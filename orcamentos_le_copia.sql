@@ -1,0 +1,1 @@
+SELECT * FROM orcamentos.clientes;

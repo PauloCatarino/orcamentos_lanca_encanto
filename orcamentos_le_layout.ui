@@ -1,0 +1,6018 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>2714</width>
+    <height>2776</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Orçamento</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="tabWidget_orcamento">
+      <property name="sizeIncrement">
+       <size>
+        <width>0</width>
+        <height>5500</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>0</width>
+        <height>5500</height>
+       </size>
+      </property>
+      <property name="currentIndex">
+       <number>3</number>
+      </property>
+      <widget class="QWidget" name="tab_configuracoes">
+       <property name="title" stdset="0">
+        <string>Configurações</string>
+       </property>
+       <attribute name="title">
+        <string>Configuracoes</string>
+       </attribute>
+       <widget class="QLabel" name="label_base_dados">
+        <property name="geometry">
+         <rect>
+          <x>9</x>
+          <y>9</y>
+          <width>116</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Base Dados Orçamento:</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_base_dados">
+        <property name="geometry">
+         <rect>
+          <x>140</x>
+          <y>10</y>
+          <width>551</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\Base_Dados_Orcamento\orcamentos.db</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_orcamentos">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>50</y>
+          <width>62</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Orçamentos:</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_orcamentos">
+        <property name="geometry">
+         <rect>
+          <x>100</x>
+          <y>50</y>
+          <width>491</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\ORCAMENTOS\Dep._Orcamentos</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="pushButton_atualiza_configuracoes">
+        <property name="geometry">
+         <rect>
+          <x>1000</x>
+          <y>30</y>
+          <width>201</width>
+          <height>41</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="text">
+         <string>Atualizar Configurações</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="tab_relatorios">
+       <property name="title" stdset="0">
+        <string>Relatórios</string>
+       </property>
+       <attribute name="title">
+        <string>Relatorios</string>
+       </attribute>
+      </widget>
+      <widget class="QWidget" name="tab_clientes">
+       <attribute name="title">
+        <string>Clientes</string>
+       </attribute>
+       <widget class="QGroupBox" name="groupBox_dados_clientes">
+        <property name="geometry">
+         <rect>
+          <x>20</x>
+          <y>20</y>
+          <width>731</width>
+          <height>351</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Dados do Cliente</string>
+        </property>
+        <widget class="QLabel" name="icon_user">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>24</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_address">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>79</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_email">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>106</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_web">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>133</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_number">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>160</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_info">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>188</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_info">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>215</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_phone">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>242</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="icon_mobile">
+         <property name="geometry">
+          <rect>
+           <x>517</x>
+           <y>269</y>
+           <width>16</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="pixmap">
+          <pixmap/>
+         </property>
+        </widget>
+        <widget class="QWidget" name="layoutWidget">
+         <property name="geometry">
+          <rect>
+           <x>129</x>
+           <y>25</y>
+           <width>391</width>
+           <height>304</height>
+          </rect>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QLineEdit" name="lineEdit_nome_cliente">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Nome Cliente</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_nome_cliente_simplex">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Nome Cliente Abreviado Para Criar Pasta nos Orcamentos</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_morada_cliente">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Morada</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_email_cliente">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Email</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_pagina_web">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Página WEB</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_num_cliente_phc">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Número de Cliente PHC</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_info_1">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Info 1</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_info_2">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Info 2</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_telefone">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Telefone</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_telemovel">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="placeholderText">
+             <string>Telemóvel</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEdit_idCliente">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="toolTip">
+             <string>ID do Cliente</string>
+            </property>
+            <property name="placeholderText">
+             <string>id_noOrc</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="layoutWidget">
+         <property name="geometry">
+          <rect>
+           <x>11</x>
+           <y>24</y>
+           <width>113</width>
+           <height>311</height>
+          </rect>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <widget class="QLabel" name="label_nome_cliente_2">
+            <property name="text">
+             <string>Nome Cliente</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_nome_cliente_simplex">
+            <property name="text">
+             <string>Nome Cliente_Simplex</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_morada">
+            <property name="text">
+             <string>Morada</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_email">
+            <property name="text">
+             <string>Email</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_pagina_web">
+            <property name="text">
+             <string>Página WEB</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_num_cliente">
+            <property name="text">
+             <string>Número de Cliente PHC</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_info_1">
+            <property name="text">
+             <string>Info 1</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_info_2">
+            <property name="text">
+             <string>Info 2</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_telefone">
+            <property name="text">
+             <string>Telefone</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_telemovel">
+            <property name="text">
+             <string>Telemóvel</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_id_norc">
+            <property name="text">
+             <string>ID noOrc</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="layoutWidget">
+         <property name="geometry">
+          <rect>
+           <x>530</x>
+           <y>90</y>
+           <width>194</width>
+           <height>143</height>
+          </rect>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_dados_cliente">
+            <item>
+             <widget class="QPushButton" name="pushButton_inserir_cliente">
+              <property name="text">
+               <string>Inserir Novo Cliente</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_tranpordados_cliente_orcamento">
+              <property name="text">
+               <string>Transportar Dados Cliente Orcamento</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_editar_cliente">
+              <property name="text">
+               <string>Editar Dados Cliente</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="pushButton_eliminar_cliente">
+              <property name="text">
+               <string>Eliminar Cliente</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_limpar_dados_cliente">
+            <property name="text">
+             <string>Limpar Dados Cliente</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+       <widget class="QLabel" name="label_logo_cliente">
+        <property name="geometry">
+         <rect>
+          <x>1350</x>
+          <y>10</y>
+          <width>105</width>
+          <height>165</height>
+         </rect>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Box</enum>
+        </property>
+        <property name="text">
+         <string>Logotipo do Cliente</string>
+        </property>
+       </widget>
+       <widget class="QTableWidget" name="tableWidget_tabela_clientes">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>380</y>
+          <width>2501</width>
+          <height>931</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="autoScroll">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="rowCount">
+         <number>2</number>
+        </property>
+        <property name="columnCount">
+         <number>11</number>
+        </property>
+        <property name="horizontalHeaderLabels" stdset="0">
+         <stringlist>
+          <string>ID</string>
+          <string>Nome Cliente</string>
+          <string>Nome Cliente Simplex</string>
+          <string>Morada</string>
+          <string>Email</string>
+          <string>Pagina WEB</string>
+          <string>Numero Cliente PHC</string>
+          <string>Info_1</string>
+          <string>Info_2</string>
+          <string>Telefone</string>
+          <string>Telemovel</string>
+         </stringlist>
+        </property>
+        <attribute name="horizontalHeaderHighlightSections">
+         <bool>false</bool>
+        </attribute>
+        <attribute name="horizontalHeaderStretchLastSection">
+         <bool>false</bool>
+        </attribute>
+        <attribute name="verticalHeaderStretchLastSection">
+         <bool>false</bool>
+        </attribute>
+        <row/>
+        <row/>
+        <column>
+         <property name="text">
+          <string>ID</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Nome Cliente</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Nome Cliente Simplex</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Morada</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Email</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Pagina WEB</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Numero Cliente PHC</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Info_1</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Info_2</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Telefone</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Telemovel</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QLabel" name="label_pesquisar_cliente">
+        <property name="geometry">
+         <rect>
+          <x>744</x>
+          <y>30</y>
+          <width>50</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Pesquisar:</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_pesquisar_cliente">
+        <property name="geometry">
+         <rect>
+          <x>800</x>
+          <y>30</y>
+          <width>281</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="placeholderText">
+         <string>Digite aqui...</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="tab_consulta_orcamentos">
+       <attribute name="title">
+        <string>Consulta Orcamentos</string>
+       </attribute>
+       <widget class="QTableWidget" name="tableWidget_orcamentos">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>210</y>
+          <width>2511</width>
+          <height>901</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <weight>75</weight>
+          <italic>false</italic>
+          <bold>true</bold>
+          <underline>false</underline>
+          <strikeout>false</strikeout>
+          <kerning>true</kerning>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>false</bool>
+        </property>
+        <property name="inputMethodHints">
+         <set>Qt::ImhNone</set>
+        </property>
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="autoScroll">
+         <bool>true</bool>
+        </property>
+        <property name="horizontalScrollMode">
+         <enum>QAbstractItemView::ScrollPerItem</enum>
+        </property>
+        <property name="showGrid">
+         <bool>true</bool>
+        </property>
+        <property name="sortingEnabled">
+         <bool>false</bool>
+        </property>
+        <property name="rowCount">
+         <number>2</number>
+        </property>
+        <property name="columnCount">
+         <number>17</number>
+        </property>
+        <property name="horizontalHeaderLabels" stdset="0">
+         <stringlist>
+          <string>ID</string>
+          <string>Ano</string>
+          <string>Num_Orcamento</string>
+          <string>Ver_Orcamento</string>
+          <string>Nome_Cliente</string>
+          <string>Status</string>
+          <string>Data</string>
+          <string>Preço</string>
+          <string>Ref_Cliente</string>
+          <string>Obra</string>
+          <string>Caracteristicas</string>
+          <string>Localizacao</string>
+          <string>Info_1</string>
+          <string>Info_2</string>
+         </stringlist>
+        </property>
+        <attribute name="horizontalHeaderCascadingSectionResizes">
+         <bool>true</bool>
+        </attribute>
+        <attribute name="horizontalHeaderDefaultSectionSize">
+         <number>100</number>
+        </attribute>
+        <attribute name="horizontalHeaderHighlightSections">
+         <bool>true</bool>
+        </attribute>
+        <attribute name="horizontalHeaderMinimumSectionSize">
+         <number>39</number>
+        </attribute>
+        <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
+         <bool>false</bool>
+        </attribute>
+        <attribute name="horizontalHeaderStretchLastSection">
+         <bool>false</bool>
+        </attribute>
+        <attribute name="verticalHeaderMinimumSectionSize">
+         <number>23</number>
+        </attribute>
+        <attribute name="verticalHeaderShowSortIndicator" stdset="0">
+         <bool>false</bool>
+        </attribute>
+        <row/>
+        <row/>
+        <column>
+         <property name="text">
+          <string>id</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>id_cliente</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Utilizador</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ano</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Num_Orcamento</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ver_Orcamento</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Status</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Nome_Cliente</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Enc PHC</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Data</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Preço</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ref_Cliente</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Obra</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Caracteristicas</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Localizacao</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Info_1</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Info_2</string>
+         </property>
+        </column>
+        <item row="0" column="0">
+         <property name="text">
+          <string/>
+         </property>
+         <property name="flags">
+          <set>ItemIsSelectable|ItemIsEditable|ItemIsDragEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
+         </property>
+        </item>
+       </widget>
+       <widget class="QGroupBox" name="groupBox_dados_inserir_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>70</y>
+          <width>2511</width>
+          <height>141</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="title">
+         <string>Dados_Inserir_Orcamento</string>
+        </property>
+        <widget class="QLineEdit" name="lineEdit_num_orcamento_2">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="geometry">
+          <rect>
+           <x>130</x>
+           <y>18</y>
+           <width>111</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Num Orçamento</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_ano">
+         <property name="geometry">
+          <rect>
+           <x>60</x>
+           <y>18</y>
+           <width>61</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Maximum" vsizetype="Ignored">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>2</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Ano</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_versao">
+         <property name="geometry">
+          <rect>
+           <x>250</x>
+           <y>18</y>
+           <width>51</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Versão</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_nome_cliente_2">
+         <property name="geometry">
+          <rect>
+           <x>310</x>
+           <y>18</y>
+           <width>411</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Nome Cliente</string>
+         </property>
+         <property name="autoCompleteEnabled" stdset="0">
+          <bool>true</bool>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_data">
+         <property name="geometry">
+          <rect>
+           <x>880</x>
+           <y>19</y>
+           <width>111</width>
+           <height>22</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Data</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_preco">
+         <property name="geometry">
+          <rect>
+           <x>1000</x>
+           <y>18</y>
+           <width>111</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Preço</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_ref_cliente_2">
+         <property name="geometry">
+          <rect>
+           <x>1120</x>
+           <y>18</y>
+           <width>167</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Ref Cliente</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_obra_2">
+         <property name="geometry">
+          <rect>
+           <x>1300</x>
+           <y>18</y>
+           <width>1201</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Obra</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_id">
+         <property name="geometry">
+          <rect>
+           <x>11</x>
+           <y>20</y>
+           <width>41</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="placeholderText">
+          <string>ID</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_localizacao">
+         <property name="geometry">
+          <rect>
+           <x>880</x>
+           <y>51</y>
+           <width>601</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Localização</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_idCliente_noOrc">
+         <property name="geometry">
+          <rect>
+           <x>11</x>
+           <y>53</y>
+           <width>41</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="toolTip">
+          <string>ID do cliente dentro do Orcamento</string>
+         </property>
+         <property name="placeholderText">
+          <string>ID</string>
+         </property>
+        </widget>
+        <widget class="QComboBox" name="comboBox_status">
+         <property name="geometry">
+          <rect>
+           <x>730</x>
+           <y>18</y>
+           <width>140</width>
+           <height>24</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="editable">
+          <bool>true</bool>
+         </property>
+         <property name="currentText">
+          <string>Falta Orcamentar</string>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <item>
+          <property name="text">
+           <string>Falta Orcamentar</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Enviado</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Nao Enviado</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Adjudicado</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Nao Adjudicado</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Sem Interesse</string>
+          </property>
+         </item>
+        </widget>
+        <widget class="QPlainTextEdit" name="plainTextEdit_caracteristicas">
+         <property name="geometry">
+          <rect>
+           <x>60</x>
+           <y>50</y>
+           <width>811</width>
+           <height>81</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="plainText">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Descreva as Caracteristicas do Orcamento</string>
+         </property>
+        </widget>
+        <widget class="QPlainTextEdit" name="plainTextEdit_info_1">
+         <property name="geometry">
+          <rect>
+           <x>1490</x>
+           <y>50</y>
+           <width>500</width>
+           <height>81</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Info_1</string>
+         </property>
+        </widget>
+        <widget class="QPlainTextEdit" name="plainTextEdit_info_2">
+         <property name="geometry">
+          <rect>
+           <x>2000</x>
+           <y>50</y>
+           <width>500</width>
+           <height>81</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Info_2</string>
+         </property>
+        </widget>
+        <widget class="QComboBox" name="comboBox_utilizador">
+         <property name="geometry">
+          <rect>
+           <x>880</x>
+           <y>80</y>
+           <width>131</width>
+           <height>24</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="editable">
+          <bool>true</bool>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <item>
+          <property name="text">
+           <string>Andreia</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Catia</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Paulo</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>Pedro</string>
+          </property>
+         </item>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_enc_phc">
+         <property name="geometry">
+          <rect>
+           <x>1296</x>
+           <y>80</y>
+           <width>181</width>
+           <height>25</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="placeholderText">
+          <string>Enc PHC</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="layoutWidget">
+        <property name="geometry">
+         <rect>
+          <x>607</x>
+          <y>10</y>
+          <width>828</width>
+          <height>26</height>
+         </rect>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QPushButton" name="pushButton_abrir_orcamento">
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Abrir Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_inserir_linha_orcamento_2">
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Inserir Nova Linha Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_apagar_orcamento">
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Apagar Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_abrir_criar_pasta_orcamento">
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Abrir/Criar Pasta Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_editar_linha_orcamento">
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Editar Linha Orçamento</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QLabel" name="label_pesquisar">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>50</width>
+          <height>16</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Pesquisar:</string>
+        </property>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_pesquisar">
+        <property name="geometry">
+         <rect>
+          <x>66</x>
+          <y>10</y>
+          <width>241</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
+        <property name="placeholderText">
+         <string>Digite aqui...</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="tab_criar_orcamento">
+       <property name="title" stdset="0">
+        <string>Criar Orçamento</string>
+       </property>
+       <attribute name="title">
+        <string>Orcamento</string>
+       </attribute>
+       <widget class="QGroupBox" name="groupBox_dados_cliente">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>40</y>
+          <width>531</width>
+          <height>131</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Dados do Cliente</string>
+        </property>
+        <layout class="QFormLayout" name="formLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_nome_cliente">
+           <property name="text">
+            <string>Nome:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="lineEdit_nome_cliente1"/>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_morada">
+           <property name="text">
+            <string>Morada:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="lineEdit_morada"/>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_email">
+           <property name="text">
+            <string>Email:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="lineEdit_email"/>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_obra">
+           <property name="text">
+            <string>Obra</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLineEdit" name="lineEdit_obra"/>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QTableWidget" name="tableWidget_artigos">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>290</y>
+          <width>2511</width>
+          <height>821</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="rowCount">
+         <number>2</number>
+        </property>
+        <property name="columnCount">
+         <number>22</number>
+        </property>
+        <property name="horizontalHeaderLabels" stdset="0">
+         <stringlist>
+          <string>Item</string>
+          <string>Codigo</string>
+          <string>Descricao</string>
+          <string>Altura</string>
+          <string>Largura</string>
+          <string>Profundidade</string>
+          <string>Und</string>
+          <string>QT</string>
+          <string>Preco_Unitario</string>
+          <string>Preco_Total</string>
+          <string>Custo Produzido</string>
+          <string>Custo Total Orlas (€)</string>
+          <string>Custo Total Mão de Obra (€)</string>
+          <string>Custo Total Matéria Prima (€)</string>
+          <string>Custo Total Acabamentos (€)</string>
+          <string>Margem de Lucro (%)</string>
+          <string>Valor da Margem (€)</string>
+          <string>Custos Administrativos (%)</string>
+          <string>Valor Custos Admin. (€)</string>
+          <string>Ajustes_1(%)</string>
+          <string>Valor Ajustes_1 (€)</string>
+          <string>Ajustes_2 (%)</string>
+          <string>Valor Ajustes_2 (€)</string>
+         </stringlist>
+        </property>
+        <attribute name="horizontalHeaderStretchLastSection">
+         <bool>false</bool>
+        </attribute>
+        <row>
+         <property name="text">
+          <string>1</string>
+         </property>
+        </row>
+        <row>
+         <property name="text">
+          <string>2</string>
+         </property>
+        </row>
+        <column>
+         <property name="text">
+          <string>Item</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Codigo</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Descricao</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Altura</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Largura</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Profundidade</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Und</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>QT</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Preco_Unitario</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Preco_Total</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Custo_Produzido</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Custo Total Orlas (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Custo Total Mão de Obra (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Custo Total Acabamentos (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Margem de Lucro (%)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor da Margem (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Custos Administrativos (%)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Custos Admin. (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ajustes_1(%)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Ajustes_1 (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ajustes_2 (%)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Ajustes_2 (€)</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QPushButton" name="pushButton_configurar_dados_gerais">
+        <property name="geometry">
+         <rect>
+          <x>900</x>
+          <y>180</y>
+          <width>161</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Configurar Dados Geris</string>
+        </property>
+       </widget>
+       <widget class="QGroupBox" name="groupBox_dados_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>980</x>
+          <y>60</y>
+          <width>541</width>
+          <height>111</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Dados Orcamento</string>
+        </property>
+        <widget class="QLabel" name="label_num_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>20</x>
+           <y>20</y>
+           <width>91</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Num_Orcamento</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_num_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>110</x>
+           <y>20</y>
+           <width>113</width>
+           <height>20</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_ref_cliente">
+         <property name="geometry">
+          <rect>
+           <x>20</x>
+           <y>50</y>
+           <width>91</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Ref Cliente</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_ref_cliente">
+         <property name="geometry">
+          <rect>
+           <x>110</x>
+           <y>50</y>
+           <width>113</width>
+           <height>20</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_versao_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>230</x>
+           <y>20</y>
+           <width>91</width>
+           <height>16</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Versao Orcamento</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_versao_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>330</x>
+           <y>20</y>
+           <width>113</width>
+           <height>20</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QDateEdit" name="dateEdit_data_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>330</x>
+           <y>80</y>
+           <width>110</width>
+           <height>22</height>
+          </rect>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_id_no_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>330</x>
+           <y>50</y>
+           <width>61</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+        <widget class="QLabel" name="label_id_no_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>280</x>
+           <y>50</y>
+           <width>41</width>
+           <height>20</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>ID</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QPushButton" name="pushButton_eliminar_linha_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>1220</x>
+          <y>180</y>
+          <width>151</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Eliminar Linha  Orçamento</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="pushButton_inserir_linha_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>750</x>
+          <y>180</y>
+          <width>151</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Inserir Linha  Orçamento</string>
+        </property>
+       </widget>
+       <widget class="QGroupBox" name="groupBox_linhas_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>200</y>
+          <width>1561</width>
+          <height>81</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Linhas Orcamento</string>
+        </property>
+        <widget class="QLineEdit" name="lineEdit_item_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>30</y>
+           <width>41</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Item</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_codigo_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>60</x>
+           <y>25</y>
+           <width>161</width>
+           <height>41</height>
+          </rect>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Codigo</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_altura_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>890</x>
+           <y>9</y>
+           <width>113</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Altura</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_largura_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>1010</x>
+           <y>9</y>
+           <width>113</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Largura</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_profundidade_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>1130</x>
+           <y>9</y>
+           <width>113</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Profundidade</string>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_und_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>1250</x>
+           <y>29</y>
+           <width>41</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string>und</string>
+         </property>
+         <property name="placeholderText">
+          <string/>
+         </property>
+        </widget>
+        <widget class="QLineEdit" name="lineEdit_qt_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>1300</x>
+           <y>29</y>
+           <width>71</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="inputMask">
+          <string/>
+         </property>
+         <property name="text">
+          <string>1</string>
+         </property>
+         <property name="placeholderText">
+          <string>QT</string>
+         </property>
+        </widget>
+        <widget class="QPlainTextEdit" name="plainTextEdit_descricao_orcamento">
+         <property name="geometry">
+          <rect>
+           <x>223</x>
+           <y>10</y>
+           <width>661</width>
+           <height>71</height>
+          </rect>
+         </property>
+         <property name="tabletTracking">
+          <bool>false</bool>
+         </property>
+         <property name="tabChangesFocus">
+          <bool>true</bool>
+         </property>
+         <property name="plainText">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string>Descricao , aqui podes descrever o item que pretende orçamentar. Permite Multilinha</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_pesquisar_orcamento">
+        <property name="geometry">
+         <rect>
+          <x>66</x>
+          <y>10</y>
+          <width>281</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="placeholderText">
+         <string>Digite aqui...</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_pesquisar_cliente_2">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>50</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Pesquisar:</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="pushButton_editar_linha_orcamento_2">
+        <property name="geometry">
+         <rect>
+          <x>1370</x>
+          <y>180</y>
+          <width>151</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Editar Linha  Orçamento</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="orcamentar_items">
+        <property name="geometry">
+         <rect>
+          <x>1060</x>
+          <y>180</y>
+          <width>161</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Orcamentar Itens</string>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="pushButton_exportar_excel">
+        <property name="geometry">
+         <rect>
+          <x>590</x>
+          <y>180</y>
+          <width>151</width>
+          <height>23</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>pushButton_exportar_excel</string>
+        </property>
+       </widget>
+       <widget class="QGroupBox" name="groupBox_margens_ajustes">
+        <property name="geometry">
+         <rect>
+          <x>1540</x>
+          <y>60</y>
+          <width>521</width>
+          <height>141</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Margens e Ajustes</string>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_margem_lucro">
+           <property name="text">
+            <string>Margem Lucro (%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="lineEdit_margem_lucro"/>
+         </item>
+         <item row="0" column="2">
+          <widget class="QLabel" name="label_ajustes_1">
+           <property name="text">
+            <string>Ajustes_1(%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QLineEdit" name="lineEdit_ajustes_2">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QLabel" name="label_ajustes_2">
+           <property name="text">
+            <string>Ajustes_2(%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_custos_administrativos">
+           <property name="text">
+            <string>Custos Administrativos (%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QLineEdit" name="lineEdit_ajustes_1"/>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="lineEdit_custos_administrativos"/>
+         </item>
+         <item row="2" column="2">
+          <widget class="QPushButton" name="pushButton_atualiza_preco_final">
+           <property name="text">
+            <string>Atualiza Preco Final</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_atingir_preco_final">
+           <property name="text">
+            <string>Atingir Objetico Preco Final(€)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="lineEdit_atingir_preco_final"/>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_preco_final_orcamento">
+           <property name="text">
+            <string>Preco Final Orcamento</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLineEdit" name="lineEdit_preco_final_orcamento"/>
+         </item>
+         <item row="2" column="3">
+          <widget class="QPushButton" name="pushButton_atualiza_preco_items">
+           <property name="styleSheet">
+            <string notr="true">background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Atualiza Preco Items Orcamento</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="tab_materias_primas">
+       <attribute name="title">
+        <string>Matérias Primas</string>
+       </attribute>
+       <widget class="QGroupBox" name="groupBox_materias_config">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>1311</width>
+          <height>80</height>
+         </rect>
+        </property>
+        <property name="title">
+         <string>Gestão de Matérias Primas</string>
+        </property>
+        <widget class="QPushButton" name="pushButton_atualizar_excel">
+         <property name="geometry">
+          <rect>
+           <x>1070</x>
+           <y>30</y>
+           <width>221</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="text">
+          <string>Atualizar do Excel</string>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QTableWidget" name="tableWidget_materias_primas">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>140</y>
+          <width>2511</width>
+          <height>1181</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOn</enum>
+        </property>
+        <property name="rowCount">
+         <number>0</number>
+        </property>
+        <property name="columnCount">
+         <number>29</number>
+        </property>
+        <property name="horizontalHeaderLabels" stdset="0">
+         <stringlist>
+          <string>ID_MP</string>
+          <string>REF_PHC</string>
+          <string>REF_FORNECEDOR</string>
+          <string>DESCRICAO_PHC</string>
+          <string>DESCRICAO_ORC</string>
+          <string>PRECO_TABELA</string>
+          <string>DESC1_(+)</string>
+          <string>DESC2_(-)</string>
+          <string>PLIQ</string>
+          <string>UND</string>
+          <string>DESP</string>
+          <string>ESPESSURA</string>
+          <string>FAMILIA_PHC</string>
+          <string>TIPO</string>
+          <string>FAMILIA</string>
+          <string>COR</string>
+          <string>CORESP_ORLA_0.4</string>
+          <string>CORESP_ORLA_1.0</string>
+          <string>COR_REF</string>
+          <string>COMP_MP</string>
+          <string>LARG_MP</string>
+          <string>ESP_MP</string>
+          <string>FORNECEDOR</string>
+          <string>FABRICANTE</string>
+          <string>DATA_ATUALIZACAO</string>
+          <string>APLICACAO</string>
+          <string>NOTAS_1</string>
+          <string>NOTAS_2</string>
+          <string>NOTAS_3</string>
+          <string>NOTAS_4</string>
+         </stringlist>
+        </property>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+        <column/>
+       </widget>
+       <widget class="QLineEdit" name="lineEdit_pesquisar_mp">
+        <property name="geometry">
+         <rect>
+          <x>90</x>
+          <y>90</y>
+          <width>281</width>
+          <height>31</height>
+         </rect>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
+        <property name="placeholderText">
+         <string>Digite aqui...</string>
+        </property>
+       </widget>
+       <widget class="QLabel" name="label_pesquisar_mp">
+        <property name="geometry">
+         <rect>
+          <x>34</x>
+          <y>90</y>
+          <width>50</width>
+          <height>20</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Pesquisar:</string>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="dados_gerais_mp">
+       <property name="title" stdset="0">
+        <string>Dados Gerais MP</string>
+       </property>
+       <attribute name="title">
+        <string>Dados Gerais MP</string>
+       </attribute>
+       <widget class="QTabWidget" name="tab_dados_gerais_mp">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>2541</width>
+          <height>1001</height>
+         </rect>
+        </property>
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <widget class="QWidget" name="Material">
+         <attribute name="title">
+          <string>Material</string>
+         </attribute>
+         <widget class="QTableWidget" name="Tab_Material">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>100</y>
+            <width>2461</width>
+            <height>861</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="sizeAdjustPolicy">
+           <enum>QAbstractScrollArea::AdjustIgnored</enum>
+          </property>
+          <property name="rowCount">
+           <number>26</number>
+          </property>
+          <property name="columnCount">
+           <number>20</number>
+          </property>
+          <property name="horizontalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Material</string>
+            <string>Descricao</string>
+            <string>id_dg</string>
+            <string>id_orcamento</string>
+            <string>id_verc_orcamento</string>
+            <string>REF_LE</string>
+            <string>DESCRICAO_no_ORCAMENTO</string>
+            <string>PLIQ</string>
+            <string>DESC1_(+)</string>
+            <string>DESC2_(-)</string>
+            <string>UND</string>
+            <string>DESP</string>
+            <string>CORRESP_ORLA_0_4</string>
+            <string>CORRESP_ORLA_1_0</string>
+            <string>TIPO</string>
+            <string>FAMILIA</string>
+            <string>COMP_MP</string>
+            <string>LARG_MP</string>
+            <string>ESP_MP</string>
+            <string>MP</string>
+           </stringlist>
+          </property>
+          <property name="verticalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Mat_Costas</string>
+            <string>Mat_Laterais</string>
+            <string>Mat_Divisorias</string>
+            <string>Mat_Tetos</string>
+            <string>Mat_Fundos</string>
+            <string>Mat_Prat_Fixas</string>
+            <string>Mat_Prat_Amoviveis</string>
+            <string>Mat_Portas_Abrir</string>
+            <string>Mat_Laterais_Acabamento</string>
+            <string>Mat_Fundos_Acabamento</string>
+            <string>Mat_Costas_Acabamento</string>
+            <string>Mat_Tampos_Acabamento</string>
+            <string>Mat_Remates_Verticais</string>
+            <string>Mat_Remates_Horizontais</string>
+            <string>Mat_Guarnicoes_Verticais</string>
+            <string>Mat_Guarnicoes_Horizontais</string>
+            <string>Mat_Enchimentos_Guarnicao</string>
+            <string>Mat_Rodape_AGL</string>
+            <string>Mat_Gavetas_Frentes</string>
+            <string>Mat_Gavetas_Caixa</string>
+            <string>Mat_Gavetas_Fundo</string>
+            <string>Mat_Livre_1</string>
+            <string>Mat_Livre_2</string>
+            <string>Mat_Livre_3</string>
+            <string>Mat_Livre_4</string>
+            <string>Mat_Livre_5</string>
+           </stringlist>
+          </property>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+         </widget>
+         <widget class="QPushButton" name="guardar_dados_gerais_material">
+          <property name="geometry">
+           <rect>
+            <x>20</x>
+            <y>20</y>
+            <width>191</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Guardar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="importar_dados_gerais_material">
+          <property name="geometry">
+           <rect>
+            <x>220</x>
+            <y>20</y>
+            <width>151</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Importar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="limpar_linha_material">
+          <property name="geometry">
+           <rect>
+            <x>380</x>
+            <y>20</y>
+            <width>151</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Limpar Linha Selecionada </string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="importar_dados_gerais_4_separadores">
+          <property name="geometry">
+           <rect>
+            <x>540</x>
+            <y>20</y>
+            <width>211</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="toolTip">
+           <string>Este botão pode importar os dados para o preenchimento das 4 tabelas em simultaneo</string>
+          </property>
+          <property name="text">
+           <string>Importar Dados Gerais 4 Separadores</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="guardar_dados_gerais_orcamento">
+          <property name="geometry">
+           <rect>
+            <x>760</x>
+            <y>20</y>
+            <width>241</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="toolTip">
+           <string>Este botão guarda na base dados e associado ao num_orc &amp; ver_orc todas as 4 tabelas com dados preenchidos de linhas e colunas</string>
+          </property>
+          <property name="text">
+           <string>Guardar para este Orcamento Dados Gerais</string>
+          </property>
+         </widget>
+        </widget>
+        <widget class="QWidget" name="Ferragens">
+         <attribute name="title">
+          <string>Ferragens</string>
+         </attribute>
+         <widget class="QTableWidget" name="Tab_Ferragens">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>80</y>
+            <width>2441</width>
+            <height>841</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="rowCount">
+           <number>25</number>
+          </property>
+          <property name="columnCount">
+           <number>20</number>
+          </property>
+          <property name="horizontalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Ferragens</string>
+            <string>Descricao</string>
+            <string>id_fer</string>
+            <string>id_orcamento</string>
+            <string>id_verc_orcamento</string>
+            <string>REF_LE</string>
+            <string>DESCRICAO_no_ORCAMENTO</string>
+            <string>PLIQ</string>
+            <string>DESC1_(+)</string>
+            <string>DESC2_(-)</string>
+            <string>UND</string>
+            <string>DESP</string>
+            <string>CORRESP_ORLA_0_4</string>
+            <string>CORRESP_ORLA_1_0</string>
+            <string>TIPO</string>
+            <string>FAMILIA</string>
+            <string>COMP_MP</string>
+            <string>LARG_MP</string>
+            <string>ESP_MP</string>
+            <string>MP</string>
+           </stringlist>
+          </property>
+          <property name="verticalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Fer_Dobradica</string>
+            <string>Fer_Suporte Prateleira</string>
+            <string>Fer_Suporte Varao</string>
+            <string>Fer_Varao_SPP</string>
+            <string>Fer_Rodape_PVC</string>
+            <string>Fer_Pes_1</string>
+            <string>Fer_Pes_2</string>
+            <string>Fer_Grampas</string>
+            <string>Fer_Corredica_1</string>
+            <string>Fer_Corredica_2</string>
+            <string>Fer_Corredica_3</string>
+            <string>Fer_Puxador</string>
+            <string>Fer_Puxador_SPP_1</string>
+            <string>Fer_Puxador_SPP_2</string>
+            <string>Fer_Puxador_SPP_3</string>
+            <string>Fer_Sistema_Basculante_1</string>
+            <string>Fer_Sistema_Basculante_2</string>
+            <string>Fer_Acessorio_1</string>
+            <string>Fer_Acessorio_2</string>
+            <string>Fer_Acessorio_3</string>
+            <string>Fer_Acessorio_4</string>
+            <string>Fer_Acessorio_5</string>
+            <string>Fer_Acessorio_6</string>
+            <string>Fer_Acessorio_7</string>
+            <string>Fer_Acessorio_8_SPP</string>
+           </stringlist>
+          </property>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+         </widget>
+         <widget class="QPushButton" name="guardar_dados_gerais_ferragens">
+          <property name="geometry">
+           <rect>
+            <x>30</x>
+            <y>20</y>
+            <width>371</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Guardar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="importar_dados_gerais_ferragens">
+          <property name="geometry">
+           <rect>
+            <x>410</x>
+            <y>20</y>
+            <width>251</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Importar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="limpar_linha_ferragens">
+          <property name="geometry">
+           <rect>
+            <x>670</x>
+            <y>20</y>
+            <width>671</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Limpar Linha Selecionada </string>
+          </property>
+         </widget>
+        </widget>
+        <widget class="QWidget" name="SistemasCorrer">
+         <attribute name="title">
+          <string>Sistemas Correr</string>
+         </attribute>
+         <widget class="QTableWidget" name="Tab_Sistemas_Correr">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>100</y>
+            <width>2441</width>
+            <height>791</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="rowCount">
+           <number>18</number>
+          </property>
+          <property name="columnCount">
+           <number>20</number>
+          </property>
+          <property name="horizontalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Sitemas_Correr</string>
+            <string>Descricao</string>
+            <string>id_sc</string>
+            <string>id_orcamento</string>
+            <string>id_verc_orcamento</string>
+            <string>REF_LE</string>
+            <string>DESCRICAO_no_ORCAMENTO</string>
+            <string>PLIQ</string>
+            <string>DESC1_(+)</string>
+            <string>DESC2_(-)</string>
+            <string>UND</string>
+            <string>DESP</string>
+            <string>CORRESP_ORLA_0_4</string>
+            <string>CORRESP_ORLA_1_0</string>
+            <string>TIPO</string>
+            <string>FAMILIA</string>
+            <string>COMP_MP</string>
+            <string>LARG_MP</string>
+            <string>ESP_MP</string>
+            <string>MP</string>
+           </stringlist>
+          </property>
+          <property name="verticalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>SC_Puxador_Vertical_SPP</string>
+            <string>SC_Calha_Superior_SPP</string>
+            <string>SC_Calha_Inferior_SPP_1</string>
+            <string>SC_Calha_Inferior_SPP_2</string>
+            <string>SC_Calha_Porta_Horizontal_H_SPP</string>
+            <string>SC_Calha_Porta_Horizontal_Sup_SPP</string>
+            <string>SC_Calha_Porta_Horizontal_Inf_SPP</string>
+            <string>SC_Painel_Porta_Correr_1</string>
+            <string>SC_Painel_Porta_Correr_2</string>
+            <string>SC_Painel_Porta_Correr_3</string>
+            <string>SC_Painel_Porta_Correr_4</string>
+            <string>SC_Espelho_Porta_Correr_1</string>
+            <string>SC_Espelho_Porta_Correr_2</string>
+            <string>SC_Acessorio_1</string>
+            <string>SC_Acessorio_2</string>
+            <string>SC_Acessorio_3</string>
+            <string>SC_Acessorio_4_SPP</string>
+            <string>SC_Acessorio_5_SPP</string>
+           </stringlist>
+          </property>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+         </widget>
+         <widget class="QPushButton" name="guardar_dados_gerais_sistemas_correr">
+          <property name="geometry">
+           <rect>
+            <x>30</x>
+            <y>20</y>
+            <width>191</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Guardar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="importar_dados_gerais_sistemas_correr">
+          <property name="geometry">
+           <rect>
+            <x>230</x>
+            <y>20</y>
+            <width>271</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Importar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="limpar_linha_sistemas_correr">
+          <property name="geometry">
+           <rect>
+            <x>510</x>
+            <y>20</y>
+            <width>561</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Limpar Linha Selecionada </string>
+          </property>
+         </widget>
+        </widget>
+        <widget class="QWidget" name="Acabamentos">
+         <attribute name="title">
+          <string>Acabamentos</string>
+         </attribute>
+         <widget class="QTableWidget" name="Tab_Acabamentos">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>90</y>
+            <width>2501</width>
+            <height>841</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="verticalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOn</enum>
+          </property>
+          <property name="rowCount">
+           <number>8</number>
+          </property>
+          <property name="columnCount">
+           <number>20</number>
+          </property>
+          <property name="horizontalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Acabamentos</string>
+            <string>Descricao</string>
+            <string>id_sc</string>
+            <string>id_orcamento</string>
+            <string>id_verc_orcamento</string>
+            <string>REF_LE</string>
+            <string>DESCRICAO_no_ORCAMENTO</string>
+            <string>PLIQ</string>
+            <string>DESC1_(+)</string>
+            <string>DESC2_(-)</string>
+            <string>UND</string>
+            <string>DESP</string>
+            <string>CORRESP_ORLA_0_4</string>
+            <string>CORRESP_ORLA_1_0</string>
+            <string>TIPO</string>
+            <string>FAMILIA</string>
+            <string>COMP_MP</string>
+            <string>LARG_MP</string>
+            <string>ESP_MP</string>
+            <string>MP</string>
+           </stringlist>
+          </property>
+          <property name="verticalHeaderLabels" stdset="0">
+           <stringlist>
+            <string>Acab_Lacar_Face_Sup</string>
+            <string>Acab_Lacar_Face_Inf</string>
+            <string>Acab_Verniz_Face_Sup</string>
+            <string>Acab_Verniz_Face_Inf</string>
+            <string>Acab_Face_Sup_1</string>
+            <string>Acab_Face_Inf_1</string>
+            <string>Acab_Face_Sup_2</string>
+            <string>Acab_Face_Inf_2</string>
+           </stringlist>
+          </property>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+          <column/>
+         </widget>
+         <widget class="QPushButton" name="guardar_dados_gerais_acabamentos">
+          <property name="geometry">
+           <rect>
+            <x>40</x>
+            <y>20</y>
+            <width>301</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Guardar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="importar_dados_gerais_acabamentos">
+          <property name="geometry">
+           <rect>
+            <x>540</x>
+            <y>20</y>
+            <width>281</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Importar Dados Gerais</string>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="limpar_linha_acabamentos">
+          <property name="geometry">
+           <rect>
+            <x>870</x>
+            <y>20</y>
+            <width>351</width>
+            <height>23</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Limpar Linha Selecionada </string>
+          </property>
+         </widget>
+        </widget>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="orcamento_items">
+       <attribute name="title">
+        <string>Orcamento de Items</string>
+       </attribute>
+       <widget class="QTabWidget" name="orcamento_items_configurar_pecas">
+        <property name="geometry">
+         <rect>
+          <x>2</x>
+          <y>5</y>
+          <width>2891</width>
+          <height>3000</height>
+         </rect>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="baseSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <widget class="QWidget" name="calculo_item">
+         <attribute name="title">
+          <string>Calculo Item</string>
+         </attribute>
+         <widget class="QToolBox" name="Items_Orcamento">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>10</y>
+            <width>2451</width>
+            <height>1200</height>
+           </rect>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>2450</width>
+            <height>1200</height>
+           </size>
+          </property>
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="dados_item_orcamento">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>2451</width>
+             <height>1065</height>
+            </rect>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <attribute name="label">
+            <string>Dados Item Orcaemnto</string>
+           </attribute>
+           <widget class="QScrollArea" name="scrollArea_Dados_Items_Orcamento">
+            <property name="geometry">
+             <rect>
+              <x>10</x>
+              <y>0</y>
+              <width>2441</width>
+              <height>2500</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>1220</width>
+              <height>2200</height>
+             </size>
+            </property>
+            <property name="sizeIncrement">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="baseSize">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QHeaderView::section { border-bottom: 1px solid black}</string>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAsNeeded</enum>
+            </property>
+            <property name="sizeAdjustPolicy">
+             <enum>QAbstractScrollArea::AdjustToContents</enum>
+            </property>
+            <property name="widgetResizable">
+             <bool>true</bool>
+            </property>
+            <widget class="QWidget" name="scrollAreaWidgetContents_11">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>2422</width>
+               <height>3000</height>
+              </rect>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>1200</width>
+               <height>3000</height>
+              </size>
+             </property>
+             <widget class="QLabel" name="label_Tab_Sistemas_Correr_12">
+              <property name="geometry">
+               <rect>
+                <x>11</x>
+                <y>1700</y>
+                <width>164</width>
+                <height>19</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>Tabela Sistemas Correr</string>
+              </property>
+             </widget>
+             <widget class="QLabel" name="label_Tab_Acabamentos_11">
+              <property name="geometry">
+               <rect>
+                <x>11</x>
+                <y>2240</y>
+                <width>147</width>
+                <height>19</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>Tabela Acabamentos</string>
+              </property>
+             </widget>
+             <widget class="QScrollArea" name="scrollArea_Grupos_Pecas">
+              <property name="geometry">
+               <rect>
+                <x>10</x>
+                <y>120</y>
+                <width>2311</width>
+                <height>661</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="widgetResizable">
+               <bool>true</bool>
+              </property>
+              <widget class="QWidget" name="scrollAreaWidgetContents_6">
+               <property name="geometry">
+                <rect>
+                 <x>0</x>
+                 <y>0</y>
+                 <width>2309</width>
+                 <height>659</height>
+                </rect>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <layout class="QHBoxLayout" name="horizontalLayout_5">
+                <item>
+                 <widget class="QGroupBox" name="groupBox_caixote_4">
+                  <property name="title">
+                   <string>CAIXOTE</string>
+                  </property>
+                  <property name="flat">
+                   <bool>true</bool>
+                  </property>
+                  <widget class="QListWidget" name="listWidget_caixote_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>23</y>
+                     <width>431</width>
+                     <height>611</height>
+                    </rect>
+                   </property>
+                  </widget>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QGroupBox" name="groupBox_ferragens_4">
+                  <property name="title">
+                   <string>FERRAGENS</string>
+                  </property>
+                  <property name="flat">
+                   <bool>true</bool>
+                  </property>
+                  <widget class="QListWidget" name="listWidget_ferragens_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>23</y>
+                     <width>431</width>
+                     <height>611</height>
+                    </rect>
+                   </property>
+                  </widget>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QGroupBox" name="groupBox_mao_obra_4">
+                  <property name="enabled">
+                   <bool>true</bool>
+                  </property>
+                  <property name="title">
+                   <string>MAO_DE_OBRA</string>
+                  </property>
+                  <property name="flat">
+                   <bool>true</bool>
+                  </property>
+                  <widget class="QListWidget" name="listWidget_mao_obra_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>23</y>
+                     <width>441</width>
+                     <height>281</height>
+                    </rect>
+                   </property>
+                  </widget>
+                  <widget class="QGroupBox" name="groupBox_paineis_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>0</x>
+                     <y>310</y>
+                     <width>461</width>
+                     <height>271</height>
+                    </rect>
+                   </property>
+                   <property name="title">
+                    <string>PAINEIS</string>
+                   </property>
+                   <property name="flat">
+                    <bool>true</bool>
+                   </property>
+                   <widget class="QListWidget" name="listWidget_paineis_4">
+                    <property name="geometry">
+                     <rect>
+                      <x>10</x>
+                      <y>20</y>
+                      <width>441</width>
+                      <height>251</height>
+                     </rect>
+                    </property>
+                   </widget>
+                  </widget>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QGroupBox" name="groupBox_remates_guarnicoes_4">
+                  <property name="title">
+                   <string>REMATES_GUARNICOES</string>
+                  </property>
+                  <property name="flat">
+                   <bool>true</bool>
+                  </property>
+                  <widget class="QListWidget" name="listWidget_remates_guarnicoes_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>26</y>
+                     <width>431</width>
+                     <height>311</height>
+                    </rect>
+                   </property>
+                  </widget>
+                  <widget class="QGroupBox" name="groupBox_acabamentos_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>340</y>
+                     <width>451</width>
+                     <height>251</height>
+                    </rect>
+                   </property>
+                   <property name="title">
+                    <string>ACABAMENTOS</string>
+                   </property>
+                   <property name="flat">
+                    <bool>true</bool>
+                   </property>
+                   <widget class="QListWidget" name="listWidget_acabamentos_4">
+                    <property name="geometry">
+                     <rect>
+                      <x>0</x>
+                      <y>20</y>
+                      <width>431</width>
+                      <height>221</height>
+                     </rect>
+                    </property>
+                   </widget>
+                  </widget>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QGroupBox" name="groupBox_sistemas_correr_4">
+                  <property name="title">
+                   <string>SISTEMAS_CORRER</string>
+                  </property>
+                  <property name="flat">
+                   <bool>true</bool>
+                  </property>
+                  <widget class="QListWidget" name="listWidget_sistemas_correr_4">
+                   <property name="geometry">
+                    <rect>
+                     <x>10</x>
+                     <y>23</y>
+                     <width>431</width>
+                     <height>561</height>
+                    </rect>
+                   </property>
+                  </widget>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </widget>
+             <widget class="QPushButton" name="Atualizar_Grupos_Pecas">
+              <property name="geometry">
+               <rect>
+                <x>320</x>
+                <y>790</y>
+                <width>361</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Atualizar Grupos Definicao de Pecas</string>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="Inserir_Pecas_Selecionadas">
+              <property name="geometry">
+               <rect>
+                <x>30</x>
+                <y>790</y>
+                <width>281</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Inserir_Pecas_Selecionadas</string>
+              </property>
+             </widget>
+             <widget class="QLabel" name="label_nome_cliente_11">
+              <property name="geometry">
+               <rect>
+                <x>20</x>
+                <y>10</y>
+                <width>51</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Nome:</string>
+              </property>
+             </widget>
+             <widget class="QLineEdit" name="nome_cliente_11">
+              <property name="geometry">
+               <rect>
+                <x>70</x>
+                <y>10</y>
+                <width>451</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+             </widget>
+             <widget class="QLabel" name="label_num_orcamento_11">
+              <property name="geometry">
+               <rect>
+                <x>550</x>
+                <y>10</y>
+                <width>111</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="sizeIncrement">
+               <size>
+                <width>50</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="baseSize">
+               <size>
+                <width>50</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Num_Orcamento</string>
+              </property>
+             </widget>
+             <widget class="QLineEdit" name="num_orcamento_11">
+              <property name="geometry">
+               <rect>
+                <x>660</x>
+                <y>10</y>
+                <width>133</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+             </widget>
+             <widget class="QLabel" name="label_versao_orcamento_11">
+              <property name="geometry">
+               <rect>
+                <x>810</x>
+                <y>10</y>
+                <width>121</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Versao Orcamento</string>
+              </property>
+             </widget>
+             <widget class="QLineEdit" name="versao_orcamento_11">
+              <property name="geometry">
+               <rect>
+                <x>930</x>
+                <y>10</y>
+                <width>51</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+             </widget>
+             <widget class="QLabel" name="label_ref_cliente_11">
+              <property name="geometry">
+               <rect>
+                <x>1000</x>
+                <y>10</y>
+                <width>71</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Ref Cliente</string>
+              </property>
+             </widget>
+             <widget class="QLineEdit" name="ref_cliente_11">
+              <property name="geometry">
+               <rect>
+                <x>1070</x>
+                <y>10</y>
+                <width>151</width>
+                <height>20</height>
+               </rect>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>20</height>
+               </size>
+              </property>
+             </widget>
+             <widget class="QTableWidget" name="tab_def_pecas">
+              <property name="geometry">
+               <rect>
+                <x>10</x>
+                <y>890</y>
+                <width>2351</width>
+                <height>661</height>
+               </rect>
+              </property>
+              <property name="horizontalScrollBarPolicy">
+               <enum>Qt::ScrollBarAlwaysOn</enum>
+              </property>
+              <property name="rowCount">
+               <number>0</number>
+              </property>
+              <property name="columnCount">
+               <number>82</number>
+              </property>
+              <column>
+               <property name="text">
+                <string>id</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Descricao_Livre</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Def_Peca</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Descricao</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>QT_mod</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>QT_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Comp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Larg</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Esp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>MPs</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>MO</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Orla</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>BLK</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Mat_Default</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Tab_Default</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ids</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>num_orc</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ver_orc</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ref_le</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>descricao_no_orcamento</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ptab</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>pliq</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>desc1_plus</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>desc2_minus</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>desp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>corres_orla_0_4</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>corres_orla_1_0</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>tipo</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>familia</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>comp_mp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>larg_mp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>esp_mp</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>MP</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>COMP_ASS_1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>COMP_ASS_2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>COMP_ASS_3</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ORLA_C1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ORLA_C2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ORLA_L1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ORLA_L2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ML_C1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ML_C2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ML_L1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ML_L2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_ML_C1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_ML_C2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_ML_L1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_ML_L2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>QT_Total</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Comp_res</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Larg_res</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Esp_res</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Gravar_Modulo</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>AREA_M2_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>SPP_ML_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP09_CUSTO_MP</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_MP_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CUSTO_MP_Total</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ACB_SUP</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ACB_INF</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ACB_SUP_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ACB_INF_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP01_SEC</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP01_SEC_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP02_ORL</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP02_ORL_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP03_CNC</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP03_CNC_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP04_ABD</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP04_ABD_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP05_PRENSA</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP05_PRENSA_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP06_ESQUAD</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP06_ESQUAD_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP07_EMBALAGEM</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP07_EMBALAGEM_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP08_MAO_DE_OBRA</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>CP08_MAO_DE_OBRA_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Soma_Custo_und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Soma_Custo_Total</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Soma_Custo_ACB</string>
+               </property>
+              </column>
+             </widget>
+             <widget class="QPushButton" name="Atualizar_Precos">
+              <property name="geometry">
+               <rect>
+                <x>690</x>
+                <y>790</y>
+                <width>251</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Deve clicar neste botão para atualizar os preços do item em orçamento&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Atualizar Precos</string>
+              </property>
+             </widget>
+             <widget class="QTableWidget" name="tab_modulo_medidas">
+              <property name="geometry">
+               <rect>
+                <x>10</x>
+                <y>820</y>
+                <width>2001</width>
+                <height>61</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>10</pointsize>
+               </font>
+              </property>
+              <property name="columnCount">
+               <number>18</number>
+              </property>
+              <row>
+               <property name="text">
+                <string>Medidas</string>
+               </property>
+              </row>
+              <column>
+               <property name="text">
+                <string>H</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>L</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>P</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>H1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>L1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>P1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>H2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>L2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>P2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>H3</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>L3</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>P3</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>H4</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>L4</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>P4</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ids</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>num_orc</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>ver_orc</string>
+               </property>
+              </column>
+             </widget>
+             <widget class="QTreeWidget" name="tab_artigos_11">
+              <property name="geometry">
+               <rect>
+                <x>10</x>
+                <y>40</y>
+                <width>2281</width>
+                <height>71</height>
+               </rect>
+              </property>
+              <property name="sizeAdjustPolicy">
+               <enum>QAbstractScrollArea::AdjustToContents</enum>
+              </property>
+              <column>
+               <property name="text">
+                <string>Item</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Codigo</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Descricao</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Altura</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Largura</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Profundidade</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Qt</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Preco_Und</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>New Column</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Preco_Total</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Info_1</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Info_2</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Info_4</string>
+               </property>
+              </column>
+             </widget>
+             <widget class="QPushButton" name="botao_down_item">
+              <property name="geometry">
+               <rect>
+                <x>1390</x>
+                <y>10</y>
+                <width>116</width>
+                <height>27</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>↓ Próximo item</string>
+              </property>
+              <property name="flat">
+               <bool>false</bool>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="botao_up_item">
+              <property name="geometry">
+               <rect>
+                <x>1250</x>
+                <y>10</y>
+                <width>114</width>
+                <height>27</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>↑ Item anterior</string>
+              </property>
+              <property name="flat">
+               <bool>false</bool>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="Guardar_Dados_Items">
+              <property name="geometry">
+               <rect>
+                <x>960</x>
+                <y>790</y>
+                <width>251</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Guarda os dados em SQL para as tabelas -&amp;gt; tab_def_pecas e tab_modulo_medidas&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Guardar Dados</string>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="Guardar_Modulo">
+              <property name="geometry">
+               <rect>
+                <x>1220</x>
+                <y>790</y>
+                <width>251</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Guarda com Modulo as linhas selecionadas &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Guardar Modulo</string>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="Importar_Modulo">
+              <property name="geometry">
+               <rect>
+                <x>1470</x>
+                <y>790</y>
+                <width>251</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Importa a partir de uma lista o Modulo que prtende adicionar ao orcamento&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Importar Modulo</string>
+              </property>
+             </widget>
+             <widget class="QPushButton" name="Gerir_Modulo">
+              <property name="geometry">
+               <rect>
+                <x>1730</x>
+                <y>790</y>
+                <width>281</width>
+                <height>31</height>
+               </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Gerir Modulos Guardados -&amp;gt; Menu onde utilizador pode editar , eliminar , consultar modulos guardados para serem importados para preenhcer a tab_def_pecas.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string>Gerir Modulos Guardados</string>
+              </property>
+             </widget>
+            </widget>
+           </widget>
+          </widget>
+          <widget class="QWidget" name="Tab_Material_3">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>98</width>
+             <height>28</height>
+            </rect>
+           </property>
+           <attribute name="label">
+            <string>Tabela Material</string>
+           </attribute>
+           <widget class="QTableWidget" name="Tab_Material_11">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>34</y>
+              <width>2391</width>
+              <height>831</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="sizeAdjustPolicy">
+             <enum>QAbstractScrollArea::AdjustIgnored</enum>
+            </property>
+            <property name="rowCount">
+             <number>26</number>
+            </property>
+            <property name="columnCount">
+             <number>21</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Material</string>
+              <string>Descricao</string>
+              <string>id_dg</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Mat_Costas</string>
+              <string>Mat_Laterais</string>
+              <string>Mat_Divisorias</string>
+              <string>Mat_Tetos</string>
+              <string>Mat_Fundos</string>
+              <string>Mat_Prat_Fixas</string>
+              <string>Mat_Prat_Amoviveis</string>
+              <string>Mat_Portas_Abrir</string>
+              <string>Mat_Laterais_Acabamento</string>
+              <string>Mat_Fundos_Acabamento</string>
+              <string>Mat_Costas_Acabamento</string>
+              <string>Mat_Tampos_Acabamento</string>
+              <string>Mat_Remates_Verticais</string>
+              <string>Mat_Remates_Horizontais</string>
+              <string>Mat_Guarnicoes_Verticais</string>
+              <string>Mat_Guarnicoes_Horizontais</string>
+              <string>Mat_Enchimentos_Guarnicao</string>
+              <string>Mat_Rodape_AGL</string>
+              <string>Mat_Gavetas_Frentes</string>
+              <string>Mat_Gavetas_Caixa</string>
+              <string>Mat_Gavetas_Fundo</string>
+              <string>Mat_Livre_1</string>
+              <string>Mat_Livre_2</string>
+              <string>Mat_Livre_3</string>
+              <string>Mat_Livre_4</string>
+              <string>Mat_Livre_5</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QLabel" name="label_Tab_Material_11">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>107</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Material</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="limpar_linha_tab_material">
+            <property name="geometry">
+             <rect>
+              <x>760</x>
+              <y>0</y>
+              <width>181</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>Limpar Linha Selecionada </string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="importar_dados_item_tab_material">
+            <property name="geometry">
+             <rect>
+              <x>150</x>
+              <y>0</y>
+              <width>241</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Importar Dados Item Tabela Material</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="guardar_dados_item_orcamento_tab_material">
+            <property name="geometry">
+             <rect>
+              <x>410</x>
+              <y>0</y>
+              <width>341</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão guarda na base dados e associado ao num_orc &amp;amp; ver_orc &amp;amp; id_item todas as 4 tabelas com dados preenchidos de linhas e colunas&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Guardar para este Orcamento Dados Item Tabela Material</string>
+            </property>
+           </widget>
+          </widget>
+          <widget class="QWidget" name="Tab_Ferragens_3">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>98</width>
+             <height>28</height>
+            </rect>
+           </property>
+           <attribute name="label">
+            <string>Tabela Ferragens</string>
+           </attribute>
+           <widget class="QTableWidget" name="Tab_Ferragens_11">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>34</y>
+              <width>2391</width>
+              <height>801</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>25</number>
+            </property>
+            <property name="columnCount">
+             <number>21</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Ferragens</string>
+              <string>Descricao</string>
+              <string>id_fer</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Fer_Dobradica</string>
+              <string>Fer_Suporte Prateleira</string>
+              <string>Fer_Suporte Varao</string>
+              <string>Fer_Varao_SPP</string>
+              <string>Fer_Rodape_PVC</string>
+              <string>Fer_Pes_1</string>
+              <string>Fer_Pes_2</string>
+              <string>Fer_Grampas</string>
+              <string>Fer_Corredica_1</string>
+              <string>Fer_Corredica_2</string>
+              <string>Fer_Corredica_3</string>
+              <string>Fer_Puxador</string>
+              <string>Fer_Puxador_SPP_1</string>
+              <string>Fer_Puxador_SPP_2</string>
+              <string>Fer_Puxador_SPP_3</string>
+              <string>Fer_Sistema_Basculante_1</string>
+              <string>Fer_Sistema_Basculante_2</string>
+              <string>Fer_Acessorio_1</string>
+              <string>Fer_Acessorio_2</string>
+              <string>Fer_Acessorio_3</string>
+              <string>Fer_Acessorio_4</string>
+              <string>Fer_Acessorio_5</string>
+              <string>Fer_Acessorio_6</string>
+              <string>Fer_Acessorio_7</string>
+              <string>Fer_Acessorio_8_SPP</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QLabel" name="label_Tab_Ferragens_11">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>121</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Ferragens</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="guardar_dados_item_orcamento_tab_ferragens_2">
+            <property name="geometry">
+             <rect>
+              <x>410</x>
+              <y>0</y>
+              <width>341</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão guarda na base dados e associado ao num_orc &amp;amp; ver_orc &amp;amp; id_item todas as 4 tabelas com dados preenchidos de linhas e colunas&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Guardar para este Orcamento Dados Item Tabela Ferragens</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="importar_dados_item_tab_ferragens_2">
+            <property name="geometry">
+             <rect>
+              <x>150</x>
+              <y>0</y>
+              <width>241</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Importar Dados Item Tabela Ferragens</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="limpar_linha_tab_ferragens">
+            <property name="geometry">
+             <rect>
+              <x>760</x>
+              <y>0</y>
+              <width>321</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>Limpar Linha Selecionada</string>
+            </property>
+           </widget>
+          </widget>
+          <widget class="QWidget" name="Tab_Sistemas_Correr_3">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>98</width>
+             <height>28</height>
+            </rect>
+           </property>
+           <attribute name="label">
+            <string>Tabela Sistemas Correr</string>
+           </attribute>
+           <widget class="QTableWidget" name="Tab_Sistemas_Correr_11">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>34</y>
+              <width>2391</width>
+              <height>591</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>18</number>
+            </property>
+            <property name="columnCount">
+             <number>21</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Sitemas_Correr</string>
+              <string>Descricao</string>
+              <string>id_sc</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>SC_Puxador_Vertical_SPP</string>
+              <string>SC_Calha_Superior_SPP</string>
+              <string>SC_Calha_Inferior_SPP_1</string>
+              <string>SC_Calha_Inferior_SPP_2</string>
+              <string>SC_Calha_Porta_Horizontal_H_SPP</string>
+              <string>SC_Calha_Porta_Horizontal_Sup_SPP</string>
+              <string>SC_Calha_Porta_Horizontal_Inf_SPP</string>
+              <string>SC_Painel_Porta_Correr_1</string>
+              <string>SC_Painel_Porta_Correr_2</string>
+              <string>SC_Painel_Porta_Correr_3</string>
+              <string>SC_Painel_Porta_Correr_4</string>
+              <string>SC_Espelho_Porta_Correr_1</string>
+              <string>SC_Espelho_Porta_Correr_2</string>
+              <string>SC_Acessorio_1</string>
+              <string>SC_Acessorio_2</string>
+              <string>SC_Acessorio_3</string>
+              <string>SC_Acessorio_4_SPP</string>
+              <string>SC_Acessorio_5_SPP</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QLabel" name="label_Tab_Sistemas_Correr_11">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>164</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Sistemas Correr</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="importar_dados_item_tab_sistemas_correr_3">
+            <property name="geometry">
+             <rect>
+              <x>180</x>
+              <y>0</y>
+              <width>241</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Importar Dados Item Tabela Sistemas Correr</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="limpar_linha_tab_sistemas_correr_2">
+            <property name="geometry">
+             <rect>
+              <x>790</x>
+              <y>0</y>
+              <width>321</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>Limpar Linha Selecionada</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="guardar_dados_item_orcamento_tab_sistemas_correr_3">
+            <property name="geometry">
+             <rect>
+              <x>440</x>
+              <y>0</y>
+              <width>341</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão guarda na base dados e associado ao num_orc &amp;amp; ver_orc &amp;amp; id_item todas as 4 tabelas com dados preenchidos de linhas e colunas&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Guardar para este Orcamento Dados Item Sistemas Correr</string>
+            </property>
+           </widget>
+          </widget>
+          <widget class="QWidget" name="Tab_Acabamentos_3">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>98</width>
+             <height>28</height>
+            </rect>
+           </property>
+           <attribute name="label">
+            <string>Tabela Acabamentos</string>
+           </attribute>
+           <widget class="QLabel" name="label_Tab_Acabamentos_12">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>-4</y>
+              <width>147</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Acabamentos</string>
+            </property>
+           </widget>
+           <widget class="QTableWidget" name="Tab_Acabamentos_12">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>30</y>
+              <width>2391</width>
+              <height>301</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>8</number>
+            </property>
+            <property name="columnCount">
+             <number>21</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Acabamentos</string>
+              <string>Descricao</string>
+              <string>id_sc</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Acab_Lacar_Face_Sup</string>
+              <string>Acab_Lacar_Face_Inf</string>
+              <string>Acab_Verniz_Face_Sup</string>
+              <string>Acab_Verniz_Face_Inf</string>
+              <string>Acab_Face_Sup_1</string>
+              <string>Acab_Face_Inf_1</string>
+              <string>Acab_Face_Sup_2</string>
+              <string>Acab_Face_Inf_2</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QPushButton" name="guardar_dados_item_orcamento_tab_acabamentos_4">
+            <property name="geometry">
+             <rect>
+              <x>420</x>
+              <y>0</y>
+              <width>341</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão guarda na base dados e associado ao num_orc &amp;amp; ver_orc &amp;amp; id_item todas as 4 tabelas com dados preenchidos de linhas e colunas&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Guardar para este Orcamento Dados Item Acabamentos</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="importar_dados_item_tab_acabamentos_4">
+            <property name="geometry">
+             <rect>
+              <x>160</x>
+              <y>0</y>
+              <width>241</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Importar Dados Item Tabela Acabamentos</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="limpar_linha_tab_acabamentos_3">
+            <property name="geometry">
+             <rect>
+              <x>770</x>
+              <y>0</y>
+              <width>321</width>
+              <height>23</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>Limpar Linha Selecionada</string>
+            </property>
+           </widget>
+          </widget>
+         </widget>
+        </widget>
+        <widget class="QWidget" name="configurar_pecas_maquinas">
+         <attribute name="title">
+          <string>Configurações Peças / Maquinas</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_2">
+          <item row="0" column="0">
+           <widget class="QScrollArea" name="scrollArea">
+            <property name="widgetResizable">
+             <bool>true</bool>
+            </property>
+            <widget class="QWidget" name="scrollAreaWidgetContents">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>1200</width>
+               <height>2500</height>
+              </rect>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>1200</width>
+               <height>2500</height>
+              </size>
+             </property>
+            </widget>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="tab">
+         <attribute name="title">
+          <string>Page</string>
+         </attribute>
+         <widget class="QScrollArea" name="scrollArea_7">
+          <property name="geometry">
+           <rect>
+            <x>-20</x>
+            <y>0</y>
+            <width>2441</width>
+            <height>2391</height>
+           </rect>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>1220</width>
+            <height>2000</height>
+           </size>
+          </property>
+          <property name="sizeIncrement">
+           <size>
+            <width>0</width>
+            <height>5000</height>
+           </size>
+          </property>
+          <property name="baseSize">
+           <size>
+            <width>0</width>
+            <height>5300</height>
+           </size>
+          </property>
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="scrollAreaWidgetContents_10">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>1200</width>
+             <height>6000</height>
+            </rect>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>1200</width>
+             <height>6000</height>
+            </size>
+           </property>
+           <widget class="QTableWidget" name="Tab_Sistemas_Correr_10">
+            <property name="geometry">
+             <rect>
+              <x>11</x>
+              <y>1734</y>
+              <width>2391</width>
+              <height>491</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>18</number>
+            </property>
+            <property name="columnCount">
+             <number>20</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Sitemas_Correr</string>
+              <string>Descricao</string>
+              <string>id_sc</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>SC_Puxador_Vertical_SPP</string>
+              <string>SC_Calha_Superior_SPP</string>
+              <string>SC_Calha_Inferior_SPP_1</string>
+              <string>SC_Calha_Inferior_SPP_2</string>
+              <string>SC_Calha_Porta_Horizontal_H_SPP</string>
+              <string>SC_Calha_Porta_Horizontal_Sup_SPP</string>
+              <string>SC_Calha_Porta_Horizontal_Inf_SPP</string>
+              <string>SC_Painel_Porta_Correr_1</string>
+              <string>SC_Painel_Porta_Correr_2</string>
+              <string>SC_Painel_Porta_Correr_3</string>
+              <string>SC_Painel_Porta_Correr_4</string>
+              <string>SC_Espelho_Porta_Correr_1</string>
+              <string>SC_Espelho_Porta_Correr_2</string>
+              <string>SC_Acessorio_1</string>
+              <string>SC_Acessorio_2</string>
+              <string>SC_Acessorio_3</string>
+              <string>SC_Acessorio_4_SPP</string>
+              <string>SC_Acessorio_5_SPP</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QTableWidget" name="Tab_Acabamentos_10">
+            <property name="geometry">
+             <rect>
+              <x>11</x>
+              <y>2274</y>
+              <width>2391</width>
+              <height>291</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>8</number>
+            </property>
+            <property name="columnCount">
+             <number>20</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Acabamentos</string>
+              <string>Descricao</string>
+              <string>id_sc</string>
+              <string>id_orcamento</string>
+              <string>id_verc_orcamento</string>
+              <string>REF_LE</string>
+              <string>DESCRICAO_no_ORCAMENTO</string>
+              <string>PLIQ</string>
+              <string>DESC1_(+)</string>
+              <string>DESC2_(-)</string>
+              <string>UND</string>
+              <string>DESP</string>
+              <string>CORRESP_ORLA_0_4</string>
+              <string>CORRESP_ORLA_1_0</string>
+              <string>TIPO</string>
+              <string>FAMILIA</string>
+              <string>COMP_MP</string>
+              <string>LARG_MP</string>
+              <string>ESP_MP</string>
+              <string>MP</string>
+             </stringlist>
+            </property>
+            <property name="verticalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Acab_Lacar_Face_Sup</string>
+              <string>Acab_Lacar_Face_Inf</string>
+              <string>Acab_Verniz_Face_Sup</string>
+              <string>Acab_Verniz_Face_Inf</string>
+              <string>Acab_Face_Sup_1</string>
+              <string>Acab_Face_Inf_1</string>
+              <string>Acab_Face_Sup_2</string>
+              <string>Acab_Face_Inf_2</string>
+             </stringlist>
+            </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+            <column/>
+           </widget>
+           <widget class="QLabel" name="label_Tab_Sistemas_Correr_10">
+            <property name="geometry">
+             <rect>
+              <x>11</x>
+              <y>1700</y>
+              <width>164</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Sistemas Correr</string>
+            </property>
+           </widget>
+           <widget class="QLabel" name="label_Tab_Acabamentos_10">
+            <property name="geometry">
+             <rect>
+              <x>11</x>
+              <y>2240</y>
+              <width>147</width>
+              <height>19</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Tabela Acabamentos</string>
+            </property>
+           </widget>
+           <widget class="QLabel" name="label_nome_cliente_12">
+            <property name="geometry">
+             <rect>
+              <x>30</x>
+              <y>10</y>
+              <width>51</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Nome:</string>
+            </property>
+           </widget>
+           <widget class="QLineEdit" name="versao_orcamento_12">
+            <property name="geometry">
+             <rect>
+              <x>900</x>
+              <y>10</y>
+              <width>51</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </widget>
+           <widget class="QLineEdit" name="num_orcamento_12">
+            <property name="geometry">
+             <rect>
+              <x>640</x>
+              <y>10</y>
+              <width>133</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </widget>
+           <widget class="QLabel" name="label_ref_cliente_12">
+            <property name="geometry">
+             <rect>
+              <x>980</x>
+              <y>10</y>
+              <width>71</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Ref Cliente</string>
+            </property>
+           </widget>
+           <widget class="QLabel" name="label_num_orcamento_12">
+            <property name="geometry">
+             <rect>
+              <x>531</x>
+              <y>10</y>
+              <width>111</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="sizeIncrement">
+             <size>
+              <width>50</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="baseSize">
+             <size>
+              <width>50</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Num_Orcamento</string>
+            </property>
+           </widget>
+           <widget class="QLineEdit" name="nome_cliente_12">
+            <property name="geometry">
+             <rect>
+              <x>75</x>
+              <y>10</y>
+              <width>451</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </widget>
+           <widget class="QTableWidget" name="tab_artigos_12">
+            <property name="geometry">
+             <rect>
+              <x>30</x>
+              <y>50</y>
+              <width>2341</width>
+              <height>174</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="horizontalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOn</enum>
+            </property>
+            <property name="rowCount">
+             <number>2</number>
+            </property>
+            <property name="columnCount">
+             <number>10</number>
+            </property>
+            <property name="horizontalHeaderLabels" stdset="0">
+             <stringlist>
+              <string>Item</string>
+              <string>Codigo</string>
+              <string>Descricao</string>
+              <string>Altura</string>
+              <string>Largura</string>
+              <string>Profundidade</string>
+              <string>Und</string>
+              <string>QT</string>
+              <string>Preco_Unitario</string>
+              <string>Preco_Total</string>
+             </stringlist>
+            </property>
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>false</bool>
+            </attribute>
+            <row>
+             <property name="text">
+              <string>1</string>
+             </property>
+            </row>
+            <row>
+             <property name="text">
+              <string>2</string>
+             </property>
+            </row>
+            <column>
+             <property name="text">
+              <string>Item</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Codigo</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Descricao</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Altura</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Largura</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Profundidade</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Und</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>QT</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Preco_Unitario</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Preco_Total</string>
+             </property>
+            </column>
+           </widget>
+           <widget class="QLineEdit" name="ref_cliente_12">
+            <property name="geometry">
+             <rect>
+              <x>1060</x>
+              <y>10</y>
+              <width>151</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </widget>
+           <widget class="QScrollArea" name="scrollArea_4">
+            <property name="geometry">
+             <rect>
+              <x>30</x>
+              <y>240</y>
+              <width>2351</width>
+              <height>611</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="widgetResizable">
+             <bool>true</bool>
+            </property>
+            <widget class="QWidget" name="scrollAreaWidgetContents_5">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>2349</width>
+               <height>609</height>
+              </rect>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+             <layout class="QHBoxLayout" name="horizontalLayout_4">
+              <item>
+               <widget class="QGroupBox" name="groupBox_caixote_3">
+                <property name="title">
+                 <string>CAIXOTE</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_caixote_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>371</width>
+                   <height>541</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_ferragens_3">
+                <property name="title">
+                 <string>FERRAGENS</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_ferragens_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>371</width>
+                   <height>541</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_mao_obra_3">
+                <property name="title">
+                 <string>MAO_DE_OBRA</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_mao_obra_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>361</width>
+                   <height>547</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_paineis_3">
+                <property name="title">
+                 <string>PAINEIS</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_paineis_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>361</width>
+                   <height>547</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_remates_guarnicoes_3">
+                <property name="title">
+                 <string>REMATES_GUARNICOES</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_remates_guarnicoes_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>26</y>
+                   <width>371</width>
+                   <height>551</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="groupBox_sistemas_correr_3">
+                <property name="title">
+                 <string>SISTEMAS_CORRER</string>
+                </property>
+                <widget class="QListWidget" name="listWidget_sistemas_correr_3">
+                 <property name="geometry">
+                  <rect>
+                   <x>10</x>
+                   <y>23</y>
+                   <width>371</width>
+                   <height>551</height>
+                  </rect>
+                 </property>
+                </widget>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </widget>
+           <widget class="QLabel" name="label_versao_orcamento_12">
+            <property name="geometry">
+             <rect>
+              <x>780</x>
+              <y>10</y>
+              <width>121</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Versao Orcamento</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="Atualizar_Grupos_Pecas_2">
+            <property name="geometry">
+             <rect>
+              <x>1070</x>
+              <y>860</y>
+              <width>601</width>
+              <height>31</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Atualizar Grupos Definicao de Pecas</string>
+            </property>
+           </widget>
+           <widget class="QPushButton" name="Inserir_Pecas_Selecionadas_2">
+            <property name="geometry">
+             <rect>
+              <x>440</x>
+              <y>860</y>
+              <width>601</width>
+              <height>31</height>
+             </rect>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string>Inserir_Pecas_Selecionadas</string>
+            </property>
+           </widget>
+          </widget>
+         </widget>
+        </widget>
+       </widget>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>2714</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <tabstops>
+  <tabstop>lineEdit_nome_cliente_2</tabstop>
+  <tabstop>pushButton_inserir_cliente</tabstop>
+  <tabstop>pushButton_tranpordados_cliente_orcamento</tabstop>
+  <tabstop>pushButton_editar_cliente</tabstop>
+  <tabstop>pushButton_eliminar_cliente</tabstop>
+  <tabstop>lineEdit_versao</tabstop>
+  <tabstop>lineEdit_orcamentos</tabstop>
+  <tabstop>lineEdit_morada_cliente</tabstop>
+  <tabstop>lineEdit_telemovel</tabstop>
+  <tabstop>lineEdit_pagina_web</tabstop>
+  <tabstop>lineEdit_num_cliente_phc</tabstop>
+  <tabstop>lineEdit_info_1</tabstop>
+  <tabstop>lineEdit_info_2</tabstop>
+  <tabstop>lineEdit_telefone</tabstop>
+  <tabstop>lineEdit_nome_cliente</tabstop>
+  <tabstop>lineEdit_idCliente</tabstop>
+  <tabstop>tableWidget_tabela_clientes</tabstop>
+  <tabstop>lineEdit_pesquisar_cliente</tabstop>
+  <tabstop>tableWidget_orcamentos</tabstop>
+  <tabstop>lineEdit_num_orcamento_2</tabstop>
+  <tabstop>lineEdit_ano</tabstop>
+  <tabstop>lineEdit_data</tabstop>
+  <tabstop>lineEdit_nome_cliente_simplex</tabstop>
+  <tabstop>lineEdit_preco</tabstop>
+  <tabstop>pushButton_atualiza_configuracoes</tabstop>
+  <tabstop>lineEdit_email_cliente</tabstop>
+  <tabstop>lineEdit_ref_cliente_2</tabstop>
+  <tabstop>lineEdit_obra_2</tabstop>
+  <tabstop>lineEdit_id</tabstop>
+  <tabstop>lineEdit_localizacao</tabstop>
+  <tabstop>lineEdit_idCliente_noOrc</tabstop>
+  <tabstop>pushButton_abrir_orcamento</tabstop>
+  <tabstop>pushButton_inserir_linha_orcamento_2</tabstop>
+  <tabstop>pushButton_apagar_orcamento</tabstop>
+  <tabstop>pushButton_abrir_criar_pasta_orcamento</tabstop>
+  <tabstop>pushButton_editar_linha_orcamento</tabstop>
+  <tabstop>lineEdit_pesquisar</tabstop>
+  <tabstop>lineEdit_nome_cliente</tabstop>
+  <tabstop>lineEdit_morada</tabstop>
+  <tabstop>lineEdit_email</tabstop>
+  <tabstop>lineEdit_obra</tabstop>
+  <tabstop>tableWidget_artigos</tabstop>
+  <tabstop>pushButton_configurar_dados_gerais</tabstop>
+  <tabstop>lineEdit_num_orcamento</tabstop>
+  <tabstop>lineEdit_ref_cliente</tabstop>
+  <tabstop>lineEdit_versao_orcamento</tabstop>
+  <tabstop>dateEdit_data_orcamento</tabstop>
+  <tabstop>lineEdit_id_no_orcamento</tabstop>
+  <tabstop>pushButton_eliminar_linha_orcamento</tabstop>
+  <tabstop>pushButton_inserir_linha_orcamento</tabstop>
+  <tabstop>lineEdit_item_orcamento</tabstop>
+  <tabstop>lineEdit_codigo_orcamento</tabstop>
+  <tabstop>plainTextEdit_descricao_orcamento</tabstop>
+  <tabstop>lineEdit_altura_orcamento</tabstop>
+  <tabstop>lineEdit_largura_orcamento</tabstop>
+  <tabstop>lineEdit_profundidade_orcamento</tabstop>
+  <tabstop>lineEdit_und_orcamento</tabstop>
+  <tabstop>lineEdit_qt_orcamento</tabstop>
+  <tabstop>lineEdit_pesquisar_orcamento</tabstop>
+  <tabstop>pushButton_editar_linha_orcamento_2</tabstop>
+  <tabstop>pushButton_atualizar_excel</tabstop>
+  <tabstop>pushButton_limpar_dados_cliente</tabstop>
+  <tabstop>comboBox_status</tabstop>
+  <tabstop>plainTextEdit_caracteristicas</tabstop>
+  <tabstop>plainTextEdit_info_1</tabstop>
+  <tabstop>plainTextEdit_info_2</tabstop>
+  <tabstop>comboBox_utilizador</tabstop>
+  <tabstop>lineEdit_enc_phc</tabstop>
+  <tabstop>lineEdit_nome_cliente</tabstop>
+  <tabstop>lineEdit_base_dados</tabstop>
+  <tabstop>tableWidget_materias_primas</tabstop>
+  <tabstop>lineEdit_nome_cliente</tabstop>
+  <tabstop>lineEdit_pesquisar_mp</tabstop>
+  <tabstop>tab_dados_gerais_mp</tabstop>
+  <tabstop>Tab_Material</tabstop>
+  <tabstop>guardar_dados_gerais_material</tabstop>
+  <tabstop>importar_dados_gerais_material</tabstop>
+  <tabstop>limpar_linha_material</tabstop>
+  <tabstop>importar_dados_gerais_4_separadores</tabstop>
+  <tabstop>Tab_Ferragens</tabstop>
+  <tabstop>guardar_dados_gerais_ferragens</tabstop>
+  <tabstop>importar_dados_gerais_ferragens</tabstop>
+  <tabstop>limpar_linha_ferragens</tabstop>
+  <tabstop>Tab_Sistemas_Correr</tabstop>
+  <tabstop>guardar_dados_gerais_sistemas_correr</tabstop>
+  <tabstop>importar_dados_gerais_sistemas_correr</tabstop>
+  <tabstop>limpar_linha_sistemas_correr</tabstop>
+  <tabstop>Tab_Acabamentos</tabstop>
+  <tabstop>guardar_dados_gerais_acabamentos</tabstop>
+  <tabstop>importar_dados_gerais_acabamentos</tabstop>
+  <tabstop>limpar_linha_acabamentos</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
