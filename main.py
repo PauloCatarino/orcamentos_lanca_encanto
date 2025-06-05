@@ -246,8 +246,13 @@ class MainApp(QMainWindow):
         except Exception as e:
             print(f"[ERRO] Falha ao conectar botão Inserir Peças Selecionadas: {e}")
 
-        # Botão "Atualizar Preços" (chama o orquestrador para recalcular tudo)
-         # NOVO: Conexão para o botão "Atualiza Preco Items Orcamento"
+        # Botão "Atualizar Preços" (recalcula todos os dados de tab_def_pecas)
+        try:
+            self.ui.Atualizar_Precos.clicked.connect(lambda: atualizar_tudo(self.ui))
+        except Exception as e:
+            print(f"[ERRO] Falha ao conectar botão Atualizar_Precos: {e}")
+
+        # NOVO: Conexão para o botão "Atualiza Preco Items Orcamento"
         # Este botão irá disparar o cálculo e atualização de todas as colunas de custo e preço por item.
         # Por padrão, não força a margem global.
         # Após a atualização dos itens, recalcula o preço final do orçamento.

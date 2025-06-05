@@ -155,13 +155,13 @@ def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None):
     
     # Seleciona o QTableWidget de acordo com o tipo
     if nome_tabela == "materiais":
-        table = ui.ui.Tab_Material
+        table = ui.Tab_Material
     elif nome_tabela == "ferragens":
-        table = ui.ui.Tab_Ferragens
+        table = ui.Tab_Ferragens
     elif nome_tabela == "sistemas_correr":
-        table = ui.ui.Tab_Sistemas_Correr
+        table = ui.Tab_Sistemas_Correr
     elif nome_tabela == "acabamentos":
-        table = ui.ui.Tab_Acabamentos
+        table = ui.Tab_Acabamentos
     else:
         QMessageBox.warning(ui, "Erro", f"Tabela para {nome_tabela} não encontrada.") # Modified: Removed parent=ui
         return
