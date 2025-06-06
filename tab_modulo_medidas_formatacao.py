@@ -1,3 +1,16 @@
+"""
+tab_modulo_medidas_formatacao.py
+==================
+
+Formatação e controle de edição da tabela ``tab_modulo_medidas``.
+
+Este módulo define um ``delegate`` customizado para mover o foco para a
+próxima célula após pressionar ``Enter`` e funções auxiliares que aplicam
+cores e estilos nas colunas de medidas. Também valida que apenas números são
+introduzidos e protege as colunas ``ids``, ``num_orc`` e ``ver_orc`` contra
+edição.
+"""
+
 from PyQt5.QtWidgets import QStyledItemDelegate, QLineEdit, QTableWidgetItem
 from PyQt5.QtGui import QColor, QBrush
 from PyQt5.QtCore import Qt, QEvent, QTimer
@@ -73,6 +86,10 @@ def aplicar_formatacao(item):
     else:
         cor = COR_BRANCO
 
+    table = item.tableWidget()
+    if table:
+        table.blockSignals(True)
+
     item.setBackground(QBrush(cor))
 
     fonte = item.font()
@@ -83,6 +100,9 @@ def aplicar_formatacao(item):
         fonte.setBold(False)
         fonte.setPointSize(FONTE_TAMANHO_DEFAULT)
     item.setFont(fonte)
+
+    if table:
+        table.blockSignals(False)
 
 
 def on_item_changed_modulo_medidas(item):
@@ -96,13 +116,17 @@ def on_item_changed_modulo_medidas(item):
     col = item.column()
     # Evita qualquer edição nas colunas de chaves
     if col in (15, 16, 17):
+        table.blockSignals(True)
         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        table.blockSignals(False)
         return
 
     texto = item.text().strip()
     if texto and not re.fullmatch(r"\d+(?:[\.,]\d+)?", texto):
         # Remove caracteres não numéricos
+        table.blockSignals(True)
         item.setText("")
+        table.blockSignals(False)
         texto = ""
 
     aplicar_formatacao(item)

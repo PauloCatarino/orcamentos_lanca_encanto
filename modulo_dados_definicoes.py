@@ -345,7 +345,7 @@ def salvar_dados_def_pecas(ui):
             f"  Versão: {key_ver_final}\n\n" # Mostrar key_ver_final no diálogo
             "Deseja substituir os dados existentes pelos dados atuais da tabela?",
             QMessageBox.Yes | QMessageBox.No, # Botões
-            QMessageBox.No # Botão padrão
+            QMessageBox.Yes # Botão padrão forçado a ficar ativo o botão 'Yes'
         )
 
         if resposta == QMessageBox.No:
