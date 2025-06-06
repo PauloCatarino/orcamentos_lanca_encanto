@@ -514,20 +514,26 @@ def criar_tabela_orcamento_items():
         for col_name, col_type in columns_to_add.items():
             try:
                 with obter_cursor() as cursor:
-                    # Tenta adicionar a coluna. Se já existir, MySQL (ou a sua biblioteca) irá lançar uma exceção.
-                    cursor.execute(f"ALTER TABLE orcamento_items ADD COLUMN `{col_name}` {col_type}")
-                print(f"Coluna '{col_name}' adicionada a 'orcamento_items'.")
+                    # Verifica se a coluna já existe para evitar exceções
+                    cursor.execute("SHOW COLUMNS FROM orcamento_items LIKE %s", (col_name,))
+                    existe = cursor.fetchone()
+                    if not existe:
+                        cursor.execute(
+                            f"ALTER TABLE orcamento_items ADD COLUMN `{col_name}` {col_type}"
+                        )
+                        print(f"Coluna '{col_name}' adicionada a 'orcamento_items'.")
             except mysql.connector.Error as err:
-                # Verifica se o erro é devido à coluna já existir
-                if "Duplicate column name" in str(err):
-                    # print(f"Coluna '{col_name}' já existe em 'orcamento_items'. (INFO)")
-                    pass # Ignora o erro se a coluna já existe
-                else:
-                    print(f"Erro MySQL ao adicionar coluna '{col_name}': {err}")
-                    QMessageBox.warning(None, "Erro BD", f"Falha ao adicionar coluna '{col_name}':\n{err}")
+                print(f"Erro MySQL ao adicionar coluna '{col_name}': {err}")
+                QMessageBox.warning(
+                    None, "Erro BD", f"Falha ao adicionar coluna '{col_name}':\n{err}"
+                )
             except Exception as e:
                 print(f"Erro inesperado ao adicionar coluna '{col_name}': {e}")
-                QMessageBox.critical(None, "Erro", f"Falha na configuração inicial ao adicionar coluna '{col_name}':\n{e}")
+                QMessageBox.critical(
+                    None,
+                    "Erro",
+                    f"Falha na configuração inicial ao adicionar coluna '{col_name}':\n{e}"
+                )
 
         #######################################################################
 
