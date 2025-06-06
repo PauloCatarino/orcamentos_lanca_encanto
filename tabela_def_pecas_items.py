@@ -150,11 +150,14 @@ def inserir_pecas_selecionadas(ui):
     items_a_desmarcar = []
 
     # 6) Para cada peça marcada, insere UI + banco básico
-    for grupo, lw in grupos_widgets.items():
-        for i in range(lw.count()):
-            item = lw.item(i)
-            if item.checkState() != Qt.Checked:
-                continue
+    table.setProperty("importando_dados", True)  # Evita triggers de BLK durante inserção
+    table.blockSignals(True)
+    try:
+        for grupo, lw in grupos_widgets.items():
+            for i in range(lw.count()):
+                item = lw.item(i)
+                if item.checkState() != Qt.Checked:
+                    continue
 
             texto_def_peca = item.text().strip()
             
@@ -242,8 +245,11 @@ def inserir_pecas_selecionadas(ui):
                     # table.setItem(row, c, item_c) # <-- REMOVER ESTA LINHA
 
 
-            # Adiciona o item à lista para desmarcar depois
+           # Adiciona o item à lista para desmarcar depois
             items_a_desmarcar.append(item)
+    finally:
+        table.blockSignals(False)
+        table.setProperty("importando_dados", False)
 
     # 7) Pós-processamento:
     update_ids(table) # Renumera os IDs após todas as inserções

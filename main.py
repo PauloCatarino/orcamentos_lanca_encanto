@@ -2,7 +2,8 @@
 main.py
 =======
 Módulo principal do software de orçamentos.
-Este módulo integra e configura os diversos componentes da interface (...)
+Este módulo integra e 
+gura os diversos componentes da interface (...)
 e conecta os módulos responsáveis por gerenciar:
   - Clientes
   - Orçamentos e itens de orçamento
@@ -256,7 +257,8 @@ class MainApp(QMainWindow):
             except TypeError:
                 pass
             table_def_pecas.itemChanged.connect(on_item_changed_def_pecas)
-            print("[INFO Main] Sinal itemChanged conectado a on_item_changed_def_pecas.")
+            print(
+                "[INFO Main] Sinal itemChanged conectado a on_item_changed_def_pecas.")
             # -------------------------------------------------
             print("[INFO] Tabela Definição de Peças configurada.")
 
