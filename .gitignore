@@ -1,0 +1,15 @@
+# Ignorar ficheiros compilados do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignorar ficheiros de configuração do VSCode
+.vscode/
+
+# Ignorar ficheiros temporários do sistema
+*.swp
+*.tmp
+
+# Ignorar ficheiros de backup do editor
+*~
+*.bak

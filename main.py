@@ -21,6 +21,8 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
 """
 
 import modulo_dados_definicoes
+# Configuração visual e eventos para a tabela 'tab_modulo_medidas'
+from tab_modulo_medidas_formatacao import setup_tab_modulo_medidas
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QHBoxLayout, QPushButton, QComboBox, QDialog, QTableWidgetItem
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
@@ -254,9 +256,13 @@ class MainApp(QMainWindow):
             except TypeError:
                 pass
             table_def_pecas.itemChanged.connect(on_item_changed_def_pecas)
-
+            print("[INFO Main] Sinal itemChanged conectado a on_item_changed_def_pecas.")
             # -------------------------------------------------
             print("[INFO] Tabela Definição de Peças configurada.")
+
+            # Configura eventos e formatação da tabela de medidas
+            setup_tab_modulo_medidas(self.ui)
+            print("[INFO] Tabela de Medidas configurada.")
         except Exception as e:
             print(f"[ERRO] Falha ao configurar Definição de Peças: {e}")
             QMessageBox.critical(self, "Erro de Inicialização",
