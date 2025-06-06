@@ -17,10 +17,9 @@ Observação:
 import datetime
 import math
 import re
-import mysql.connector 
+import mysql.connector
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
 from db_connection import obter_cursor
-
 
 
 VARIAVEIS_VALIDAS = [
@@ -33,6 +32,7 @@ VARIAVEIS_VALIDAS = [
 ]
 original_pliq_values = {}
 
+
 def gerar_id_orcamento():
     """
     Gera automaticamente o próximo ID para a tabela 'orcamentos'.
@@ -41,7 +41,7 @@ def gerar_id_orcamento():
     Retorna:
       Uma string com o próximo ID (calculado como MAX(id) + 1), ou "1" em caso de erro.
     """
-    ultimo_id = 0 # Valor padrão caso a tabela esteja vazia ou ocorra erro
+    ultimo_id = 0  # Valor padrão caso a tabela esteja vazia ou ocorra erro
     try:
         # Utiliza o gestor de contexto para obter e fechar cursor/conexão
         with obter_cursor() as cursor:
@@ -58,9 +58,10 @@ def gerar_id_orcamento():
         return "1"
     except Exception as e:
         print(f"Erro inesperado ao gerar ID de orçamento: {e}")
-        return "1" # Fallback
+        return "1"  # Fallback
 
 # Função refatorada para usar obter_cursor()
+
 
 def sugerir_numero_orcamento(ano):
     """
@@ -77,7 +78,8 @@ def sugerir_numero_orcamento(ano):
     try:
         # Utiliza o gestor de contexto
         with obter_cursor() as cursor:
-            cursor.execute("SELECT MAX(num_orcamento) FROM orcamentos WHERE ano = %s", (ano,))
+            cursor.execute(
+                "SELECT MAX(num_orcamento) FROM orcamentos WHERE ano = %s", (ano,))
             resultado = cursor.fetchone()
             if resultado and resultado[0] is not None:
                 ultimo_num_orc = resultado[0]
@@ -89,9 +91,10 @@ def sugerir_numero_orcamento(ano):
                 seq = int(ultimo_num_orc[2:])
                 novo_seq = seq + 1
             except (ValueError, IndexError):
-                 # Se o formato não for o esperado, retorna um padrão
-                 print(f"Aviso: Formato inesperado para último num_orcamento ('{ultimo_num_orc}'). Usando sequência 1.")
-                 novo_seq = 1
+                # Se o formato não for o esperado, retorna um padrão
+                print(
+                    f"Aviso: Formato inesperado para último num_orcamento ('{ultimo_num_orc}'). Usando sequência 1.")
+                novo_seq = 1
         else:
             novo_seq = 1
         # Formata o resultado final
@@ -103,7 +106,8 @@ def sugerir_numero_orcamento(ano):
         return f"{ano[-2:]}0001"
     except Exception as e:
         print(f"Erro inesperado ao sugerir número de orçamento: {e}")
-        return f"{ano[-2:]}0001" # Fallback
+        return f"{ano[-2:]}0001"  # Fallback
+
 
 def limpar_campos_orcamento(ui):
     """
@@ -121,7 +125,7 @@ def limpar_campos_orcamento(ui):
 def atualizar_campos_para_novo_orcamento(ui):
     """
     Atualiza os campos da interface para um novo orçamento com base nos dados atuais.
-    
+
     Parâmetros:
       - ui: objeto da interface que contém os campos do orçamento.
       - get_connection: função que retorna uma conexão com o MySQL.
@@ -144,10 +148,11 @@ def atualizar_campos_para_novo_orcamento(ui):
     # Define a data atual.
     ui.lineEdit_data.setText(datetime.datetime.now().strftime("%d/%m/%Y"))
 
+
 def limpar_dados_cliente(ui):
     """
     Limpa todos os campos do grupo de dados do cliente na interface (Separador Clientes).
-    
+
     Parâmetros:
       - ui: objeto da interface que contém os campos do cliente.
     """
@@ -167,10 +172,10 @@ def formatar_valor_moeda(valor):
     """
     Formata um valor numérico para exibição como moeda.
     Exibe sempre com 2 casas decimais e o símbolo '€'.
-    
+
     Parâmetros:
       - valor: número a ser formatado.
-      
+
     Retorna:
       Uma string formatada ou o valor original convertido para string em caso de erro.
     """
@@ -184,14 +189,15 @@ def formatar_valor_moeda(valor):
         # Se não for possível converter (ex: texto não numérico), retorna como string
         return str(valor)
 
+
 def formatar_valor_percentual(valor):
     """
     Formata um valor numérico para exibição como percentual.
     Exibe sem casas decimais e com o símbolo '%'.
-    
+
     Parâmetros:
       - valor: número (fração) a ser formatado.
-      
+
     Retorna:
       Uma string com o valor percentual ou o valor original convertido para string em caso de erro.
     """
@@ -206,14 +212,15 @@ def formatar_valor_percentual(valor):
     except (ValueError, TypeError):
         return str(valor)
 
+
 def converter_texto_para_valor(txt, tipo):
     """
     Converte um texto formatado para um valor numérico "limpo".
-    
+
     Parâmetros:
       - txt: string a ser convertida.
       - tipo: tipo de conversão; pode ser 'moeda' ou 'percentual'.
-      
+
     Retorna:
       Um float representando o valor numérico limpo. Retorna 0.0 em caso de falha.
     """
@@ -234,7 +241,8 @@ def converter_texto_para_valor(txt, tipo):
     except (ValueError, TypeError):
         # Retorna 0.0 se a conversão falhar
         return 0.0
-    
+
+
 def limpar_formatacao_preco(valor_formatado):
     """
     Remove símbolos de moeda (€) e separadores de milhares (espaços)
@@ -250,35 +258,39 @@ def limpar_formatacao_preco(valor_formatado):
     if not valor_formatado:
         return ""
     # Remove o símbolo '€', remove espaços (separadores de milhares), substitui ',' por '.'
-    valor_limpo = valor_formatado.replace("€", "").replace(" ", "").replace(",", ".").strip()
+    valor_limpo = valor_formatado.replace(
+        "€", "").replace(" ", "").replace(",", ".").strip()
     return valor_limpo
+
 
 def get_distinct_values_with_filter(col_name, filter_col, filter_val):
     """
     Retorna os valores distintos da coluna `col_name` da tabela "materias_primas",
     considerando apenas os registros em que `filter_col` é igual a `filter_val`.
     Exclui valores nulos ou vazios.
-    
+
     Parâmetros:
       - col_name: nome da coluna da qual se deseja obter valores distintos.
       - filter_col: coluna que será utilizada para filtrar os registros.
       - filter_val: valor que os registros devem ter na coluna de filtro.
-      
+
     Retorna:
       Uma lista com os valores distintos encontrados.
     """
     # Importação local para evitar dependência circular.
-    #from orcamentos import get_connection
+    # from orcamentos import get_connection
     values = []
     # Validação básica dos nomes das colunas para prevenir injeção SQL simples
     # (Idealmente, usar uma lista mais completa de colunas permitidas)
-    allowed_cols = {"tipo", "familia", "ref_le", "descricao", "material"} # Adicione outras colunas se necessário
+    allowed_cols = {"tipo", "familia", "ref_le", "descricao",
+                    "material"}  # Adicione outras colunas se necessário
     col_name_safe = col_name.strip('`').lower()
     filter_col_safe = filter_col.strip('`').lower()
 
     if col_name_safe not in allowed_cols or filter_col_safe not in allowed_cols:
-         print(f"[ERRO] Tentativa de usar colunas não permitidas em get_distinct_values_with_filter: {col_name}, {filter_col}")
-         return values # Retorna lista vazia
+        print(
+            f"[ERRO] Tentativa de usar colunas não permitidas em get_distinct_values_with_filter: {col_name}, {filter_col}")
+        return values  # Retorna lista vazia
 
     # Usar backticks ` em torno dos nomes das colunas na query
     query = f"""
@@ -296,37 +308,48 @@ def get_distinct_values_with_filter(col_name, filter_col, filter_val):
             # Extrai o primeiro elemento de cada tupla retornada
             values = [row[0] for row in cursor.fetchall()]
     except mysql.connector.Error as err:
-        print(f"Erro MySQL ao obter valores distintos ({col_name} filtrado por {filter_col}): {err}")
+        print(
+            f"Erro MySQL ao obter valores distintos ({col_name} filtrado por {filter_col}): {err}")
     except Exception as e:
         print(f"Erro inesperado ao obter valores distintos: {e}")
     return values
+
 
 def avaliar_formula_segura(expr):
     """
     Avalia uma expressão matemática de forma segura, permitindo apenas funções do módulo math.
     Retorna o resultado ou None em caso de erro.
     """
-    if not isinstance(expr, str): # Verifica se a entrada é uma string
-         return None
+    if not isinstance(expr, str):  # Verifica se a entrada é uma string
+        return None
+
+    expr = expr.strip()
+    if expr == "":
+        # Expressão vazia não é avaliada
+        return None
     try:
         # Dicionário seguro, permite apenas funções matemáticas
         safe_dict = {"__builtins__": None}
         # Adiciona funções e constantes do módulo math
-        safe_dict.update({k: getattr(math, k) for k in dir(math) if not k.startswith("__")})
+        safe_dict.update({k: getattr(math, k)
+                         for k in dir(math) if not k.startswith("__")})
         # Avalia a expressão usando o dicionário seguro
         return eval(expr, safe_dict)
     except NameError as ne:
-         # Erro comum se tentar usar variáveis não definidas (H, L, etc. não são passadas aqui)
-         print(f"[Erro avaliar_formula_segura] Nome não definido: {ne} na expressão '{expr}'")
-         return None
+        # Erro comum se tentar usar variáveis não definidas (H, L, etc. não são passadas aqui)
+        print(
+            f"[Erro avaliar_formula_segura] Nome não definido: {ne} na expressão '{expr}'")
+        return None
     except SyntaxError as se:
-         print(f"[Erro avaliar_formula_segura] Sintaxe inválida: {se} na expressão '{expr}'")
-         return None
+        print(
+            f"[Erro avaliar_formula_segura] Sintaxe inválida: {se} na expressão '{expr}'")
+        return None
     except Exception as e:
         # Captura outros erros potenciais (divisão por zero, etc.)
         print(f"[Erro avaliar_formula_segura] Erro ao avaliar '{expr}': {e}")
         return None
-    
+
+
 def validar_expressao_modulo(texto, row=None, nome_coluna=None):
     """
     Valida se o texto representa:
@@ -334,26 +357,28 @@ def validar_expressao_modulo(texto, row=None, nome_coluna=None):
       - uma variável simples (ex.: "H");
       - ou uma expressão aritmética composta (ex.: "H/2", "L*3", "H+150", "(H/2)+90"),
     garantindo que as variáveis utilizadas estejam listadas em VARIAVEIS_VALIDAS.
-    
+
     Parâmetros:
       texto       : string a ser validada.
       row         : (opcional) número da linha (usado para mensagem de erro).
       nome_coluna : (opcional) nome da coluna (usado para mensagem de erro).
-      
+
     Retorna:
       True se a expressão for válida; False em caso contrário.
       Em caso de expressão inválida, exibe uma QMessageBox com a mensagem de erro.
     """
-    if not isinstance(texto, str): return False # Garante que é string
+    if not isinstance(texto, str):
+        return False  # Garante que é string
     texto = texto.strip().upper()
-    if not texto: return True # Vazio é válido
+    if not texto:
+        return True  # Vazio é válido
 
     # 1. Tenta converter para número
     try:
         float(texto.replace(",", "."))
         return True
     except ValueError:
-        pass # Não é número simples, continua a validação
+        pass  # Não é número simples, continua a validação
 
     # 2. Verifica se é uma variável válida isolada
     if texto in VARIAVEIS_VALIDAS:
@@ -361,12 +386,14 @@ def validar_expressao_modulo(texto, row=None, nome_coluna=None):
 
     # 3. Valida expressão composta
     # Extrai todas as "palavras" (potenciais variáveis)
-    tokens = re.findall(r'[A-Z][A-Z0-9]*', texto) # Modificado para incluir HM, LM, PM
+    # Modificado para incluir HM, LM, PM
+    tokens = re.findall(r'[A-Z][A-Z0-9]*', texto)
     for token in tokens:
         # Se não for um número (já tratado) e não for variável válida
         if not token.isdigit() and token not in VARIAVEIS_VALIDAS:
             msg = f"O valor '{texto}'"
-            if row is not None and nome_coluna is not None: msg += f" na linha {row+1}, coluna '{nome_coluna}'"
+            if row is not None and nome_coluna is not None:
+                msg += f" na linha {row+1}, coluna '{nome_coluna}'"
             msg += f" contém a variável inválida '{token}'.\nPermitidas: {', '.join(VARIAVEIS_VALIDAS)}"
             QMessageBox.warning(None, "Valor Inválido", msg)
             return False
@@ -374,16 +401,18 @@ def validar_expressao_modulo(texto, row=None, nome_coluna=None):
     # 4. Tenta avaliar a expressão com variáveis dummy para testar a sintaxe
     dummy_env = {var: 1 for var in VARIAVEIS_VALIDAS}
     # Adiciona funções matemáticas seguras ao ambiente dummy
-    math_funcs = {k: getattr(math, k) for k in dir(math) if not k.startswith("__")}
+    math_funcs = {k: getattr(math, k)
+                  for k in dir(math) if not k.startswith("__")}
     dummy_env.update(math_funcs)
 
     try:
         # Usa eval com o ambiente dummy e restrições
         eval(texto, {"__builtins__": None}, dummy_env)
-        return True # Se avaliou sem erro, a sintaxe é válida
+        return True  # Se avaliou sem erro, a sintaxe é válida
     except Exception as e:
         msg = f"A expressão '{texto}'"
-        if row is not None and nome_coluna is not None: msg += f" na linha {row+1}, coluna '{nome_coluna}'"
+        if row is not None and nome_coluna is not None:
+            msg += f" na linha {row+1}, coluna '{nome_coluna}'"
         msg += f" não é válida.\nErro: {e}"
         QMessageBox.warning(None, "Expressão Inválida", msg)
         return False
@@ -398,7 +427,7 @@ def validar_variaveis_usadas(formula, row, nome_coluna):
     #         QMessageBox.warning(None, "Variável Inválida",
     #             f"A variável '{token}' usada na linha {row+1}, coluna '{nome_coluna}' não é reconhecida.\nPermitidas: {', '.join(VARIAVEIS_VALIDAS)}")
     #         return False
-    return True # Se usada, deve retornar True se tudo ok
+    return True  # Se usada, deve retornar True se tudo ok
 
 
 ##############################################
@@ -414,25 +443,27 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     se confirmado, mapeia os dados do material para a linha 'row' da tabela 'tab_def_pecas'.
     Exibe uma mensagem informando se a seleção foi bem-sucedida.
     """
-  
+
     if escolher_material_item(ui, row):
-        QMessageBox.information(None, "Material", f"Material selecionado para a linha {row+1}.")
+        QMessageBox.information(
+            None, "Material", f"Material selecionado para a linha {row+1}.")
     else:
-        QMessageBox.warning(None, "Material", "Nenhum Material foi selecionado.")
+        QMessageBox.warning(
+            None, "Material", "Nenhum Material foi selecionado.")
 
 
 # --- Função auxiliar para obter texto de célula de forma segura ---
 def safe_item_text(table, row, col, default=""):
-     """
-     Retorna o texto do item na célula (row, col) ou o valor default caso o item não exista ou seja None.
-     """
-     item = table.item(row, col)
-     if item is None or item.text() is None:
-         return default
-     return item.text()
+    """
+    Retorna o texto do item na célula (row, col) ou o valor default caso o item não exista ou seja None.
+    """
+    item = table.item(row, col)
+    if item is None or item.text() is None:
+        return default
+    return item.text()
+
 
 def set_item(table, row, col, text):
-    
     """
     Garante que exista um QTableWidgetItem na célula (row, col).
     Se não existir, cria um novo item.
@@ -442,13 +473,12 @@ def set_item(table, row, col, text):
     item = table.item(row, col)
     if item is None:
         # Se o item não existe, cria um novo e define-o na célula.
-        item = QTableWidgetItem(str(text)) # Garante que o texto é string
+        item = QTableWidgetItem(str(text))  # Garante que o texto é string
         table.setItem(row, col, item)
     else:
         # Se o item já existe, apenas atualiza o texto.
         # Não precisa de chamar setItem novamente, pois o item já está na tabela.
-        item.setText(str(text)) # Garante que o texto é string
+        item.setText(str(text))  # Garante que o texto é string
 
     # Opcional: Pode querer retornar o item para permitir configurações adicionais (flags, tooltips, etc.)
     # return item
-
