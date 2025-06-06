@@ -159,15 +159,15 @@ def inserir_pecas_selecionadas(ui):
                 if item.checkState() != Qt.Checked:
                     continue
 
-            texto_def_peca = item.text().strip()
-            
-            # Obter Mat_Default e Tab_Default do item do QListWidget
-            mat_def = item.data(Qt.UserRole+1) or ""
-            tab_def = item.data(Qt.UserRole+2) or ""
+                texto_def_peca = item.text().strip()
 
-            # --- Inserção na UI ---
-            row = table.rowCount()
-            table.insertRow(row)
+                # Obter Mat_Default e Tab_Default do item do QListWidget
+                mat_def = item.data(Qt.UserRole+1) or ""
+                tab_def = item.data(Qt.UserRole+2) or ""
+
+                # --- Inserção na UI ---
+                row = table.rowCount()
+                table.insertRow(row)
 
             # id (Temporário, será atualizado por update_ids no final)
             # set_item garante item existe, get item depois para flags
