@@ -68,6 +68,8 @@ import modulo_gestao_modulos_db # Modulo que trada Este módulo é responsável 
 modulo_gestao_modulos_db.criar_tabelas_modulos() # Cria as tabelas 'modulos_guardados' e 'modulo_pecas_guardadas' se não existirem. 
 
 import modulo_dados_definicoes
+# Configuração visual e eventos para a tabela 'tab_modulo_medidas'
+from tab_modulo_medidas_formatacao import setup_tab_modulo_medidas
 # Cria as tabelas 'dados_modulo_medidas' e 'dados_def_pecas' se não existirem.
 # Esta chamada acontece uma vez quando o módulo main.py é carregado.
 modulo_dados_definicoes.criar_tabelas_definicoes()
@@ -233,6 +235,10 @@ class MainApp(QMainWindow):
             print("[INFO Main] Sinal itemChanged conectado a on_item_changed_def_pecas.")
             # -------------------------------------------------
             print("[INFO] Tabela Definição de Peças configurada.")
+
+            # Configura eventos e formatação da tabela de medidas
+            setup_tab_modulo_medidas(self.ui)
+            print("[INFO] Tabela de Medidas configurada.")
         except Exception as e:
             print(f"[ERRO] Falha ao configurar Definição de Peças: {e}")
             QMessageBox.critical(self, "Erro de Inicialização", f"Falha ao configurar a tabela de Definição de Peças:\n{e}")
