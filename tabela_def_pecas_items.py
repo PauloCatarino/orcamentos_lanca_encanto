@@ -1558,143 +1558,131 @@ def show_context_menu(ui, pos):
 
             # Após a exclusão, renumera os IDs e chama o orquestrador para reprocessar tudo (cálculos, etc.)
             update_ids(table)
-            print(
-                "[INFO] Menu Contexto: Chamando orquestrador após exclusão de linha(s).")
+            print("[INFO] Menu Contexto: Chamando orquestrador após exclusão de linha(s).")
             atualizar_tudo(ui)  # Passa a referência da UI
+
+    #__________
 
     elif action == action_insert_above:
         # Determina a linha de inserção (acima da primeira linha selecionada, ou no final se nada selecionado)
-        current_row = selected_rows[0].row(
-        ) if selected_rows else table.rowCount()
+        current_row = selected_rows[0].row() if selected_rows else table.rowCount()
+        table.setProperty("importando_dados", True)
+        table.blockSignals(True)
+        try:
+            table.insertRow(current_row)
+            # Inicializa colunas essenciais da nova linha vazia
+            for col in [1, 2, 13, 14]: # Descricao_Livre, Def_Peca, Mat_Default, Tab_Default (col 0 é ID)
+                set_item(table, current_row, col, "")
+                item = table.item(current_row, col)
+                if item:
+                    if col == 2:
+                        item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    else:
+                        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
 
-        table.insertRow(current_row)
-        # Inicializa colunas essenciais da nova linha vazia
-        # Descricao_Livre, Def_Peca, Mat_Default, Tab_Default (col 0 é ID)
-        for col in [1, 2, 13, 14]:
-            # Usa set_item para criar/obter item e definir texto vazio
-            set_item(table, current_row, col, "")
-            item = table.item(current_row, col)  # Get item para flags
-            if item:
-                if col == 2:
-                    # Def_Peca deve ser editável
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-                else:
-                    # Outras col editáveis por defeito
-                    item.setFlags(Qt.ItemIsEnabled |
-                                  Qt.ItemIsSelectable | Qt.ItemIsEditable)
 
-        # Inicializa Checkboxes (Unchecked) para colunas importantes
-        # MPs, MO, Orla, BLK, GRAVAR_MODULO, ACB_SUP, ACB_INF
-        for col in [9, 10, 11, 12, 53, 59, 60]:
-            chk = QTableWidgetItem()
-            chk.setFlags(chk.flags() | Qt.ItemIsUserCheckable |
-                         Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            chk.setCheckState(Qt.Unchecked)
-            table.setItem(current_row, col, chk)
+            # Inicializa Checkboxes (Unchecked) para colunas importantes
+            for col in [9, 10, 11, 12, 53, 59, 60]:
+                chk = QTableWidgetItem()
+                chk.setFlags(chk.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                chk.setCheckState(Qt.Unchecked)
+                table.setItem(current_row, col, chk)
 
-        # Inicializa colunas de IDs/Orcamento (15-17)
-        set_item(table, current_row, 15,
-                 ui.lineEdit_item_orcamento.text().strip())
-        set_item(table, current_row, 16,
-                 ui.lineEdit_num_orcamento.text().strip())
-        set_item(table, current_row, 17,
-                 ui.lineEdit_versao_orcamento.text().strip())
-        # pega o item na coluna 15 e torna-o não-editável se existir
-        item_ids = table.item(current_row, 15)
-        if item_ids:
-            item_ids.setFlags(item_ids.flags() & ~Qt.ItemIsEditable)
-        item_num = table.item(current_row, 16)
-        if item_num:
-            item_num.setFlags(item_num.flags() & ~Qt.ItemIsEditable)
-        item_ver = table.item(current_row, 17)
-        if item_ver:
-            item_ver.setFlags(item_ver.flags() & ~Qt.ItemIsEditable)
+            # Inicializa colunas de IDs/Orcamento (15-17)
+            set_item(table, current_row, 15, ui.lineEdit_item_orcamento.text().strip())
+            set_item(table, current_row, 16, ui.lineEdit_num_orcamento.text().strip())
+            set_item(table, current_row, 17, ui.lineEdit_versao_orcamento.text().strip())
+            item_ids = table.item(current_row, 15)
+            if item_ids:
+                item_ids.setFlags(item_ids.flags() & ~Qt.ItemIsEditable)
+            item_num = table.item(current_row, 16)
+            if item_num:
+                item_num.setFlags(item_num.flags() & ~Qt.ItemIsEditable)
+            item_ver = table.item(current_row, 17)
+            if item_ver:
+                item_ver.setFlags(item_ver.flags() & ~Qt.ItemIsEditable)
 
-        # Inicializa o botão "Escolher" (coluna 33)
-        btn = QPushButton("Escolher")
-        # Conecta o botão à função de seleção de material, passando a nova linha
-        btn.clicked.connect(
-            lambda _, r=current_row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
-        table.setCellWidget(current_row, 33, btn)
+            # Inicializa o botão "Escolher" (coluna 33)
+            btn = QPushButton("Escolher")
+            btn.clicked.connect(lambda _, r=current_row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
+            table.setCellWidget(current_row, 33, btn)
 
-        # Inicializa outras colunas numéricas/texto como vazias/0
-        for col in range(3, 82):  # Das colunas de dados/cálculo em diante
-            if col in [9, 10, 11, 12, 33, 53, 59, 60]:
-                continue  # Já tratadas (checkbox/button)
-            # Usa set_item para garantir item existe e definir texto vazio
-            set_item(table, current_row, col, "")
+            # Inicializa outras colunas numéricas/texto como vazias/0
+            for col in range(3, 82):
+                if col in [9, 10, 11, 12, 33, 53, 59, 60]:
+                    continue
+                set_item(table, current_row, col, "")
+        finally:
+            table.blockSignals(False)
+            table.setProperty("importando_dados", False)
+
+
 
         # Após a inserção, renumera os IDs e chama o orquestrador
         update_ids(table)
-        print(
-            f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia acima na linha {current_row+1}.")
-        atualizar_tudo(ui)  # Passa a referência da UI
+        print(f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia acima na linha {current_row+1}.")
+        atualizar_tudo(ui)
+
 
     elif action == action_insert_below:
         # Determina a linha de inserção (abaixo da última linha selecionada, ou no final se nada selecionado)
         # Se selected_rows está vazio, currentRow() pode ser -1, então insere no final.
-        current_row = selected_rows[-1].row() + \
-            1 if selected_rows else table.rowCount()
+        current_row = selected_rows[-1].row() + 1 if selected_rows else table.rowCount()
 
-        table.insertRow(current_row)
-        # Inicializa colunas essenciais da nova linha vazia (similar a inserir acima)
-        # Descricao_Livre, Def_Peca, Mat_Default, Tab_Default (col 0 é ID)
-        for col in [1, 2, 13, 14]:
-            set_item(table, current_row, col, "")  # Usa set_item
-            item = table.item(current_row, col)  # Get item para flags
-            if item:
-                if col == 2:
-                    # Def_Peca deve ser editável
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-                else:
-                    # Outras col editáveis por defeito
-                    item.setFlags(Qt.ItemIsEnabled |
-                                  Qt.ItemIsSelectable | Qt.ItemIsEditable)
+        table.setProperty("importando_dados", True)
+        table.blockSignals(True)
+        try:
+            table.insertRow(current_row)
+            # Inicializa colunas essenciais da nova linha vazia (similar a inserir acima)
+            for col in [1, 2, 13, 14]:
+                set_item(table, current_row, col, "")
+                item = table.item(current_row, col)
+                if item:
+                    if col == 2:
+                        item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    else:
+                        item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
 
-        # Inicializa Checkboxes (Unchecked)
-        # MPs, MO, Orla, BLK, GRAVAR_MODULO, ACB_SUP, ACB_INF
-        for col in [9, 10, 11, 12, 53, 59, 60]:
-            chk = QTableWidgetItem()  # Cria novo item checkbox
-            chk.setFlags(Qt.ItemIsUserCheckable |
-                         Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            chk.setCheckState(Qt.Unchecked)
-            # Adiciona o novo item à tabela
-            table.setItem(current_row, col, chk)
 
-        # Inicializa colunas de IDs/Orcamento (15-17)
-        set_item(table, current_row, 15,
-                 ui.lineEdit_item_orcamento.text().strip())
-        set_item(table, current_row, 16,
-                 ui.lineEdit_num_orcamento.text().strip())
-        set_item(table, current_row, 17,
-                 ui.lineEdit_versao_orcamento.text().strip())
-        item_ids = table.item(current_row, 15)
-        if item_ids:
-            item_ids.setFlags(item_ids.flags() & ~Qt.ItemIsEditable)
-        item_num = table.item(current_row, 16)
-        if item_num:
-            item_num.setFlags(item_num.flags() & ~Qt.ItemIsEditable)
-        item_ver = table.item(current_row, 17)
-        if item_ver:
-            item_ver.setFlags(item_ver.flags() & ~Qt.ItemIsEditable)
+            # Inicializa Checkboxes (Unchecked)
+            for col in [9, 10, 11, 12, 53, 59, 60]:
+                chk = QTableWidgetItem()
+                chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                chk.setCheckState(Qt.Unchecked)
+                table.setItem(current_row, col, chk)
 
-        # Inicializa o botão "Escolher" (coluna 33)
-        btn = QPushButton("Escolher")
-        btn.clicked.connect(
-            lambda _, r=current_row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
-        table.setCellWidget(current_row, 33, btn)
+            # Inicializa colunas de IDs/Orcamento (15-17)
+            set_item(table, current_row, 15, ui.lineEdit_item_orcamento.text().strip())
+            set_item(table, current_row, 16, ui.lineEdit_num_orcamento.text().strip())
+            set_item(table, current_row, 17, ui.lineEdit_versao_orcamento.text().strip())
+            item_ids = table.item(current_row, 15)
+            if item_ids:
+                item_ids.setFlags(item_ids.flags() & ~Qt.ItemIsEditable)
+            item_num = table.item(current_row, 16)
+            if item_num:
+                item_num.setFlags(item_num.flags() & ~Qt.ItemIsEditable)
+            item_ver = table.item(current_row, 17)
+            if item_ver:
+                item_ver.setFlags(item_ver.flags() & ~Qt.ItemIsEditable)
 
-        # Inicializa outras colunas numéricas/texto como vazias/0
-        for col in range(3, 82):  # Das colunas de dados/cálculo em diante
-            if col in [9, 10, 11, 12, 33, 53, 59, 60]:
-                continue  # Já tratadas
-            set_item(table, current_row, col, "")  # Usa set_item
+            # Inicializa o botão "Escolher" (coluna 33)
+            btn = QPushButton("Escolher")
+            btn.clicked.connect(lambda _, r=current_row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
+            table.setCellWidget(current_row, 33, btn)
 
-        # Após a inserção, renumera os IDs e chama o orquestrador
+            # Inicializa outras colunas numéricas/texto como vazias/0
+            for col in range(3, 82):
+                if col in [9, 10, 11, 12, 33, 53, 59, 60]:
+                    continue
+                set_item(table, current_row, col, "")
+        finally:
+            table.blockSignals(False)
+            table.setProperty("importando_dados", False)
+
+        # Após a inserção, renumera os IDs e chama o orquestrador␊
         update_ids(table)
-        print(
-            f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia abaixo na linha {current_row+1}.")
-        atualizar_tudo(ui)  # Passa a referência da UI
+        print(f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia abaixo na linha {current_row+1}.")
+        atualizar_tudo(ui)
 
     elif action == action_copy:
         # Placeholder para futura implementação

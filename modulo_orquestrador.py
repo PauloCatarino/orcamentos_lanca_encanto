@@ -329,8 +329,6 @@ def atualizar_tudo(ui):
             # -----------------------------------------------
             setup_context_menu(ui, None)
 
-            # Limpa a flag de atualização em andamento
-            table.setProperty("atualizando_tudo", False)
             print("\n[INFO] Atualização completa da tabela concluída.")
 
 
