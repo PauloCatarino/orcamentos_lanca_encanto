@@ -113,7 +113,8 @@ def atualizar_grupos_pecas(ui):
     }
     # Atualiza o delegate da tabela (para que os combobox sejam preenchidos com as opções atuais)
     from tabela_def_pecas_items import install_def_peca_delegate
-    install_def_peca_delegate(ui, opcoes_por_grupo)
+    # Corrigido: passar a tabela como parent e o dicionário de opções separadamente
+    install_def_peca_delegate(ui, ui.tab_def_pecas, opcoes_por_grupo)
 
 def tornar_listwidget_clickavel(list_widget):
     """
