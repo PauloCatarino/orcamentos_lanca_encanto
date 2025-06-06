@@ -169,84 +169,77 @@ def inserir_pecas_selecionadas(ui):
                 row = table.rowCount()
                 table.insertRow(row)
 
-            # id (Temporário, será atualizado por update_ids no final)
-            # set_item garante item existe, get item depois para flags
-            set_item(table, row, 0, str(row+1))
-            it_id = table.item(row, 0)
-            it_id.setFlags(it_id.flags() & ~Qt.ItemIsEditable)
+                # id (Temporário, será atualizado por update_ids no final)
+                # set_item garante item existe, get item depois para flags
+                set_item(table, row, 0, str(row+1))
+                it_id = table.item(row, 0)
+                it_id.setFlags(it_id.flags() & ~Qt.ItemIsEditable)
 
-            # descricao_livre (Vazio inicial)
-            set_item(table, row, 1, "")
+                # descricao_livre (Vazio inicial)
+                set_item(table, row, 1, "")
 
-            # def_peca
-            set_item(table, row, 2, texto_def_peca)
-            it_dp = table.item(row, 2)
-            it_dp.setFlags(it_dp.flags() | Qt.ItemIsEditable) # Mantém editável para o delegate ComboBox
-            it_dp.setData(Qt.UserRole, grupo) # Armazena o grupo para o delegate
+                # def_peca
+                set_item(table, row, 2, texto_def_peca)
+                it_dp = table.item(row, 2)
+                it_dp.setFlags(it_dp.flags() | Qt.ItemIsEditable)  # Mantém editável para o delegate ComboBox
+                it_dp.setData(Qt.UserRole, grupo)  # Armazena o grupo para o delegate
 
-            # Colunas Descricao, QT_mod, QT_und, Comp, Larg, Esp (Vazias iniciais)
-            # Estas serão preenchidas/calculadas pelo orquestrador
-            for col in [3, 4, 5, 6, 7, 8]:
-                set_item(table, row, col, "")
+                # Colunas Descricao, QT_mod, QT_und, Comp, Larg, Esp (Vazias iniciais)
+                # Estas serão preenchidas/calculadas pelo orquestrador
+                for col in [3, 4, 5, 6, 7, 8]:
+                    set_item(table, row, col, "")
 
-            # Checkboxes (Unchecked iniciais)
-            for col in [9, 10, 11, 12, 53, 59, 60]: # MPs, MO, Orla, BLK, GRAVAR_MODULO, ACB_SUP, ACB_INF
-                chk = QTableWidgetItem() # Cria novo item checkbox
-                chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                chk.setCheckState(Qt.Unchecked)
-                table.setItem(row, col, chk) # Adiciona o novo item à tabela
+                # Checkboxes (Unchecked iniciais)
+                for col in [9, 10, 11, 12, 53, 59, 60]:  # MPs, MO, Orla, BLK, GRAVAR_MODULO, ACB_SUP, ACB_INF
+                    chk = QTableWidgetItem()  # Cria novo item checkbox
+                    chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    chk.setCheckState(Qt.Unchecked)
+                    table.setItem(row, col, chk)  # Adiciona o novo item à tabela
 
-            # mat_default / tab_default (Preenchidos com dados do QListWidget)
-            set_item(table, row, 13, mat_def)
-            set_item(table, row, 14, tab_def)
+                # mat_default / tab_default (Preenchidos com dados do QListWidget)
+                set_item(table, row, 13, mat_def)
+                set_item(table, row, 14, tab_def)
 
-            # ids / num_orc / ver_orc (Preenchidos com dados da UI)
-            set_item(table, row, 15, valor_ids)
-            set_item(table, row, 16, valor_num_orc)
-            set_item(table, row, 17, valor_ver_orc)
+                # ids / num_orc / ver_orc (Preenchidos com dados da UI)
+                set_item(table, row, 15, valor_ids)
+                set_item(table, row, 16, valor_num_orc)
+                set_item(table, row, 17, valor_ver_orc)
 
-            # Colunas 18-32 (ref_le a esp_mp) e 34-81 SÃO DEIXADAS VAZIAS
-            for col in range(18, 82): # 18 até 81 (inclusive)
-                 # Salta a coluna 33 onde vai o botão MP
-                 if col == 33: continue 
-                 set_item(table, row, col, "")
+                # Colunas 18-32 (ref_le a esp_mp) e 34-81 SÃO DEIXADAS VAZIAS
+                for col in range(18, 82):  # 18 até 81 (inclusive)
+                    if col == 33:  # Salta a coluna 33 onde vai o botão MP
+                        continue
+                    set_item(table, row, col, "")
 
+                # botão Escolher (col 33)
+                btn = QPushButton("Escolher")
+                # Conecta o botão à função de seleção de material, passando a linha atual
+                btn.clicked.connect(lambda _, r=row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
+                table.setCellWidget(row, 33, btn)
 
-            # botão Escolher (col 33)
-            btn = QPushButton("Escolher")
-            # Conecta o botão à função de seleção de material, passando a linha atual
-            btn.clicked.connect(lambda _, r=row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
-            table.setCellWidget(row, 33, btn)
+                # --- Caso MODULO: ajustes especiais iniciais ---
+                # Estes ajustes são apenas visuais e de editabilidade NESTA FASE INICIAL
+                # O preenchimento dos valores '1' e negrito será feito pelo orquestrador
+                if texto_def_peca.upper() == "MODULO":
+                    # Limpa defs iniciais para MODULO
+                    set_item(table, row, 13, "")
+                    set_item(table, row, 14, "")
+                    # QT_mod e QT_und são deixados vazios aqui, serão tratados pelo orquestrador
+                    # Habilita edição e negrito para Descricao_Livre, Comp, Larg, Esp (serão validados depois)
+                    for col in [1, 6, 7, 8]:  # Descricao_Livre, Comp, Larg, Esp
+                        item_col = table.item(row, col) or QTableWidgetItem("")
+                        item_col.setFlags(item_col.flags() | Qt.ItemIsEditable)
+                        font = item_col.font()
+                        font.setBold(True)
+                        item_col.setFont(font)
+                    # Define a cor de fundo cinza-claro para a linha MODULO
+                    for c in range(table.columnCount()):
+                        item_c = table.item(row, c)
+                        if item_c:
+                            item_c.setBackground(QColor(220, 220, 220))  # Cinza mais claro
 
-
-            # --- Caso MODULO: ajustes especiais iniciais ---
-            # Estes ajustes são apenas visuais e de editabilidade NESTA FASE INICIAL
-            # O preenchimento dos valores '1' e negrito será feito pelo orquestrador
-            if texto_def_peca.upper() == "MODULO":
-                 # Limpa defs iniciais para MODULO
-                set_item(table, row, 13, "")
-                set_item(table, row, 14, "")
-                # QT_mod e QT_und são deixados vazios aqui, serão tratados pelo orquestrador
-                # Habilita edição e negrito para Descricao_Livre, Comp, Larg, Esp (serão validados depois)
-                for col in [1, 6, 7, 8]: # Descricao_Livre, Comp, Larg, Esp
-                    item_col = table.item(row, col) or QTableWidgetItem("")
-                    item_col.setFlags(item_col.flags() | Qt.ItemIsEditable)
-                    font = item_col.font(); font.setBold(True); item_col.setFont(font)
-                    # setItem NÃO é necessário aqui, item_col já é o item na tabela
-                    # table.setItem(row, col, item_col) # <-- REMOVER ESTA LINHA
-                # Define a cor de fundo cinza-claro para a linha MODULO
-                for c in range(table.columnCount()):
-                    item_c = table.item(row, c) # Obtém o item existente (set_item já criou)
-                    if item_c: # Garante que o item existe
-                       # Não sobrescreve cor azul de associados se já aplicada por engano (verificação melhor no orquestrador)
-                       # Para inserção inicial, basta aplicar a cor
-                       item_c.setBackground(QColor(220, 220, 220)) # Cinza mais claro
-                    # setItem NÃO é necessário aqui
-                    # table.setItem(row, c, item_c) # <-- REMOVER ESTA LINHA
-
-
-            # Adiciona o item à lista para desmarcar depois
-            items_a_desmarcar.append(item)
+                # Adiciona o item à lista para desmarcar depois
+                items_a_desmarcar.append(item)
     finally:
         table.blockSignals(False)
         table.setProperty("importando_dados", False)

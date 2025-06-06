@@ -306,8 +306,13 @@ def avaliar_formula_segura(expr):
     Avalia uma expressão matemática de forma segura, permitindo apenas funções do módulo math.
     Retorna o resultado ou None em caso de erro.
     """
-    if not isinstance(expr, str): # Verifica se a entrada é uma string
-         return None
+    if not isinstance(expr, str):  # Verifica se a entrada é uma string
+        return None
+
+    expr = expr.strip()
+    if expr == "":
+        # Expressão vazia não é avaliada
+        return None
     try:
         # Dicionário seguro, permite apenas funções matemáticas
         safe_dict = {"__builtins__": None}
