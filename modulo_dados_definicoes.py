@@ -171,22 +171,24 @@ def salvar_dados_modulo_medidas(ui):
         for i in range(tbl.columnCount()):
             col_name = cols[i]
             item = tbl.item(0, i)
-            texto = item.text().strip() if item and item.text() is not None else "" # Pega texto, trata None
+            texto = item.text().strip() if item and item.text() is not None else ""  # Pega texto, trata None
             if texto == "":
                 vals_map[col_name] = None
             else:
-                # Tentar converter para Decimal aqui, tratando erros
-                try:
-                    # Substituir vírgula por ponto antes de converter
-                    valor_decimal = Decimal(texto.replace(',', '.'))
-                    # Guardar o valor Decimal (ou None se a conversão falhar)
-                    vals_map[col_name] = valor_decimal
-                except InvalidOperation:
-                    print(f"[Aviso] salvar_dados_modulo_medidas: Valor '{texto}' na coluna '{col_name}' não é um número válido. Guardando como NULL.")
-                    vals_map[col_name] = None
-                    # Opcional: Avisar o utilizador
-                    # QMessageBox.warning(None, "Valor Inválido", f"O valor '{texto}' na coluna '{col_name}' da tabela de medidas não é um número válido.")
-                    # return # Pode optar por parar se houver erro
+                if col_name in ["ids", "num_orc", "ver_orc"]:
+                    # Estes campos devem ser tratados como texto simples para
+                    # preservar eventuais zeros à esquerda (ex: versao "01").
+                    vals_map[col_name] = texto
+                else:
+                    try:
+                        # Substituir vírgula por ponto antes de converter
+                        valor_decimal = Decimal(texto.replace(',', '.'))
+                        vals_map[col_name] = valor_decimal
+                    except InvalidOperation:
+                        print(
+                            f"[Aviso] salvar_dados_modulo_medidas: Valor '{texto}' na coluna '{col_name}' não é um número válido. Guardando como NULL."
+                        )
+                        vals_map[col_name] = None
     else:
         print("[Info] salvar_dados_modulo_medidas: Tabela de medidas vazia.")
         return
