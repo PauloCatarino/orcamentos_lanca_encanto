@@ -406,9 +406,21 @@ def navegar_item_orcamento(main_window, direcao):
     # Agora, simula o clique no botão "orcamentar_items"
     # Esse botão já está configurado para atualizar as demais tabelas e agora também os custos/preços.
     ui.orcamentar_items.click()
-    # NOTA: A conexão do 'orcamentar_items.click()' em main.py foi ajustada
-    # para também chamar carregar_dados_modulo_medidas e carregar_dados_def_pecas
-    # e a atualização das chaves na tab_modulo_medidas.
+
+    # Garantia extra: recarrega as tabelas de definições após o clique.
+    # Em algumas situações, dependências externas podem impedir que o
+    # sinal "clicked" execute todas as funções pretendidas. Ao chamar
+    # explicitamente as funções de carregamento aqui, asseguramos que as
+    # colunas de medidas (H, L, P, H1..P4) são atualizadas com o item
+    # recentemente selecionado.
+    modulo_dados_definicoes.carregar_dados_modulo_medidas(ui)
+    modulo_dados_definicoes.carregar_dados_def_pecas(ui)
+    tabela_def_pecas_items.actualizar_ids_num_orc_ver_orc_tab_modulo_medidas(
+        ui,
+        novo_id_str,
+        novo_num_orc_str,
+        novo_ver_orc_str
+    )
 
     # ----- REMOVIDO - Agora é feito pela conexão do botão orcamentar_items -----
     # print("[DEBUG navegar_item] Chamando carregamento explícito das tabelas de definição...")
