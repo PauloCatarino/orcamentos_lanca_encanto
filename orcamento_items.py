@@ -58,7 +58,7 @@ from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 # Importa a função de conexão MySQL (já configurada no módulo de conexão)
 from db_connection import obter_cursor
 # Importa a função para configurar os Dados Gerais do Orçamento
-from configurar_guardar_dados_gerais_orcamento import configurar_dados_gerais
+from configurar_guardar_dados_gerais_orcamento import configurar_dados_gerais, carregar_dados_gerais_se_existir
 from utils import formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item
 
 
@@ -156,6 +156,13 @@ def configurar_orcamento_ui(main_window):
         lambda: inserir_item_orcamento(ui))
     ui.pushButton_configurar_dados_gerais.clicked.connect(lambda: configurar_dados_gerais(
         main_window))  # Preenche os campos num_orc e ver_orc nas tabelas dos Dados Gerais
+
+    # Se o utilizador preencher manualmente num_orc ou versao, tenta carregar dados gerais
+    ui.lineEdit_num_orcamento.editingFinished.connect(
+        lambda: carregar_dados_gerais_se_existir(main_window))
+    ui.lineEdit_versao_orcamento.editingFinished.connect(
+        lambda: carregar_dados_gerais_se_existir(main_window))
+
     ui.pushButton_eliminar_linha_orcamento.clicked.connect(
         lambda: eliminar_item_orcamento(ui))
     ui.pushButton_editar_linha_orcamento_2.clicked.connect(
@@ -691,6 +698,8 @@ def abrir_orcamento(main_window):
         # --- ADICIONADO: Chama o mapeamento inicial após abrir orçamento ---
         # Isso garante que os dados gerais e a árvore de itens sejam preenchidos
         mapeia_dados_items_orcamento(main_window)
+        # Se existir configuracao previa de dados gerais, carrega automaticamente
+        carregar_dados_gerais_se_existir(main_window)
         # E também força o carregamento inicial das tabelas de definição para o primeiro item
         # ui.orcamentar_items.click() # Simula clique para carregar tudo
         # --- FIM ADICIONADO ---
