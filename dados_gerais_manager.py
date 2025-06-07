@@ -19,6 +19,7 @@ import math  # Para verificação de valores NaN
 import mysql.connector # Adicionado para erros específicos
 from PyQt5.QtWidgets import QTableWidgetItem, QInputDialog, QMessageBox, QComboBox
 from PyQt5.QtCore import Qt
+import re
 from db_connection import obter_cursor
 from utils import formatar_valor_moeda, formatar_valor_percentual, original_pliq_values, converter_texto_para_valor
 
@@ -34,12 +35,16 @@ def listar_nomes_dados_gerais(tabela_bd):
     #     print(f"Erro: Nome de tabela inválido '{tabela_bd}' em listar_nomes_dados_gerais.")
     #     return nomes
 
-    print(f"Listando nomes para: {tabela_bd_segura}") # Debug
+    print(f"Listando nomes para: {tabela_bd_segura}")  # Debug
     try:
         with obter_cursor() as cursor:
             # Usar backticks para o nome da tabela
-            cursor.execute(f"SELECT DISTINCT nome FROM `{tabela_bd_segura}` ORDER BY nome")
-            nomes = [row[0] for row in cursor.fetchall() if row[0] is not None] # Filtra None
+            cursor.execute(
+                f"SELECT DISTINCT nome FROM `{tabela_bd_segura}` ORDER BY nome"
+            )
+            nomes = [row[0] for row in cursor.fetchall() if row[0] is not None]
+            # Filtra nomes gerados automaticamente para orçamentos (ex.: 12345-00)
+            nomes = [n for n in nomes if not re.fullmatch(r"\d+-\d+", str(n))]
     except mysql.connector.Error as err:
          # Trata erro específico se a tabela não existir
         if err.errno == 1146: # Código de erro para "Table doesn't exist"
