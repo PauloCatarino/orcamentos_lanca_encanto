@@ -43,8 +43,8 @@ def listar_nomes_dados_gerais(tabela_bd):
                 f"SELECT DISTINCT nome FROM `{tabela_bd_segura}` ORDER BY nome"
             )
             nomes = [row[0] for row in cursor.fetchall() if row[0] is not None]
-            # Filtra nomes gerados automaticamente para orçamentos (ex.: 12345-00)
-            nomes = [n for n in nomes if not re.fullmatch(r"\d+-\d+", str(n))]
+            # Filtra nomes gerados automaticamente para orçamentos (ex.: 12345_00)
+            nomes = [n for n in nomes if not re.fullmatch(r"\d+_\d+", str(n))]
     except mysql.connector.Error as err:
          # Trata erro específico se a tabela não existir
         if err.errno == 1146: # Código de erro para "Table doesn't exist"
