@@ -1,7 +1,6 @@
 # dialogs_modelos.py
 
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetItem,
-                             QDialogButtonBox, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox)
+from PyQt5.QtWidgets import (QDialog,QVBoxLayout,QListWidget,QListWidgetItem, QDialogButtonBox, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QInputDialog)
 from PyQt5.QtCore import Qt
 
 class SelecaoModeloDialog(QDialog):
@@ -57,6 +56,9 @@ class GerirNomesDialog(QDialog):
         self.btn_del = QPushButton("Eliminar Selecionado")
         self.btn_del.clicked.connect(self._eliminar)
         btns.addWidget(self.btn_del)
+        self.btn_edit = QPushButton("Editar Nome")
+        self.btn_edit.clicked.connect(self._editar)
+        btns.addWidget(self.btn_edit)
         btns.addStretch()
         self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self.accept)
@@ -65,6 +67,7 @@ class GerirNomesDialog(QDialog):
         lay.addLayout(btns)
         self.lista.itemClicked.connect(lambda it: self.edit.setText(it.text()))
         self.nome_eliminado = None
+        self.nomes_editados = {}
 
     def _eliminar(self):
         item = self.lista.currentItem()
@@ -74,6 +77,22 @@ class GerirNomesDialog(QDialog):
         self.nome_eliminado = item.text()
         row = self.lista.row(item)
         self.lista.takeItem(row)
+        try:
+            from dados_gerais_manager import apagar_registros_por_nome
+            apagar_registros_por_nome(self.tabela, self.nome_eliminado)
+        except Exception as e:
+            print(f"Erro ao eliminar '{self.nome_eliminado}' da base de dados: {e}")
+
+    def _editar(self):
+        item = self.lista.currentItem()
+        if not item:
+            QMessageBox.warning(self, "Aviso", "Selecione um nome para editar.")
+            return
+        texto_atual = item.text()
+        novo, ok = QInputDialog.getText(self, "Editar Nome", "Novo nome:", text=texto_atual)
+        if ok and novo.strip():
+            self.nomes_editados[texto_atual] = novo.strip()
+            item.setText(novo.strip())
 
     def obter_nome(self):
-        return self.edit.text().strip(), self.nome_eliminado
+        return self.edit.text().strip(), self.nome_eliminado, self.nomes_editados
