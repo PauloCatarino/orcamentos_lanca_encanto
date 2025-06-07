@@ -78,9 +78,32 @@ def apagar_registros_por_nome(tabela_bd, nome):
         print(f"Erro MySQL ao apagar registos de '{nome}' em '{tabela_bd_segura}': {err}")
         QMessageBox.critical(None, "Erro Base de Dados", f"Erro ao apagar registos:\n{err}")
         return False
+    
+
+def renomear_registros(tabela_bd, nome_antigo, nome_novo):
+    """Atualiza o campo 'nome' para todos os registros que possuam
+    ``nome_antigo`` na tabela ``dados_gerais_<tabela_bd>``."""
+    tabela_bd_segura = f"dados_gerais_{tabela_bd.replace(' ', '_').lower()}"
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                f"UPDATE `{tabela_bd_segura}` SET nome=%s WHERE nome=%s",
+                (nome_novo, nome_antigo),
+            )
+        return True
+    except mysql.connector.Error as err:
+        print(
+            f"Erro MySQL ao renomear '{nome_antigo}' para '{nome_novo}' em '{tabela_bd_segura}': {err}"
+        )
+        QMessageBox.critical(
+            None,
+            "Erro Base de Dados",
+            f"Erro ao renomear registros:\n{err}",
+        )
+        return False
     except Exception as e:
-        print(f"Erro inesperado ao apagar registos: {e}")
-        QMessageBox.critical(None, "Erro Inesperado", f"Erro ao apagar registos:\n{e}")
+        print(f"Erro inesperado ao renomear registros: {e}")
+        QMessageBox.critical(None, "Erro Inesperado", f"Erro ao renomear registros:\n{e}")
         return False
 
 def obter_nome_para_salvar(parent, tabela_bd):
@@ -89,12 +112,16 @@ def obter_nome_para_salvar(parent, tabela_bd):
     dlg = GerirNomesDialog(tabela_bd, nomes_existentes, parent)
     if dlg.exec_() != QDialog.Accepted:
         return None
-    nome, eliminado = dlg.obter_nome()
+    nome, eliminado, editados = dlg.obter_nome()
     if not nome:
         return None
     if eliminado:
         apagar_registros_por_nome(tabela_bd, eliminado)
-    if nome in nomes_existentes and nome != eliminado:
+    for old, new in editados.items():
+        renomear_registros(tabela_bd, old, new)
+        if old == nome:
+            nome = new
+    if nome in nomes_existentes and nome not in editados.values() and nome != eliminado:
         # Substituir sem nova pergunta
         apagar_registros_por_nome(tabela_bd, nome)
     return nome

@@ -176,26 +176,7 @@ def configurar_orcamento_ui(main_window):
         lambda: pesquisar_itens(ui))
     # Botão "orcamentar_items": mapeia os dados do separador "tab_criar_orcamento" para "dados_item_orcamento"
     # e também configura as tabelas dos itens (materiais, ferragens, sistemas correr e acabamentos)
-    ui.orcamentar_items.clicked.connect(lambda: (
-        mapeia_dados_items_orcamento(main_window),
-        configurar_dados_items_orcamento_materiais(main_window),
-        configurar_dados_items_orcamento_ferragens(main_window),
-        configurar_dados_items_orcamento_sistemas_correr(main_window),
-        configurar_dados_items_orcamento_acabamentos(main_window),
-        # --- ADICIONADO: Chamar carregamento após mapear ---
-        # Carrega os dados das tabelas de definição logo após mapear e configurar
-        # É importante que os lineEdits (ids, num, ver) estejam corretos neste ponto
-        # A função carregar_dados_def_pecas já chama atualizar_tudo no final
-        modulo_dados_definicoes.carregar_dados_modulo_medidas(ui),
-        modulo_dados_definicoes.carregar_dados_def_pecas(ui),
-        # Chama explicitamente a atualização das chaves na tab_modulo_medidas
-        tabela_def_pecas_items.actualizar_ids_num_orc_ver_orc_tab_modulo_medidas(
-            ui,
-            ui.lineEdit_item_orcamento.text().strip(),
-            ui.lineEdit_num_orcamento.text().strip(),
-            ui.lineEdit_versao_orcamento.text().strip()
-        )
-    ))
+    # Este botão também atualiza os dados de medidas e definições de peças.
     ui.orcamentar_items.clicked.connect(lambda: acao_orcamentar_items(main_window))
 
     # NOVO: Conexão para o botão "Atualiza Preco Items Orcamento"
@@ -360,6 +341,8 @@ def mapeia_dados_items_orcamento(main_window):
         item_data.append("")
         item_data.append("")
 
+        dest.addTopLevelItem(QTreeWidgetItem(item_data))
+
         
 def acao_orcamentar_items(main_window):
     """Executa as ações do botão 'orcamentar_items'."""
@@ -386,15 +369,9 @@ def acao_orcamentar_items(main_window):
         QMessageBox.Yes,
     )
     if resp == QMessageBox.Yes:
-        from dados_items_materiais import carregar_dados_items as carregar_mat
-        from dados_items_ferragens import carregar_dados_items as carregar_fer
-        from dados_items_sistemas_correr import carregar_dados_items_sistemas_correr as carregar_sc
-        from dados_items_acabamentos import carregar_dados_items_acabamentos as carregar_acb
+        from utils import copiar_dados_gerais_para_itens
 
-        carregar_mat(main_window)
-        carregar_fer(main_window)
-        carregar_sc(main_window)
-        carregar_acb(main_window)
+        copiar_dados_gerais_para_itens(ui)
 
 
 def navegar_item_orcamento(main_window, direcao):

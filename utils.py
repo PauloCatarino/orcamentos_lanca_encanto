@@ -482,8 +482,9 @@ def set_item(table, row, col, text):
         item.setText(str(text))  # Garante que o texto é string
 
     # Opcional: Pode querer retornar o item para permitir configurações adicionais (flags, tooltips, etc.)
-    # return item
-    
+    return item
+
+
 def adicionar_menu_limpar(tabela, callback):
     """Associa um menu de contexto com opção de limpar linhas selecionadas."""
     from PyQt5.QtWidgets import QMenu
@@ -497,3 +498,48 @@ def adicionar_menu_limpar(tabela, callback):
 
     tabela.setContextMenuPolicy(Qt.CustomContextMenu)
     tabela.customContextMenuRequested.connect(abrir_menu)
+
+
+def copiar_valores_tabela(origem, destino):
+    """Copia valores de ``origem`` para ``destino`` célula a célula."""
+    rows = min(origem.rowCount(), destino.rowCount())
+    cols = min(origem.columnCount(), destino.columnCount())
+    destino.blockSignals(True)
+    destino.setProperty("importando", True)
+    for r in range(rows):
+        for c in range(cols):
+            texto = ""
+            w_src = origem.cellWidget(r, c)
+            if w_src:
+                if hasattr(w_src, "currentText"):
+                    texto = w_src.currentText()
+                elif hasattr(w_src, "text"):
+                    texto = w_src.text()
+            else:
+                it = origem.item(r, c)
+                if it:
+                    texto = it.text()
+
+            w_dst = destino.cellWidget(r, c)
+            if w_dst:
+                if hasattr(w_dst, "findText"):
+                    idx = w_dst.findText(texto)
+                    w_dst.setCurrentIndex(idx if idx >= 0 else -1)
+                elif hasattr(w_dst, "setText"):
+                    w_dst.setText(texto)
+            else:
+                set_item(destino, r, c, texto)
+    destino.setProperty("importando", False)
+    destino.blockSignals(False)
+
+
+def copiar_dados_gerais_para_itens(ui):
+    """Copia as quatro tabelas de Dados Gerais para as tabelas dos itens."""
+    pares = [
+        (ui.Tab_Material, ui.Tab_Material_11),
+        (ui.Tab_Ferragens, ui.Tab_Ferragens_11),
+        (ui.Tab_Sistemas_Correr, ui.Tab_Sistemas_Correr_11),
+        (ui.Tab_Acabamentos, ui.Tab_Acabamentos_12),
+    ]
+    for origem, destino in pares:
+        copiar_valores_tabela(origem, destino)
