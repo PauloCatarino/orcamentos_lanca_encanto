@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt
 import mysql.connector # Importar para capturar erros específicos
 
 # Funções utilitárias (formatação/conversão de valores e filtros)
-from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter)
+from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter, adicionar_menu_limpar)
 
 # Diálogo de seleção de material/ferragem/ssitemascorrer/acabamentos
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
@@ -879,6 +879,7 @@ def inicializar_dados_items_sistemas_correr(parent):
 
     # Botão para importar dados (ex.: a partir de modelos existentes)
     ui.importar_dados_item_tab_sistemas_correr_3.clicked.connect(lambda: importar_dados_item_tab_sistemas_correr_3(parent))
+    adicionar_menu_limpar(ui.Tab_Sistemas_Correr_11, lambda: limpar_linha_tab_sistemas_correr_2(parent))
 
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Sistemas_Correr_11 com o botão "Limpar Linha Selecionada" 

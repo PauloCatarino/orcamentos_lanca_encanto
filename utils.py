@@ -19,6 +19,7 @@ import math
 import re
 import mysql.connector
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
+from PyQt5.QtCore import Qt
 from db_connection import obter_cursor
 
 
@@ -482,3 +483,17 @@ def set_item(table, row, col, text):
 
     # Opcional: Pode querer retornar o item para permitir configurações adicionais (flags, tooltips, etc.)
     # return item
+    
+def adicionar_menu_limpar(tabela, callback):
+    """Associa um menu de contexto com opção de limpar linhas selecionadas."""
+    from PyQt5.QtWidgets import QMenu
+
+    def abrir_menu(pos):
+        menu = QMenu(tabela)
+        acao = menu.addAction("Limpar linha(s) selecionada(s)")
+        acao_ret = menu.exec_(tabela.mapToGlobal(pos))
+        if acao_ret == acao:
+            callback()
+
+    tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+    tabela.customContextMenuRequested.connect(abrir_menu)

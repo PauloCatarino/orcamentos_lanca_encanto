@@ -35,12 +35,13 @@ Autor: Paulo Catarino
 Data: 27-01-2025
 """
 
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QInputDialog, QComboBox
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QInputDialog, QComboBox, QDialog
 from PyQt5.QtCore import Qt
-import mysql.connector  # Adicionado para erros específicos
+import mysql.connector # Adicionado para erros específicos
 from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
 from dados_gerais_manager import apagar_registros_por_nome
+from dialogs_modelos import SelecaoModeloDialog
 import math
 
 
@@ -638,6 +639,15 @@ def guardar_dados_gerais_orcamento(parent):
     ui = parent.ui
     sucesso = True
 
+    # Identificador a ser utilizado nas tabelas de BD
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
+    nome_registro = f"{num_orc}_{ver_orc}"
+
+    # Remove registos anteriores deste orçamento nas quatro tabelas
+    for tabela in ("materiais", "ferragens", "sistemas_correr", "acabamentos"):
+        apagar_registros_por_nome(tabela, nome_registro)
+
     # Mapeamento e nomes de colunas para a aba Materiais
     mapping_materiais = {
         "material": 0,
@@ -790,10 +800,11 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                 f"Nenhum registo salvo para '{nome_tabela}'.")
         return
     if modelo_escolhido is None:
-        modelo_escolhido, ok = QInputDialog.getItem(
-            parent_app, "Importar", f"Selecione (<b>{nome_tabela.upper()}</b>):", modelos, 0, False)
-        if not ok or not modelo_escolhido:
-            return
+          dlg = SelecaoModeloDialog(modelos, titulo=f"Importar {nome_tabela}", parent=parent_app)
+          if dlg.exec_() != QDialog.Accepted:
+               return
+          modelo_escolhido = dlg.modelo_escolhido()
+          if not modelo_escolhido: return
     opcoes = ["Manter dados gravados no BD",
               "Atualizar com dados de matérias primas"]
     opcao_selecionada, ok = QInputDialog.getItem(

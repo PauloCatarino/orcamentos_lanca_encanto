@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (QTableWidgetItem, QComboBox, QPushButton, QMessageB
 from PyQt5.QtCore import Qt
 
 # Importações de funções utilitárias (formatação/conversão de valores, filtros de dados etc.)
-from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter)
+from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter,adicionar_menu_limpar)
 
 # Diálogo de seleção de material
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
@@ -848,3 +848,4 @@ def inicializar_dados_items_material(parent):
     ui.limpar_linha_tab_material.clicked.connect(lambda: limpar_linha_tab_material(parent))
     # Conecta o botão "Importar Dados Item Tabela Material"
     ui.importar_dados_item_tab_material.clicked.connect(lambda: importar_dados_item_orcamento_tab_material(parent))
+    adicionar_menu_limpar(ui.Tab_Material_11, lambda: limpar_linha_tab_material(parent))

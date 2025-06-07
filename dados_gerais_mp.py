@@ -13,14 +13,12 @@ Observação:
   Todas as operações de banco de dados utilizam MySQL, via a função get_connection() importada do módulo db_connection.py.
 """
 import mysql.connector # Para capturar erros específicos
-from PyQt5.QtWidgets import (
-    QTableWidgetItem, QComboBox, QPushButton, QMessageBox, QHeaderView,
-    QAbstractItemView, QInputDialog, QStyledItemDelegate, QLineEdit
-)
+from PyQt5.QtWidgets import (QTableWidgetItem, QComboBox, QPushButton, QMessageBox, QHeaderView, QAbstractItemView, QInputDialog, QStyledItemDelegate, QLineEdit)
 from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
 from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
+from utils import adicionar_menu_limpar
 
 # --- Delegates para formatação de moeda e percentual ---
 
@@ -82,6 +80,8 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_mat.clicked.connect(lambda: acao_guardar_dados(main_window, "materiais"))
         btn_importar_mat.clicked.connect(lambda: acao_importar_dados(main_window, "materiais"))
         btn_limpar_mat.clicked.connect(lambda: limpar_linha_por_tab(main_window, "materiais"))
+        adicionar_menu_limpar(main_window.ui.Tab_Material,
+                              lambda: limpar_linha_por_tab(main_window, "materiais"))
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: guardar_dados_gerais_orcamento(main_window))
     except Exception as e:
@@ -96,6 +96,8 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_fer.clicked.connect(lambda: acao_guardar_dados(main_window, "ferragens"))
         btn_importar_fer.clicked.connect(lambda: acao_importar_dados(main_window, "ferragens"))
         btn_limpar_fer.clicked.connect(lambda: limpar_linha_por_tab(main_window, "ferragens"))
+        adicionar_menu_limpar(main_window.ui.Tab_Ferragens,
+                              lambda: limpar_linha_por_tab(main_window, "ferragens"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Ferragens", f"Erro: {e}")
 
@@ -108,6 +110,8 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_sc.clicked.connect(lambda: acao_guardar_dados(main_window, "sistemas_correr"))
         btn_importar_sc.clicked.connect(lambda: acao_importar_dados(main_window, "sistemas_correr"))
         btn_limpar_sc.clicked.connect(lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
+        adicionar_menu_limpar(main_window.ui.Tab_Sistemas_Correr,
+                              lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Sistemas Correr", f"Erro: {e}")
 
@@ -120,6 +124,8 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_acab.clicked.connect(lambda: acao_guardar_dados(main_window, "acabamentos"))
         btn_importar_acab.clicked.connect(lambda: acao_importar_dados(main_window, "acabamentos"))
         btn_limpar_acab.clicked.connect(lambda: limpar_linha_por_tab(main_window, "acabamentos"))
+        adicionar_menu_limpar(main_window.ui.Tab_Acabamentos,
+                              lambda: limpar_linha_por_tab(main_window, "acabamentos"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Acabamentos", f"Erro: {e}")
 

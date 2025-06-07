@@ -23,7 +23,7 @@ from PyQt5.QtCore import Qt
 import mysql.connector # Adicionado para erros específicos
 
 # Utilitários de formatação e conversão
-from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter)
+from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter, adicionar_menu_limpar)
 
 # Diálogo de seleção de material/ferragem/ssitemascorrer/acabamentos
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
@@ -856,3 +856,4 @@ def inicializar_dados_items_acabamentos(parent):
 
     # Botão para importar dados
     ui.importar_dados_item_tab_acabamentos_4.clicked.connect(lambda: importar_dados_item_tab_acabamentos(parent))
+    adicionar_menu_limpar(ui.Tab_Acabamentos_12, lambda: limpar_linha_tab_acabamentos(parent))

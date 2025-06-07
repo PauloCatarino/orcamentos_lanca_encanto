@@ -196,6 +196,7 @@ def configurar_orcamento_ui(main_window):
             ui.lineEdit_versao_orcamento.text().strip()
         )
     ))
+    ui.orcamentar_items.clicked.connect(lambda: acao_orcamentar_items(main_window))
 
     # NOVO: Conexão para o botão "Atualiza Preco Items Orcamento"
     # Este botão irá disparar o cálculo e atualização de todas as colunas de custo e preço por item.
@@ -359,7 +360,41 @@ def mapeia_dados_items_orcamento(main_window):
         item_data.append("")
         item_data.append("")
 
-        dest.addTopLevelItem(QTreeWidgetItem(item_data))
+        
+def acao_orcamentar_items(main_window):
+    """Executa as ações do botão 'orcamentar_items'."""
+    ui = main_window.ui
+    mapeia_dados_items_orcamento(main_window)
+    configurar_dados_items_orcamento_materiais(main_window)
+    configurar_dados_items_orcamento_ferragens(main_window)
+    configurar_dados_items_orcamento_sistemas_correr(main_window)
+    configurar_dados_items_orcamento_acabamentos(main_window)
+    modulo_dados_definicoes.carregar_dados_modulo_medidas(ui)
+    modulo_dados_definicoes.carregar_dados_def_pecas(ui)
+    tabela_def_pecas_items.actualizar_ids_num_orc_ver_orc_tab_modulo_medidas(
+        ui,
+        ui.lineEdit_item_orcamento.text().strip(),
+        ui.lineEdit_num_orcamento.text().strip(),
+        ui.lineEdit_versao_orcamento.text().strip(),
+    )
+
+    resp = QMessageBox.question(
+        main_window,
+        "Usar Dados Gerais",
+        "Pretende preencher os dados do item com os Dados Gerais atuais?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes,
+    )
+    if resp == QMessageBox.Yes:
+        from dados_items_materiais import carregar_dados_items as carregar_mat
+        from dados_items_ferragens import carregar_dados_items as carregar_fer
+        from dados_items_sistemas_correr import carregar_dados_items_sistemas_correr as carregar_sc
+        from dados_items_acabamentos import carregar_dados_items_acabamentos as carregar_acb
+
+        carregar_mat(main_window)
+        carregar_fer(main_window)
+        carregar_sc(main_window)
+        carregar_acb(main_window)
 
 
 def navegar_item_orcamento(main_window, direcao):
