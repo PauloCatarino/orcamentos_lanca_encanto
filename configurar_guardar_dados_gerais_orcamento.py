@@ -287,9 +287,9 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
                 table.setItem(i, 4, item_ver)
             item_ver.setText(ver_orc)
 
-        if registros:
-            QMessageBox.information(parent, "Configurar Dados Gerais",
-                                    f"Dados carregados para '{nome_tabela}' (Orc: {num_orc}, Ver: {ver_orc}).")
+        # A informação de carregamento automático foi removida para evitar
+        # mensagens constantes ao alternar de separador ou ao abrir um
+        # orçamento. Mantemos o preenchimento silencioso das tabelas.
     finally:
         table.setProperty("importando", False)
         table.blockSignals(False)
