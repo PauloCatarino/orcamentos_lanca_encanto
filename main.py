@@ -19,6 +19,12 @@ Utiliza MySQL como banco de dados, por meio do módulo "db_connection.py", para 
 
 pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
 
+ Para enviar atualizações para o github
+git status                # (opcional) ver o que mudou
+git add .                 # adiciona todos os ficheiros alterados
+git commit -m "tua mensagem aqui"
+git push                  # envia para o GitHub
+
 """
 
 import modulo_dados_definicoes
