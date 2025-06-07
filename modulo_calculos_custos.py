@@ -57,6 +57,7 @@ EUROS_HORA_MO = 22.0              # €/hora para Mão de Obra
 IDX_DEF_PECA = 2             # Tipo de peça (para lookup no Excel)
 IDX_UND = 24                 # Unidade (M2, ML, UND)
 IDX_MAT_DEFAULT = 13         # Mat_Default (para regra CP09)
+IDX_TAB_DEFAULT = 14          # Tabela Default (para regra CP09)
 IDX_PTAB = 20                # Preço Tabela (€)
 IDX_PLIQ = 21                # Preço Líquido (€)
 IDX_DESP_PECA = 25           # Desperdício da peça principal (%)
@@ -227,7 +228,7 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     # --- Obter dados COMUNS da linha (necessários em todos os casos) ---
     def_peca_val = safe_item_text(table, row, IDX_DEF_PECA).strip().upper()
     und_val = safe_item_text(table, row, IDX_UND).strip().upper()
-    mat_default_val = safe_item_text(table, row, IDX_MAT_DEFAULT).strip().upper()
+    tab_default_val = safe_item_text(table, row, IDX_TAB_DEFAULT).strip().upper()
     comp_res = converter_texto_para_valor(safe_item_text(table, row, IDX_COMP_RES), "moeda") # mm
     larg_res = converter_texto_para_valor(safe_item_text(table, row, IDX_LARG_RES), "moeda") # mm
     esp_res = converter_texto_para_valor(safe_item_text(table, row, IDX_ESP_RES), "moeda")  # mm
@@ -328,7 +329,7 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     # Regra: 1 se und in ["M2", "ML", "UND"] E Mat_Default != "TAB_ACABAMENTOS_12", senão 0
     custo_mp_flag = 0
     if und_val in ["M2", "ML", "UND"]:
-        if und_val == "M2" and mat_default_val == "TAB_ACABAMENTOS_12":
+        if und_val == "M2" and tab_default_val == "TAB_ACABAMENTOS_12":
             custo_mp_flag = 0 # Exceção para M2 em Acabamentos
         else:
             custo_mp_flag = 1
@@ -628,7 +629,7 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
 
     # NOVA PROTEÇÃO: Se Mat_Default não for "TAB_ACABAMENTOS_12", forçar 0 para ACB_SUP_und e ACB_INF_und
     # E desmarcar checkboxes 59 e 60.
-    if mat_default_val != "TAB_ACABAMENTOS_12":
+    if tab_default_val != "TAB_ACABAMENTOS_12":
         acb_sup_und = 0.0
         acb_inf_und = 0.0
         tooltip_acb_sup = "0 (Mat_Default != TAB_ACABAMENTOS_12)"
