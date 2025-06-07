@@ -215,7 +215,8 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
             # *** ESTA FUNÇÃO PRECISA DO NOME DO MODELO A CARREGAR, NÃO SÓ num_orc/ver_orc ***
             # *** VAMOS ASSUMIR POR AGORA QUE O NOME É O num_orc PARA FINS DE EXEMPLO ***
             # *** ISTO PRECISA SER REVISTO COM BASE NA LÓGICA DE NEGÓCIO ***
-            nome_modelo = num_orc  # ASSUMINDO que o nome do modelo é o número do orçamento
+            # O nome do modelo inclui o numero e a versao para ser unico
+            nome_modelo = f"{num_orc}-{ver_orc}"
             print(f"  Query: {query}")
             # <-- Usando nome_modelo (num_orc) como 'nome'
             print(f"  Params: {(nome_modelo, ver_orc)}")
@@ -340,7 +341,8 @@ def configurar_dados_gerais(parent):
             # ASSUMINDO que a tabela geral usa 'nome' e não 'num_orc' para identificar o modelo.
             # A lógica aqui precisa ser consistente com 'guardar_por_tabela'.
             # Vamos assumir que o 'nome' do modelo é o 'num_orc' para esta verificação.
-            nome_modelo = num_orc  # Assumindo nome = num_orc
+            # Nome unico composto por numero e versao do orçamento
+            nome_modelo = f"{num_orc}-{ver_orc}"
             query_check = f"SELECT COUNT(*) FROM `{tabela_referencia}` WHERE nome=%s AND ver_orc=%s"
             cursor.execute(query_check, (nome_modelo, ver_orc))
             resultado = cursor.fetchone()
@@ -444,6 +446,39 @@ def configurar_dados_gerais(parent):
             ui.tabWidget_orcamento.setCurrentIndex(i)
             break
 
+# ---------------------------------------------------------------------------
+# FUNÇÃO: Carrega automaticamente dados gerais se existirem
+# ---------------------------------------------------------------------------
+def carregar_dados_gerais_se_existir(parent):
+    """Preenche as quatro tabelas de dados gerais caso já existam
+    registros para o orçamento atual."""
+    ui = parent.ui
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
+    if not num_orc or not ver_orc:
+        return
+
+    nome_modelo = f"{num_orc}-{ver_orc}"
+    tabela_ref = "dados_gerais_materiais"
+    existe = 0
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                f"SELECT COUNT(*) FROM `{tabela_ref}` WHERE nome=%s AND ver_orc=%s",
+                (nome_modelo, ver_orc),
+            )
+            res = cursor.fetchone()
+            if res:
+                existe = res[0]
+    except Exception as e:
+        print(f"Erro ao verificar dados gerais existentes: {e}")
+        return
+
+    if existe > 0:
+        carregar_configuracao_dados_gerais(parent, "materiais")
+        carregar_configuracao_dados_gerais(parent, "ferragens")
+        carregar_configuracao_dados_gerais(parent, "sistemas_correr")
+        carregar_configuracao_dados_gerais(parent, "acabamentos")
 
 # ---------------------------------------------------------------------------
 # FUNÇÃO AUXILIAR: Guarda os dados da tabela no banco de dados
@@ -466,12 +501,17 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
     num_orc = ui.lineEdit_num_orcamento.text().strip()
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
     # O nome do modelo/registro é passado para esta função agora
-    nome_registro = num_orc  # ASSUMINDO que o nome do registro é o num_orc
+    # Usa o numero e a versao do orçamento para criar um identificador unico.
+    nome_registro = f"{num_orc}-{ver_orc}"
 
     if not num_orc or not ver_orc:
         QMessageBox.warning(
             parent, "Aviso", "Os campos 'Num Orçamento' e 'Versão' devem estar preenchidos!")
         return False
+
+
+
+
 
     num_rows = table_widget.rowCount()
     dados_para_salvar = []
@@ -499,7 +539,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
 
         # Preenche o identificador (id_mat/id_fer/id_sc/id_acb) se existir.
         col_id = mapping.get('id_mat') or mapping.get('id_fer') \
-            or mapping.get('id_sc') or mapping.get('id_acb')
+                 or mapping.get('id_sc') or mapping.get('id_acb')
         if col_id is not None and col_id < table_widget.columnCount():
             item_id = table_widget.item(row, col_id)
             if item_id is None:
@@ -515,6 +555,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
             'num_orc': num_orc,
             'ver_orc': ver_orc,
         }
+
         # Adiciona as colunas mapeadas
         for campo_bd, col_ui in mapping.items():
             if col_ui >= table_widget.columnCount():
