@@ -17,7 +17,8 @@ Observação:
 '''
 import math  # Para verificação de valores NaN
 import mysql.connector # Adicionado para erros específicos
-from PyQt5.QtWidgets import QTableWidgetItem, QInputDialog, QMessageBox, QComboBox
+from PyQt5.QtWidgets import QTableWidgetItem, QInputDialog, QMessageBox, QComboBox, QDialog
+from dialogs_modelos import SelecaoModeloDialog, GerirNomesDialog
 from PyQt5.QtCore import Qt
 import re
 from db_connection import obter_cursor
@@ -83,64 +84,20 @@ def apagar_registros_por_nome(tabela_bd, nome):
         return False
 
 def obter_nome_para_salvar(parent, tabela_bd):
-    """
-    Solicita ao usuário um nome para salvar os dados do tipo <tabela_bd>.
-    Se o nome já existir, oferece opções (Substituir, Eliminar, Editar ou Cancelar).
-
-    Retorna o nome escolhido ou None se o usuário cancelar.
-    """
+    """Abre um diálogo para escolher ou introduzir o nome a guardar."""
     nomes_existentes = listar_nomes_dados_gerais(tabela_bd)
-    if nomes_existentes:
-        nomes_texto_html = "<br>".join(nomes_existentes)
-        QMessageBox.information(
-            parent,
-            "Modelos Existentes",
-            f"Modelos já salvos para <b>{tabela_bd.upper()}</b>:<br>{nomes_texto_html}"
-        )
-    
-    while True:
-        nome, ok = QInputDialog.getText(
-            parent,
-            "Guardar Dados",
-            f"Digite o nome para salvar os dados de <b>{tabela_bd.upper()}</b>:"
-        )
-        if not ok or not nome.strip():
-            return None  # Usuário cancelou ou não digitou nada
-        
-        nome = nome.strip()
-        if nome not in nomes_existentes:
-            return nome
-        
-        # Se o nome já existir, oferece opções ao usuário
-        msg_box = QMessageBox(parent)
-        msg_box.setWindowTitle("Nome já existe")
-        msg_box.setIcon(QMessageBox.Question)
-        msg_box.setText(
-            f"O nome <b>{nome}</b> já existe em <b>{tabela_bd.upper()}</b>.<br><br>"
-            "Selecione uma opção:<br>"
-            "<b>Substituir</b> = Substituir os dados existentes<br>"
-            "<b>Eliminar</b> = Eliminar os dados e cancelar o salvamento<br>"
-            "<b>Editar</b> = Digitar um novo nome<br>"
-            "<b>Cancelar</b> = Cancelar a operação")
-        
-        btn_substituir = msg_box.addButton("Substituir", QMessageBox.YesRole)
-        btn_eliminar = msg_box.addButton("Eliminar", QMessageBox.NoRole)
-        btn_editar = msg_box.addButton("Editar", QMessageBox.ActionRole)
-        btn_cancelar = msg_box.addButton("Cancelar", QMessageBox.RejectRole)
-        
-        msg_box.exec_()
-        clicked_button = msg_box.clickedButton()
-        
-        if clicked_button == btn_substituir:
-            if apagar_registros_por_nome(tabela_bd, nome): return nome # Apaga e retorna nome
-            else: return None # Erro ao apagar
-        elif clicked_button == btn_eliminar:
-            apagar_registros_por_nome(tabela_bd, nome)
-            return None
-        elif clicked_button == btn_editar:
-            continue
-        else:
-            return None
+    dlg = GerirNomesDialog(tabela_bd, nomes_existentes, parent)
+    if dlg.exec_() != QDialog.Accepted:
+        return None
+    nome, eliminado = dlg.obter_nome()
+    if not nome:
+        return None
+    if eliminado:
+        apagar_registros_por_nome(tabela_bd, eliminado)
+    if nome in nomes_existentes and nome != eliminado:
+        # Substituir sem nova pergunta
+        apagar_registros_por_nome(tabela_bd, nome)
+    return nome
 
 def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None):
     """
@@ -257,10 +214,12 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
         return
 
     if modelo_escolhido is None:
-        modelo_escolhido, ok = QInputDialog.getItem(parent_app, "Importar Dados Gerais",
-                                                     f"Selecione o registo a importar (<b>{nome_tabela.upper()}</b>):",
-                                                     modelos, 0, False)
-        if not ok or not modelo_escolhido: return
+        dlg = SelecaoModeloDialog(modelos, titulo=f"Importar {nome_tabela}", parent=parent_app)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        modelo_escolhido = dlg.modelo_escolhido()
+        if not modelo_escolhido:
+            return
 
     opcoes = ["Manter dados gravados no BD", "Atualizar com dados de matérias primas"]
     opcao_selecionada, ok = QInputDialog.getItem(parent_app, "Opção de Importação",

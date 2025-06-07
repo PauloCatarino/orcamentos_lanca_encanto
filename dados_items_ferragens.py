@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 import mysql.connector # Adicionado para erros específicos de conexão com o banco de dados
 
 # Importações de funções utilitárias para formatação e conversão de valores:
-from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor,  get_distinct_values_with_filter)
+from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor,  get_distinct_values_with_filter, adicionar_menu_limpar)
 
 # Diálogo de seleção de material/ferragem/ssitemascorrer/acabamentos
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
@@ -905,3 +905,8 @@ def inicializar_dados_items_ferragens(parent):
 
     # Botão para importar dados do item (ex: reutilizar dados de outra tabela)
     ui.importar_dados_item_tab_ferragens_2.clicked.connect(lambda: importar_dados_item_orcamento_tab_ferragens(parent))
+    ui.limpar_linha_tab_ferragens.clicked.connect(lambda: limpar_linha_tab_ferragens(parent))
+
+    # Botão para importar dados do item (ex: reutilizar dados de outra tabela)
+    ui.importar_dados_item_tab_ferragens_2.clicked.connect(lambda: importar_dados_item_orcamento_tab_ferragens(parent))
+    adicionar_menu_limpar(ui.Tab_Ferragens_11, lambda: limpar_linha_tab_ferragens(parent))
