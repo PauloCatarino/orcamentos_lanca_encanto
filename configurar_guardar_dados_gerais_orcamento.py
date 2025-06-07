@@ -586,7 +586,12 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
     col_names_insert = ['nome', 'linha'] + col_names_db
     placeholders = ", ".join(["%s"] * len(col_names_insert))
     col_names_sql = ", ".join(f"`{c}`" for c in col_names_insert)
-    query_insert = f"INSERT INTO `{tabela_bd_segura}` ({col_names_sql}) VALUES ({placeholders})"
+    # Utiliza REPLACE para evitar erros de duplicidade caso alguma linha já
+    # exista. A chave única (nome, linha) fará com que o registro anterior
+    # seja removido e inserido novamente.
+    query_insert = (
+        f"REPLACE INTO `{tabela_bd_segura}` ({col_names_sql}) VALUES ({placeholders})"
+    )
 
     try:
         # Usa obter_cursor para a transação de inserção
