@@ -162,6 +162,11 @@ def configurar_orcamento_ui(main_window):
         lambda: carregar_dados_gerais_se_existir(main_window))
     ui.lineEdit_versao_orcamento.editingFinished.connect(
         lambda: carregar_dados_gerais_se_existir(main_window))
+    # Ao alternar para o separador de Dados Gerais MP, carrega dados se existirem
+    ui.tabWidget_orcamento.currentChanged.connect(
+        lambda idx: carregar_dados_gerais_se_existir(main_window)
+        if ui.tabWidget_orcamento.widget(idx).objectName() == "dados_gerais_mp"
+        else None)
 
     ui.pushButton_eliminar_linha_orcamento.clicked.connect(
         lambda: eliminar_item_orcamento(ui))

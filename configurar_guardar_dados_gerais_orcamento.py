@@ -206,22 +206,14 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
 
     try:
         with obter_cursor() as cursor:
-            # Usar backticks e placeholders
-            query = f"SELECT * FROM `{tabela_bd_segura}` WHERE nome=%s AND ver_orc=%s ORDER BY linha"
-            # ATENÇÃO: A query original usava num_orc=%s. A tabela dados_gerais_* usa 'nome' para o modelo.
-            # Se a intenção é carregar baseado no ORÇAMENTO ATUAL, a query deveria ser:
-            # query = f"SELECT * FROM `{tabela_bd_segura}` WHERE num_orc=%s AND ver_orc=%s ORDER BY linha"
-            # Vamos assumir que a intenção é carregar pelo NOME do modelo/orçamento. Precisa do nome!
-            # *** ESTA FUNÇÃO PRECISA DO NOME DO MODELO A CARREGAR, NÃO SÓ num_orc/ver_orc ***
-            # *** VAMOS ASSUMIR POR AGORA QUE O NOME É O num_orc PARA FINS DE EXEMPLO ***
-            # *** ISTO PRECISA SER REVISTO COM BASE NA LÓGICA DE NEGÓCIO ***
-            # O nome do modelo inclui o numero e a versao para ser unico
-            nome_modelo = f"{num_orc}-{ver_orc}"
+            # Carrega pela combinação de num_orc e ver_orc
+            query = (
+                f"SELECT * FROM `{tabela_bd_segura}` "
+                f"WHERE num_orc=%s AND ver_orc=%s ORDER BY linha"
+            )
             print(f"  Query: {query}")
-            # <-- Usando nome_modelo (num_orc) como 'nome'
-            print(f"  Params: {(nome_modelo, ver_orc)}")
-            # <-- Parâmetros precisam bater com a query
-            cursor.execute(query, (nome_modelo, ver_orc))
+            print(f"  Params: {(num_orc, ver_orc)}")
+            cursor.execute(query, (num_orc, ver_orc))
             registros = cursor.fetchall()
         print(f"  Encontrados {len(registros)} registos.")
 
@@ -337,17 +329,14 @@ def configurar_dados_gerais(parent):
     tabela_referencia = "dados_gerais_materiais"  # Usa materiais como referência
     try:
         with obter_cursor() as cursor:
-            # Verifica se já existe configuração para este num_orc e ver_orc na tabela de referência
-            # ASSUMINDO que a tabela geral usa 'nome' e não 'num_orc' para identificar o modelo.
-            # A lógica aqui precisa ser consistente com 'guardar_por_tabela'.
-            # Vamos assumir que o 'nome' do modelo é o 'num_orc' para esta verificação.
-            # Nome unico composto por numero e versao do orçamento
-            nome_modelo = f"{num_orc}-{ver_orc}"
-            query_check = f"SELECT COUNT(*) FROM `{tabela_referencia}` WHERE nome=%s AND ver_orc=%s"
-            cursor.execute(query_check, (nome_modelo, ver_orc))
+            # Verifica se já existe configuração para este num_orc e ver_orc
+            query_check = (
+                f"SELECT COUNT(*) FROM `{tabela_referencia}` "
+                f"WHERE num_orc=%s AND ver_orc=%s"
+            )
+            cursor.execute(query_check, (num_orc, ver_orc))
             resultado = cursor.fetchone()
-            if resultado:
-                count_materiais = resultado[0]
+            if resultado: count_materiais = resultado[0]
 
     except mysql.connector.Error as err:
         if err.errno == 1146:
@@ -458,14 +447,14 @@ def carregar_dados_gerais_se_existir(parent):
     if not num_orc or not ver_orc:
         return
 
-    nome_modelo = f"{num_orc}-{ver_orc}"
+    nome_modelo = f"{num_orc}-{ver_orc}"  # Mantido apenas para unicidade interna
     tabela_ref = "dados_gerais_materiais"
     existe = 0
     try:
         with obter_cursor() as cursor:
             cursor.execute(
-                f"SELECT COUNT(*) FROM `{tabela_ref}` WHERE nome=%s AND ver_orc=%s",
-                (nome_modelo, ver_orc),
+                f"SELECT COUNT(*) FROM `{tabela_ref}` WHERE num_orc=%s AND ver_orc=%s",
+                (num_orc, ver_orc),
             )
             res = cursor.fetchone()
             if res:
@@ -508,10 +497,6 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
         QMessageBox.warning(
             parent, "Aviso", "Os campos 'Num Orçamento' e 'Versão' devem estar preenchidos!")
         return False
-
-
-
-
 
     num_rows = table_widget.rowCount()
     dados_para_salvar = []
