@@ -40,6 +40,7 @@ from PyQt5.QtCore import Qt
 import mysql.connector  # Adicionado para erros específicos
 from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
+from dados_gerais_manager import apagar_registros_por_nome
 import math
 
 
@@ -447,6 +448,7 @@ def carregar_dados_gerais_se_existir(parent):
     if not num_orc or not ver_orc:
         return
 
+    # Identificador usado quando os dados foram gravados previamente
     nome_modelo = f"{num_orc}-{ver_orc}"  # Mantido apenas para unicidade interna
     tabela_ref = "dados_gerais_materiais"
     existe = 0

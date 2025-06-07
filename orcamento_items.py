@@ -2029,6 +2029,7 @@ def configurar_context_menu_groupbox(ui):
 
 # --- Novas Funções para Duplicar Linhas na tableWidget_artigos ---
 
+
 def configurar_context_menu_tabela(ui):
     """Adiciona um menu de contexto na tabela de artigos.
 
@@ -2058,7 +2059,8 @@ def duplicar_registos_associados(cursor, tabela, coluna_item, item_antigo, item_
     cursor.execute(f"SHOW COLUMNS FROM {tabela}")
     cols = [row[0] for row in cursor.fetchall() if row[0] != 'id']
     insert_cols = ", ".join(f"`{c}`" for c in cols)
-    select_cols = ", ".join(["%s" if c == coluna_item else f"`{c}`" for c in cols])
+    select_cols = ", ".join(
+        ["%s" if c == coluna_item else f"`{c}`" for c in cols])
     query = (
         f"INSERT INTO {tabela} ({insert_cols}) "
         f"SELECT {select_cols} FROM {tabela} "
@@ -2072,7 +2074,8 @@ def duplicar_item_orcamento(ui):
     tbl = ui.tableWidget_artigos
     row_sel = tbl.currentRow()
     if row_sel < 0:
-        QMessageBox.warning(None, "Erro", "Nenhuma linha selecionada para duplicar.")
+        QMessageBox.warning(
+            None, "Erro", "Nenhuma linha selecionada para duplicar.")
         return
 
     id_item_str = _get_cell_text(tbl, row_sel, COL_ID_ITEM)
@@ -2108,19 +2111,27 @@ def duplicar_item_orcamento(ui):
                 "custo_produzido, custo_total_orlas, custo_total_mao_obra, "
                 "custo_total_materia_prima, custo_total_acabamentos, margem_lucro_perc, "
                 "valor_margem, custos_admin_perc, valor_custos_admin, ajustes1_perc, "
-                "valor_ajustes1, ajustes2_perc, valor_ajustes2) VALUES (" + ", ".join(["%s"]*24) + ")"
+                "valor_ajustes1, ajustes2_perc, valor_ajustes2) VALUES (" + ", ".join([
+                    "%s"]*24) + ")"
             )
             cursor.execute(insert_q, (id_orc, novo_item, *dados))
 
-            duplicar_registos_associados(cursor, 'dados_modulo_medidas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
-            duplicar_registos_associados(cursor, 'dados_def_pecas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
-            duplicar_registos_associados(cursor, 'dados_items_materiais', 'id_mat', item_num_str, str(novo_item), num_orc, ver_orc)
-            duplicar_registos_associados(cursor, 'dados_items_ferragens', 'id_fer', item_num_str, str(novo_item), num_orc, ver_orc)
-            duplicar_registos_associados(cursor, 'dados_items_sistemas_correr', 'id_sc', item_num_str, str(novo_item), num_orc, ver_orc)
-            duplicar_registos_associados(cursor, 'dados_items_acabamentos', 'id_acb', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_modulo_medidas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_def_pecas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_materiais', 'id_mat', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_ferragens', 'id_fer', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_sistemas_correr', 'id_sc', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_acabamentos', 'id_acb', item_num_str, str(novo_item), num_orc, ver_orc)
 
         carregar_itens_orcamento(ui, id_orc)
-        ui.lineEdit_item_orcamento.setText(str(obter_proximo_item_para_orcamento(id_orc)))
+        ui.lineEdit_item_orcamento.setText(
+            str(obter_proximo_item_para_orcamento(id_orc)))
         QMessageBox.information(None, "OK", "Linha duplicada com sucesso.")
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao duplicar item: {err}")
@@ -2135,7 +2146,8 @@ def excluir_item_orcamento(ui):
     tbl = ui.tableWidget_artigos
     row_sel = tbl.currentRow()
     if row_sel < 0:
-        QMessageBox.warning(None, "Erro", "Nenhuma linha selecionada para eliminar.")
+        QMessageBox.warning(
+            None, "Erro", "Nenhuma linha selecionada para eliminar.")
         return
 
     id_item_db = _get_cell_text(tbl, row_sel, COL_ID_ITEM)
@@ -2154,7 +2166,8 @@ def excluir_item_orcamento(ui):
 
     try:
         with obter_cursor() as cursor:
-            cursor.execute("DELETE FROM orcamento_items WHERE id_item=%s", (int(id_item_db),))
+            cursor.execute(
+                "DELETE FROM orcamento_items WHERE id_item=%s", (int(id_item_db),))
             cursor.execute(
                 "DELETE FROM dados_modulo_medidas WHERE ids=%s AND num_orc=%s AND ver_orc=%s",
                 (item_num, num_orc, ver_orc))
@@ -2175,7 +2188,8 @@ def excluir_item_orcamento(ui):
                 (item_num, num_orc, ver_orc))
 
         carregar_itens_orcamento(ui, id_orc)
-        ui.lineEdit_item_orcamento.setText(str(obter_proximo_item_para_orcamento(id_orc)))
+        ui.lineEdit_item_orcamento.setText(
+            str(obter_proximo_item_para_orcamento(id_orc)))
         QMessageBox.information(None, "OK", "Linha eliminada com sucesso.")
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao eliminar item: {err}")
