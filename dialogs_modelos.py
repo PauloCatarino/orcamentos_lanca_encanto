@@ -1,4 +1,15 @@
-# dialogs_modelos.py
+"""
+dialogs_modelos.py
+
+Este script define diálogos em PyQt5 para o software de orçamentos de mobiliário.
+Inclui:
+- SelecaoModeloDialog: janela para o utilizador selecionar um único modelo de uma lista (com checkboxes).
+- GerirNomesDialog: janela para visualizar, editar ou eliminar nomes/modelos guardados na base de dados.
+As janelas são utilizadas para facilitar operações como importar acabamentos, selecionar referências, ou gerir listas de modelos/nomes.
+
+Última alteração: [07-06-2025]
+Autor: Paulo Catarino
+"""
 
 from PyQt5.QtWidgets import (QDialog,QVBoxLayout,QListWidget,QListWidgetItem, QDialogButtonBox, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QInputDialog)
 from PyQt5.QtCore import Qt
@@ -8,8 +19,10 @@ class SelecaoModeloDialog(QDialog):
     def __init__(self, modelos, titulo="Selecionar Modelo", parent=None):
         super().__init__(parent)
         self.setWindowTitle(titulo)
+        self.resize(400, 300)  # <-- ESTA LINHA AUMENTA A JANELA
         layout = QVBoxLayout(self)
         self.lista = QListWidget()
+        self.lista.setMinimumWidth(350)  # Garante largura suficiente para os textos
         for nome in modelos:
             item = QListWidgetItem(nome)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
@@ -41,7 +54,8 @@ class GerirNomesDialog(QDialog):
     def __init__(self, tabela, nomes, parent=None):
         super().__init__(parent)
         self.tabela = tabela
-        self.setWindowTitle(f"Guardar Dados - {tabela.upper()}")
+        self.setWindowTitle(f"Guardar Dados Gerais  -> {tabela.upper()}")
+        self.resize(400, 300)  # <-- ESTA LINHA AUMENTA A JANELA
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Modelos existentes:"))
         self.lista = QListWidget()

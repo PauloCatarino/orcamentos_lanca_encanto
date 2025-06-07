@@ -800,7 +800,7 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                 f"Nenhum registo salvo para '{nome_tabela}'.")
         return
     if modelo_escolhido is None:
-          dlg = SelecaoModeloDialog(modelos, titulo=f"Importar {nome_tabela}", parent=parent_app)
+          dlg = SelecaoModeloDialog(modelos, titulo=f"Importa Dados Gerais para tenho duvida o que é ? ->  {nome_tabela}", parent=parent_app)
           if dlg.exec_() != QDialog.Accepted:
                return
           modelo_escolhido = dlg.modelo_escolhido()
