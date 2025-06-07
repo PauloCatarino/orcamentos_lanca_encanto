@@ -497,6 +497,17 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
         if not item_ver.text().strip():
             item_ver.setText(ver_orc)
 
+        # Preenche o identificador (id_mat/id_fer/id_sc/id_acb) se existir.
+        col_id = mapping.get('id_mat') or mapping.get('id_fer') \
+            or mapping.get('id_sc') or mapping.get('id_acb')
+        if col_id is not None and col_id < table_widget.columnCount():
+            item_id = table_widget.item(row, col_id)
+            if item_id is None:
+                item_id = QTableWidgetItem()
+                table_widget.setItem(row, col_id, item_id)
+            if not item_id.text().strip():
+                item_id.setText(str(row))
+
         # Primeiro, adiciona nome, linha e referencias do orçamento
         dados_linha = {
             'nome': nome_registro,
@@ -596,7 +607,11 @@ def guardar_dados_gerais_orcamento(parent):
 
     # Mapeamento e nomes de colunas para a aba Materiais
     mapping_materiais = {
+        "material": 0,
         "descricao": 1,
+        "id_mat": 2,
+        "num_orc": 3,
+        "ver_orc": 4,
         "ref_le": 5,
         "descricao_no_orcamento": 6,
         "ptab": 7,
@@ -614,7 +629,7 @@ def guardar_dados_gerais_orcamento(parent):
         "esp_mp": 19
     }
     col_names_materiais = [
-        "descricao", "num_orc", "ver_orc",
+        "material", "descricao", "id_mat", "num_orc", "ver_orc",
         "ref_le", "descricao_no_orcamento", "ptab", "pliq",
         "desc1_plus", "desc2_minus", "und", "desp",
         "corres_orla_0_4", "corres_orla_1_0", "tipo", "familia",
@@ -625,7 +640,11 @@ def guardar_dados_gerais_orcamento(parent):
 
     # Mapeamento para a aba Ferragens
     mapping_ferragens = {
+        "ferragens": 0,
         "descricao": 1,
+        "id_fer": 2,
+        "num_orc": 3,
+        "ver_orc": 4,
         "ref_le": 5,
         "descricao_no_orcamento": 6,
         "ptab": 7,
@@ -643,7 +662,7 @@ def guardar_dados_gerais_orcamento(parent):
         "esp_mp": 19
     }
     col_names_ferragens = [
-        "descricao", "num_orc", "ver_orc",
+        "ferragens", "descricao", "id_fer", "num_orc", "ver_orc",
         "ref_le", "descricao_no_orcamento", "ptab", "pliq",
         "desc1_plus", "desc2_minus", "und", "desp",
         "corres_orla_0_4", "corres_orla_1_0", "tipo", "familia",
@@ -654,7 +673,11 @@ def guardar_dados_gerais_orcamento(parent):
 
     # Mapeamento para a aba Sistemas Correr
     mapping_sistemas_correr = {
+        "sistemas_correr": 0,
         "descricao": 1,
+        "id_sc": 2,
+        "num_orc": 3,
+        "ver_orc": 4,
         "ref_le": 5,
         "descricao_no_orcamento": 6,
         "ptab": 7,
@@ -672,7 +695,7 @@ def guardar_dados_gerais_orcamento(parent):
         "esp_mp": 19
     }
     col_names_sistemas_correr = [
-        "descricao", "num_orc", "ver_orc",
+        "sistemas_correr", "descricao", "id_sc", "num_orc", "ver_orc",
         "ref_le", "descricao_no_orcamento", "ptab", "pliq",
         "desc1_plus", "desc2_minus", "und", "desp",
         "corres_orla_0_4", "corres_orla_1_0", "tipo", "familia",
@@ -683,7 +706,11 @@ def guardar_dados_gerais_orcamento(parent):
 
     # Mapeamento para a aba Acabamentos
     mapping_acabamentos = {
+        "acabamentos": 0,
         "descricao": 1,
+        "id_acb": 2,
+        "num_orc": 3,
+        "ver_orc": 4,
         "ref_le": 5,
         "descricao_no_orcamento": 6,
         "ptab": 7,
@@ -701,7 +728,7 @@ def guardar_dados_gerais_orcamento(parent):
         "esp_mp": 19
     }
     col_names_acabamentos = [
-        "descricao", "num_orc", "ver_orc",
+        "acabamentos", "descricao", "id_acb", "num_orc", "ver_orc",
         "ref_le", "descricao_no_orcamento", "ptab", "pliq",
         "desc1_plus", "desc2_minus", "und", "desp",
         "corres_orla_0_4", "corres_orla_1_0", "tipo", "familia",
