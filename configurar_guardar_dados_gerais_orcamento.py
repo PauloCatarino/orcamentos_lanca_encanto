@@ -35,9 +35,9 @@ Autor: Paulo Catarino
 Data: 27-01-2025
 """
 
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QInputDialog, QComboBox 
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QInputDialog, QComboBox
 from PyQt5.QtCore import Qt
-import mysql.connector # Adicionado para erros específicos
+import mysql.connector  # Adicionado para erros específicos
 from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
 import math
@@ -57,11 +57,11 @@ def formatar_versao(raw_ver):
     Se ocorrer erro na conversão, retorna "00".
     """
     raw_ver = raw_ver.strip()
-    #print(f"DEBUG: Raw version from UI: {raw_ver=}")  # Para debugar o valor recebido
+    # print(f"DEBUG: Raw version from UI: {raw_ver=}")  # Para debugar o valor recebido
     try:
         ver_int = int(raw_ver)
         formatted = f"{ver_int:02d}"
-        #print(f"DEBUG: Formatted version: {formatted=}")
+        # print(f"DEBUG: Formatted version: {formatted=}")
         return formatted
     except Exception:
         return "00"
@@ -69,13 +69,15 @@ def formatar_versao(raw_ver):
 # ------------------------------------------------------------------------------
 # FUNÇÃO AUXILIAR: mapear_registro_gerais
 # ------------------------------------------------------------------------------
+
+
 def mapear_registro_gerais(registro):
     """
     Reordena os dados de um registro vindo do banco de dados para a ordem
     que será apresentada no QTableWidget.
-    
+
     Atenção: O campo ver_orc (registro[7]) é convertido para uma string de dois dígitos.
-    
+
     Mapeamento (índices do QTableWidget):
       1  ← registro[4]  (descrição)
       3  ← registro[6]  (num_orc)
@@ -126,31 +128,33 @@ def mapear_registro_gerais(registro):
     try:
         # Assume que o SELECT * retorna as colunas na ordem de criação (id, nome, linha, ...)
         # O mapeamento deve ser NomeColunaBD -> IndiceUI
-        ver_orc_formatada = formatar_versao(str(registro[7]) if registro[7] is not None else "00")
+        ver_orc_formatada = formatar_versao(
+            str(registro[7]) if registro[7] is not None else "00")
         return {
             1: registro[4],   # descricao -> UI[1]
             # 2: ID específico (id_mat, id_fer...) não está no SELECT * de dados_gerais_*
             3: registro[6],   # num_orc -> UI[3]
-            4: ver_orc_formatada, # ver_orc -> UI[4]
+            4: ver_orc_formatada,  # ver_orc -> UI[4]
             5: registro[8],   # ref_le -> UI[5]
             6: registro[9],   # descricao_no_orcamento -> UI[6]
             7: registro[10],  # ptab -> UI[7]
             8: registro[11],  # pliq -> UI[8]
             9: registro[12],  # desc1_plus -> UI[9]
-            10: registro[13], # desc2_minus -> UI[10]
-            11: registro[14], # und -> UI[11]
-            12: registro[15], # desp -> UI[12]
-            13: registro[16], # corres_orla_0_4 -> UI[13]
-            14: registro[17], # corres_orla_1_0 -> UI[14]
-            15: registro[18], # tipo -> UI[15]
-            16: registro[19], # familia -> UI[16]
-            17: registro[20], # comp_mp -> UI[17]
-            18: registro[21], # larg_mp -> UI[18]
+            10: registro[13],  # desc2_minus -> UI[10]
+            11: registro[14],  # und -> UI[11]
+            12: registro[15],  # desp -> UI[12]
+            13: registro[16],  # corres_orla_0_4 -> UI[13]
+            14: registro[17],  # corres_orla_1_0 -> UI[14]
+            15: registro[18],  # tipo -> UI[15]
+            16: registro[19],  # familia -> UI[16]
+            17: registro[20],  # comp_mp -> UI[17]
+            18: registro[21],  # larg_mp -> UI[18]
             19: registro[22]  # esp_mp -> UI[19]
         }
     except IndexError:
-        print(f"[ERRO] mapear_registro_gerais: Registro inválido ou incompleto: {registro}")
-        return {} # Retorna dicionário vazio em caso de erro
+        print(
+            f"[ERRO] mapear_registro_gerais: Registro inválido ou incompleto: {registro}")
+        return {}  # Retorna dicionário vazio em caso de erro
 
 
 # ---------------------------------------------------------------------------
@@ -160,11 +164,11 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
     """
     Carrega os dados salvos na tabela 'dados_gerais_<nome_tabela>' para o orçamento atual,
     utilizando os valores de num_orc e ver_orc obtidos dos widgets.
-    
+
     Parâmetros:
       parent     : objeto principal da aplicação (MainApp) – é usado como parent para os diálogos.
       nome_tabela: string com o nome da tabela de dados gerais (ex.: "materiais", "ferragens", etc.)
-    
+
     Observação:
       Este exemplo preenche os QTableWidgets com os dados salvos, atualizando as colunas:
       num_orc, ver_orc, ref_le, descricao_no_orcamento, ptab, desc1_plus, desc2_minus,
@@ -194,10 +198,11 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
     num_orc = ui.lineEdit_num_orcamento.text().strip()
     # Aplica formatação na versão ao importar
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
-    
+
     registros = []
     tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-    print(f"Carregando configuração para '{nome_tabela}' (Orc: {num_orc}, Ver: {ver_orc})...")
+    print(
+        f"Carregando configuração para '{nome_tabela}' (Orc: {num_orc}, Ver: {ver_orc})...")
 
     try:
         with obter_cursor() as cursor:
@@ -210,79 +215,103 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
             # *** ESTA FUNÇÃO PRECISA DO NOME DO MODELO A CARREGAR, NÃO SÓ num_orc/ver_orc ***
             # *** VAMOS ASSUMIR POR AGORA QUE O NOME É O num_orc PARA FINS DE EXEMPLO ***
             # *** ISTO PRECISA SER REVISTO COM BASE NA LÓGICA DE NEGÓCIO ***
-            nome_modelo = num_orc # ASSUMINDO que o nome do modelo é o número do orçamento
+            nome_modelo = num_orc  # ASSUMINDO que o nome do modelo é o número do orçamento
             print(f"  Query: {query}")
-            print(f"  Params: {(nome_modelo, ver_orc)}") # <-- Usando nome_modelo (num_orc) como 'nome'
-            cursor.execute(query, (nome_modelo, ver_orc)) # <-- Parâmetros precisam bater com a query
+            # <-- Usando nome_modelo (num_orc) como 'nome'
+            print(f"  Params: {(nome_modelo, ver_orc)}")
+            # <-- Parâmetros precisam bater com a query
+            cursor.execute(query, (nome_modelo, ver_orc))
             registros = cursor.fetchall()
         print(f"  Encontrados {len(registros)} registos.")
 
     except mysql.connector.Error as err:
-        if err.errno == 1146: print(f"Aviso: Tabela '{tabela_bd_segura}' não encontrada.")
-        else: print(f"Erro MySQL ao carregar config '{nome_tabela}': {err}"); QMessageBox.warning(parent, "Erro BD", f"Erro: {err}")
-        return # Retorna se não conseguiu carregar
+        if err.errno == 1146:
+            print(f"Aviso: Tabela '{tabela_bd_segura}' não encontrada.")
+        else:
+            print(f"Erro MySQL ao carregar config '{nome_tabela}': {err}")
+            QMessageBox.warning(parent, "Erro BD", f"Erro: {err}")
+        return  # Retorna se não conseguiu carregar
     except Exception as e:
-        print(f"Erro inesperado ao carregar config '{nome_tabela}': {e}"); QMessageBox.critical(parent, "Erro", f"Erro: {e}")
+        print(f"Erro inesperado ao carregar config '{nome_tabela}': {e}")
+        QMessageBox.critical(parent, "Erro", f"Erro: {e}")
         return
 
     # Seleciona o QTableWidget correspondente
-    widget_map = { "materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens,
-                   "sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos }
+    widget_map = {"materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens,
+                  "sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos}
     table = widget_map.get(nome_tabela)
-    if not table: return
+    if not table:
+        return
 
-    table.blockSignals(True); table.setProperty("importando", True)
+    table.blockSignals(True)
+    table.setProperty("importando", True)
     try:
         row_count_ui = table.rowCount()
-        print(f"  Preenchendo {min(len(registros), row_count_ui)} linhas na tabela UI '{table.objectName()}'.")
+        print(
+            f"  Preenchendo {min(len(registros), row_count_ui)} linhas na tabela UI '{table.objectName()}'.")
         for i in range(min(len(registros), row_count_ui)):
             registro_bd = registros[i]
-            dados_mapeados = mapear_registro_gerais(registro_bd) # Mapeia dados da BD para índices UI
+            dados_mapeados = mapear_registro_gerais(
+                registro_bd)  # Mapeia dados da BD para índices UI
 
             for col_idx_ui, valor_bd in dados_mapeados.items():
-                if not (0 <= col_idx_ui < table.columnCount()): continue # Segurança
+                if not (0 <= col_idx_ui < table.columnCount()):
+                    continue  # Segurança
 
                 # Formata o valor para exibição
                 texto_formatado = ""
                 if valor_bd is not None:
                     # Adapta a formatação baseada no ÍNDICE DA COLUNA UI
-                    if col_idx_ui in [7, 8]: texto_formatado = formatar_valor_moeda(valor_bd)
-                    elif col_idx_ui in [9, 10, 12]: texto_formatado = formatar_valor_percentual(valor_bd)
-                    else: texto_formatado = str(valor_bd)
+                    if col_idx_ui in [7, 8]:
+                        texto_formatado = formatar_valor_moeda(valor_bd)
+                    elif col_idx_ui in [9, 10, 12]:
+                        texto_formatado = formatar_valor_percentual(valor_bd)
+                    else:
+                        texto_formatado = str(valor_bd)
 
                 # Preenche a célula (widget ou item)
                 widget = table.cellWidget(i, col_idx_ui)
                 if isinstance(widget, QComboBox):
-                    idx_combo = widget.findText(texto_formatado, Qt.MatchFixedString)
+                    idx_combo = widget.findText(
+                        texto_formatado, Qt.MatchFixedString)
                     widget.setCurrentIndex(idx_combo if idx_combo >= 0 else -1)
                 else:
                     item = table.item(i, col_idx_ui)
-                    if item is None: item = QTableWidgetItem(); table.setItem(i, col_idx_ui, item)
+                    if item is None:
+                        item = QTableWidgetItem()
+                        table.setItem(i, col_idx_ui, item)
                     item.setText(texto_formatado)
 
             # Preenche as colunas fixas num_orc e ver_orc (colunas 3 e 4)
-            item_num = table.item(i, 3);
-            if not item_num: item_num = QTableWidgetItem(); table.setItem(i, 3, item_num)
+            item_num = table.item(i, 3)
+            if not item_num:
+                item_num = QTableWidgetItem()
+                table.setItem(i, 3, item_num)
             item_num.setText(num_orc)
-            item_ver = table.item(i, 4);
-            if not item_ver: item_ver = QTableWidgetItem(); table.setItem(i, 4, item_ver)
+            item_ver = table.item(i, 4)
+            if not item_ver:
+                item_ver = QTableWidgetItem()
+                table.setItem(i, 4, item_ver)
             item_ver.setText(ver_orc)
 
         if registros:
-             QMessageBox.information(parent, "Configurar Dados Gerais",
-                                     f"Dados carregados para '{nome_tabela}' (Orc: {num_orc}, Ver: {ver_orc}).")
+            QMessageBox.information(parent, "Configurar Dados Gerais",
+                                    f"Dados carregados para '{nome_tabela}' (Orc: {num_orc}, Ver: {ver_orc}).")
     finally:
-        table.setProperty("importando", False); table.blockSignals(False)
-        table.resizeColumnsToContents() # Ajusta as colunas para o conteúdo
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        table.resizeColumnsToContents()  # Ajusta as colunas para o conteúdo
 
 # ---------------------------------------------------------------------------
 # FUNÇÃO PRINCIPAL: Configurar Dados Gerais
 # ---------------------------------------------------------------------------
+
+
 def configurar_dados_gerais(parent):
     """
     Configura (ou carrega) os Dados Gerais dos 4 separadores (Materiais, Ferragens, Sistemas Correr e Acabamentos)
     para o orçamento atual.
-    
+
     Primeiro, obtém os valores dos campos 'Num Orçamento' e 'Versão' na aba Orçamento.
     Em seguida, verifica se já existe alguma configuração salva no banco (usando, por exemplo, a tabela de Materiais):
       - Se existir, chama a função auxiliar para carregar os dados salvos para as 4 tabelas.
@@ -290,7 +319,7 @@ def configurar_dados_gerais(parent):
         "num_orc" (índice 3) e "ver_orc" (índice 4) (e possivelmente outras) com os valores atuais,
         perguntando ao usuário se houver divergência.
     Ao final, alterna a visualização para a aba "Dados Gerais MP".
-    
+
     Parâmetros:
       parent: objeto principal da aplicação (MainApp) que possui o atributo ui.
     """
@@ -298,31 +327,38 @@ def configurar_dados_gerais(parent):
     num_orc = ui.lineEdit_num_orcamento.text().strip()
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
     if not num_orc or not ver_orc:
-        QMessageBox.warning(parent, "Aviso", "Preencha os campos 'Num Orçamento' e 'Versão'.")
+        QMessageBox.warning(
+            parent, "Aviso", "Preencha os campos 'Num Orçamento' e 'Versão'.")
         return
 
     # Verifica se já existe configuração salva na tabela de Materiais (pode ser usada como referência)
     count_materiais = 0
-    tabela_referencia = "dados_gerais_materiais" # Usa materiais como referência
+    tabela_referencia = "dados_gerais_materiais"  # Usa materiais como referência
     try:
         with obter_cursor() as cursor:
             # Verifica se já existe configuração para este num_orc e ver_orc na tabela de referência
             # ASSUMINDO que a tabela geral usa 'nome' e não 'num_orc' para identificar o modelo.
             # A lógica aqui precisa ser consistente com 'guardar_por_tabela'.
             # Vamos assumir que o 'nome' do modelo é o 'num_orc' para esta verificação.
-            nome_modelo = num_orc # Assumindo nome = num_orc
+            nome_modelo = num_orc  # Assumindo nome = num_orc
             query_check = f"SELECT COUNT(*) FROM `{tabela_referencia}` WHERE nome=%s AND ver_orc=%s"
             cursor.execute(query_check, (nome_modelo, ver_orc))
             resultado = cursor.fetchone()
-            if resultado: count_materiais = resultado[0]
+            if resultado:
+                count_materiais = resultado[0]
 
     except mysql.connector.Error as err:
-        if err.errno == 1146: print(f"Tabela '{tabela_referencia}' não existe ainda.") # Tabela não existe, é a primeira vez
-        else: print(f"Erro MySQL ao verificar dados gerais: {err}"); QMessageBox.critical(parent, "Erro BD", f"Erro: {err}")
-        count_materiais = 0 # Assume que não existe se houver erro
+        if err.errno == 1146:
+            # Tabela não existe, é a primeira vez
+            print(f"Tabela '{tabela_referencia}' não existe ainda.")
+        else:
+            print(f"Erro MySQL ao verificar dados gerais: {err}")
+            QMessageBox.critical(parent, "Erro BD", f"Erro: {err}")
+        count_materiais = 0  # Assume que não existe se houver erro
     except Exception as e:
-        print(f"Erro inesperado ao verificar dados gerais: {e}"); QMessageBox.critical(parent, "Erro", f"Erro: {e}")
-        count_materiais = 0 # Assume que não existe se houver erro
+        print(f"Erro inesperado ao verificar dados gerais: {e}")
+        QMessageBox.critical(parent, "Erro", f"Erro: {e}")
+        count_materiais = 0  # Assume que não existe se houver erro
 
     if count_materiais > 0:
         # Se existir, carrega os dados salvos para as 4 tabelas
@@ -332,7 +368,8 @@ def configurar_dados_gerais(parent):
         carregar_configuracao_dados_gerais(parent, "acabamentos")
     else:
         # Se não existir, verifica se é a primeira configuração (todas as células estão vazias)
-        tabelas = [ui.Tab_Material, ui.Tab_Ferragens, ui.Tab_Sistemas_Correr, ui.Tab_Acabamentos]
+        tabelas = [ui.Tab_Material, ui.Tab_Ferragens,
+                   ui.Tab_Sistemas_Correr, ui.Tab_Acabamentos]
         primeira_vez = True
         for tabela in tabelas:
             for row in range(tabela.rowCount()):
@@ -379,10 +416,10 @@ def configurar_dados_gerais(parent):
 
             if divergencia:
                 resposta = QMessageBox.question(parent,
-                    "Dados Gerais divergentes",
-                    ("Os campos 'num_orc' e 'ver_orc' nas tabelas de Dados Gerais não correspondem "
-                     "ao orçamento atual.\nDeseja atualizar esses campos para os valores atuais?"),
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                                "Dados Gerais divergentes",
+                                                ("Os campos 'num_orc' e 'ver_orc' nas tabelas de Dados Gerais não correspondem "
+                                                 "ao orçamento atual.\nDeseja atualizar esses campos para os valores atuais?"),
+                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
                 if resposta == QMessageBox.Yes:
                     for tabela in tabelas:
                         for row in range(tabela.rowCount()):
@@ -415,24 +452,25 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
     """
     Salva os dados do QTableWidget da aba 'dados_gerais_<nome_tabela>' no banco de dados,
     associando-os ao orçamento atual (usando os campos num_orc e ver_orc).
-    
+
     Parâmetros:
       parent     : objeto principal (MainApp) que possui o atributo ui.
       nome_tabela: string com o nome (ex.: "materiais").
       table_widget: QTableWidget da aba correspondente.
       mapping    : dicionário mapeando os nomes dos campos para os índices das colunas no QTableWidget.
       col_names  : lista com os nomes das colunas a serem inseridas no banco, na ordem desejada.
-      
+
     Retorna True se os dados foram gravados com sucesso; False caso contrário.
     """
     ui = parent.ui
     num_orc = ui.lineEdit_num_orcamento.text().strip()
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
     # O nome do modelo/registro é passado para esta função agora
-    nome_registro = num_orc # ASSUMINDO que o nome do registro é o num_orc
-    
+    nome_registro = num_orc  # ASSUMINDO que o nome do registro é o num_orc
+
     if not num_orc or not ver_orc:
-        QMessageBox.warning(parent, "Aviso", "Os campos 'Num Orçamento' e 'Versão' devem estar preenchidos!")
+        QMessageBox.warning(
+            parent, "Aviso", "Os campos 'Num Orçamento' e 'Versão' devem estar preenchidos!")
         return False
 
     num_rows = table_widget.rowCount()
@@ -442,33 +480,53 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
 
     # Coleta dados da UI
     for row in range(num_rows):
-        # Primeiro, adiciona nome e linha
-        dados_linha = {'nome': nome_registro, 'linha': row}
+        # Primeiro, adiciona nome, linha e referencias do orçamento
+        # As colunas num_orc e ver_orc devem ser preenchidas para cada linha
+        # pois são usadas posteriormente para relacionar os dados gerais ao
+        # orçamento corrente. Estas colunas estavam a ficar a NULL porque não
+        # eram adicionadas aqui.
+        dados_linha = {
+            'nome': nome_registro,
+            'linha': row,
+            'num_orc': num_orc,
+            'ver_orc': ver_orc,
+        }
         # Adiciona as colunas mapeadas
         for campo_bd, col_ui in mapping.items():
-            if col_ui >= table_widget.columnCount(): continue # Segurança
+            if col_ui >= table_widget.columnCount():
+                continue  # Segurança
 
             widget = table_widget.cellWidget(row, col_ui)
             valor_str = ""
-            if widget and isinstance(widget, QComboBox): valor_str = widget.currentText()
-            else: item = table_widget.item(row, col_ui); valor_str = item.text() if item else ""
+            if widget and isinstance(widget, QComboBox):
+                valor_str = widget.currentText()
+            else:
+                item = table_widget.item(row, col_ui)
+                valor_str = item.text() if item else ""
 
             valor_final = None
             if valor_str:
                 if campo_bd in campos_moeda:
-                    try: valor_final = converter_texto_para_valor(valor_str, "moeda")
-                    except: valor_final = None
+                    try:
+                        valor_final = converter_texto_para_valor(
+                            valor_str, "moeda")
+                    except:
+                        valor_final = None
                 elif campo_bd in campos_percentual:
-                    try: valor_final = converter_texto_para_valor(valor_str, "percentual")
-                    except: valor_final = None
-                else: valor_final = valor_str.strip() if valor_str else None
+                    try:
+                        valor_final = converter_texto_para_valor(
+                            valor_str, "percentual")
+                    except:
+                        valor_final = None
+                else:
+                    valor_final = valor_str.strip() if valor_str else None
             dados_linha[campo_bd] = valor_final
 
         # Cria tupla na ordem correta das colunas BD
         # Inclui 'nome' e 'linha' no início
-        tupla_linha = [nome_registro, row] + [dados_linha.get(cn, None) for cn in col_names_db]
+        tupla_linha = [nome_registro, row] + \
+            [dados_linha.get(cn, None) for cn in col_names_db]
         dados_para_salvar.append(tuple(tupla_linha))
-
 
     # Monta a query INSERT
     tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
@@ -487,18 +545,23 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
             # Aqui apenas inserimos:
             cursor.executemany(query_insert, dados_para_salvar)
         # Commit automático
-        print(f"Dados para '{nome_tabela}' (Modelo: {nome_registro}) guardados.")
+        print(
+            f"Dados para '{nome_tabela}' (Modelo: {nome_registro}) guardados.")
         return True
     except mysql.connector.Error as err:
-        print(f"Erro MySQL ao guardar dados gerais para '{nome_tabela}': {err}")
-        QMessageBox.critical(parent, "Erro Base de Dados", f"Erro ao guardar '{nome_tabela}':\n{err}")
+        print(
+            f"Erro MySQL ao guardar dados gerais para '{nome_tabela}': {err}")
+        QMessageBox.critical(parent, "Erro Base de Dados",
+                             f"Erro ao guardar '{nome_tabela}':\n{err}")
         return False
     except Exception as e:
-        print(f"Erro inesperado ao guardar dados gerais para '{nome_tabela}': {e}")
-        QMessageBox.critical(parent, "Erro Inesperado", f"Erro ao guardar '{nome_tabela}':\n{e}")
-        import traceback; traceback.print_exc()
+        print(
+            f"Erro inesperado ao guardar dados gerais para '{nome_tabela}': {e}")
+        QMessageBox.critical(parent, "Erro Inesperado",
+                             f"Erro ao guardar '{nome_tabela}':\n{e}")
+        import traceback
+        traceback.print_exc()
         return False
-
 
 
 # ---------------------------------------------------------------------------
@@ -509,10 +572,10 @@ def guardar_dados_gerais_orcamento(parent):
     Função principal que guarda os dados gerais de um orçamento, associando os dados
     de cada uma das 4 abas (materiais, ferragens, sistemas_correr e acabamentos) ao orçamento
     atual (identificado por num_orc e ver_orc).
-    
+
     Para cada tabela, chama a função auxiliar guardar_por_tabela() (definida abaixo) com o mapeamento
     específico de índices e nomes de colunas.
-    
+
     Retorna True se todos os dados foram salvos com sucesso, False caso contrário.
     """
     ui = parent.ui
@@ -635,110 +698,182 @@ def guardar_dados_gerais_orcamento(parent):
         sucesso = False
 
     if sucesso:
-        QMessageBox.information(parent, "Sucesso", "Dados gerais do orçamento guardados com sucesso em todas as tabelas.")
+        QMessageBox.information(
+            parent, "Sucesso", "Dados gerais do orçamento guardados com sucesso em todas as tabelas.")
     else:
-        QMessageBox.warning(parent, "Aviso", "Ocorreu algum problema ao guardar os dados gerais do orçamento.")
+        QMessageBox.warning(
+            parent, "Aviso", "Ocorreu algum problema ao guardar os dados gerais do orçamento.")
 
 # (Manter importar_dados_gerais_com_opcao e importar_dados_gerais_por_modelo como na resposta anterior,
 #  pois elas já usam obter_cursor indiretamente através das funções que chamam)
+
+
 def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_escolhido=None):
-     # ... (código da função mantido como antes, já usa listar_nomes e obter_cursor indiretamente) ...
-     ui = parent_app.ui
-     modelos = listar_nomes_dados_gerais(nome_tabela)
-     if not modelos: QMessageBox.information(parent_app, "Importar", f"Nenhum registo salvo para '{nome_tabela}'."); return
-     if modelo_escolhido is None:
-          modelo_escolhido, ok = QInputDialog.getItem(parent_app, "Importar", f"Selecione (<b>{nome_tabela.upper()}</b>):", modelos, 0, False)
-          if not ok or not modelo_escolhido: return
-     opcoes = ["Manter dados gravados no BD", "Atualizar com dados de matérias primas"]
-     opcao_selecionada, ok = QInputDialog.getItem(parent_app, "Opção", f"Importar <b>{nome_tabela.upper()}<b>?", opcoes, 0, False)
-     if not ok or not opcao_selecionada: return
+    # ... (código da função mantido como antes, já usa listar_nomes e obter_cursor indiretamente) ...
+    ui = parent_app.ui
+    modelos = listar_nomes_dados_gerais(nome_tabela)
+    if not modelos:
+        QMessageBox.information(parent_app, "Importar",
+                                f"Nenhum registo salvo para '{nome_tabela}'.")
+        return
+    if modelo_escolhido is None:
+        modelo_escolhido, ok = QInputDialog.getItem(
+            parent_app, "Importar", f"Selecione (<b>{nome_tabela.upper()}</b>):", modelos, 0, False)
+        if not ok or not modelo_escolhido:
+            return
+    opcoes = ["Manter dados gravados no BD",
+              "Atualizar com dados de matérias primas"]
+    opcao_selecionada, ok = QInputDialog.getItem(
+        parent_app, "Opção", f"Importar <b>{nome_tabela.upper()}<b>?", opcoes, 0, False)
+    if not ok or not opcao_selecionada:
+        return
 
-     tabela_widgets = {"materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens,"sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos}
-     table = tabela_widgets.get(nome_tabela)
-     if not table: QMessageBox.warning(parent_app, "Erro", f"Tabela UI '{nome_tabela}' não encontrada."); return
+    tabela_widgets = {"materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens,
+                      "sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos}
+    table = tabela_widgets.get(nome_tabela)
+    if not table:
+        QMessageBox.warning(parent_app, "Erro",
+                            f"Tabela UI '{nome_tabela}' não encontrada.")
+        return
 
-     registros_bd = []
-     try:
-          tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-          colunas_select = ['linha'] + list(mapeamento.keys())
-          colunas_sql = ", ".join(f"`{c}`" for c in colunas_select)
-          query = f"SELECT {colunas_sql} FROM `{tabela_bd_segura}` WHERE nome = %s ORDER BY linha"
-          with obter_cursor() as cursor: cursor.execute(query, (modelo_escolhido,)); registros_bd = cursor.fetchall()
-          if not registros_bd: QMessageBox.information(parent_app, "Importar", f"Nenhum dado para '{modelo_escolhido}'."); return
+    registros_bd = []
+    try:
+        tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
+        colunas_select = ['linha'] + list(mapeamento.keys())
+        colunas_sql = ", ".join(f"`{c}`" for c in colunas_select)
+        query = f"SELECT {colunas_sql} FROM `{tabela_bd_segura}` WHERE nome = %s ORDER BY linha"
+        with obter_cursor() as cursor:
+            cursor.execute(query, (modelo_escolhido,))
+            registros_bd = cursor.fetchall()
+        if not registros_bd:
+            QMessageBox.information(
+                parent_app, "Importar", f"Nenhum dado para '{modelo_escolhido}'.")
+            return
 
-          table.blockSignals(True); table.setProperty("importando", True)
-          row_count_ui = table.rowCount(); dados_mp_cache = {}
-          for reg_bd in registros_bd:
-               reg_dict = dict(zip(colunas_select, reg_bd)); linha_ui = reg_dict.get('linha')
-               if linha_ui is None or not (0 <= linha_ui < row_count_ui): continue
-               if opcao_selecionada == "Manter dados gravados no BD":
+        table.blockSignals(True)
+        table.setProperty("importando", True)
+        row_count_ui = table.rowCount()
+        dados_mp_cache = {}
+        for reg_bd in registros_bd:
+            reg_dict = dict(zip(colunas_select, reg_bd))
+            linha_ui = reg_dict.get('linha')
+            if linha_ui is None or not (0 <= linha_ui < row_count_ui):
+                continue
+            if opcao_selecionada == "Manter dados gravados no BD":
+                for campo_bd, col_ui in mapeamento.items():
+                    valor_bd = reg_dict.get(campo_bd)
+                    texto_formatado = ""
+                    if valor_bd is not None:
+                        if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
+                            texto_formatado = formatar_valor_moeda(valor_bd)
+                        elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                            texto_formatado = formatar_valor_percentual(
+                                valor_bd)
+                        else:
+                            texto_formatado = str(valor_bd)
+                    widget = table.cellWidget(linha_ui, col_ui)
+                    if isinstance(widget, QComboBox):
+                        idx = widget.findText(
+                            texto_formatado, Qt.MatchFixedString)
+                        widget.setCurrentIndex(idx if idx >= 0 else -1)
+                    else:
+                        item = table.item(linha_ui, col_ui)
+                        if not item:
+                            item = QTableWidgetItem()
+                            table.setItem(linha_ui, col_ui, item)
+                        item.setText(texto_formatado)
+            else:  # Atualizar com Matérias-Primas
+                ref_le = reg_dict.get("ref_le")
+                dados_atuais_mp = None
+                if ref_le:
+                    if ref_le in dados_mp_cache:
+                        dados_atuais_mp = dados_mp_cache[ref_le]
+                    else:
+                        with obter_cursor() as cursor_mp:
+                            cursor_mp.execute(
+                                "SELECT DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, DESC1_PLUS, DESC2_MINUS, UND, DESP, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COMP_MP, LARG_MP, ESP_MP FROM materias_primas WHERE Ref_LE = %s", (ref_le,))
+                            dados_atuais_mp = cursor_mp.fetchone()
+                            dados_mp_cache[ref_le] = dados_atuais_mp
+                if dados_atuais_mp:
+                    map_mp_cols = ["descricao_no_orcamento", "ptab", "pliq", "desc1_plus", "desc2_minus",
+                                   "und", "desp", "corres_orla_0_4", "corres_orla_1_0", "comp_mp", "larg_mp", "esp_mp"]
+                    dados_mp_dict = dict(zip(map_mp_cols, dados_atuais_mp))
+                    for campo_mp, col_ui in mapeamento.items():
+                        if campo_mp in dados_mp_dict:
+                            valor_bd = dados_mp_dict[campo_mp]
+                            texto_formatado = ""
+                            if valor_bd is not None:
+                                if campo_mp in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
+                                    texto_formatado = formatar_valor_moeda(
+                                        valor_bd)
+                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
+                                    texto_formatado = formatar_valor_percentual(
+                                        valor_bd)
+                                else:
+                                    texto_formatado = str(valor_bd)
+                            widget = table.cellWidget(linha_ui, col_ui)
+                            if isinstance(widget, QComboBox):
+                                idx = widget.findText(
+                                    texto_formatado, Qt.MatchFixedString)
+                                widget.setCurrentIndex(idx if idx >= 0 else -1)
+                            else:
+                                item = table.item(linha_ui, col_ui)
+                                if not item:
+                                    item = QTableWidgetItem()
+                                    table.setItem(linha_ui, col_ui, item)
+                                item.setText(texto_formatado)
+                        elif campo_bd == "ref_le":  # Mantem ref_le original se dados_mp não encontrado
+                            valor_bd = reg_dict.get(campo_bd)
+                            texto_formatado = str(
+                                valor_bd) if valor_bd is not None else ""
+                            item = table.item(linha_ui, col_ui)
+                            if not item:
+                                item = QTableWidgetItem()
+                                table.setItem(linha_ui, col_ui, item)
+                            item.setText(texto_formatado)
+                else:  # Se não encontrou em matérias-primas, mantém dados gerais originais
+                    print(
+                        f"Aviso: Ref_LE '{ref_le}' não encontrado em matérias-primas (linha {linha_ui}). Mantendo dados gerais.")
                     for campo_bd, col_ui in mapeamento.items():
-                         valor_bd = reg_dict.get(campo_bd); texto_formatado = ""
-                         if valor_bd is not None:
-                              if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                              elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                              else: texto_formatado = str(valor_bd)
-                         widget = table.cellWidget(linha_ui, col_ui)
-                         if isinstance(widget, QComboBox):
-                             idx = widget.findText(texto_formatado, Qt.MatchFixedString)
-                             widget.setCurrentIndex(idx if idx >= 0 else -1)
-                         else:
-                             item = table.item(linha_ui, col_ui)
-                             if not item:
-                                 item = QTableWidgetItem()
-                                 table.setItem(linha_ui, col_ui, item)
-                             item.setText(texto_formatado)
-               else: # Atualizar com Matérias-Primas
-                    ref_le = reg_dict.get("ref_le"); dados_atuais_mp = None
-                    if ref_le:
-                         if ref_le in dados_mp_cache: dados_atuais_mp = dados_mp_cache[ref_le]
-                         else:
-                              with obter_cursor() as cursor_mp:
-                                   cursor_mp.execute("SELECT DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, DESC1_PLUS, DESC2_MINUS, UND, DESP, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COMP_MP, LARG_MP, ESP_MP FROM materias_primas WHERE Ref_LE = %s", (ref_le,))
-                                   dados_atuais_mp = cursor_mp.fetchone(); dados_mp_cache[ref_le] = dados_atuais_mp
-                    if dados_atuais_mp:
-                         map_mp_cols = ["descricao_no_orcamento", "ptab", "pliq", "desc1_plus", "desc2_minus", "und", "desp", "corres_orla_0_4", "corres_orla_1_0", "comp_mp", "larg_mp", "esp_mp"]
-                         dados_mp_dict = dict(zip(map_mp_cols, dados_atuais_mp))
-                         for campo_mp, col_ui in mapeamento.items():
-                              if campo_mp in dados_mp_dict:
-                                   valor_bd = dados_mp_dict[campo_mp]; texto_formatado = ""
-                                   if valor_bd is not None:
-                                        if campo_mp in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                                        elif campo_mp in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                                        else: texto_formatado = str(valor_bd)
-                                   widget = table.cellWidget(linha_ui, col_ui)
-                                   if isinstance(widget, QComboBox):
-                                        idx = widget.findText(texto_formatado, Qt.MatchFixedString)
-                                        widget.setCurrentIndex(idx if idx >= 0 else -1)
-                                   else:
-                                        item = table.item(linha_ui, col_ui)
-                                        if not item:
-                                            item = QTableWidgetItem()
-                                            table.setItem(linha_ui, col_ui, item)
-                                        item.setText(texto_formatado)
-                              elif campo_bd == "ref_le": # Mantem ref_le original se dados_mp não encontrado
-                                  valor_bd = reg_dict.get(campo_bd); texto_formatado = str(valor_bd) if valor_bd is not None else ""
-                                  item = table.item(linha_ui, col_ui);
-                                  if not item: item = QTableWidgetItem(); table.setItem(linha_ui, col_ui, item)
-                                  item.setText(texto_formatado)
-                    else: # Se não encontrou em matérias-primas, mantém dados gerais originais
-                         print(f"Aviso: Ref_LE '{ref_le}' não encontrado em matérias-primas (linha {linha_ui}). Mantendo dados gerais.");
-                         for campo_bd, col_ui in mapeamento.items():
-                              valor_bd = reg_dict.get(campo_bd); texto_formatado = ""
-                              if valor_bd is not None:
-                                    if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                                    elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                                    else: texto_formatado = str(valor_bd)
-                              widget = table.cellWidget(linha_ui, col_ui)
-                              if isinstance(widget, QComboBox): idx = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx if idx >= 0 else -1)
-                              else:
-                                   item = table.item(linha_ui, col_ui)
-                                   if not item: item = QTableWidgetItem(); table.setItem(linha_ui, col_ui, item)
-                                   item.setText(texto_formatado)
-          table.setProperty("importando", False); table.blockSignals(False)
-          QMessageBox.information(parent_app, "Importar Dados Gerais", f"Dados importados (Modelo: {modelo_escolhido}, Opção: {opcao_selecionada}).")
-     except mysql.connector.Error as err: table.setProperty("importando", False); table.blockSignals(False); print(f"Erro BD: {err}"); QMessageBox.critical(parent_app, "Erro", f"Erro BD: {err}")
-     except Exception as e: table.setProperty("importando", False); table.blockSignals(False); print(f"Erro: {e}"); QMessageBox.critical(parent_app, "Erro", f"Erro: {e}"); import traceback; traceback.print_exc()
+                        valor_bd = reg_dict.get(campo_bd)
+                        texto_formatado = ""
+                        if valor_bd is not None:
+                            if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
+                                texto_formatado = formatar_valor_moeda(
+                                    valor_bd)
+                            elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                                texto_formatado = formatar_valor_percentual(
+                                    valor_bd)
+                            else:
+                                texto_formatado = str(valor_bd)
+                        widget = table.cellWidget(linha_ui, col_ui)
+                        if isinstance(widget, QComboBox):
+                            idx = widget.findText(
+                                texto_formatado, Qt.MatchFixedString)
+                            widget.setCurrentIndex(idx if idx >= 0 else -1)
+                        else:
+                            item = table.item(linha_ui, col_ui)
+                            if not item:
+                                item = QTableWidgetItem()
+                                table.setItem(linha_ui, col_ui, item)
+                            item.setText(texto_formatado)
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        QMessageBox.information(parent_app, "Importar Dados Gerais",
+                                f"Dados importados (Modelo: {modelo_escolhido}, Opção: {opcao_selecionada}).")
+    except mysql.connector.Error as err:
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        print(f"Erro BD: {err}")
+        QMessageBox.critical(parent_app, "Erro", f"Erro BD: {err}")
+    except Exception as e:
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        print(f"Erro: {e}")
+        QMessageBox.critical(parent_app, "Erro", f"Erro: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 def listar_nomes_dados_gerais(nome_tabela):
     """
@@ -754,41 +889,71 @@ def listar_nomes_dados_gerais(nome_tabela):
         print(f"Erro ao listar nomes de dados gerais para {nome_tabela}: {e}")
         return []
 
+
 def importar_dados_gerais_por_modelo(parent_app, nome_tabela, mapeamento, modelo):
     """Importa dados de um modelo específico SEM interação."""
     # (Código mantido como na resposta anterior, já usa obter_cursor indiretamente)
-    ui = parent_app.ui; print(f"Importando modelo '{modelo}' para '{nome_tabela}'...")
+    ui = parent_app.ui
+    print(f"Importando modelo '{modelo}' para '{nome_tabela}'...")
     registros_bd = []
     try:
         tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-        colunas_select = ['linha'] + list(mapeamento.keys()); colunas_sql = ", ".join(f"`{c}`" for c in colunas_select)
+        colunas_select = ['linha'] + list(mapeamento.keys())
+        colunas_sql = ", ".join(f"`{c}`" for c in colunas_select)
         query = f"SELECT {colunas_sql} FROM `{tabela_bd_segura}` WHERE nome = %s ORDER BY linha"
-        with obter_cursor() as cursor: cursor.execute(query, (modelo,)); registros_bd = cursor.fetchall()
-        if not registros_bd: QMessageBox.information(parent_app, "Importar", f"Nenhum dado para '{modelo}'."); return
-        tabela_widgets = {"materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens, "sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos}
-        table = tabela_widgets.get(nome_tabela);
-        if not table: return
-        row_count_ui = table.rowCount(); table.blockSignals(True); table.setProperty("importando", True)
+        with obter_cursor() as cursor:
+            cursor.execute(query, (modelo,))
+            registros_bd = cursor.fetchall()
+        if not registros_bd:
+            QMessageBox.information(
+                parent_app, "Importar", f"Nenhum dado para '{modelo}'.")
+            return
+        tabela_widgets = {"materiais": ui.Tab_Material, "ferragens": ui.Tab_Ferragens,
+                          "sistemas_correr": ui.Tab_Sistemas_Correr, "acabamentos": ui.Tab_Acabamentos}
+        table = tabela_widgets.get(nome_tabela)
+        if not table:
+            return
+        row_count_ui = table.rowCount()
+        table.blockSignals(True)
+        table.setProperty("importando", True)
         for reg_bd in registros_bd:
-            reg_dict = dict(zip(colunas_select, reg_bd)); linha_ui = reg_dict.get('linha')
-            if linha_ui is None or not (0 <= linha_ui < row_count_ui): continue
+            reg_dict = dict(zip(colunas_select, reg_bd))
+            linha_ui = reg_dict.get('linha')
+            if linha_ui is None or not (0 <= linha_ui < row_count_ui):
+                continue
             for campo_bd, col_ui in mapeamento.items():
-                valor_bd = reg_dict.get(campo_bd); texto_formatado = ""
+                valor_bd = reg_dict.get(campo_bd)
+                texto_formatado = ""
                 if valor_bd is not None:
-                    if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                    elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                    else: texto_formatado = str(valor_bd)
+                    if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
+                        texto_formatado = formatar_valor_moeda(valor_bd)
+                    elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                        texto_formatado = formatar_valor_percentual(valor_bd)
+                    else:
+                        texto_formatado = str(valor_bd)
                 widget = table.cellWidget(linha_ui, col_ui)
-                if isinstance(widget, QComboBox): idx = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx if idx >= 0 else -1)
-                else: 
+                if isinstance(widget, QComboBox):
+                    idx = widget.findText(texto_formatado, Qt.MatchFixedString)
+                    widget.setCurrentIndex(idx if idx >= 0 else -1)
+                else:
                     item = table.item(linha_ui, col_ui)
-                    if not item: item = QTableWidgetItem(); table.setItem(linha_ui, col_ui, item)
+                    if not item:
+                        item = QTableWidgetItem()
+                        table.setItem(linha_ui, col_ui, item)
                     item.setText(texto_formatado)
-        table.setProperty("importando", False); table.blockSignals(False)
-        QMessageBox.information(parent_app, "Importar", f"Modelo '{modelo}' importado para '{nome_tabela}'.")
-    except mysql.connector.Error as err: table.setProperty("importando", False); table.blockSignals(False); print(f"Erro BD: {err}"); QMessageBox.critical(parent_app, "Erro", f"Erro BD: {err}")
-    except Exception as e: table.setProperty("importando", False); table.blockSignals(False); print(f"Erro: {e}"); QMessageBox.critical(parent_app, "Erro", f"Erro: {e}"); import traceback; traceback.print_exc()
-
-
-
-
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        QMessageBox.information(
+            parent_app, "Importar", f"Modelo '{modelo}' importado para '{nome_tabela}'.")
+    except mysql.connector.Error as err:
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        print(f"Erro BD: {err}")
+        QMessageBox.critical(parent_app, "Erro", f"Erro BD: {err}")
+    except Exception as e:
+        table.setProperty("importando", False)
+        table.blockSignals(False)
+        print(f"Erro: {e}")
+        QMessageBox.critical(parent_app, "Erro", f"Erro: {e}")
+        import traceback
+        traceback.print_exc()

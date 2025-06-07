@@ -1995,7 +1995,12 @@ def exibir_menu_contexto_groupbox(ui, pos):
         limpar_dados_linha_orcamento(ui)
 
 #################################################################################################################################
-# 10.2
+# 10.2  Funções de manipulação de itens do orçamento via menu de contexto
+#
+#  Inclui ações para limpar campos de edição, duplicar linhas de artigo e
+#  eliminar itens selecionados. A duplicação copia todos os registos
+#  correspondentes para um novo número sequencial de item, enquanto a
+#  eliminação remove esses dados de todas as tabelas relacionadas.
 #################################################################################################################################
 
 
