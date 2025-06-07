@@ -222,6 +222,8 @@ def configurar_orcamento_ui(main_window):
 
     # Chama a função para configurar o menu de contexto no groupBox de linhas opção com o botão lado direito do rato tem opção de limpar dados nos campos dos item do orçamento para poder escrever novo item a inserir na tabela dos items do orcamento
     configurar_context_menu_groupbox(ui)
+    # Configura menu de contexto para duplicar linhas na tabela de artigos esta função permite o utilizador no separador Orcamenteos duplicar linhas de artigos
+    configurar_context_menu_tabela(ui)
 
     # Inicializa o campo de item com "1"
     ui.lineEdit_item_orcamento.setText("1")
@@ -852,7 +854,12 @@ def inserir_item_orcamento(ui):
         return
     id_orc = int(id_orc_str)
 
-    item_str = ui.lineEdit_item_orcamento.text().strip() or "1"
+    # Garante que o número do item seja sempre sequencial.
+    # Obtém o próximo item disponível a partir da base de dados.
+    prox_item = obter_proximo_item_para_orcamento(id_orc)
+    # Ignora o valor eventualmente presente no QLineEdit e força o valor correto
+    item_str = str(prox_item)
+    ui.lineEdit_item_orcamento.setText(item_str)
     codigo = ui.lineEdit_codigo_orcamento.text().strip().upper()
     descricao = ui.plainTextEdit_descricao_orcamento.toPlainText().strip()
     altura_str = ui.lineEdit_altura_orcamento.text().strip()
@@ -1468,15 +1475,16 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
     # Se 'force_global_margin_update' for True, sobrescreve o valor da célula de margem de lucro
     # com o valor global e reseta a cor.
     # Adicionando depuração para as percentagens lidas
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Global Margem Lucro (%): {global_margem_lucro_perc*100:.2f}%")
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Célula Margem Lucro Texto (antes de parse): '{_get_cell_text(tbl, row_idx, COL_MARGEM_PERC)}'")
-    margem_lucro_perc_cell_val_parsed = converter_texto_para_valor(_get_cell_text(tbl, row_idx, COL_MARGEM_PERC), "percentual")
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Célula Margem Lucro Valor Parsed: {margem_lucro_perc_cell_val_parsed*100:.2f}%")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Global Margem Lucro (%): {global_margem_lucro_perc*100:.2f}%")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Célula Margem Lucro Texto (antes de parse): '{_get_cell_text(tbl, row_idx, COL_MARGEM_PERC)}'")
+    margem_lucro_perc_cell_val_parsed = converter_texto_para_valor(
+        _get_cell_text(tbl, row_idx, COL_MARGEM_PERC), "percentual")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Célula Margem Lucro Valor Parsed: {margem_lucro_perc_cell_val_parsed*100:.2f}%")
 
     margem_lucro_perc = 0.0
     if force_global_margin_update:
         margem_lucro_perc = global_margem_lucro_perc
-        #print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem global (forced): {margem_lucro_perc*100:.2f}%")
+        # print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem global (forced): {margem_lucro_perc*100:.2f}%")
         _editando_programaticamente = True  # Ativar para alterar a célula da margem
         try:
             item_q_margin_perc = tbl.item(row_idx, COL_MARGEM_PERC)
@@ -1493,29 +1501,29 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
         # Se a célula tem um valor diferente do global, usa o da célula. Senão, usa o global.
         if abs(margem_lucro_perc_cell_val_parsed - global_margem_lucro_perc) > 0.001:
             margem_lucro_perc = margem_lucro_perc_cell_val_parsed
-            #print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem da célula (diferente do global): {margem_lucro_perc*100:.2f}%")
+            # print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem da célula (diferente do global): {margem_lucro_perc*100:.2f}%")
         else:
             margem_lucro_perc = global_margem_lucro_perc
-            #print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem global (célula igual ou proxima): {margem_lucro_perc*100:.2f}%")
+            # print(f"[DEBUG CalcLinha {row_idx+1}] Usando margem global (célula igual ou proxima): {margem_lucro_perc*100:.2f}%")
 
     # Adicionando depuração para os outros percentuais
     custos_admin_perc_cell = converter_texto_para_valor(
         _get_cell_text(tbl, row_idx, COL_CUSTOS_ADMIN_PERC), "percentual")
     custos_admin_perc = custos_admin_perc_cell if abs(
         custos_admin_perc_cell - global_custos_admin_perc) > 0.001 else global_custos_admin_perc
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Custos Admin Perc Efetivo: {custos_admin_perc*100:.2f}%")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Custos Admin Perc Efetivo: {custos_admin_perc*100:.2f}%")
 
     ajustes1_perc_cell = converter_texto_para_valor(
         _get_cell_text(tbl, row_idx, COL_AJUSTES1_PERC), "percentual")
     ajustes1_perc = ajustes1_perc_cell if abs(
         ajustes1_perc_cell - global_ajustes1_perc) > 0.001 else global_ajustes1_perc
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 1 Perc Efetivo: {ajustes1_perc*100:.2f}%")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 1 Perc Efetivo: {ajustes1_perc*100:.2f}%")
 
     ajustes2_perc_cell = converter_texto_para_valor(
         _get_cell_text(tbl, row_idx, COL_AJUSTES2_PERC), "percentual")
     ajustes2_perc = ajustes2_perc_cell if abs(
         ajustes2_perc_cell - global_ajustes2_perc) > 0.001 else global_ajustes2_perc
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 2 Perc Efetivo: {ajustes2_perc*100:.2f}%")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 2 Perc Efetivo: {ajustes2_perc*100:.2f}%")
 
     qt_item = converter_texto_para_valor(
         _get_cell_text(tbl, row_idx, COL_QT), "moeda")
@@ -1524,7 +1532,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
 
     custo_produzido_calculado = (
         total_orlas + total_mao_obra + total_materia_prima + total_acabamentos)
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Custo Produzido (Orlas+MO+MP+Acab): {custo_produzido_calculado:.2f}€")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Custo Produzido (Orlas+MO+MP+Acab): {custo_produzido_calculado:.2f}€")
     # --- 3. Calcular valores de margem, custos administrativos e ajustes ---
     # Valores de margem, custos administrativos e ajustes são calculados como percentagens do custo produzido
 
@@ -1543,7 +1551,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                               valor_custos_admin + valor_ajustes1 + valor_ajustes2)
     preco_unit_calculado = preco_base_por_unidade
     preco_total_calculado = preco_base_por_unidade * qt_item
-    #print(f"[DEBUG CalcLinha {row_idx+1}] Preco_Total Calculado para esta linha: {preco_total_calculado:.2f}€")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Preco_Total Calculado para esta linha: {preco_total_calculado:.2f}€")
 
     # print(f"[DEBUG CalcLinha {row_idx+1}] Preço Unitário Calculado: {preco_unit_calculado:.2f}€")
     # print(f"[DEBUG CalcLinha {row_idx+1}] Preço Total Calculado: {preco_total_calculado:.2f}€")
@@ -1670,7 +1678,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
 
         # DEBUG: Confirmar o valor na célula após a atualização
         debug_read_preco_total = _get_cell_text(tbl, row_idx, COL_PRECO_TOTAL)
-        #print(f"[DEBUG CalcLinha {row_idx+1}] Preco_Total na célula após set_item: {debug_read_preco_total}")
+        # print(f"[DEBUG CalcLinha {row_idx+1}] Preco_Total na célula após set_item: {debug_read_preco_total}")
 
         # CUIDADO COM COLORAÇÃO: A lógica de colorir a célula de percentagem se ela foi editada manualmente
         # é feita em `handle_item_editado` ou `carregar_itens_orcamento`.
@@ -1930,11 +1938,11 @@ def calcular_preco_final_orcamento(ui):
         val = converter_texto_para_valor(
             current_preco_total_cell_text, "moeda")
         final_sum_preco_total += val
-        #print(f"[DEBUG SumFinal] Linha {row_idx+1}: Preco_Total lido='{current_preco_total_cell_text}' convertido={val:.2f}€")
+        # print(f"[DEBUG SumFinal] Linha {row_idx+1}: Preco_Total lido='{current_preco_total_cell_text}' convertido={val:.2f}€")
 
     ui.lineEdit_preco_final_orcamento.setText(
         formatar_valor_moeda(final_sum_preco_total))
-    #print(f"[INFO] Preço final do orçamento (soma atual): {formatar_valor_moeda(final_sum_preco_total)}")
+    # print(f"[INFO] Preço final do orçamento (soma atual): {formatar_valor_moeda(final_sum_preco_total)}")
 
 
 #################################################################################################################################
@@ -1999,5 +2007,110 @@ def configurar_context_menu_groupbox(ui):
     ui.groupBox_linhas_orcamento.setContextMenuPolicy(Qt.CustomContextMenu)
     ui.groupBox_linhas_orcamento.customContextMenuRequested.connect(
         lambda pos: exibir_menu_contexto_groupbox(ui, pos))
+
+# --- Novas Funções para Duplicar Linhas na tableWidget_artigos ---
+
+
+def configurar_context_menu_tabela(ui):
+    """Adiciona um menu de contexto na tabela para duplicar a linha selecionada."""
+    ui.tableWidget_artigos.setContextMenuPolicy(Qt.CustomContextMenu)
+    ui.tableWidget_artigos.customContextMenuRequested.connect(
+        lambda pos: exibir_menu_contexto_tabela(ui, pos))
+
+
+def exibir_menu_contexto_tabela(ui, pos):
+    """Exibe o menu de contexto da tabela de artigos."""
+    menu = QMenu()
+    acao_duplicar = menu.addAction("Duplicar Linha de Artigo")
+    acao = menu.exec_(ui.tableWidget_artigos.mapToGlobal(pos))
+    if acao == acao_duplicar:
+        duplicar_item_orcamento(ui)
+
+
+def duplicar_registos_associados(cursor, tabela, coluna_item, item_antigo, item_novo, num_orc, ver_orc):
+    """Duplica registros de uma tabela associados a um item."""
+    cursor.execute(f"SHOW COLUMNS FROM {tabela}")
+    cols = [row[0] for row in cursor.fetchall() if row[0] != 'id']
+    insert_cols = ", ".join(f"`{c}`" for c in cols)
+    select_cols = ", ".join(
+        ["%s" if c == coluna_item else f"`{c}`" for c in cols])
+    query = (
+        f"INSERT INTO {tabela} ({insert_cols}) "
+        f"SELECT {select_cols} FROM {tabela} "
+        f"WHERE {coluna_item}=%s AND num_orc=%s AND ver_orc=%s")
+    params = [item_novo, item_antigo, num_orc, ver_orc]
+    cursor.execute(query, params)
+
+
+def duplicar_item_orcamento(ui):
+    """Duplica a linha selecionada e todos os dados associados."""
+    tbl = ui.tableWidget_artigos
+    row_sel = tbl.currentRow()
+    if row_sel < 0:
+        QMessageBox.warning(
+            None, "Erro", "Nenhuma linha selecionada para duplicar.")
+        return
+
+    id_item_str = _get_cell_text(tbl, row_sel, COL_ID_ITEM)
+    item_num_str = _get_cell_text(tbl, row_sel, COL_ITEM_NUM)
+    id_orc_str = ui.lineEdit_id.text().strip()
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = ui.lineEdit_versao_orcamento.text().strip()
+
+    if not id_item_str.isdigit() or not id_orc_str.isdigit():
+        QMessageBox.warning(None, "Erro", "ID inválido para duplicação.")
+        return
+
+    id_orc = int(id_orc_str)
+    novo_item = obter_proximo_item_para_orcamento(id_orc)
+
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                "SELECT codigo, descricao, altura, largura, profundidade, und, qt, "
+                "preco_unitario, preco_total, custo_produzido, custo_total_orlas, "
+                "custo_total_mao_obra, custo_total_materia_prima, custo_total_acabamentos, "
+                "margem_lucro_perc, valor_margem, custos_admin_perc, valor_custos_admin, "
+                "ajustes1_perc, valor_ajustes1, ajustes2_perc, valor_ajustes2 "
+                "FROM orcamento_items WHERE id_item=%s",
+                (int(id_item_str),))
+            dados = cursor.fetchone()
+            if not dados:
+                QMessageBox.warning(None, "Erro", "Item não encontrado na BD.")
+                return
+            insert_q = (
+                "INSERT INTO orcamento_items (id_orcamento, item, codigo, descricao, "
+                "altura, largura, profundidade, und, qt, preco_unitario, preco_total, "
+                "custo_produzido, custo_total_orlas, custo_total_mao_obra, "
+                "custo_total_materia_prima, custo_total_acabamentos, margem_lucro_perc, "
+                "valor_margem, custos_admin_perc, valor_custos_admin, ajustes1_perc, "
+                "valor_ajustes1, ajustes2_perc, valor_ajustes2) VALUES (" + ", ".join([
+                    "%s"]*24) + ")"
+            )
+            cursor.execute(insert_q, (id_orc, novo_item, *dados))
+
+            duplicar_registos_associados(
+                cursor, 'dados_modulo_medidas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_def_pecas', 'ids', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_materiais', 'id_mat', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_ferragens', 'id_fer', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_sistemas_correr', 'id_sc', item_num_str, str(novo_item), num_orc, ver_orc)
+            duplicar_registos_associados(
+                cursor, 'dados_items_acabamentos', 'id_acb', item_num_str, str(novo_item), num_orc, ver_orc)
+
+        carregar_itens_orcamento(ui, id_orc)
+        ui.lineEdit_item_orcamento.setText(
+            str(obter_proximo_item_para_orcamento(id_orc)))
+        QMessageBox.information(None, "OK", "Linha duplicada com sucesso.")
+    except mysql.connector.Error as err:
+        print(f"Erro MySQL ao duplicar item: {err}")
+        QMessageBox.critical(None, "Erro BD", f"Erro: {err}")
+    except Exception as e:
+        print(f"Erro inesperado ao duplicar item: {e}")
+        QMessageBox.critical(None, "Erro", f"Erro: {e}")
 #################################################################################################################################
 # --- Fim das funções de manipulação de itens do orçamento ---
