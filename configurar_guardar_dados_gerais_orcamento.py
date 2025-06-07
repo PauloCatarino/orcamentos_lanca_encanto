@@ -480,11 +480,24 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
 
     # Coleta dados da UI
     for row in range(num_rows):
+        # Garante que as colunas num_orc e ver_orc estejam preenchidas na UI.
+        # Se o utilizador não tiver configurado manualmente estas colunas,
+        # definimo-las aqui para evitar que sejam gravadas como NULL.
+        item_num = table_widget.item(row, 3)
+        if item_num is None:
+            item_num = QTableWidgetItem()
+            table_widget.setItem(row, 3, item_num)
+        if not item_num.text().strip():
+            item_num.setText(num_orc)
+
+        item_ver = table_widget.item(row, 4)
+        if item_ver is None:
+            item_ver = QTableWidgetItem()
+            table_widget.setItem(row, 4, item_ver)
+        if not item_ver.text().strip():
+            item_ver.setText(ver_orc)
+
         # Primeiro, adiciona nome, linha e referencias do orçamento
-        # As colunas num_orc e ver_orc devem ser preenchidas para cada linha
-        # pois são usadas posteriormente para relacionar os dados gerais ao
-        # orçamento corrente. Estas colunas estavam a ficar a NULL porque não
-        # eram adicionadas aqui.
         dados_linha = {
             'nome': nome_registro,
             'linha': row,
