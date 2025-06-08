@@ -65,9 +65,32 @@ def listar_nomes_descricoes_dados_gerais(tabela_bd):
     try:
         with obter_cursor() as cursor:
             cursor.execute(
-                f"SELECT nome, MAX(descricao_modelo) FROM `{tabela_bd_segura}` GROUP BY nome ORDER BY nome"
+                f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'descricao_modelo'"
             )
-            for nome, desc in cursor.fetchall():
+            has_col = cursor.fetchone() is not None
+            if not has_col:
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN descricao_modelo TEXT NULL AFTER nome"
+                    )
+                    has_col = True
+                except mysql.connector.Error as alter_err:
+                    print(
+                        f"Erro ao adicionar coluna descricao_modelo em '{tabela_bd_segura}': {alter_err}"
+                    )
+            if has_col:
+                cursor.execute(
+                    f"SELECT nome, MAX(descricao_modelo) FROM `{tabela_bd_segura}` GROUP BY nome ORDER BY nome"
+                )
+            else:
+                cursor.execute(
+                    f"SELECT DISTINCT nome FROM `{tabela_bd_segura}` ORDER BY nome"
+                )
+            for row in cursor.fetchall():
+                if has_col:
+                    nome, desc = row
+                else:
+                    nome, desc = row[0], ""
                 if nome is not None:
                     resultados[nome] = desc or ""
     except mysql.connector.Error as err:
@@ -78,6 +101,7 @@ def listar_nomes_descricoes_dados_gerais(tabela_bd):
     except Exception as e:
         print(f"Erro inesperado ao listar descricoes de '{tabela_bd_segura}': {e}")
     return resultados
+
 
 def apagar_registros_por_nome(tabela_bd, nome):
     """

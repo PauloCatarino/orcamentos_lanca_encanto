@@ -81,6 +81,22 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 print(f"Tabela '{tabela_bd_segura}' criada com sucesso.")
             else:
                 print(f"Tabela '{tabela_bd_segura}' já existe.")  # Ao remover este print dá erro de commit Como remover esta linha?
+                # Garante que a nova coluna 'descricao_modelo' esteja presente
+                cursor.execute(
+                    f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'descricao_modelo'"
+                )
+                if not cursor.fetchone():
+                    try:
+                        cursor.execute(
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN descricao_modelo TEXT NULL AFTER nome"
+                        )
+                        print(
+                            f"Coluna 'descricao_modelo' adicionada à '{tabela_bd_segura}'."
+                        )
+                    except mysql.connector.Error as alter_err:
+                        print(
+                            f"Erro ao adicionar coluna descricao_modelo: {alter_err}"
+                        )
         # Commit automático
 
     except mysql.connector.Error as err:
