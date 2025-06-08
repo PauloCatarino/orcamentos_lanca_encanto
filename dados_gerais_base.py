@@ -69,6 +69,7 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 CREATE TABLE IF NOT EXISTS `{tabela_bd_segura}` (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     nome VARCHAR(255) NOT NULL, -- Nome do modelo salvo
+                    descricao_modelo TEXT NULL,
                     linha INT NOT NULL,         -- Índice da linha original (0 a N-1)
                     {sql_colunas},
                     UNIQUE KEY idx_nome_linha (nome, linha), -- Garante unicidade por modelo/linha

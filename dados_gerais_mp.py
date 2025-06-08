@@ -214,10 +214,10 @@ def acao_guardar_dados(main_window, nome_tabela):
             18: {"nome": "larg_mp", "type": "float", "percent": False},
             19: {"nome": "esp_mp", "type": "float", "percent": False},
         }
-        nome_escolhido = obter_nome_para_salvar(main_window, "materiais")
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "materiais")
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "materiais", col_info, nome_registro=nome_escolhido)
+        guardar_dados_gerais(main_window, "materiais", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
 
     elif nome_tabela == "ferragens":
         # Novo mapeamento para a Tab_Ferragens
@@ -242,10 +242,10 @@ def acao_guardar_dados(main_window, nome_tabela):
             19: {"nome": "esp_mp", "type": "float", "percent": False},
         }
         # Solicita ao usuário um nome para salvar os dados de ferragens
-        nome_escolhido = obter_nome_para_salvar(main_window, "ferragens")
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "ferragens")
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "ferragens", col_info, nome_registro=nome_escolhido)
+        guardar_dados_gerais(main_window, "ferragens", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
 
     elif nome_tabela == "sistemas_correr":
         # Para a aba Sistemas Correr, a estrutura é similar,
@@ -268,10 +268,10 @@ def acao_guardar_dados(main_window, nome_tabela):
             18: {"nome": "larg_mp", "type": "float", "percent": False},
             19: {"nome": "esp_mp", "type": "float", "percent": False},
         }
-        nome_escolhido = obter_nome_para_salvar(main_window, "sistemas_correr")
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "sistemas_correr")
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "sistemas_correr", col_info, nome_registro=nome_escolhido)
+        guardar_dados_gerais(main_window, "sistemas_correr", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
 
     elif nome_tabela == "acabamentos":
             # Para a aba Acabaemntos, a estrutura é similar,
@@ -294,10 +294,10 @@ def acao_guardar_dados(main_window, nome_tabela):
                 18: {"nome": "larg_mp", "type": "float", "percent": False},
                 19: {"nome": "esp_mp", "type": "float", "percent": False},
             }
-            nome_escolhido = obter_nome_para_salvar(main_window, "acabamentos")
+            nome_escolhido, desc = obter_nome_para_salvar(main_window, "acabamentos")
             if not nome_escolhido:
                 return
-            guardar_dados_gerais(main_window, "acabamentos", col_info, nome_registro=nome_escolhido)
+            guardar_dados_gerais(main_window, "acabamentos", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
 
 
     else:

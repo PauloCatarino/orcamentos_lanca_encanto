@@ -23,7 +23,7 @@ Classes:
 """
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGroupBox, QListWidget, QListWidgetItem, QHBoxLayout, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt
-from dados_gerais_manager import listar_nomes_dados_gerais
+from dados_gerais_manager import listar_nomes_descricoes_dados_gerais
 
 class ImportarDadosGeralDialog(QDialog):
     def __init__(self, main_window, parent=None): # Modified: Accept main_window instead of ui
@@ -50,9 +50,10 @@ class ImportarDadosGeralDialog(QDialog):
             lista = QListWidget()
             lista.setSelectionMode(QListWidget.MultiSelection)
             # Torna cada item checkable
-            nomes = listar_nomes_dados_gerais(tabela)
-            for nome in nomes:
-                item = QListWidgetItem(nome)
+            nomes_desc = listar_nomes_descricoes_dados_gerais(tabela)
+            for nome, desc in nomes_desc.items():
+                item = QListWidgetItem(f"{nome} - {desc}")
+                item.setData(Qt.UserRole, nome)
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
                 lista.addItem(item)
@@ -79,7 +80,7 @@ class ImportarDadosGeralDialog(QDialog):
             for i in range(lista.count()):
                 item = lista.item(i)
                 if item.checkState() == Qt.Checked:
-                    nomes_selecionados.append(item.text())
+                    nomes_selecionados.append(item.data(Qt.UserRole))
             selecionados[tabela] = nomes_selecionados
 
         if not any(selecionados.values()):

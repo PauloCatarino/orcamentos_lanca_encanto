@@ -11,7 +11,7 @@ As janelas são utilizadas para facilitar operações como importar acabamentos,
 Autor: Paulo Catarino
 """
 
-from PyQt5.QtWidgets import (QDialog,QVBoxLayout,QListWidget,QListWidgetItem, QDialogButtonBox, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QInputDialog)
+from PyQt5.QtWidgets import (QDialog,QVBoxLayout,QListWidget,QListWidgetItem, QDialogButtonBox, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QInputDialog, QTextEdit)
 from PyQt5.QtCore import Qt
 
 class SelecaoModeloDialog(QDialog):
@@ -23,8 +23,10 @@ class SelecaoModeloDialog(QDialog):
         layout = QVBoxLayout(self)
         self.lista = QListWidget()
         self.lista.setMinimumWidth(350)  # Garante largura suficiente para os textos
-        for nome in modelos:
-            item = QListWidgetItem(nome)
+        for nome, desc in (modelos.items() if isinstance(modelos, dict) else [(m, "") for m in modelos]):
+            texto = f"{nome} - {desc}" if desc else nome
+            item = QListWidgetItem(texto)
+            item.setData(Qt.UserRole, nome)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Unchecked)
             self.lista.addItem(item)
@@ -46,12 +48,12 @@ class SelecaoModeloDialog(QDialog):
         for i in range(self.lista.count()):
             it = self.lista.item(i)
             if it.checkState() == Qt.Checked:
-                return it.text()
+                return it.data(Qt.UserRole)
         return None
 
 class GerirNomesDialog(QDialog):
     """Permite visualizar, eliminar e escolher um nome para guardar."""
-    def __init__(self, tabela, nomes, parent=None):
+    def __init__(self, tabela, nomes_desc, parent=None):
         super().__init__(parent)
         self.tabela = tabela
         self.setWindowTitle(f"Guardar Dados Gerais  -> {tabela.upper()}")
@@ -59,13 +61,23 @@ class GerirNomesDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Modelos existentes:"))
         self.lista = QListWidget()
-        self.lista.addItems(nomes)
+        self.nomes_desc = nomes_desc
+        for nome, desc in nomes_desc.items():
+            item = QListWidgetItem(f"{nome} - {desc}")
+            item.setData(Qt.UserRole, nome)
+            self.lista.addItem(item)
         lay.addWidget(self.lista)
         form = QHBoxLayout()
         form.addWidget(QLabel("Nome:"))
         self.edit = QLineEdit()
         form.addWidget(self.edit)
         lay.addLayout(form)
+        lay_desc = QVBoxLayout()
+        lay_desc.addWidget(QLabel("Descrição:"))
+        self.edit_desc = QTextEdit()
+        self.edit_desc.setFixedHeight(60)
+        lay_desc.addWidget(self.edit_desc)
+        lay.addLayout(lay_desc)
         btns = QHBoxLayout()
         self.btn_del = QPushButton("Eliminar Selecionado")
         self.btn_del.clicked.connect(self._eliminar)
@@ -79,16 +91,21 @@ class GerirNomesDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
         btns.addWidget(self.buttons)
         lay.addLayout(btns)
-        self.lista.itemClicked.connect(lambda it: self.edit.setText(it.text()))
+        self.lista.itemClicked.connect(self._preencher_campos)
         self.nome_eliminado = None
-        self.nomes_editados = {}
+        self.descricoes_editadas = {}
+
+    def _preencher_campos(self, item):
+        nome = item.data(Qt.UserRole)
+        self.edit.setText(nome)
+        self.edit_desc.setPlainText(self.nomes_desc.get(nome, ""))
 
     def _eliminar(self):
         item = self.lista.currentItem()
         if not item:
             QMessageBox.warning(self, "Aviso", "Selecione um nome para eliminar.")
             return
-        self.nome_eliminado = item.text()
+        self.nome_eliminado = item.data(Qt.UserRole)
         row = self.lista.row(item)
         self.lista.takeItem(row)
         try:
@@ -96,17 +113,27 @@ class GerirNomesDialog(QDialog):
             apagar_registros_por_nome(self.tabela, self.nome_eliminado)
         except Exception as e:
             print(f"Erro ao eliminar '{self.nome_eliminado}' da base de dados: {e}")
+        self.nomes_desc.pop(self.nome_eliminado, None)
 
     def _editar(self):
         item = self.lista.currentItem()
         if not item:
             QMessageBox.warning(self, "Aviso", "Selecione um nome para editar.")
             return
-        texto_atual = item.text()
+        texto_atual = item.data(Qt.UserRole)
         novo, ok = QInputDialog.getText(self, "Editar Nome", "Novo nome:", text=texto_atual)
         if ok and novo.strip():
             self.nomes_editados[texto_atual] = novo.strip()
-            item.setText(novo.strip())
+            desc = self.nomes_desc.pop(texto_atual, "")
+            self.nomes_desc[novo.strip()] = desc
+            item.setText(f"{novo.strip()} - {desc}")
+            item.setData(Qt.UserRole, novo.strip())
 
     def obter_nome(self):
-        return self.edit.text().strip(), self.nome_eliminado, self.nomes_editados
+        nome = self.edit.text().strip()
+        desc = self.edit_desc.toPlainText().strip()
+        if nome:
+            if self.nomes_desc.get(nome, "") != desc:
+                self.descricoes_editadas[nome] = desc
+            self.nomes_desc[nome] = desc
+        return nome, desc, self.nome_eliminado, self.nomes_editados, self.descricoes_editadas

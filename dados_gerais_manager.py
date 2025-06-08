@@ -58,6 +58,27 @@ def listar_nomes_dados_gerais(tabela_bd):
         print(f"Erro inesperado ao listar nomes de '{tabela_bd_segura}': {e}")
     return nomes
 
+def listar_nomes_descricoes_dados_gerais(tabela_bd):
+    """Retorna um dicionário nome -> descricao_modelo da tabela."""
+    tabela_bd_segura = f"dados_gerais_{tabela_bd.replace(' ', '_').lower()}"
+    resultados = {}
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                f"SELECT nome, MAX(descricao_modelo) FROM `{tabela_bd_segura}` GROUP BY nome ORDER BY nome"
+            )
+            for nome, desc in cursor.fetchall():
+                if nome is not None:
+                    resultados[nome] = desc or ""
+    except mysql.connector.Error as err:
+        if err.errno == 1146:
+            print(f"Aviso: Tabela '{tabela_bd_segura}' não encontrada ao listar descricoes.")
+        else:
+            print(f"Erro MySQL ao listar descricoes de '{tabela_bd_segura}': {err}")
+    except Exception as e:
+        print(f"Erro inesperado ao listar descricoes de '{tabela_bd_segura}': {e}")
+    return resultados
+
 def apagar_registros_por_nome(tabela_bd, nome):
     """
     Apaga do banco de dados todos os registros da tabela 'dados_gerais_<tabela_bd>'
@@ -101,32 +122,47 @@ def renomear_registros(tabela_bd, nome_antigo, nome_novo):
             f"Erro ao renomear registros:\n{err}",
         )
         return False
+    
+def atualizar_descricao_modelo(tabela_bd, nome, nova_descricao):
+    """Atualiza a coluna descricao_modelo para todas as linhas de um nome."""
+    tabela_bd_segura = f"dados_gerais_{tabela_bd.replace(' ', '_').lower()}"
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                f"UPDATE `{tabela_bd_segura}` SET descricao_modelo=%s WHERE nome=%s",
+                (nova_descricao, nome),
+            )
+        return True
+    except Exception as e:
+        print(f"Erro ao atualizar descricao de '{nome}' em '{tabela_bd_segura}': {e}")
+        return False
     except Exception as e:
         print(f"Erro inesperado ao renomear registros: {e}")
         QMessageBox.critical(None, "Erro Inesperado", f"Erro ao renomear registros:\n{e}")
         return False
 
 def obter_nome_para_salvar(parent, tabela_bd):
-    """Abre um diálogo para escolher ou introduzir o nome a guardar."""
-    nomes_existentes = listar_nomes_dados_gerais(tabela_bd)
-    dlg = GerirNomesDialog(tabela_bd, nomes_existentes, parent)
+    """Abre um diálogo para escolher ou introduzir o nome e descrição a guardar."""
+    nomes_desc = listar_nomes_descricoes_dados_gerais(tabela_bd)
+    dlg = GerirNomesDialog(tabela_bd, nomes_desc, parent)
     if dlg.exec_() != QDialog.Accepted:
-        return None
-    nome, eliminado, editados = dlg.obter_nome()
+        return None, None
+    nome, descricao, eliminado, editados, desc_editadas = dlg.obter_nome()
     if not nome:
-        return None
+        return None, None
     if eliminado:
         apagar_registros_por_nome(tabela_bd, eliminado)
     for old, new in editados.items():
         renomear_registros(tabela_bd, old, new)
         if old == nome:
             nome = new
-    if nome in nomes_existentes and nome not in editados.values() and nome != eliminado:
-        # Substituir sem nova pergunta
+    for n, nova_desc in desc_editadas.items():
+        atualizar_descricao_modelo(tabela_bd, n, nova_desc)
+    if nome in nomes_desc and nome not in editados.values() and nome != eliminado:
         apagar_registros_por_nome(tabela_bd, nome)
-    return nome
+    return nome, descricao
 
-def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None):
+def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None, descricao_registro=""):
     """
     Salva os dados do QTableWidget na tabela 'dados_gerais_<nome_tabela>'.
 
@@ -161,7 +197,7 @@ def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None):
     
     # Percorre cada linha e coluna para coletar os dados
     for row in range(row_count):
-        registro = [nome_registro, row]  # Inicia com o nome e o índice da linha
+        registro = [nome_registro, descricao_registro, row]  # Nome, descrição e índice da linha
         for col in range(col_count):
             if col not in col_info:
                 continue  # Pula colunas que não estão no mapeamento
@@ -187,11 +223,10 @@ def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None):
     # Monta a query SQL para inserir os dados
     col_names_bd = [col_info[c]["nome"] for c in sorted(col_info.keys())]
     col_names_str = ", ".join(col_names_bd)
-    # Para MySQL, usa-se %s como placeholder
-    placeholders = ", ".join(["%s"] * (2 + len(col_info)))
+    placeholders = ", ".join(["%s"] * (3 + len(col_info)))
     
     sql_insert = f"""
-        INSERT INTO dados_gerais_{nome_tabela} (nome, linha, {col_names_str})
+        INSERT INTO dados_gerais_{nome_tabela} (nome, descricao_modelo, linha, {col_names_str})
         VALUES ({placeholders})
     """
     
@@ -235,13 +270,13 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
     # Busca os modelos salvos para a tabela
     ui = parent_app.ui # Acessa a UI a partir da instância principal
 
-    modelos = listar_nomes_dados_gerais(nome_tabela) # Já usa obter_cursor
-    if not modelos:
+    modelos_desc = listar_nomes_descricoes_dados_gerais(nome_tabela)
+    if not modelos_desc:
         QMessageBox.information(parent_app, "Importar Dados Gerais", f"Nenhum registo salvo para '{nome_tabela}'.")
         return
 
     if modelo_escolhido is None:
-        dlg = SelecaoModeloDialog(modelos, titulo=f"Importar Dados Gerais ->> {nome_tabela}", parent=parent_app)
+        dlg = SelecaoModeloDialog(modelos_desc, titulo=f"Importar Dados Gerais ->> {nome_tabela}", parent=parent_app)
         if dlg.exec_() != QDialog.Accepted:
             return
         modelo_escolhido = dlg.modelo_escolhido()
