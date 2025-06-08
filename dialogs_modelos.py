@@ -93,6 +93,10 @@ class GerirNomesDialog(QDialog):
         lay.addLayout(btns)
         self.lista.itemClicked.connect(self._preencher_campos)
         self.nome_eliminado = None
+        # Dicionários para rastrear alterações feitas pelo utilizador.
+        # A inicialização aqui garante que existam mesmo se métodos forem
+        # chamados de forma inesperada.
+        self.nomes_editados = {}
         self.descricoes_editadas = {}
 
     def _preencher_campos(self, item):
@@ -132,8 +136,22 @@ class GerirNomesDialog(QDialog):
     def obter_nome(self):
         nome = self.edit.text().strip()
         desc = self.edit_desc.toPlainText().strip()
+
+        # Garante que dicionários de estado existam mesmo se a instância
+        # tiver sido criada com uma versão antiga da classe
+        if not hasattr(self, "nomes_editados"):
+            self.nomes_editados = {}
+        if not hasattr(self, "descricoes_editadas"):
+            self.descricoes_editadas = {}
+
         if nome:
             if self.nomes_desc.get(nome, "") != desc:
                 self.descricoes_editadas[nome] = desc
             self.nomes_desc[nome] = desc
-        return nome, desc, self.nome_eliminado, self.nomes_editados, self.descricoes_editadas
+        return (
+            nome,
+            desc,
+            getattr(self, "nome_eliminado", None),
+            self.nomes_editados,
+            self.descricoes_editadas,
+        )
