@@ -12,7 +12,8 @@ A função configurar_dados_gerais realiza o seguinte:
      - Se existir (por exemplo, na tabela de Materiais), a função carrega os dados salvos e preenche
        os QTableWidgets dos 4 separadores (Materiais, Ferragens, Sistemas Correr e Acabamentos),
        preenchendo as colunas:
-         num_orc; ver_orc; ref_le; descricao_no_orcamento; ptab (form. moeda, ex.: 12.36€);
+         num_orc; ver_orc; ref_le; descricao_no_orcamento;
+         pliq (form. moeda, ex.: 12.36€);
          desc1_plus (form. percentual, ex.: 13%); desc2_minus (form. percentual, ex.: 8%);
          und; desp (form. percentual, ex.: 13%); corres_orla_0_4; corres_orla_1_0;
          tipo; familia; comp_mp; larg_mp; esp_mp.
@@ -73,7 +74,7 @@ def formatar_versao(raw_ver):
 # ------------------------------------------------------------------------------
 
 
-def mapear_registro_gerais(registro):
+def mapear_registro_gerais(registro, column_names=None):
     """
     Reordena os dados de um registro vindo do banco de dados para a ordem
     que será apresentada no QTableWidget.
@@ -128,13 +129,40 @@ def mapear_registro_gerais(registro):
     # --- REVISAR ESTE MAPEAMENTO CUIDADOSAMENTE ---
     """
     try:
+        if column_names:
+            dados = dict(zip(column_names, registro))
+            mapeamento = {
+                1: "descricao",
+                3: "num_orc",
+                4: "ver_orc",
+                5: "ref_le",
+                6: "descricao_no_orcamento",
+                7: "ptab",
+                8: "pliq",
+                9: "desc1_plus",
+                10: "desc2_minus",
+                11: "und",
+                12: "desp",
+                13: "corres_orla_0_4",
+                14: "corres_orla_1_0",
+                15: "tipo",
+                16: "familia",
+                17: "comp_mp",
+                18: "larg_mp",
+                19: "esp_mp",
+            }
+            resultado = {}
+            for ui_idx, col_nome in mapeamento.items():
+                valor = dados.get(col_nome)
+                if col_nome == "ver_orc":
+                    valor = formatar_versao(str(valor) if valor is not None else "00")
+                resultado[ui_idx] = valor
+            return resultado
         # Assume que o SELECT * retorna as colunas na ordem de criação (id, nome, linha, ...)
-        # O mapeamento deve ser NomeColunaBD -> IndiceUI
         ver_orc_formatada = formatar_versao(
             str(registro[7]) if registro[7] is not None else "00")
         return {
             1: registro[4],   # descricao -> UI[1]
-            # 2: ID específico (id_mat, id_fer...) não está no SELECT * de dados_gerais_*
             3: registro[6],   # num_orc -> UI[3]
             4: ver_orc_formatada,  # ver_orc -> UI[4]
             5: registro[8],   # ref_le -> UI[5]
@@ -217,6 +245,7 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
             print(f"  Params: {(num_orc, ver_orc)}")
             cursor.execute(query, (num_orc, ver_orc))
             registros = cursor.fetchall()
+            col_names = cursor.column_names
         print(f"  Encontrados {len(registros)} registos.")
 
     except mysql.connector.Error as err:
@@ -242,12 +271,10 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
     table.setProperty("importando", True)
     try:
         row_count_ui = table.rowCount()
-        print(
-            f"  Preenchendo {min(len(registros), row_count_ui)} linhas na tabela UI '{table.objectName()}'.")
+        print(f"  Preenchendo {min(len(registros), row_count_ui)} linhas na tabela UI '{table.objectName()}'.")
         for i in range(min(len(registros), row_count_ui)):
             registro_bd = registros[i]
-            dados_mapeados = mapear_registro_gerais(
-                registro_bd)  # Mapeia dados da BD para índices UI
+            dados_mapeados = mapear_registro_gerais(registro_bd, col_names)  # Mapeia dados da BD para índices UI
 
             for col_idx_ui, valor_bd in dados_mapeados.items():
                 if not (0 <= col_idx_ui < table.columnCount()):
