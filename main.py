@@ -22,7 +22,7 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
  Para enviar atualizações para o github
 git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
-git commit -m "26º Commit"
+git commit -m "27º Commit"
 git push                  # envia para o GitHub
 
 """
@@ -70,7 +70,7 @@ from modulo_orquestrador import atualizar_tudo
 # Importar a função de conexão da lógica BLK
 from controle_edicao_manual_blk import conectar_eventos_edicao_manual, on_cell_changed_for_blk_logic
 # Função para obter o texto de um item de tabela, retornando uma string vazia se o item for None
-from utils import safe_item_text, set_item
+from utils import safe_item_text, set_item, apply_row_selection_style
 
 
 # Modulo que trada Este módulo é responsável por todas as interações com a base de dados referentes à gravação, carregamento, e gestão de "Módulos Guardados".
@@ -96,6 +96,21 @@ class MainApp(QMainWindow):
         # Inicializa a interface gráfica a partir do ficheiro gerado pelo Qt Designer
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        # Aplicar estilo de seleção de linha às principais tabelas
+        for tbl in [
+            self.ui.tableWidget_tabela_clientes,
+            self.ui.tableWidget_orcamentos,
+            self.ui.tableWidget_artigos,
+            self.ui.Tab_Material,
+            self.ui.Tab_Ferragens,
+            self.ui.Tab_Sistemas_Correr,
+            self.ui.Tab_Acabamentos,
+            self.ui.Tab_Material_11,
+            self.ui.Tab_Ferragens_11,
+            self.ui.Tab_Sistemas_Correr_11,
+            self.ui.Tab_Acabamentos_12,
+        ]:
+            apply_row_selection_style(tbl)
         # Configurações visuais e de comportamento da UI
         self.ui.tab_artigos_11.setSelectionMode(
             self.ui.tab_artigos_11.SingleSelection)
