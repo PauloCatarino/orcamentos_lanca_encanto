@@ -446,6 +446,42 @@ def configurar_tabela_ferragens(parent):
 
     # Define larguras personalizadas
     definir_larguras_tab_ferragens_item(ui)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo com valores predefinidos exemplo: 'DOBRADICAS', 'SUPORTE_PRATELEIRA', etc.
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Ferragens_11
+    familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
+    tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
+    tipo_padrao = {
+        'Fer_Dobradica': 'DOBRADICAS',
+        'Fer_Suporte Prateleira': 'SUPORTE_PRATELEIRA',
+        'Fer_Suporte Varao': 'SUPORTE VARAO',
+        'Fer_Varao_SPP': 'SPP',
+        'Fer_Rodape_PVC': 'RODAPE',
+        'Fer_Pes_1': 'PES',
+        'Fer_Pes_2': 'PES',
+        'Fer_Corredica_1': 'CORREDICAS',
+        'Fer_Corredica_2': 'CORREDICAS',
+        'Fer_Corredica_3': 'CORREDICAS',
+        'Fer_Puxador': 'PUXADOR',
+        'Fer_Puxador_SPP_1': 'SPP',
+        'Fer_Puxador_SPP_2': 'SPP',
+        'Fer_Puxador_SPP_3': 'SPP'
+    }
+    for r, nome in enumerate(FERRAGENS_LINHAS):
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo, QComboBox):
+                padrao = tipo_padrao.get(nome, '')
+                idx = combo.findText(padrao)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
 
 # =============================================================================
@@ -614,7 +650,7 @@ def guardar_dados_item_orcamento_tab_ferragens(parent):
         'esp_mp': 19
     }
     # Conjuntos para conversão de valores formatados
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
 
     # Coleta de dados da UI (mantida como antes)

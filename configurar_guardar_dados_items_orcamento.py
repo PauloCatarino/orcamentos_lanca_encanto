@@ -189,7 +189,7 @@ def guardar_dados_item_orcamento(tab_widget, num_orc, ver_orc, id_item, mapping,
                   'und', 'desp', 'corres_orla_0_4', 'corres_orla_1_0', 'tipo', 'familia',
                   'comp_mp', 'larg_mp', 'esp_mp']
     # Conjuntos para conversão de valores formatados
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
     dados = []
     for row in range(num_rows):

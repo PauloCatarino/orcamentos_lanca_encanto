@@ -184,9 +184,45 @@ def configurar_ferragens_ui(ui):
     """
     #print("DEBUG: Executando configurar_ferragens_ui para ferragens.")
     criar_tabela_dados_gerais('ferragens', FERRAGENS_COLUNAS, FERRAGENS_LINHAS)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo com valores predefinidos exemplo: 'DOBRADICAS', 'SUPORTE_PRATELEIRA', etc.
     configurar_tabela_dados_gerais_ui(ui, 'ferragens', FERRAGENS_COLUNAS, FERRAGENS_LINHAS)
-    #print("DEBUG: Tabela de ferragens configurada com sucesso.")
     definir_larguras_tab_ferragens(ui)
+
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Ferragens
+    familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
+    tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
+    tipo_padrao = {
+        'Fer_Dobradica': 'DOBRADICAS',
+        'Fer_Suporte Prateleira': 'SUPORTE_PRATELEIRA',
+        'Fer_Suporte Varao': 'SUPORTE VARAO',
+        'Fer_Varao_SPP': 'SPP',
+        'Fer_Rodape_PVC': 'RODAPE',
+        'Fer_Pes_1': 'PES',
+        'Fer_Pes_2': 'PES',
+        'Fer_Corredica_1': 'CORREDICAS',
+        'Fer_Corredica_2': 'CORREDICAS',
+        'Fer_Corredica_3': 'CORREDICAS',
+        'Fer_Puxador': 'PUXADOR',
+        'Fer_Puxador_SPP_1': 'SPP',
+        'Fer_Puxador_SPP_2': 'SPP',
+        'Fer_Puxador_SPP_3': 'SPP'
+    }
+    for r, nome in enumerate(FERRAGENS_LINHAS):
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo, QComboBox):
+                padrao = tipo_padrao.get(nome, '')
+                idx = combo.findText(padrao)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
 def on_item_changed_ferragens(item):
     """

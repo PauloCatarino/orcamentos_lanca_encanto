@@ -530,7 +530,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
 
     num_rows = table_widget.rowCount()
     dados_para_salvar = []
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
 
     # Coleta dados da UI

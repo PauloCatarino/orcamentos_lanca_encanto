@@ -359,9 +359,14 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                     # Formatação e preenchimento (lógica similar à anterior)
                     texto_formatado = ""
                     if valor_bd is not None:
-                        if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                        elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                        else: texto_formatado = str(valor_bd)
+                        if campo_bd in ("pliq", "ptab"):
+                            texto_formatado = formatar_valor_moeda(valor_bd)
+                        elif campo_bd in ("comp_mp", "larg_mp", "esp_mp"):
+                            texto_formatado = f"{float(valor_bd):.1f}"
+                        elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                            texto_formatado = formatar_valor_percentual(valor_bd)
+                        else:
+                            texto_formatado = str(valor_bd)
                     # Preenche widget ou item
                     widget = table.cellWidget(linha_ui, col_ui)
                     if isinstance(widget, QComboBox):
@@ -404,9 +409,14 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                              valor_bd = dados_mp_dict[campo_mp]
                              texto_formatado = ""
                              if valor_bd is not None:
-                                if campo_mp in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                                else: texto_formatado = str(valor_bd)
+                                if campo_mp in ("pliq", "ptab"):
+                                    texto_formatado = formatar_valor_moeda(valor_bd)
+                                elif campo_mp in ("comp_mp", "larg_mp", "esp_mp"):
+                                    texto_formatado = f"{float(valor_bd):.1f}"
+                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
+                                    texto_formatado = formatar_valor_percentual(valor_bd)
+                                else:
+                                    texto_formatado = str(valor_bd)
                              # Preenche widget ou item
                              widget = table.cellWidget(linha_ui, col_ui)
                              if isinstance(widget, QComboBox):
@@ -430,9 +440,14 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                         valor_bd = reg_dict.get(campo_bd)
                         texto_formatado = ""
                         if valor_bd is not None:
-                            if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                            elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                            else: texto_formatado = str(valor_bd)
+                            if campo_bd in ("pliq", "ptab"):
+                                texto_formatado = formatar_valor_moeda(valor_bd)
+                            elif campo_bd in ("comp_mp", "larg_mp", "esp_mp"):
+                                texto_formatado = f"{float(valor_bd):.1f}"
+                            elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                                texto_formatado = formatar_valor_percentual(valor_bd)
+                            else:
+                                texto_formatado = str(valor_bd)
                         widget = table.cellWidget(linha_ui, col_ui)
                         if isinstance(widget, QComboBox):
                             idx = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx if idx >= 0 else -1)
@@ -499,9 +514,14 @@ def importar_dados_gerais_por_modelo(parent_app, nome_tabela, mapeamento, modelo
                 valor_bd = reg_dict.get(campo_bd)
                 texto_formatado = ""
                 if valor_bd is not None:
-                    if campo_bd in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"): texto_formatado = formatar_valor_moeda(valor_bd)
-                    elif campo_bd in ("desc1_plus", "desc2_minus", "desp"): texto_formatado = formatar_valor_percentual(valor_bd)
-                    else: texto_formatado = str(valor_bd)
+                    if campo_bd in ("pliq", "ptab"):
+                        texto_formatado = formatar_valor_moeda(valor_bd)
+                    elif campo_bd in ("comp_mp", "larg_mp", "esp_mp"):
+                        texto_formatado = f"{float(valor_bd):.1f}"
+                    elif campo_bd in ("desc1_plus", "desc2_minus", "desp"):
+                        texto_formatado = formatar_valor_percentual(valor_bd)
+                    else:
+                        texto_formatado = str(valor_bd)
 
                 widget = table.cellWidget(linha_ui, col_ui)
                 if isinstance(widget, QComboBox):

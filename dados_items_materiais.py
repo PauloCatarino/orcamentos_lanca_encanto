@@ -417,6 +417,17 @@ def configurar_tabela_material(parent):
     tabela.resizeRowsToContents()
     # Define larguras personalizadas
     definir_larguras_tab_material_item(ui)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'PLACAS' & coluna tipo sem filtro
+    from utils import apply_row_selection_style
+    familia_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] == 'familia'), None)
+    if familia_idx is not None:
+        for r in range(tabela.rowCount()):
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('PLACAS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
         
 # =============================================================================
@@ -571,7 +582,7 @@ def guardar_dados_item_orcamento_tab_material(parent):
     }
     # Conjuntos para conversão de valores formatados
 
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
 
     dados_para_salvar = []
