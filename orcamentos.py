@@ -239,137 +239,7 @@ def preencher_tabela_orcamentos(ui, registros=None):
     ui.tableWidget_orcamentos.setColumnWidth(15, 200)  # Info_1
     ui.tableWidget_orcamentos.setColumnWidth(16, 200)  # Info_2
 
-    def abrir_janela_apagar_orcamento(ui):
-        """
-        Abre uma janela de confirmação para excluir um orçamento.
-        Pode excluir do BD e/ou apagar a pasta associada.
-        """
-    linha_selecionada = ui.tableWidget_orcamentos.currentRow()
-    if linha_selecionada < 0:
-        QMessageBox.warning(None, "Erro", "Nenhuma linha selecionada para exclusão.")
-        return
-
-    # Obter dados da linha selecionada ou dos campos de edição?
-    # É mais seguro obter da linha selecionada para garantir que se apaga o correto.
-    try:
-        id_orc = int(ui.tableWidget_orcamentos.item(linha_selecionada, 0).text())
-        num_orcamento = ui.tableWidget_orcamentos.item(linha_selecionada, 4).text()
-        nome_cliente_bd = ui.tableWidget_orcamentos.item(linha_selecionada, 7).text() # Nome como está na BD
-        versao_orcamento = ui.tableWidget_orcamentos.item(linha_selecionada, 5).text()
-        data_orcamento = ui.tableWidget_orcamentos.item(linha_selecionada, 9).text()
-        ano_orcamento = ui.tableWidget_orcamentos.item(linha_selecionada, 3).text()
-    except (AttributeError, ValueError, IndexError):
-        QMessageBox.critical(None, "Erro", "Não foi possível obter os dados do orçamento selecionado na tabela.")
-        return
-
-    # Formatar nome da pasta (consistente com abrir_criar_pasta_orcamento)
-    nome_pasta_orcamento = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente_bd)
-    if nome_pasta_orcamento is None:
-        QMessageBox.critical(None, "Erro", "Não foi possível gerar o nome da pasta do orçamento.")
-        return
-
-
-    dialog = QDialog()
-    dialog_ui = Ui_Dialog()
-    dialog_ui.setupUi(dialog)
-    dialog_ui.label_nome_orcamento.setText(f"Orçamento: {num_orcamento}")
-    dialog_ui.label_versao_orcamento.setText(f"Versão: {versao_orcamento}")
-    dialog_ui.label_cliente_orcamento.setText(f"Cliente: {nome_cliente_bd}") # Adicionado cliente
-
-    def processar_exclusao():
-        orcamento_excluido = False
-        pasta_excluida = False
-        erros = []
-
-        # Excluir do Banco de Dados
-        if dialog_ui.checkBox_apagar_bd.isChecked():
-            print(f"Tentando excluir orçamento ID: {id_orc} da BD...")
-            try:
-                with obter_cursor() as cursor:
-                    # Excluir primeiro da tabela de itens (se houver dependência)
-                    # Assumindo que a chave é (num_orc, ver_orc, id_item) onde id_item é o ID do orçamento? verificar FK
-                    # Se id_item = ID do orçamento, a query abaixo pode não ser necessária se houver ON DELETE CASCADE
-                    # cursor.execute("DELETE FROM dados_def_pecas WHERE num_orc=%s AND ver_orc=%s AND ids=%s", (num_orcamento, versao_orcamento, str(id_orc))) # Verificar nome da coluna id do item
-                    # cursor.execute("DELETE FROM dados_modulo_medidas WHERE num_orc=%s AND ver_orc=%s AND ids=%s", (num_orcamento, versao_orcamento, str(id_orc))) # Verificar nome da coluna id do item
-
-                    # Excluir o orçamento principal
-                    cursor.execute("DELETE FROM orcamentos WHERE id = %s", (id_orc,))
-                    if cursor.rowcount > 0:
-                        orcamento_excluido = True
-                        print("Orçamento excluído da BD.")
-                    else:
-                        print("Orçamento não encontrado na BD para exclusão (ID:{id_orc}).")
-                # O commit é automático
-                # Recarregar a tabela após exclusão bem-sucedida
-                if orcamento_excluido:
-                    preencher_tabela_orcamentos(ui)
-            except mysql.connector.Error as err:
-                erros.append(f"Erro ao excluir da BD: {err}")
-                print(f"[ERRO DB Exclusão]: {err}")
-            except Exception as e:
-                 erros.append(f"Erro inesperado ao excluir da BD: {e}")
-                 print(f"[ERRO Inesperado Exclusão BD]: {e}")
-
-        # Excluir Pasta
-        if dialog_ui.checkBox_apagar_pasta.isChecked():
-            caminho_orcamentos = ui.lineEdit_orcamentos.text().strip()
-            if not caminho_orcamentos or not os.path.isdir(caminho_orcamentos):
-                erros.append("Caminho base dos orçamentos inválido ou não configurado.")
-            else:
-                caminho_ano = os.path.join(caminho_orcamentos, ano_orcamento)
-                caminho_orcamento = os.path.join(caminho_ano, nome_pasta_orcamento)
-                # Se a versão não for "00", a pasta da versão está dentro da pasta principal
-                if versao_orcamento != "00":
-                    caminho_versao = os.path.join(caminho_orcamento, versao_orcamento)
-                    if os.path.exists(caminho_versao) and os.path.isdir(caminho_versao):
-                        caminho_final_apagar = caminho_versao
-                        print(f"Tentando excluir pasta da versão: {caminho_final_apagar}")
-                    # Se a pasta da versão não existir, verifica se a pasta principal existe (para o caso de ser a única versão ou erro)
-                    elif os.path.exists(caminho_orcamento) and os.path.isdir(caminho_orcamento):
-                         caminho_final_apagar = caminho_orcamento
-                         print(f"Pasta da versão '{versao_orcamento}' não encontrada, tentando excluir pasta principal: {caminho_final_apagar}")
-                    else:
-                         caminho_final_apagar = None
-                         erros.append(f"Pasta não encontrada: {caminho_versao} nem {caminho_orcamento}")
-                # Se a versão for "00", apaga a pasta principal
-                else:
-                     if os.path.exists(caminho_orcamento) and os.path.isdir(caminho_orcamento):
-                         caminho_final_apagar = caminho_orcamento
-                         print(f"Tentando excluir pasta principal (versão 00): {caminho_final_apagar}")
-                     else:
-                          caminho_final_apagar = None
-                          erros.append(f"Pasta não encontrada: {caminho_orcamento}")
-
-                # Tenta apagar a pasta encontrada
-                if caminho_final_apagar:
-                    try:
-                        import shutil
-                        shutil.rmtree(caminho_final_apagar)
-                        pasta_excluida = True
-                        print(f"Pasta '{caminho_final_apagar}' excluída.")
-                    except Exception as e:
-                        erros.append(f"Falha ao excluir pasta '{caminho_final_apagar}': {e}")
-                        print(f"[ERRO Exclusão Pasta]: {e}")
-
-        # Mensagem final
-        msg_final = ""
-        if orcamento_excluido: msg_final += "Orçamento excluído da Base de Dados.\n"
-        if pasta_excluida: msg_final += "Pasta do Orçamento excluída.\n"
-        if erros: msg_final += "\nErros:\n- " + "\n- ".join(erros)
-
-        if not orcamento_excluido and not pasta_excluida and not erros:
-            QMessageBox.information(None, "Exclusão", "Nenhuma ação selecionada ou realizada.")
-        elif erros:
-            QMessageBox.warning(None, "Exclusão Parcial ou Falhada", msg_final)
-        else:
-            QMessageBox.information(None, "Exclusão Concluída", msg_final)
-
-        dialog.accept()
-
-    dialog_ui.pushButton_ok.clicked.connect(processar_exclusao)
-    dialog_ui.pushButton_cancel.clicked.connect(dialog.reject)
-    dialog.exec_()
-
+    
 def transportar_dados_cliente_orcamento():
     """
     Limpa os campos do orçamento e atualiza para novo orçamento,
@@ -380,16 +250,25 @@ def transportar_dados_cliente_orcamento():
     # nome_cliente = ui.lineEdit_nome_cliente.text() # Exemplo
     # ref_cliente = ui.lineEdit_ref_cliente.text() # Exemplo
 
-    # Limpar campos do formulário de orçamento
+    # Obtém dados do cliente selecionado
+    id_cliente = ui.lineEdit_idCliente.text().strip()
+    nome_simplex = ui.lineEdit_nome_cliente_simplex.text().strip()
+
+    if not id_cliente:
+        QMessageBox.warning(None, "Aviso", "Selecione um cliente antes de transportar os dados.")
+        return
+
+    # Limpa os campos do orçamento e prepara um novo orçamento
     limpar_campos_orcamento(ui)
-    # Atualizar campos para novo ID, Ano, Num Orc, Versão, Data
-    # A função em utils já não precisa de get_connection
     atualizar_campos_para_novo_orcamento(ui)
 
-    # Preencher campos do orçamento com dados do cliente (se disponíveis)
-    # ui.lineEdit_idCliente_noOrc.setText(id_cliente)
-    # ui.lineEdit_nome_cliente_2.setText(nome_cliente)
-    # ui.lineEdit_ref_cliente_2.setText(ref_cliente)
+    # Preenche os campos do orçamento com os dados do cliente
+    ui.lineEdit_idCliente_noOrc.setText(id_cliente)
+    ui.lineEdit_nome_cliente_2.setText(nome_simplex)
+
+    # Muda para o separador Consulta Orçamentos
+    ui.tabWidget_orcamento.setCurrentWidget(ui.tab_consulta_orcamentos)
+
 def atualizar_campos_por_selecao():
     """
     Atualiza os campos do formulário com os dados da linha selecionada na tabela.
@@ -549,6 +428,7 @@ def abrir_criar_pasta_orcamento():
             QMessageBox.critical(None, "Erro", "Não foi possível gerar o nome da pasta do orçamento.")
             return
         caminho_orcamento = os.path.join(caminho_ano, nome_pasta_orcamento)
+
         # Verifica se o caminho base do ano existe, se não, cria
         # Se a versão for diferente de "00", cria/abre subpasta da versão
         if versao != "00":
@@ -769,10 +649,14 @@ def abrir_janela_apagar_orcamento(ui):
                         erros.append(f"Falha ao excluir pasta '{os.path.basename(caminho_final_apagar)}': {e}"); print(f"[ERRO Exclusão Pasta]: {e}")
 
         msg_final = ""
-        if orcamento_excluido: msg_final += "Orçamento excluído da BD.\n"
-        if pasta_excluida: msg_final += "Pasta do Orçamento excluída.\n"
-        if erros: msg_final += "\nErros:\n- " + "\n- ".join(erros)
-        if not msg_final: msg_final = "Nenhuma ação selecionada ou realizada."
+        if orcamento_excluido:
+            msg_final += f"Orçamento -> {nome_pasta_base} <- excluído da Base de Dados.\n"
+        if pasta_excluida:
+            msg_final += f"Pasta do Orçamento -> {nome_pasta_base} <- excluída.\n"
+        if erros:
+            msg_final += "\nErros:\n- " + "\n- ".join(erros)
+        if not msg_final:
+            msg_final = "Nenhuma ação selecionada ou realizada."
 
         if erros: QMessageBox.warning(None, "Exclusão Parcial ou Falhada", msg_final)
         else: QMessageBox.information(None, "Exclusão Concluída", msg_final)
