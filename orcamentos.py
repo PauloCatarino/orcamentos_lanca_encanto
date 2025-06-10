@@ -608,19 +608,43 @@ def abrir_janela_apagar_orcamento(ui):
             print(f"Tentando excluir orçamento ID: {id_orc} da BD...")
             try:
                 with obter_cursor() as cursor:
-                    # Adicionar exclusão de tabelas dependentes PRIMEIRO (se não usar CASCADE)
-                    # Ex: cursor.execute("DELETE FROM dados_def_pecas WHERE num_orc=%s AND ver_orc=%s AND ids=%s", (num_orcamento, versao_orcamento, id_orc_como_string_se_necessario))
-                    # Ex: cursor.execute("DELETE FROM dados_modulo_medidas WHERE num_orc=%s AND ver_orc=%s AND ids=%s", (num_orcamento, versao_orcamento, id_orc_como_string_se_necessario))
+                    tabelas = [
+                        "dados_def_pecas",
+                        "dados_modulo_medidas",
+                        "dados_gerais_materiais",
+                        "dados_gerais_ferragens",
+                        "dados_gerais_sistemas_correr",
+                        "dados_gerais_acabamentos",
+                        "dados_items_materiais",
+                        "dados_items_ferragens",
+                        "dados_items_sistemas_correr",
+                        "dados_items_acabamentos",
+                    ]
+                    for tab in tabelas:
+                        cursor.execute(
+                            f"DELETE FROM {tab} WHERE num_orc=%s AND ver_orc=%s",
+                            (num_orcamento, versao_orcamento),
+                        )
 
+                    cursor.execute(
+                        "DELETE FROM orcamento_items WHERE id_orcamento=%s",
+                        (id_orc,),
+                    )
                     cursor.execute("DELETE FROM orcamentos WHERE id = %s", (id_orc,))
                     if cursor.rowcount > 0:
-                        orcamento_excluido = True; print("Orçamento excluído da BD.")
-                    else: print(f"Orçamento não encontrado na BD (ID:{id_orc}).")
-                if orcamento_excluido: preencher_tabela_orcamentos(ui) # Atualiza tabela
+                        orcamento_excluido = True
+                        print("Orçamento excluído da BD.")
+                    else:
+                        print(f"Orçamento não encontrado na BD (ID:{id_orc}).")
+
+                if orcamento_excluido:
+                    preencher_tabela_orcamentos(ui)
             except mysql.connector.Error as err:
-                erros.append(f"Erro ao excluir da BD: {err}"); print(f"[ERRO DB Exclusão]: {err}")
+                erros.append(f"Erro ao excluir da BD: {err}")
+                print(f"[ERRO DB Exclusão]: {err}")
             except Exception as e:
-                 erros.append(f"Erro inesperado ao excluir da BD: {e}"); print(f"[ERRO Inesperado Exclusão BD]: {e}")
+                erros.append(f"Erro inesperado ao excluir da BD: {e}")
+                print(f"[ERRO Inesperado Exclusão BD]: {e}")
 
         if dialog_ui.checkBox_apagar_pasta.isChecked():
             caminho_base = ui.lineEdit_orcamentos.text().strip()

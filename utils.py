@@ -18,11 +18,16 @@ import datetime
 import math
 import re
 import mysql.connector
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
 
+# Cor de seleção para linhas das tabelas | # Cor de fundo para linhas selecionadas
+ROW_SELECTION_COLOR = QColor(173, 216, 230)  # Azul claro  Esta variavel serve para alterar a cor de seleção das linhas nas tabelas
 
+
+# Lista de variáveis válidas para expressões matemáticas
 VARIAVEIS_VALIDAS = [
     "H", "L", "P",
     "H1", "L1", "P1",
@@ -543,3 +548,16 @@ def copiar_dados_gerais_para_itens(ui):
     ]
     for origem, destino in pares:
         copiar_valores_tabela(origem, destino)
+
+
+def apply_row_selection_style(table, color=ROW_SELECTION_COLOR):
+    """Define que a tabela selecione linhas inteiras e aplica a cor de fundo da seleção."""
+    if table is None:
+        return
+    try:
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.setStyleSheet(
+            f"QTableWidget::item:selected{{background-color: {color.name()};}}"
+        )
+    except Exception as e:
+        print(f"[ERRO] apply_row_selection_style: {e}")
