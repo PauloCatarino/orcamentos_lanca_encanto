@@ -650,9 +650,9 @@ def abrir_janela_apagar_orcamento(ui):
 
         msg_final = ""
         if orcamento_excluido:
-            msg_final += f"Orçamento -> {nome_pasta_base} <- excluído da Base de Dados.\n"
+            msg_final += f"Orçamento -> {nome_pasta_base} _ {versao_orcamento} <- excluído da Base de Dados.\n"
         if pasta_excluida:
-            msg_final += f"Pasta do Orçamento -> {nome_pasta_base} <- excluída.\n"
+            msg_final += f"Pasta do Orçamento -> {nome_pasta_base} _ {versao_orcamento}<- excluída.\n"
         if erros:
             msg_final += "\nErros:\n- " + "\n- ".join(erros)
         if not msg_final:
