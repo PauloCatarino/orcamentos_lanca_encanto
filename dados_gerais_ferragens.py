@@ -73,7 +73,7 @@ def escolher_ferragens(ui, linha_tab, nome_tabela):
     aplicando pré-filtros para 'tipo' e 'familia' se definidos.
     Após a seleção, mapeia os dados da linha selecionada para a linha da Tab_Ferragens
     e recalcula 'pliq' utilizando a fórmula:
-         pliq = ptab * (1 + desc1_plus) * (1 - desc2_minus)
+         pliq = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
     
     Retorna True se um material for selecionado; caso contrário, retorna False.
     """
@@ -137,7 +137,7 @@ def escolher_ferragens(ui, linha_tab, nome_tabela):
                 dplus = converter_texto_para_valor(valor, "percentual")
             elif campo == 'desc2_minus':
                 dminus = converter_texto_para_valor(valor, "percentual")
-        novo_pliq = round(ptab_valor * (1 + dplus) * (1 - dminus), 2)
+        novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
         
         tbl_ferragens.blockSignals(False)
@@ -193,7 +193,7 @@ def on_item_changed_ferragens(item):
     Trata as alterações na tabela de Ferragens.
     Se o usuário editar os campos 'ptab' (col. 7), 'desc1_plus' (col. 9) ou 'desc2_minus' (col. 10),
     recalcula o valor de 'pliq' (col. 8) usando a fórmula:
-         pliq = ptab * (1 + desc1_plus) * (1 - desc2_minus)
+         pliq = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
     Aplica também formatação de moeda para 'pliq' e formatação percentual para os descontos.
     """
     if not item:
@@ -219,8 +219,8 @@ def on_item_changed_ferragens(item):
             dplus = converter_texto_para_valor(desc1_text, "percentual")
             dminus = converter_texto_para_valor(desc2_text, "percentual")
             # Recalcula PLIQ usando a fórmula:
-            # PLIQ = PTAB * (1 + desc1_plus) * (1 - desc2_minus)            
-            novo_pliq = round(ptab_valor * (1 + dplus) * (1 - dminus), 2)
+            # PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)           
+            novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
         except Exception:
             novo_pliq = 0.0
 

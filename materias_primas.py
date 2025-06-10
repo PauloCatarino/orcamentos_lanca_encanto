@@ -93,7 +93,7 @@ def criar_tabela_materias_primas():
 
 def carregar_materias_primas_para_tabela(ui, rows=None):
     """
-    Carrega os registros da tabela "materias_primas" no QTableWidget.
+    Carrega os registros da tabela "materias_primas" que estão na tabela da base dados para a tabela do QTableWidget -> 'tableWidget_materias_primas' .
     Se rows for None, carrega todos os registros; caso contrário, exibe somente os registros fornecidos.
     """
     tbl = ui.tableWidget_materias_primas
@@ -248,10 +248,10 @@ def on_item_changed(ui, item):
 
         # Recalcula e atualiza PLIQ se necessário
         if col in [6, 7, 8]: # PRECO_TABELA, DESC1_PLUS, DESC2_MINUS
-            preco = parse_texto_digitado(6, safe_text(tbl, row, 6)) or 0.0
-            dplus = parse_texto_digitado(7, safe_text(tbl, row, 7)) or 0.0
-            dmins = parse_texto_digitado(8, safe_text(tbl, row, 8)) or 0.0
-            pliq = round(preco * (1 + dplus) * (1 - dmins), 2)
+            preco = parse_texto_digitado(6, safe_text(tbl, row, 6)) or 0.0 # PRECO_TABELA            
+            dplus = parse_texto_digitado(7, safe_text(tbl, row, 7)) or 0.0 # DESC1_PLUS  -> MARGEM
+            dmins = parse_texto_digitado(8, safe_text(tbl, row, 8)) or 0.0 # DESC2_MINUS -> DESCONTO
+            pliq = round((preco * (1 - dmins)) * (1 + dplus), 2) # Recalcula PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
 
             with obter_cursor() as cursor_pliq:
                 cursor_pliq.execute("UPDATE materias_primas SET PLIQ=%s WHERE ID_MP=%s", (pliq, id_mp))
