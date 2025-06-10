@@ -1,0 +1,73 @@
+-- MySQL dump 10.13  Distrib 8.0.40, for Win64 (x86_64)
+--
+-- Host: localhost    Database: orcamentos
+-- ------------------------------------------------------
+-- Server version	8.0.40
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `dados_items_sistemas_correr`
+--
+
+DROP TABLE IF EXISTS `dados_items_sistemas_correr`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `dados_items_sistemas_correr` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `num_orc` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ver_orc` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_sc` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `linha` int NOT NULL,
+  `material` text COLLATE utf8mb4_unicode_ci,
+  `descricao` text COLLATE utf8mb4_unicode_ci,
+  `ref_le` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `descricao_no_orcamento` text COLLATE utf8mb4_unicode_ci,
+  `ptab` double DEFAULT '0',
+  `pliq` double DEFAULT '0',
+  `desc1_plus` double DEFAULT '0',
+  `desc2_minus` double DEFAULT '0',
+  `und` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `desp` double DEFAULT '0',
+  `corres_orla_0_4` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `corres_orla_1_0` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tipo` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `familia` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `comp_mp` double DEFAULT '0',
+  `larg_mp` double DEFAULT '0',
+  `esp_mp` double DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_item_unico` (`num_orc`,`ver_orc`,`id_sc`,`linha`),
+  KEY `idx_item_lookup` (`num_orc`,`ver_orc`,`id_sc`)
+) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `dados_items_sistemas_correr`
+--
+
+LOCK TABLES `dados_items_sistemas_correr` WRITE;
+/*!40000 ALTER TABLE `dados_items_sistemas_correr` DISABLE KEYS */;
+INSERT INTO `dados_items_sistemas_correr` VALUES (1,'250001','01','2',0,'SC_Puxador_Vertical_SPP',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),(2,'250001','01','2',1,'SC_Calha_Superior_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(3,'250001','01','2',2,'SC_Calha_Inferior_SPP_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(4,'250001','01','2',3,'SC_Calha_Inferior_SPP_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(5,'250001','01','2',4,'SC_Calha_Porta_Horizontal_H_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(6,'250001','01','2',5,'SC_Calha_Porta_Horizontal_Sup_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(7,'250001','01','2',6,'SC_Calha_Porta_Horizontal_Inf_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(8,'250001','01','2',7,'SC_Painel_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(9,'250001','01','2',8,'SC_Painel_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(10,'250001','01','2',9,'SC_Painel_Porta_Correr_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(11,'250001','01','2',10,'SC_Painel_Porta_Correr_4',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(12,'250001','01','2',11,'SC_Espelho_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(13,'250001','01','2',12,'SC_Espelho_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(14,'250001','01','2',13,'SC_Acessorio_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(15,'250001','01','2',14,'SC_Acessorio_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(16,'250001','01','2',15,'SC_Acessorio_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(17,'250001','01','2',16,'SC_Acessorio_4_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(18,'250001','01','2',17,'SC_Acessorio_5_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(37,'250001','00','1',0,'SC_Puxador_Vertical_SPP',NULL,'FER0014','PUXADOR PORTA CORRER STYLE 16 ANODIZADO MATE 2350',8.7,10,0.15,0,'UND',0.15,NULL,NULL,NULL,NULL,2350,0,16),(38,'250001','00','1',1,'SC_Calha_Superior_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(39,'250001','00','1',2,'SC_Calha_Inferior_SPP_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(40,'250001','00','1',3,'SC_Calha_Inferior_SPP_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(41,'250001','00','1',4,'SC_Calha_Porta_Horizontal_H_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(42,'250001','00','1',5,'SC_Calha_Porta_Horizontal_Sup_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(43,'250001','00','1',6,'SC_Calha_Porta_Horizontal_Inf_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(44,'250001','00','1',7,'SC_Painel_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(45,'250001','00','1',8,'SC_Painel_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(46,'250001','00','1',9,'SC_Painel_Porta_Correr_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(47,'250001','00','1',10,'SC_Painel_Porta_Correr_4',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(48,'250001','00','1',11,'SC_Espelho_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(49,'250001','00','1',12,'SC_Espelho_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(50,'250001','00','1',13,'SC_Acessorio_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(51,'250001','00','1',14,'SC_Acessorio_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(52,'250001','00','1',15,'SC_Acessorio_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(53,'250001','00','1',16,'SC_Acessorio_4_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(54,'250001','00','1',17,'SC_Acessorio_5_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(73,'250001','00','6',0,'SC_Puxador_Vertical_SPP',NULL,'FER0014','PUXADOR PORTA CORRER STYLE 16 ANODIZADO MATE 2350',8.7,10,0.15,0,'UND',0.15,NULL,NULL,NULL,NULL,2350,0,16),(74,'250001','00','6',1,'SC_Calha_Superior_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(75,'250001','00','6',2,'SC_Calha_Inferior_SPP_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(76,'250001','00','6',3,'SC_Calha_Inferior_SPP_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(77,'250001','00','6',4,'SC_Calha_Porta_Horizontal_H_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(78,'250001','00','6',5,'SC_Calha_Porta_Horizontal_Sup_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(79,'250001','00','6',6,'SC_Calha_Porta_Horizontal_Inf_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(80,'250001','00','6',7,'SC_Painel_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(81,'250001','00','6',8,'SC_Painel_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(82,'250001','00','6',9,'SC_Painel_Porta_Correr_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(83,'250001','00','6',10,'SC_Painel_Porta_Correr_4',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(84,'250001','00','6',11,'SC_Espelho_Porta_Correr_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(85,'250001','00','6',12,'SC_Espelho_Porta_Correr_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(86,'250001','00','6',13,'SC_Acessorio_1',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(87,'250001','00','6',14,'SC_Acessorio_2',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(88,'250001','00','6',15,'SC_Acessorio_3',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(89,'250001','00','6',16,'SC_Acessorio_4_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(90,'250001','00','6',17,'SC_Acessorio_5_SPP',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0);
+/*!40000 ALTER TABLE `dados_items_sistemas_correr` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2025-06-08 23:17:47

@@ -39,28 +39,19 @@ from db_connection import obter_cursor
 
 
 # --- Funções de Geração de Nomes de Pasta (Movidas para aqui para clareza) ---
-def _gerar_nome_pasta_orcamento(num_orcamento, data_orcamento, nome_cliente):
-    """
-    Função auxiliar para gerar o nome base da pasta do orçamento.
-    Formata data e nome do cliente. Retorna None se dados inválidos.
-    """
-    try:
-        data_formatada = datetime.datetime.strptime(data_orcamento, "%d/%m/%Y").strftime("%d%m")
-    except ValueError:
-        # Tenta um fallback simples se o formato for diferente
-        data_formatada = data_orcamento.replace("/", "").replace("-","")[:4]
-        print(f"Aviso: Formato de data inválido '{data_orcamento}', usando '{data_formatada}' para nome da pasta.")
-        if len(data_formatada) < 4: # Se nem assim conseguir 4 dígitos, é inválido
-             print("Erro: Data inválida para gerar nome de pasta.")
-             return None
+def _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente):
+    """Gera o nome da pasta principal do orçamento.
 
-    # Remove caracteres inválidos do nome do cliente
+    A nova regra ignora a data e utiliza apenas o número do orçamento e o nome
+    do cliente. Caracteres inválidos são removidos.
+    """
+
     nome_cliente_seguro = re.sub(r'[\\/*?:"<>|]+', '', nome_cliente.strip().upper().replace(' ', '_'))
-    if not nome_cliente_seguro: # Se o nome ficar vazio após limpar
-         print("Erro: Nome de cliente inválido para gerar nome de pasta.")
-         return None
+    if not nome_cliente_seguro:
+        print("Erro: Nome de cliente inválido para gerar nome de pasta.")
+        return None
 
-    return f"{num_orcamento}_{data_formatada}_{nome_cliente_seguro}"
+    return f"{num_orcamento}_{nome_cliente_seguro}"
 
 
 # OBS: Como a conexão MySQL não depende de um ficheiro (como no SQLite),
@@ -272,11 +263,10 @@ def preencher_tabela_orcamentos(ui, registros=None):
         return
 
     # Formatar nome da pasta (consistente com abrir_criar_pasta_orcamento)
-    try:
-        data_formatada = datetime.datetime.strptime(data_orcamento, "%d/%m/%Y").strftime("%d%m")
-    except ValueError:
-        data_formatada = data_orcamento.replace("/", "")[:4] # Fallback
-    nome_pasta_orcamento = f"{num_orcamento}_{data_formatada}_{nome_cliente_bd.upper().replace(' ', '_')}"
+    nome_pasta_orcamento = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente_bd)
+    if nome_pasta_orcamento is None:
+        QMessageBox.critical(None, "Erro", "Não foi possível gerar o nome da pasta do orçamento.")
+        return
 
 
     dialog = QDialog()
@@ -542,30 +532,24 @@ def abrir_criar_pasta_orcamento():
         if not caminho_base:
             QMessageBox.warning(None, "Erro", "O caminho base dos orçamentos não está configurado.")
             return
+
         ano = ui.lineEdit_ano.text().strip()
         num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
-        data = ui.lineEdit_data.text().strip()
         # Usa o nome do cliente do campo, pois pode ter sido alterado
-        nome_cliente = ui.lineEdit_nome_cliente_2.text().strip().upper().replace(" ", "_")
-        versao = ui.lineEdit_versao.text().strip()
+        nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()  # Nome do cliente simplex
+        versao = ui.lineEdit_versao.text().strip() # Versão do orcaemnto
 
-        if not (ano and num_orcamento and data and nome_cliente and versao):
-            QMessageBox.warning(None, "Erro", "Preencha corretamente todos os dados do orçamento (Ano, Nº, Data, Cliente, Versão).")
+        if not (ano and num_orcamento and nome_cliente and versao):
+            QMessageBox.warning(None, "Erro", "Preencha corretamente todos os dados do orçamento (Ano, Nº, Cliente, Versão).")
             return
-        try:
-            # Tenta formatar a data, mas usa fallback se falhar
-            data_formatada = datetime.datetime.strptime(data, "%d/%m/%Y").strftime("%d%m")
-        except ValueError:
-            data_formatada = data.replace("/", "")[:4] # Usa os primeiros 4 dígitos se formato inválido
-            print(f"Aviso: Formato de data inválido '{data}', usando '{data_formatada}' para nome da pasta.")
 
         caminho_ano = os.path.join(caminho_base, ano)
-        # Garante que caracteres inválidos para nome de pasta sejam removidos/substituídos
-        # Regex simples para remover caracteres problemáticos comuns em nomes de ficheiro/pasta
-        nome_cliente_seguro = re.sub(r'[\\/*?:"<>|]+', '', nome_cliente)
-        nome_pasta_orcamento = f"{num_orcamento}_{data_formatada}_{nome_cliente_seguro}"
+        nome_pasta_orcamento = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente)
+        if nome_pasta_orcamento is None:
+            QMessageBox.critical(None, "Erro", "Não foi possível gerar o nome da pasta do orçamento.")
+            return
         caminho_orcamento = os.path.join(caminho_ano, nome_pasta_orcamento)
-
+        # Verifica se o caminho base do ano existe, se não, cria
         # Se a versão for diferente de "00", cria/abre subpasta da versão
         if versao != "00":
             caminho_final = os.path.join(caminho_orcamento, versao)
@@ -723,7 +707,7 @@ def abrir_janela_apagar_orcamento(ui):
         QMessageBox.critical(None, "Erro", "Não foi possível obter os dados do orçamento selecionado na tabela.")
         return
 
-    nome_pasta_base = _gerar_nome_pasta_orcamento(num_orcamento, data_orcamento, nome_cliente_bd)
+    nome_pasta_base = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente_bd)
     if nome_pasta_base is None:
          QMessageBox.critical(None, "Erro", "Não foi possível gerar o nome da pasta devido a dados inválidos (Data ou Cliente).")
          return
@@ -845,7 +829,7 @@ def configurar_orcamentos_ui(main_ui):
     ui.pushButton_abrir_criar_pasta_orcamento.clicked.connect(abrir_criar_pasta_orcamento)
     ui.pushButton_editar_linha_orcamento.clicked.connect(editar_linha_orcamento)
     ui.tableWidget_orcamentos.itemSelectionChanged.connect(atualizar_campos_por_selecao)
-    # ui.pushButton_tranpordados_cliente_orcamento.clicked.connect(transportar_dados_cliente_orcamento) # Descomente se esta função for necessária
+    ui.pushButton_tranpordados_cliente_orcamento.clicked.connect(transportar_dados_cliente_orcamento)
 
     # Configuração adicional da UI
     ui.lineEdit_nome_cliente_2.setReadOnly(True) # Nome do cliente geralmente vem da seleção
