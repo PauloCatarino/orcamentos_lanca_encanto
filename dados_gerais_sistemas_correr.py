@@ -187,9 +187,28 @@ def configurar_sistemas_correr_ui(ui):
     """
     #print("DEBUG: Executando configurar_sistemas_correr_ui para sistemas Correr.")
     criar_tabela_dados_gerais('sistemas_correr', SISTEMAS_CORRER_COLUNAS, SISTEMAS_CORRER_LINHAS)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo preenche com 'ROUPEIROS CORRER'
     configurar_tabela_dados_gerais_ui(ui, 'sistemas_correr', SISTEMAS_CORRER_COLUNAS,SISTEMAS_CORRER_LINHAS)
-    #print("DEBUG: Tabela de sistemas Correr configurada com sucesso.")
     definir_larguras_tab_sistemas_correr(ui)
+
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Sistemas_Correr
+    tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+    for r in range(tabela.rowCount()):
+        if tipo_idx is not None:
+            combo = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('ROUPEIROS CORRER')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
 ####################################################################################
 

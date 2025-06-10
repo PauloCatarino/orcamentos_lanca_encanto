@@ -185,9 +185,21 @@ def configurar_acabamentos_ui(ui):
     #print("DEBUG: A executar configurar_acabamentos_ui")
     criar_tabela_dados_gerais('acabamentos', ACABAMENTOS_COLUNAS, ACABAMENTOS_LINHAS)
     #print("DEBUG: Vai chamar configurar_tabela_dados_gerais_ui...") # Print ANTES da chamada
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'ACABAMENTOS'
     configurar_tabela_dados_gerais_ui(ui, 'acabamentos', ACABAMENTOS_COLUNAS, ACABAMENTOS_LINHAS)
-    #print("DEBUG: Chamada a configurar_tabela_dados_gerais_ui TERMINADA.") # Print DEPOIS da chamada
     definir_larguras_tab_acabamentos(ui)
+
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Acabamentos
+    familia_idx = next((i for i, c in enumerate(ACABAMENTOS_COLUNAS) if c['nome'] == 'familia'), None)
+    if familia_idx is not None:
+        for r in range(tabela.rowCount()):
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('ACABAMENTOS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
    
 ####################################################################################

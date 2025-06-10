@@ -406,6 +406,18 @@ def configurar_tabela_acabamentos(parent):
     tabela.resizeRowsToContents()
     # Define larguras personalizadas dp item
     definir_larguras_tab_acabamentos_item(ui)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'ACABAMENTOS' & coluna tipo sem filtro
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Acabamentos_12
+    familia_idx = next((i for i, c in enumerate(ACABAMENTOS_COLUNAS) if c['nome'] == 'familia'), None)
+    if familia_idx is not None:
+        for r in range(tabela.rowCount()):
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('ACABAMENTOS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Acabamentos_12 com o botão "Limpar Linha Selecionada" 
@@ -562,7 +574,7 @@ def guardar_dados_item_orcamento_tab_acabamentos(parent):
     }
     # Conjuntos para conversão de valores formatados
 
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
 
     dados_para_salvar = []

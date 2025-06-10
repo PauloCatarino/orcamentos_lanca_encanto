@@ -417,6 +417,25 @@ def configurar_tabela_sistemas_correr(parent):
     tabela.resizeRowsToContents()
     # Define larguras personalizadas
     definir_larguras_tab_sistemas_correr(ui)
+    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo preenche com 'ROUPEIROS CORRER'
+    from utils import apply_row_selection_style
+    tabela = ui.Tab_Sistemas_Correr_11
+    tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+    for r in range(tabela.rowCount()):
+        if tipo_idx is not None:
+            combo = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('ROUPEIROS CORRER')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+    apply_row_selection_style(tabela)
 
 def criar_tabela_dados_items_sistemas_correr():
     """
@@ -528,7 +547,7 @@ def guardar_dados_item_orcamento_tab_sistemas_correr_3(parent):
     }
     # Conjuntos para conversão de valores formatados
 
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
 
     # Coleta dos dados de cada linha da Tab_Sistemas_Correr_11

@@ -91,7 +91,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names):
     num_rows = table_widget.rowCount()
     dados = []
      # Conjuntos dos campos que devem ser convertidos para float
-    campos_moeda = {"ptab", "pliq", "comp_mp", "larg_mp", "esp_mp"}
+    campos_moeda = {"ptab", "pliq"}
     campos_percentual = {"desc1_plus", "desc2_minus", "desp"}
     for row in range(num_rows):
         registro = []

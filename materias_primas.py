@@ -26,8 +26,10 @@ import pandas as pd
 import mysql.connector  # Para tratamento de erros (por exemplo, IntegrityError)
 import re # Importado para uso em parse_texto_digitado (embora não usado lá atualmente, pode ser útil)
 
-from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QAbstractItemView, QMenu)
+from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QAbstractItemView, QMenu, QPushButton)
 from PyQt5.QtCore import Qt
+import sys
+import subprocess
 
 # Importa a função de conexão MySQL (configurada no módulo db_connection.py)
 from db_connection import obter_cursor
@@ -916,15 +918,19 @@ def conectar_materias_primas_ui(main_ui):
     for i, w in enumerate(col_widths):
         tbl.setColumnWidth(i, w)
 
-    # Permite edição por duplo clique ou seleção
-    tbl.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked)
+    # Não permite editar a tabela das materias primas diretamente, tem de usar o ficheiro excel, ao tentar editar os dados aparece mensagem de aviso
+    tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    def informar_edicao():
+        QMessageBox.information(None, "Editar Matérias-Primas",
+                                "Edite o ficheiro Excel 'TAB_MATERIAS_PRIMAS.xlsx' para alterar dados.")
+    tbl.cellDoubleClicked.connect(lambda r, c: informar_edicao())
 
     # Carrega os dados do banco na tabela
     carregar_materias_primas_para_tabela(ui)
 
     # Conecta o sinal de mudança de item para a função on_item_changed
     tbl = ui.tableWidget_materias_primas
-    tbl.itemChanged.connect(lambda item: on_item_changed(ui, item)) # Passa ui
+    # Edição direta desativada; apenas informa que deve usar o Excel
 
     # Configura o menu de contexto (copiar/colar/apagar)
     tbl.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -936,3 +942,24 @@ def conectar_materias_primas_ui(main_ui):
     # Conecta o campo de pesquisa (se existir) para filtrar os dados
     if hasattr(ui, 'lineEdit_pesquisar_mp'):
         ui.lineEdit_pesquisar_mp.textChanged.connect(lambda: pesquisar_materias_primas(ui)) # Passa ui
+
+    # Botão para abrir diretamente o Excel para utilizador modificar no excel, so depois passa para tabela materias primas
+    btn_abrir = QPushButton("Abrir Excel", ui.groupBox_materias_config)
+    btn_abrir.setGeometry(830, 30, 221, 31)
+    def abrir_excel():
+        base_dir = os.path.dirname(ui.lineEdit_base_dados.text()) if ui.lineEdit_base_dados.text() else os.getcwd()
+        excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")
+        if not os.path.exists(excel_path):
+            QMessageBox.warning(None, "Erro", f"Ficheiro Excel não encontrado:\n{excel_path}")
+            return
+        try:
+            if sys.platform.startswith('win'):
+                os.startfile(excel_path)
+            elif sys.platform.startswith('darwin'):
+                subprocess.Popen(['open', excel_path])
+            else:
+                subprocess.Popen(['xdg-open', excel_path])
+        except Exception as e:
+            QMessageBox.warning(None, "Erro", f"Não foi possível abrir o ficheiro:\n{e}")
+    btn_abrir.clicked.connect(abrir_excel)
+    ui.pushButton_abrir_excel = btn_abrir
