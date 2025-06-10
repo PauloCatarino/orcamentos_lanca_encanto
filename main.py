@@ -22,7 +22,7 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
  Para enviar atualizações para o github
 git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
-git commit -m "27º Commit"
+git commit -m "28º Commit"
 git push                  # envia para o GitHub
 
 """
@@ -101,6 +101,7 @@ class MainApp(QMainWindow):
             self.ui.tableWidget_tabela_clientes,
             self.ui.tableWidget_orcamentos,
             self.ui.tableWidget_artigos,
+            self.ui.tableWidget_materias_primas,
             self.ui.Tab_Material,
             self.ui.Tab_Ferragens,
             self.ui.Tab_Sistemas_Correr,

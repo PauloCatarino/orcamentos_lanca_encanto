@@ -51,7 +51,7 @@ def escolher_acabamentos(ui, linha_tab, nome_tabela):
     Abre o diálogo para seleção de material, aplicando pré-filtros (tipo e família) se disponíveis.
     Após a seleção, mapeia os dados da linha selecionada para a linha correspondente na Tab_Acabamentos,
     e recalcula o valor de 'pliq' utilizando a fórmula:
-         pliq = ptab * (1 + desc1_plus) * (1 - desc2_minus)
+         PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
     Retorna True se um material foi selecionado, False caso contrário.
     """
     from PyQt5.QtWidgets import QTableWidgetItem, QDialog
@@ -115,7 +115,7 @@ def escolher_acabamentos(ui, linha_tab, nome_tabela):
             elif campo == 'desc2_minus':
                 dminus = converter_texto_para_valor(valor, "percentual")
         
-        novo_pliq = round(ptab_valor * (1 + dplus) * (1 - dminus), 2)
+        novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
         
         tbl_acabamentos.blockSignals(False)
@@ -204,7 +204,7 @@ def on_item_changed_acabamentos(item):
     Callback para tratar alterações na tabela de Materiais.
     Se o usuário editar as células dos campos 'ptab' (col. 7), 'desc1_plus' (col. 9)
     ou 'desc2_minus' (col. 10), recalcula 'pliq' (col. 8) usando:
-         pliq = ptab * (1 + desc1_plus) * (1 - desc2_minus)
+         pliq = = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
     Aplica também formatação de moeda e percentual conforme necessário.
     """
     if not item:
@@ -230,8 +230,8 @@ def on_item_changed_acabamentos(item):
             dplus = converter_texto_para_valor(desc1_text, "percentual")
             dminus = converter_texto_para_valor(desc2_text, "percentual")
             # Recalcula PLIQ usando a fórmula:
-            # PLIQ = PTAB * (1 + desc1_plus) * (1 - desc2_minus)
-            novo_pliq = round(ptab_valor * (1 + dplus) * (1 - dminus), 2)
+            # PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
+            novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
         except Exception:
             novo_pliq = 0.0
 
