@@ -34,6 +34,11 @@ class Ui_Dialog(object):
         self.label_nome_orcamento = QtWidgets.QLabel(Dialog)
         self.label_nome_orcamento.setObjectName("label_nome_orcamento")
         self.verticalLayout.addWidget(self.label_nome_orcamento)
+
+        # Exibição do nome do cliente
+        self.label_cliente_orcamento = QtWidgets.QLabel(Dialog)
+        self.label_cliente_orcamento.setObjectName("label_cliente_orcamento")
+        self.verticalLayout.addWidget(self.label_cliente_orcamento)
         
         # Exibição da versão do orçamento
         self.label_versao_orcamento = QtWidgets.QLabel(Dialog)
@@ -78,6 +83,7 @@ class Ui_Dialog(object):
         Dialog.setWindowTitle(_translate("Dialog", "Eliminar Orçamento"))
         self.label_titulo.setText(_translate("Dialog", "Tem certeza que deseja eliminar este orçamento?"))
         self.label_nome_orcamento.setText(_translate("Dialog", "Nome do orçamento: --"))
+        self.label_cliente_orcamento.setText(_translate("Dialog", "Cliente: --"))
         self.label_versao_orcamento.setText(_translate("Dialog", "Versão do orçamento: --"))
         self.checkBox_apagar_bd.setText(_translate("Dialog", "Eliminar da base de dados"))
         self.checkBox_apagar_pasta.setText(_translate("Dialog", "Eliminar a pasta do orçamento"))
