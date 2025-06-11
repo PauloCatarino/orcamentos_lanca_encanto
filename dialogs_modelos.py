@@ -76,7 +76,9 @@ class GerirNomesDialog(QDialog):
         self.lista = QListWidget()
         self.nomes_desc = nomes_desc
         for nome, desc in nomes_desc.items():
-            item = QListWidgetItem(f"{nome} - {desc}")
+            # Apenas o nome é exibido na lista. A descrição fica no campo
+            # apropriado quando o item é selecionado.
+            item = QListWidgetItem(nome)
             item.setData(Qt.UserRole, nome)
             self.lista.addItem(item)
         lay.addWidget(self.lista)
@@ -143,7 +145,8 @@ class GerirNomesDialog(QDialog):
             self.nomes_editados[texto_atual] = novo.strip()
             desc = self.nomes_desc.pop(texto_atual, "")
             self.nomes_desc[novo.strip()] = desc
-            item.setText(f"{novo.strip()} - {desc}")
+            # Atualiza o item exibindo apenas o novo nome.
+            item.setText(novo.strip())
             item.setData(Qt.UserRole, novo.strip())
 
     def obter_nome(self):

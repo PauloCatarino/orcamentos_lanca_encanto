@@ -562,8 +562,11 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
             if not item_id.text().strip():
                 item_id.setText(str(row))
 
-        # Primeiro, adiciona linha e referencias do orçamento
+        # Primeiro, adiciona o identificador da linha e as referências
+        # do orçamento. A coluna 'nome' deve permanecer vazia (string
+        # vazia) quando os dados são gravados através deste diálogo.
         dados_linha = {
+            'nome': '',
             'linha': row,
             'num_orc': num_orc,
             'ver_orc': ver_orc,
@@ -600,15 +603,17 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                     valor_final = valor_str.strip() if valor_str else None
             dados_linha[campo_bd] = valor_final
 
-        # Cria tupla na ordem correta das colunas BD
-        # Inclui apenas a coluna 'linha' no início
-        tupla_linha = [row] + [dados_linha.get(cn, None) for cn in col_names_db]
+        # Cria tupla na ordem correta das colunas do BD: nome em branco
+        # seguido pelo número da linha e demais campos.
+        tupla_linha = [dados_linha.get('nome', ''), row] + \
+            [dados_linha.get(cn, None) for cn in col_names_db]
         dados_para_salvar.append(tuple(tupla_linha))
 
     # Monta a query INSERT
     tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-    # Nomes das colunas BD para INSERT (a coluna 'nome' permanece vazia)
-    col_names_insert = ['linha'] + col_names_db
+    # Nomes das colunas BD para INSERT. A coluna 'nome' é inserida em branco
+    # para satisfazer a restrição NOT NULL da base de dados.
+    col_names_insert = ['nome', 'linha'] + col_names_db
     placeholders = ", ".join(["%s"] * len(col_names_insert))
     col_names_sql = ", ".join(f"`{c}`" for c in col_names_insert)
     # Utiliza INSERT simples. Os registros antigos já foram eliminados com
