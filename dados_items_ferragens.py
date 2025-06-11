@@ -446,14 +446,14 @@ def configurar_tabela_ferragens(parent):
 
     # Define larguras personalizadas
     definir_larguras_tab_ferragens_item(ui)
-    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo com valores predefinidos exemplo: 'DOBRADICAS', 'SUPORTE_PRATELEIRA', etc.
+    # Configura a tabela de Dados do Item na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo com valores predefinidos exemplo: 'DOBRADICAS', 'SUPORTE_PRATELEIRA', etc.
     from utils import apply_row_selection_style
     tabela = ui.Tab_Ferragens_11
     familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
     tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
     tipo_padrao = {
         'Fer_Dobradica': 'DOBRADICAS',
-        'Fer_Suporte Prateleira': 'SUPORTE_PRATELEIRA',
+        'Fer_Suporte Prateleira': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
         'Fer_Varao_SPP': 'SPP',
         'Fer_Rodape_PVC': 'RODAPE',
