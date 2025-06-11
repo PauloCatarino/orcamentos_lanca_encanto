@@ -124,6 +124,32 @@ def apagar_registros_por_nome(tabela_bd, nome):
         QMessageBox.critical(None, "Erro Base de Dados", f"Erro ao apagar registos:\n{err}")
         return False
     
+def apagar_registros_por_orcamento(tabela_bd, num_orc, ver_orc):
+    """Apaga todos os registros associados ao par ``(num_orc, ver_orc)``.
+
+    Esta função é utilizada quando se guardam dados gerais para um
+    orçamento específico através do botão *guardar_dados_gerais_orcamento*.
+    Nessa operação o campo ``nome`` não é preenchido e, portanto, não pode
+    ser utilizado como chave para eliminação dos registos antigos.
+    """
+    tabela_bd_segura = f"dados_gerais_{tabela_bd.replace(' ', '_').lower()}"
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                f"DELETE FROM `{tabela_bd_segura}` WHERE num_orc=%s AND ver_orc=%s",
+                (num_orc, ver_orc),
+            )
+            rows = cursor.rowcount
+        print(f"{rows} registos removidos de '{tabela_bd_segura}' para o orçamento {num_orc}-{ver_orc}.")
+        return True
+    except mysql.connector.Error as err:
+        print(f"Erro MySQL ao eliminar registos de '{tabela_bd_segura}': {err}")
+        QMessageBox.critical(None, "Erro Base de Dados", f"Erro ao apagar registros:\n{err}")
+        return False
+    except Exception as e:
+        print(f"Erro inesperado ao eliminar registos de '{tabela_bd_segura}': {e}")
+        QMessageBox.critical(None, "Erro Inesperado", f"Erro ao apagar registros:\n{e}")
+        return False
 
 def renomear_registros(tabela_bd, nome_antigo, nome_novo):
     """Atualiza o campo 'nome' para todos os registros que possuam

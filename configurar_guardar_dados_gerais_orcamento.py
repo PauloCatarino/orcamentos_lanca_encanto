@@ -41,7 +41,7 @@ from PyQt5.QtCore import Qt
 import mysql.connector # Adicionado para erros específicos
 from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
-from dados_gerais_manager import apagar_registros_por_nome
+from dados_gerais_manager import apagar_registros_por_nome, apagar_registros_por_orcamento
 from dialogs_modelos import SelecaoModeloDialog
 import math
 
@@ -519,8 +519,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
     ui = parent.ui
     num_orc = ui.lineEdit_num_orcamento.text().strip()
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
-    # O nome do modelo/registro é passado para esta função agora
-    # Usa o numero e a versao do orçamento para criar um identificador unico.
+    # Identificador utilizado anteriormente (mantido apenas para mensagens)  # Usa o numero e a versao do orçamento para criar um identificador unico.
     nome_registro = f"{num_orc}-{ver_orc}"
 
     if not num_orc or not ver_orc:
@@ -563,9 +562,8 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
             if not item_id.text().strip():
                 item_id.setText(str(row))
 
-        # Primeiro, adiciona nome, linha e referencias do orçamento
+        # Primeiro, adiciona linha e referencias do orçamento
         dados_linha = {
-            'nome': nome_registro,
             'linha': row,
             'num_orc': num_orc,
             'ver_orc': ver_orc,
@@ -603,22 +601,20 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
             dados_linha[campo_bd] = valor_final
 
         # Cria tupla na ordem correta das colunas BD
-        # Inclui 'nome' e 'linha' no início
-        tupla_linha = [nome_registro, row] + \
-            [dados_linha.get(cn, None) for cn in col_names_db]
+        # Inclui apenas a coluna 'linha' no início
+        tupla_linha = [row] + [dados_linha.get(cn, None) for cn in col_names_db]
         dados_para_salvar.append(tuple(tupla_linha))
 
     # Monta a query INSERT
     tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-    # Nomes das colunas BD para INSERT (incluindo 'nome' e 'linha')
-    col_names_insert = ['nome', 'linha'] + col_names_db
+    # Nomes das colunas BD para INSERT (a coluna 'nome' permanece vazia)
+    col_names_insert = ['linha'] + col_names_db
     placeholders = ", ".join(["%s"] * len(col_names_insert))
     col_names_sql = ", ".join(f"`{c}`" for c in col_names_insert)
-    # Utiliza REPLACE para evitar erros de duplicidade caso alguma linha já
-    # exista. A chave única (nome, linha) fará com que o registro anterior
-    # seja removido e inserido novamente.
+    # Utiliza INSERT simples. Os registros antigos já foram eliminados com
+    # apagar_registros_por_orcamento(), portanto não é necessário usar REPLACE.
     query_insert = (
-        f"REPLACE INTO `{tabela_bd_segura}` ({col_names_sql}) VALUES ({placeholders})"
+        f"INSERT INTO `{tabela_bd_segura}` ({col_names_sql}) VALUES ({placeholders})"
     )
 
     try:
@@ -671,9 +667,9 @@ def guardar_dados_gerais_orcamento(parent):
     ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
     nome_registro = f"{num_orc}_{ver_orc}"
 
-    # Remove registos anteriores deste orçamento nas quatro tabelas
+    # Remove registos anteriores deste orçamento utilizando num_orc e ver_orc  elimina registas nas 4 tabelas dados gerais
     for tabela in ("materiais", "ferragens", "sistemas_correr", "acabamentos"):
-        apagar_registros_por_nome(tabela, nome_registro)
+        apagar_registros_por_orcamento(tabela, num_orc, ver_orc)
 
     # Mapeamento e nomes de colunas para a aba Materiais
     mapping_materiais = {
