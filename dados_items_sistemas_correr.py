@@ -429,6 +429,8 @@ def configurar_tabela_sistemas_correr(parent):
                 idx = combo.findText('ROUPEIROS CORRER')
                 if idx >= 0:
                     combo.setCurrentIndex(idx)
+                else:
+                    combo.setCurrentIndex(-1)
         if familia_idx is not None:
             combo = tabela.cellWidget(r, familia_idx)
             if isinstance(combo, QComboBox):
@@ -665,6 +667,24 @@ def carregar_dados_items_sistemas_correr(parent):
         tabela.setItem(row, 2, QTableWidgetItem(id_sc))
         tabela.setItem(row, 3, QTableWidgetItem(num_orc))
         tabela.setItem(row, 4, QTableWidgetItem(ver_orc))
+
+    tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+    for r in range(tabela.rowCount()):
+        if tipo_idx is not None:
+            combo_t = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo_t, QComboBox):
+                idx = combo_t.findText('ROUPEIROS CORRER')
+                if idx >= 0:
+                    combo_t.setCurrentIndex(idx)
+                else:
+                    combo_t.setCurrentIndex(-1)
+        if familia_idx is not None:
+            combo_f = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo_f, QComboBox):
+                idx = combo_f.findText('FERRAGENS')
+                if idx >= 0:
+                    combo_f.setCurrentIndex(idx)
 
     # Mapeamentos para os índices das colunas das tabelas do banco de dados:
     # Para a tabela dados_items_sistemas_correr (índices conforme definição)
