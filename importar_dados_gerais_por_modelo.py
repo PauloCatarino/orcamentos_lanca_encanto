@@ -21,7 +21,7 @@ Funcionalidades principais:
 Classes:
   - `ImportarDadosGeralDialog`: Diálogo para importação de Dados Gerais.
 """
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGroupBox, QListWidget, QListWidgetItem, QHBoxLayout, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QGroupBox, QListWidget, QListWidgetItem, QHBoxLayout, QPushButton, QMessageBox, QLabel
 from PyQt5.QtCore import Qt
 from dados_gerais_manager import listar_nomes_descricoes_dados_gerais
 
@@ -37,6 +37,8 @@ class ImportarDadosGeralDialog(QDialog):
 
         # Dicionário para armazenar as listas para cada tabela
         self.listas = {}
+        self.descricoes = {}
+        self.labels_desc = {}
         # Para cada tabela, cria um QGroupBox com um QListWidget
         tabelas = [
             ("materiais", "Material"),
@@ -48,18 +50,24 @@ class ImportarDadosGeralDialog(QDialog):
             group = QGroupBox(titulo)
             group_layout = QVBoxLayout(group)
             lista = QListWidget()
-            lista.setSelectionMode(QListWidget.MultiSelection)
-            # Torna cada item checkable
+            lista.setSelectionMode(QListWidget.SingleSelection)
             nomes_desc = listar_nomes_descricoes_dados_gerais(tabela)
+            self.descricoes[tabela] = nomes_desc
             for nome, desc in nomes_desc.items():
-                item = QListWidgetItem(f"{nome} - {desc}")
+                item = QListWidgetItem(nome)
                 item.setData(Qt.UserRole, nome)
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                 item.setCheckState(Qt.Unchecked)
                 lista.addItem(item)
+            lista.itemChanged.connect(lambda it, t=tabela: self._apenas_um_checked(it, t))
+            lista.currentItemChanged.connect(lambda cur, prev, t=tabela: self._atualizar_descricao(t, cur))
             group_layout.addWidget(lista)
+            label = QLabel("")
+            label.setWordWrap(True)
+            group_layout.addWidget(label)
             layout.addWidget(group)
             self.listas[tabela] = lista
+            self.labels_desc[tabela] = label
 
         # Botões na parte inferior
         btn_layout = QHBoxLayout()
@@ -71,6 +79,27 @@ class ImportarDadosGeralDialog(QDialog):
 
         self.btn_importar.clicked.connect(self.importar)
         self.btn_cancelar.clicked.connect(self.reject)
+
+    def _apenas_um_checked(self, item, tabela):
+        if item.checkState() == Qt.Checked:
+            lista = self.listas.get(tabela)
+            if not lista:
+                return
+            for i in range(lista.count()):
+                it = lista.item(i)
+                if it is not item:
+                    it.setCheckState(Qt.Unchecked)
+
+    def _atualizar_descricao(self, tabela, item):
+        label = self.labels_desc.get(tabela)
+        if label is None:
+            return
+        if not item:
+            label.setText("")
+            return
+        nome = item.data(Qt.UserRole)
+        desc = self.descricoes.get(tabela, {}).get(nome, "")
+        label.setText(desc)
 
     def importar(self):
         # Para cada tabela, percorre a lista e coleta os itens marcados

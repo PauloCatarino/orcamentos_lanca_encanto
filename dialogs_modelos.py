@@ -23,15 +23,20 @@ class SelecaoModeloDialog(QDialog):
         layout = QVBoxLayout(self)
         self.lista = QListWidget()
         self.lista.setMinimumWidth(350)  # Garante largura suficiente para os textos
+        self.descricoes = {}
         for nome, desc in (modelos.items() if isinstance(modelos, dict) else [(m, "") for m in modelos]):
-            texto = f"{nome} - {desc}" if desc else nome
-            item = QListWidgetItem(texto)
+            item = QListWidgetItem(nome)
             item.setData(Qt.UserRole, nome)
+            self.descricoes[nome] = desc
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Unchecked)
             self.lista.addItem(item)
         self.lista.itemChanged.connect(self._apenas_um_checked)
+        self.lista.currentItemChanged.connect(self._mostrar_descricao)
         layout.addWidget(self.lista)
+        self.desc_label = QLabel("")
+        self.desc_label.setWordWrap(True)
+        layout.addWidget(self.desc_label)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -43,6 +48,14 @@ class SelecaoModeloDialog(QDialog):
                 it = self.lista.item(i)
                 if it is not item:
                     it.setCheckState(Qt.Unchecked)
+
+    def _mostrar_descricao(self, item):
+            """Atualiza a descrição exibida conforme o item selecionado."""
+            if not item:
+                self.desc_label.setText("")
+                return
+            nome = item.data(Qt.UserRole)
+            self.desc_label.setText(self.descricoes.get(nome, ""))
 
     def modelo_escolhido(self):
         for i in range(self.lista.count()):
