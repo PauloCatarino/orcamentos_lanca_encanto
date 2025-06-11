@@ -420,13 +420,18 @@ def configurar_tabela_material(parent):
     # Configura a tabela de Dados do Item na interface na coluna familia preenche com 'PLACAS' & coluna tipo sem filtro
     from utils import apply_row_selection_style
     familia_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] == 'familia'), None)
-    if familia_idx is not None:
-        for r in range(tabela.rowCount()):
+    tipo_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] == 'tipo'), None)
+    for r in range(tabela.rowCount()):
+        if familia_idx is not None:
             combo = tabela.cellWidget(r, familia_idx)
             if isinstance(combo, QComboBox):
                 idx = combo.findText('PLACAS')
                 if idx >= 0:
                     combo.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo_t = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo_t, QComboBox):
+                combo_t.setCurrentIndex(-1)
     apply_row_selection_style(tabela)
 
         
@@ -689,6 +694,20 @@ def carregar_dados_items(parent):
              if not item: item = QTableWidgetItem(); tabela.setItem(r, c_key, item)
              item.setText(str(val_key) if val_key is not None else "")
              item.setFlags(item.flags() & ~Qt.ItemIsEditable) # Tornar não editável
+
+    tipo_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] == 'familia'), None)
+    for r in range(tabela.rowCount()):
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('PLACAS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo_t = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo_t, QComboBox):
+                combo_t.setCurrentIndex(-1)
 
     # Mapeamentos para os índices das colunas das tabelas do banco de dados:
     # Para a tabela dados_items_materiais (índices conforme definição)

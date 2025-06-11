@@ -479,8 +479,10 @@ def configurar_tabela_ferragens(parent):
             if isinstance(combo, QComboBox):
                 padrao = tipo_padrao.get(nome, '')
                 idx = combo.findText(padrao)
-                if idx >= 0:
+                if idx >= 0 and padrao:
                     combo.setCurrentIndex(idx)
+                else:
+                    combo.setCurrentIndex(-1)
     apply_row_selection_style(tabela)
 
 
@@ -759,6 +761,41 @@ def carregar_dados_items(parent):
              if not item: item = QTableWidgetItem(); tabela.setItem(r, c_key, item)
              item.setText(str(val_key) if val_key is not None else "")
              item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+    tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
+    tipo_padrao = {
+        'Fer_Dobradica': 'DOBRADICAS',
+        'Fer_Suporte Prateleira': 'SUPORTE PRATELEIRA',
+        'Fer_Suporte Varao': 'SUPORTE VARAO',
+        'Fer_Varao_SPP': 'SPP',
+        'Fer_Rodape_PVC': 'RODAPE',
+        'Fer_Pes_1': 'PES',
+        'Fer_Pes_2': 'PES',
+        'Fer_Corredica_1': 'CORREDICAS',
+        'Fer_Corredica_2': 'CORREDICAS',
+        'Fer_Corredica_3': 'CORREDICAS',
+        'Fer_Puxador': 'PUXADOR',
+        'Fer_Puxador_SPP_1': 'SPP',
+        'Fer_Puxador_SPP_2': 'SPP',
+        'Fer_Puxador_SPP_3': 'SPP'
+    }
+    for r, nome in enumerate(FERRAGENS_LINHAS):
+        if familia_idx is not None:
+            combo_f = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo_f, QComboBox):
+                idx = combo_f.findText('FERRAGENS')
+                if idx >= 0:
+                    combo_f.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo_t = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo_t, QComboBox):
+                padrao = tipo_padrao.get(nome, '')
+                idx = combo_t.findText(padrao)
+                if idx >= 0 and padrao:
+                    combo_t.setCurrentIndex(idx)
+                else:
+                    combo_t.setCurrentIndex(-1) 
 
     # Mapeamentos para os índices das colunas das tabelas do banco de dados:
     # Para a tabela dados_items_ferragens (índices conforme definição)
