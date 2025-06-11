@@ -406,7 +406,7 @@ def configurar_tabela_acabamentos(parent):
     tabela.resizeRowsToContents()
     # Define larguras personalizadas dp item
     definir_larguras_tab_acabamentos_item(ui)
-    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'ACABAMENTOS' & coluna tipo sem filtro
+    # Configura a tabela de Dados do Item na interface na coluna familia preenche com 'ACABAMENTOS' & coluna tipo sem filtro
     from utils import apply_row_selection_style
     tabela = ui.Tab_Acabamentos_12
     familia_idx = next((i for i, c in enumerate(ACABAMENTOS_COLUNAS) if c['nome'] == 'familia'), None)

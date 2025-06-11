@@ -417,7 +417,7 @@ def configurar_tabela_sistemas_correr(parent):
     tabela.resizeRowsToContents()
     # Define larguras personalizadas
     definir_larguras_tab_sistemas_correr(ui)
-    # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo preenche com 'ROUPEIROS CORRER'
+    # Configura a tabela de Dados do Item na interface na coluna familia preenche com 'FERRAGENS' & coluna tipo preenche com 'ROUPEIROS CORRER'
     from utils import apply_row_selection_style
     tabela = ui.Tab_Sistemas_Correr_11
     tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)

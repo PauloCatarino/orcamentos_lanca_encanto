@@ -194,7 +194,7 @@ def configurar_ferragens_ui(ui):
     tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
     tipo_padrao = {
         'Fer_Dobradica': 'DOBRADICAS',
-        'Fer_Suporte Prateleira': 'SUPORTE_PRATELEIRA',
+        'Fer_Suporte Prateleira': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
         'Fer_Varao_SPP': 'SPP',
         'Fer_Rodape_PVC': 'RODAPE',
