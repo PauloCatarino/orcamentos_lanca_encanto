@@ -17,8 +17,19 @@ from PyQt5.QtWidgets import (QTableWidgetItem, QComboBox, QPushButton, QMessageB
 from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
-from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
 from utils import adicionar_menu_limpar
+
+
+def executar_guardar_dados_orcamento(main_window):
+    """Carrega dinamicamente a função de gravação e executa-a.
+
+    A importação tardia evita um ciclo entre este módulo e
+    configurar_guardar_dados_gerais_orcamento.
+    """
+    from configurar_guardar_dados_gerais_orcamento import (
+        guardar_dados_gerais_orcamento,
+    )
+    guardar_dados_gerais_orcamento(main_window)
 
 # --- Delegates para formatação de moeda e percentual ---
 
@@ -83,7 +94,7 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar(main_window.ui.Tab_Material,
                               lambda: limpar_linha_por_tab(main_window, "materiais"))
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
-        btn_guardar_orcamento.clicked.connect(lambda: guardar_dados_gerais_orcamento(main_window))
+        btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Materiais", f"Erro: {e}")
 
