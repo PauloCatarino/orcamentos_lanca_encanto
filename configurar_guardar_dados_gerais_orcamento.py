@@ -317,6 +317,15 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
                 table.setItem(i, 4, item_ver)
             item_ver.setText(ver_orc)
 
+            # Atualiza também o identificador sequencial da linha
+            if 2 < table.columnCount():
+                item_id = table.item(i, 2)
+                if not item_id:
+                    item_id = QTableWidgetItem()
+                    table.setItem(i, 2, item_id)
+                item_id.setText(str(i))
+            
+
         # A informação de carregamento automático foi removida para evitar
         # mensagens constantes ao alternar de separador ou ao abrir um
         # orçamento. Mantemos o preenchimento silencioso das tabelas.
@@ -437,17 +446,38 @@ def carregar_dados_gerais_se_existir(parent):
         limpar_todas_tabelas_dados_gerais(parent)
 
 def limpar_todas_tabelas_dados_gerais(parent):
-    """Remove dados das quatro tabelas de dados gerais."""
+    """Remove dados das quatro tabelas de dados gerais e atualiza colunas fixas."""
     ui = parent.ui
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = formatar_versao(ui.lineEdit_versao_orcamento.text())
     tabelas = [
-        (ui.Tab_Material, COLUNAS_LIMPAR_MATERIAIS),
-        (ui.Tab_Ferragens, COLUNAS_LIMPAR_FERRAGENS),
-        (ui.Tab_Sistemas_Correr, COLUNAS_LIMPAR_SISTEMAS_CORRER),
-        (ui.Tab_Acabamentos, COLUNAS_LIMPAR_ACABAMENTOS),
+        ui.Tab_Material,
+        ui.Tab_Ferragens,
+        ui.Tab_Sistemas_Correr,
+        ui.Tab_Acabamentos,
     ]
-    for tabela, cols in tabelas:
+    colunas_limpar = [
+        COLUNAS_LIMPAR_MATERIAIS,
+        COLUNAS_LIMPAR_FERRAGENS,
+        COLUNAS_LIMPAR_SISTEMAS_CORRER,
+        COLUNAS_LIMPAR_ACABAMENTOS,
+    ]
+    for tabela, cols in zip(tabelas, colunas_limpar):
         for row in range(tabela.rowCount()):
             limpar_linha_dados_gerais(tabela, row, cols)
+            # Atualiza id sequencial e campos num_orc/ver_orc
+            if tabela.columnCount() > 2:
+                id_item = tabela.item(row, 2) or QTableWidgetItem()
+                id_item.setText(str(row))
+                tabela.setItem(row, 2, id_item)
+            if tabela.columnCount() > 3:
+                num_item = tabela.item(row, 3) or QTableWidgetItem()
+                num_item.setText(num_orc)
+                tabela.setItem(row, 3, num_item)
+            if tabela.columnCount() > 4:
+                ver_item = tabela.item(row, 4) or QTableWidgetItem()
+                ver_item.setText(ver_orc)
+                tabela.setItem(row, 4, ver_item)
 
 # ---------------------------------------------------------------------------
 # FUNÇÃO AUXILIAR: Guarda os dados da tabela no banco de dados
@@ -517,7 +547,7 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
         # permanecer nulas quando os dados são gravados através deste
         # diálogo.
         dados_linha = {
-            'nome': None,
+            'nome': nome_registro,
             'linha': row,
             'num_orc': num_orc,
             'ver_orc': ver_orc,
