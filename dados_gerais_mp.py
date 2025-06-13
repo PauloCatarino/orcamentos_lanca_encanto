@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QTableWidgetItem, QComboBox, QPushButton, QMessageB
 from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
-from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
+#from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
 from utils import adicionar_menu_limpar
 
 def executar_guardar_dados_orcamento(main_window):

@@ -43,13 +43,7 @@ from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
 from dados_gerais_manager import apagar_registros_por_nome, apagar_registros_por_orcamento
 from dialogs_modelos import SelecaoModeloDialog
-from dados_gerais_mp import (
-    limpar_linha_dados_gerais,
-    COLUNAS_LIMPAR_MATERIAIS,
-    COLUNAS_LIMPAR_FERRAGENS,
-    COLUNAS_LIMPAR_SISTEMAS_CORRER,
-    COLUNAS_LIMPAR_ACABAMENTOS,
-)
+from dados_gerais_mp import (limpar_linha_dados_gerais,COLUNAS_LIMPAR_MATERIAIS,COLUNAS_LIMPAR_FERRAGENS,COLUNAS_LIMPAR_SISTEMAS_CORRER,COLUNAS_LIMPAR_ACABAMENTOS)
 import math
 
 
