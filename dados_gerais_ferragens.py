@@ -219,10 +219,11 @@ def configurar_ferragens_ui(ui):
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
                 padrao = tipo_padrao.get(nome, '')
-                flags = Qt.MatchFixedString | Qt.MatchCaseInsensitive
-                idx = combo.findText(padrao, flags)
-                if idx >= 0:
+                idx = combo.findText(padrao)
+                if idx >= 0 and padrao:
                     combo.setCurrentIndex(idx)
+                else:
+                    combo.setCurrentIndex(-1)
     apply_row_selection_style(tabela)
 
 def on_item_changed_ferragens(item):
