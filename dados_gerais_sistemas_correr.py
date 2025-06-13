@@ -193,12 +193,21 @@ def configurar_sistemas_correr_ui(ui):
 
     from utils import apply_row_selection_style
     tabela = ui.Tab_Sistemas_Correr
-
-    # Índices das colunas
-    tipo_idx = next((i for i,c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome']=='tipo'), None)
-    familia_idx = next((i for i,c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome']=='familia'), None)
-
-    # Linhas que devem ficar com 'tipo' vazio
+    tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
+    familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+    for r in range(tabela.rowCount()):
+        if tipo_idx is not None:
+            combo = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('ROUPEIROS CORRER')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
     linhas_tipo_vazio = {
         'SC_Painel_Porta_Correr_1',
         'SC_Painel_Porta_Correr_2',
@@ -209,34 +218,21 @@ def configurar_sistemas_correr_ui(ui):
     }
 
     for r in range(tabela.rowCount()):
-        nome_linha = tabela.item(r, 0).text()
-
-        # --- Coluna TIPO ---
+        linha_item = tabela.item(r, 0)
+        linha_nome = linha_item.text() if linha_item else ""
         if tipo_idx is not None:
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
-                # 1) Garante opção vazia no início (se ainda não existir)
-                if combo.findText("") < 0:
-                    combo.insertItem(0, "")
-                # 2) Se for uma das linhas especiais, deixa selecionado o item vazio (índice 0)
-                if nome_linha in linhas_tipo_vazio:
-                    combo.setCurrentIndex(0)
-                else:
-                    # 3) Senão, procura 'ROUPEIROS CORRER' (case-insensitive)
-                    # procura "ROUPEIROS CORRER" usando correspondência exata, sem diferenciar maiúsc./minúsc.
-                    idx = combo.findText('ROUPEIROS CORRER', Qt.MatchFixedString, Qt.CaseInsensitive)
+                if linha_nome not in linhas_tipo_vazio:
+                    idx = combo.findText('ROUPEIROS CORRER')
                     if idx >= 0:
                         combo.setCurrentIndex(idx)
-
-        # --- Coluna FAMILIA (mantém sempre 'FERRAGENS') ---
         if familia_idx is not None:
-            combo_f = tabela.cellWidget(r, familia_idx)
-            if isinstance(combo_f, QComboBox):
-                idx = combo_f.findText('FERRAGENS',
-                                       Qt.MatchFixedString | Qt.MatchCaseInsensitive)
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
                 if idx >= 0:
-                    combo_f.setCurrentIndex(idx)
-
+                    combo.setCurrentIndex(idx)
     apply_row_selection_style(tabela)
 
 ####################################################################################
