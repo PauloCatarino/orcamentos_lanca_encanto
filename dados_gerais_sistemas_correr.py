@@ -193,8 +193,12 @@ def configurar_sistemas_correr_ui(ui):
 
     from utils import apply_row_selection_style
     tabela = ui.Tab_Sistemas_Correr
-    tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
-    familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+
+    # Índices das colunas
+    tipo_idx = next((i for i,c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome']=='tipo'), None)
+    familia_idx = next((i for i,c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome']=='familia'), None)
+
+    # Linhas que devem ficar com 'tipo' vazio
     linhas_tipo_vazio = {
         'SC_Painel_Porta_Correr_1',
         'SC_Painel_Porta_Correr_2',
@@ -205,21 +209,34 @@ def configurar_sistemas_correr_ui(ui):
     }
 
     for r in range(tabela.rowCount()):
-        linha_item = tabela.item(r, 0)
-        linha_nome = linha_item.text() if linha_item else ""
+        nome_linha = tabela.item(r, 0).text()
+
+        # --- Coluna TIPO ---
         if tipo_idx is not None:
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
-                if linha_nome not in linhas_tipo_vazio:
-                    idx = combo.findText('ROUPEIROS CORRER')
+                # 1) Garante opção vazia no início (se ainda não existir)
+                if combo.findText("") < 0:
+                    combo.insertItem(0, "")
+                # 2) Se for uma das linhas especiais, deixa selecionado o item vazio (índice 0)
+                if nome_linha in linhas_tipo_vazio:
+                    combo.setCurrentIndex(0)
+                else:
+                    # 3) Senão, procura 'ROUPEIROS CORRER' (case-insensitive)
+                    idx = combo.findText('ROUPEIROS CORRER',
+                                         Qt.MatchFixedString | Qt.MatchCaseInsensitive)
                     if idx >= 0:
                         combo.setCurrentIndex(idx)
+
+        # --- Coluna FAMILIA (mantém sempre 'FERRAGENS') ---
         if familia_idx is not None:
-            combo = tabela.cellWidget(r, familia_idx)
-            if isinstance(combo, QComboBox):
-                idx = combo.findText('FERRAGENS')
+            combo_f = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo_f, QComboBox):
+                idx = combo_f.findText('FERRAGENS',
+                                       Qt.MatchFixedString | Qt.MatchCaseInsensitive)
                 if idx >= 0:
-                    combo.setCurrentIndex(idx)
+                    combo_f.setCurrentIndex(idx)
+
     apply_row_selection_style(tabela)
 
 ####################################################################################
