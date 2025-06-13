@@ -91,8 +91,7 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_mat.clicked.connect(lambda: acao_guardar_dados(main_window, "materiais"))
         btn_importar_mat.clicked.connect(lambda: acao_importar_dados(main_window, "materiais"))
         btn_limpar_mat.clicked.connect(lambda: limpar_linha_por_tab(main_window, "materiais"))
-        adicionar_menu_limpar(main_window.ui.Tab_Material,
-                              lambda: limpar_linha_por_tab(main_window, "materiais"))
+        adicionar_menu_limpar(main_window.ui.Tab_Material, lambda: limpar_linha_por_tab(main_window, "materiais"))
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
     except Exception as e:
@@ -107,8 +106,7 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_fer.clicked.connect(lambda: acao_guardar_dados(main_window, "ferragens"))
         btn_importar_fer.clicked.connect(lambda: acao_importar_dados(main_window, "ferragens"))
         btn_limpar_fer.clicked.connect(lambda: limpar_linha_por_tab(main_window, "ferragens"))
-        adicionar_menu_limpar(main_window.ui.Tab_Ferragens,
-                              lambda: limpar_linha_por_tab(main_window, "ferragens"))
+        adicionar_menu_limpar(main_window.ui.Tab_Ferragens, lambda: limpar_linha_por_tab(main_window, "ferragens"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Ferragens", f"Erro: {e}")
 
@@ -121,8 +119,7 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_sc.clicked.connect(lambda: acao_guardar_dados(main_window, "sistemas_correr"))
         btn_importar_sc.clicked.connect(lambda: acao_importar_dados(main_window, "sistemas_correr"))
         btn_limpar_sc.clicked.connect(lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
-        adicionar_menu_limpar(main_window.ui.Tab_Sistemas_Correr,
-                              lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
+        adicionar_menu_limpar(main_window.ui.Tab_Sistemas_Correr,lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Sistemas Correr", f"Erro: {e}")
 
@@ -135,8 +132,7 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_acab.clicked.connect(lambda: acao_guardar_dados(main_window, "acabamentos"))
         btn_importar_acab.clicked.connect(lambda: acao_importar_dados(main_window, "acabamentos"))
         btn_limpar_acab.clicked.connect(lambda: limpar_linha_por_tab(main_window, "acabamentos"))
-        adicionar_menu_limpar(main_window.ui.Tab_Acabamentos,
-                              lambda: limpar_linha_por_tab(main_window, "acabamentos"))
+        adicionar_menu_limpar(main_window.ui.Tab_Acabamentos, lambda: limpar_linha_por_tab(main_window, "acabamentos"))
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Acabamentos", f"Erro: {e}")
 
@@ -172,10 +168,10 @@ def limpar_linha_por_tab(main_window, nome_tabela):
         QMessageBox.warning(main_window, "Limpar Linha", f"Nenhuma linha selecionada na aba '{nome_tabela}'.")
 
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
-COLUNAS_LIMPAR_MATERIAIS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
-COLUNAS_LIMPAR_FERRAGENS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
-COLUNAS_LIMPAR_SISTEMAS_CORRER = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
-COLUNAS_LIMPAR_ACABAMENTOS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_FERRAGENS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_SISTEMAS_CORRER = 1, [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_ACABAMENTOS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 
 def limpar_linha_dados_gerais(table_widget, row_index, colunas_indices_limpar):
     """
