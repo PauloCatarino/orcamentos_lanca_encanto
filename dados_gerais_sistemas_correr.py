@@ -195,19 +195,6 @@ def configurar_sistemas_correr_ui(ui):
     tabela = ui.Tab_Sistemas_Correr
     tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
     familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
-    for r in range(tabela.rowCount()):
-        if tipo_idx is not None:
-            combo = tabela.cellWidget(r, tipo_idx)
-            if isinstance(combo, QComboBox):
-                idx = combo.findText('ROUPEIROS CORRER')
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
-        if familia_idx is not None:
-            combo = tabela.cellWidget(r, familia_idx)
-            if isinstance(combo, QComboBox):
-                idx = combo.findText('FERRAGENS')
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
     linhas_tipo_vazio = {
         'SC_Painel_Porta_Correr_1',
         'SC_Painel_Porta_Correr_2',
@@ -216,10 +203,15 @@ def configurar_sistemas_correr_ui(ui):
         'SC_Espelho_Porta_Correr_1',
         'SC_Espelho_Porta_Correr_2'
     }
-
     for r in range(tabela.rowCount()):
         linha_item = tabela.item(r, 0)
         linha_nome = linha_item.text() if linha_item else ""
+        if familia_idx is not None:
+            combo = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo, QComboBox):
+                idx = combo.findText('FERRAGENS')
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
         if tipo_idx is not None:
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
@@ -227,12 +219,8 @@ def configurar_sistemas_correr_ui(ui):
                     idx = combo.findText('ROUPEIROS CORRER')
                     if idx >= 0:
                         combo.setCurrentIndex(idx)
-        if familia_idx is not None:
-            combo = tabela.cellWidget(r, familia_idx)
-            if isinstance(combo, QComboBox):
-                idx = combo.findText('FERRAGENS')
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
+                else:
+                    combo.setCurrentIndex(0)
     apply_row_selection_style(tabela)
 
 ####################################################################################

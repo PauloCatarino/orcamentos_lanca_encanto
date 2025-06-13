@@ -219,7 +219,8 @@ def configurar_ferragens_ui(ui):
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
                 padrao = tipo_padrao.get(nome, '')
-                idx = combo.findText(padrao, Qt.MatchFixedString, Qt.CaseInsensitive)
+                flags = Qt.MatchFixedString | Qt.MatchCaseInsensitive
+                idx = combo.findText(padrao, flags)
                 if idx >= 0:
                     combo.setCurrentIndex(idx)
     apply_row_selection_style(tabela)
