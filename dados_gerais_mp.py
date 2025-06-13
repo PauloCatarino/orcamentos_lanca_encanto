@@ -153,9 +153,9 @@ def limpar_linha_por_tab(main_window, nome_tabela):
     row = table.currentRow()
     if row >= 0:
         limpar_linha_dados_gerais(table, row, cols)
-        table.clearSelection()
-        table.setCurrentCell(-1, -1)
-        table.setSelectionBehavior(QAbstractItemView.SelectItems)
+        # Mantém a linha ativa selecionada após a limpeza
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.selectRow(row)
         QMessageBox.information(main_window, "Limpar Linha", f"Linha {row+1} da aba '{nome_tabela}' limpa com sucesso.")
     else:
         QMessageBox.warning(main_window, "Limpar Linha", f"Nenhuma linha selecionada na aba '{nome_tabela}'.")
