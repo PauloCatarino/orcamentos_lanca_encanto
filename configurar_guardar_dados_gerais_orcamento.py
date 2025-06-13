@@ -43,6 +43,13 @@ from db_connection import obter_cursor
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual
 from dados_gerais_manager import apagar_registros_por_nome, apagar_registros_por_orcamento
 from dialogs_modelos import SelecaoModeloDialog
+from dados_gerais_mp import (
+    limpar_linha_dados_gerais,
+    COLUNAS_LIMPAR_MATERIAIS,
+    COLUNAS_LIMPAR_FERRAGENS,
+    COLUNAS_LIMPAR_SISTEMAS_CORRER,
+    COLUNAS_LIMPAR_ACABAMENTOS,
+)
 import math
 
 
@@ -387,75 +394,9 @@ def configurar_dados_gerais(parent):
         carregar_configuracao_dados_gerais(parent, "sistemas_correr")
         carregar_configuracao_dados_gerais(parent, "acabamentos")
     else:
-        # Se não existir, verifica se é a primeira configuração (todas as células estão vazias)
-        tabelas = [ui.Tab_Material, ui.Tab_Ferragens,
-                   ui.Tab_Sistemas_Correr, ui.Tab_Acabamentos]
-        primeira_vez = True
-        for tabela in tabelas:
-            for row in range(tabela.rowCount()):
-                item_num = tabela.item(row, 3)
-                item_ver = tabela.item(row, 4)
-                if (item_num and item_num.text().strip() != "") or (item_ver and item_ver.text().strip() != ""):
-                    primeira_vez = False
-                    break
-            if not primeira_vez:
-                break
-
-        if primeira_vez:
-            # Preenche todas as linhas de todas as tabelas com os valores atuais
-            for tabela in tabelas:
-                for row in range(tabela.rowCount()):
-                    # Coluna 3: num_orc
-                    item_num = tabela.item(row, 3)
-                    if item_num is None:
-                        item_num = QTableWidgetItem()
-                        tabela.setItem(row, 3, item_num)
-                    item_num.setText(num_orc)
-                    # Coluna 4: ver_orc
-                    item_ver = tabela.item(row, 4)
-                    if item_ver is None:
-                        item_ver = QTableWidgetItem()
-                        tabela.setItem(row, 4, item_ver)
-                    item_ver.setText(ver_orc)
-            QMessageBox.information(parent, "Configurar Dados Gerais",
-                                    "As colunas 'num_orc' e 'ver_orc' foram preenchidas em todas as tabelas para o novo orçamento.")
-        else:
-            # Se houver dados e houver divergência, pergunta se deseja atualizar
-            divergencia = False
-            for tabela in tabelas:
-                for row in range(tabela.rowCount()):
-                    item_num = tabela.item(row, 3)
-                    item_ver = tabela.item(row, 4)
-                    texto_num = item_num.text().strip() if item_num else ""
-                    texto_ver = item_ver.text().strip() if item_ver else ""
-                    if texto_num != num_orc or texto_ver != ver_orc:
-                        divergencia = True
-                        break
-                if divergencia:
-                    break
-
-            if divergencia:
-                resposta = QMessageBox.question(parent,
-                                                "Dados Gerais divergentes",
-                                                ("Os campos 'num_orc' e 'ver_orc' nas tabelas de Dados Gerais não correspondem "
-                                                 "ao orçamento atual.\nDeseja atualizar esses campos para os valores atuais?"),
-                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if resposta == QMessageBox.Yes:
-                    for tabela in tabelas:
-                        for row in range(tabela.rowCount()):
-                            item_num = tabela.item(row, 3)
-                            if item_num is None:
-                                item_num = QTableWidgetItem()
-                                tabela.setItem(row, 3, item_num)
-                            item_num.setText(num_orc)
-                            item_ver = tabela.item(row, 4)
-                            if item_ver is None:
-                                item_ver = QTableWidgetItem()
-                                tabela.setItem(row, 4, item_ver)
-                            item_ver.setText(ver_orc)
-                    QMessageBox.information(parent, "Dados Gerais atualizados",
-                                            "Valores 'num_orc' e 'ver_orc' foram atualizados para o orçamento atual.")
-                # Se o usuário escolher não atualizar, os dados antigos permanecem.
+        # Nenhum dado encontrado para este orçamento: limpa possíveis dados existentes
+        limpar_todas_tabelas_dados_gerais(parent)
+    
 
     # Ao final, alterna a visualização para a aba "Dados Gerais MP"
     for i in range(ui.tabWidget_orcamento.count()):
@@ -498,6 +439,21 @@ def carregar_dados_gerais_se_existir(parent):
         carregar_configuracao_dados_gerais(parent, "ferragens")
         carregar_configuracao_dados_gerais(parent, "sistemas_correr")
         carregar_configuracao_dados_gerais(parent, "acabamentos")
+    else:
+        limpar_todas_tabelas_dados_gerais(parent)
+
+def limpar_todas_tabelas_dados_gerais(parent):
+    """Remove dados das quatro tabelas de dados gerais."""
+    ui = parent.ui
+    tabelas = [
+        (ui.Tab_Material, COLUNAS_LIMPAR_MATERIAIS),
+        (ui.Tab_Ferragens, COLUNAS_LIMPAR_FERRAGENS),
+        (ui.Tab_Sistemas_Correr, COLUNAS_LIMPAR_SISTEMAS_CORRER),
+        (ui.Tab_Acabamentos, COLUNAS_LIMPAR_ACABAMENTOS),
+    ]
+    for tabela, cols in tabelas:
+        for row in range(tabela.rowCount()):
+            limpar_linha_dados_gerais(tabela, row, cols)
 
 # ---------------------------------------------------------------------------
 # FUNÇÃO AUXILIAR: Guarda os dados da tabela no banco de dados
@@ -563,10 +519,11 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                 item_id.setText(str(row))
 
         # Primeiro, adiciona o identificador da linha e as referências
-        # do orçamento. A coluna 'nome' deve permanecer vazia (string
-        # vazia) quando os dados são gravados através deste diálogo.
+        # do orçamento. As colunas 'nome' e 'descricao_modelo' devem
+        # permanecer nulas quando os dados são gravados através deste
+        # diálogo.
         dados_linha = {
-            'nome': '',
+            'nome': None,
             'linha': row,
             'num_orc': num_orc,
             'ver_orc': ver_orc,
@@ -603,16 +560,16 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                     valor_final = valor_str.strip() if valor_str else None
             dados_linha[campo_bd] = valor_final
 
-        # Cria tupla na ordem correta das colunas do BD: nome em branco
+        # Cria tupla na ordem correta das colunas do BD: nome nulo
         # seguido pelo número da linha e demais campos.
-        tupla_linha = [dados_linha.get('nome', ''), row] + \
+        tupla_linha = [dados_linha.get('nome'), row] + \
             [dados_linha.get(cn, None) for cn in col_names_db]
         dados_para_salvar.append(tuple(tupla_linha))
 
     # Monta a query INSERT
     tabela_bd_segura = f"dados_gerais_{nome_tabela.replace(' ', '_').lower()}"
-    # Nomes das colunas BD para INSERT. A coluna 'nome' é inserida em branco
-    # para satisfazer a restrição NOT NULL da base de dados.
+    # Nomes das colunas BD para INSERT. As colunas 'nome' e
+    # 'descricao_modelo' não são utilizadas neste contexto.
     col_names_insert = ['nome', 'linha'] + col_names_db
     placeholders = ", ".join(["%s"] * len(col_names_insert))
     col_names_sql = ", ".join(f"`{c}`" for c in col_names_insert)
