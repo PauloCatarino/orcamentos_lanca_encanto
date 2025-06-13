@@ -223,8 +223,8 @@ def configurar_sistemas_correr_ui(ui):
                     combo.setCurrentIndex(0)
                 else:
                     # 3) Senão, procura 'ROUPEIROS CORRER' (case-insensitive)
-                    idx = combo.findText('ROUPEIROS CORRER',
-                                         Qt.MatchFixedString | Qt.MatchCaseInsensitive)
+                    # procura "ROUPEIROS CORRER" usando correspondência exata, sem diferenciar maiúsc./minúsc.
+                    idx = combo.findText('ROUPEIROS CORRER', Qt.MatchFixedString, Qt.CaseInsensitive)
                     if idx >= 0:
                         combo.setCurrentIndex(idx)
 
