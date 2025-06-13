@@ -170,7 +170,7 @@ def limpar_linha_por_tab(main_window, nome_tabela):
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
 COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_FERRAGENS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
-COLUNAS_LIMPAR_SISTEMAS_CORRER = 1, [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_SISTEMAS_CORRER = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_ACABAMENTOS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 
 def limpar_linha_dados_gerais(table_widget, row_index, colunas_indices_limpar):
