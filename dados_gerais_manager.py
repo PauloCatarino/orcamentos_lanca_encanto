@@ -203,13 +203,20 @@ def atualizar_descricao_modelo(tabela_bd, nome, nova_descricao):
         return False
 
 def obter_nome_para_salvar(parent, tabela_bd):
-    """Abre um diálogo para escolher ou introduzir o nome e descrição a guardar."""
-    nomes_desc = listar_nomes_descricoes_dados_gerais(tabela_bd)
+    """Abre um diálogo para escolher ou introduzir o nome e descrição a guardar.
+
+    Apenas modelos que tenham nome e descrição são listados. O utilizador é
+    obrigado a preencher ambos os campos para poder guardar.
+    """
+    nomes_desc = listar_nomes_descricoes_dados_gerais(tabela_bd, somente_completos=True)
     dlg = GerirNomesDialog(tabela_bd, nomes_desc, parent)
     if dlg.exec_() != QDialog.Accepted:
         return None, None
     nome, descricao, eliminado, editados, desc_editadas = dlg.obter_nome()
-    if not nome:
+    nome = (nome or "").strip()
+    descricao = (descricao or "").strip()
+    if not nome or not descricao:
+        QMessageBox.warning(parent, "Aviso", "Preencha Nome e Descrição para gravar o modelo.")
         return None, None
     if eliminado:
         apagar_registros_por_nome(tabela_bd, eliminado)

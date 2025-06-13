@@ -195,13 +195,25 @@ def configurar_sistemas_correr_ui(ui):
     tabela = ui.Tab_Sistemas_Correr
     tipo_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'tipo'), None)
     familia_idx = next((i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] == 'familia'), None)
+    linhas_tipo_vazio = {
+        'SC_Painel_Porta_Correr_1',
+        'SC_Painel_Porta_Correr_2',
+        'SC_Painel_Porta_Correr_3',
+        'SC_Painel_Porta_Correr_4',
+        'SC_Espelho_Porta_Correr_1',
+        'SC_Espelho_Porta_Correr_2'
+    }
+
     for r in range(tabela.rowCount()):
+        linha_item = tabela.item(r, 0)
+        linha_nome = linha_item.text() if linha_item else ""
         if tipo_idx is not None:
             combo = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo, QComboBox):
-                idx = combo.findText('ROUPEIROS CORRER')
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
+                if linha_nome not in linhas_tipo_vazio:
+                    idx = combo.findText('ROUPEIROS CORRER')
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
         if familia_idx is not None:
             combo = tabela.cellWidget(r, familia_idx)
             if isinstance(combo, QComboBox):
