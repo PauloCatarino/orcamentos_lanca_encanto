@@ -58,8 +58,14 @@ def listar_nomes_dados_gerais(tabela_bd):
         print(f"Erro inesperado ao listar nomes de '{tabela_bd_segura}': {e}")
     return nomes
 
-def listar_nomes_descricoes_dados_gerais(tabela_bd):
-    """Retorna um dicionário nome -> descricao_modelo da tabela."""
+def listar_nomes_descricoes_dados_gerais(tabela_bd, somente_completos=False):
+    """Retorna um dicionário nome -> descricao_modelo da tabela.
+
+    Se ``somente_completos`` for ``True`` apenas serão retornados os nomes que
+    possuem valores não vazios tanto para ``nome`` quanto para
+    ``descricao_modelo``. Isso é útil para os menus de importação, onde apenas
+    modelos propriamente guardados (com descrição) devem ser listados.
+    """
     tabela_bd_segura = f"dados_gerais_{tabela_bd.replace(' ', '_').lower()}"
     resultados = {}
     try:
@@ -92,7 +98,12 @@ def listar_nomes_descricoes_dados_gerais(tabela_bd):
                 else:
                     nome, desc = row[0], ""
                 if nome is not None:
-                    resultados[nome] = desc or ""
+                    desc_val = desc or ""
+                    if (
+                        not somente_completos
+                        or (str(nome).strip() and desc_val.strip())
+                    ):
+                        resultados[nome] = desc_val
     except mysql.connector.Error as err:
         if err.errno == 1146:
             print(f"Aviso: Tabela '{tabela_bd_segura}' não encontrada ao listar descricoes.")
@@ -320,7 +331,7 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
     # Busca os modelos salvos para a tabela
     ui = parent_app.ui # Acessa a UI a partir da instância principal
 
-    modelos_desc = listar_nomes_descricoes_dados_gerais(nome_tabela)
+    modelos_desc = listar_nomes_descricoes_dados_gerais(nome_tabela, somente_completos=True)
     if not modelos_desc:
         QMessageBox.information(parent_app, "Importar Dados Gerais", f"Nenhum registo salvo para '{nome_tabela}'.")
         return

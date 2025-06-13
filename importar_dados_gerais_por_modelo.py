@@ -51,7 +51,7 @@ class ImportarDadosGeralDialog(QDialog):
             group_layout = QVBoxLayout(group)
             lista = QListWidget()
             lista.setSelectionMode(QListWidget.SingleSelection)
-            nomes_desc = listar_nomes_descricoes_dados_gerais(tabela)
+            nomes_desc = listar_nomes_descricoes_dados_gerais(tabela, somente_completos=True)
             self.descricoes[tabela] = nomes_desc
             for nome, desc in nomes_desc.items():
                 item = QListWidgetItem(nome)
