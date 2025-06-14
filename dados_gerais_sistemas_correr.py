@@ -43,7 +43,7 @@ SISTEMAS_CORRER_COLUNAS = [
     {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
     'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "FERRAGENS")},
     {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
-    'combobox': True, 'opcoes': lambda: ["FERRAGENS"]},
+    'combobox': True, 'opcoes': lambda: ["FERRAGENS", "PLACAS"]},
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
@@ -168,9 +168,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     if escolher_sistemas_correr(ui, row, nome_tabela):
         QMessageBox.information(None, "Sistemas_Correr", f"Sistemas_Correr selecionado para a linha {row+1}.")
 
-    else:
-        QMessageBox.warning(None, "Sistemas_Correr", "Nenhum sistemas_correr foi selecionado.")
-
 # Atribui a função do botão "Escolher" à coluna MP
 for col in SISTEMAS_CORRER_COLUNAS:
     if col['nome'] == 'MP':
@@ -207,20 +204,23 @@ def configurar_sistemas_correr_ui(ui):
         linha_item = tabela.item(r, 0)
         linha_nome = linha_item.text() if linha_item else ""
         if familia_idx is not None:
-            combo = tabela.cellWidget(r, familia_idx)
-            if isinstance(combo, QComboBox):
-                idx = combo.findText('FERRAGENS')
-                if idx >= 0:
-                    combo.setCurrentIndex(idx)
-        if tipo_idx is not None:
-            combo = tabela.cellWidget(r, tipo_idx)
-            if isinstance(combo, QComboBox):
-                if linha_nome not in linhas_tipo_vazio:
-                    idx = combo.findText('ROUPEIROS CORRER')
-                    if idx >= 0:
-                        combo.setCurrentIndex(idx)
+            combo_f = tabela.cellWidget(r, familia_idx)
+            if isinstance(combo_f, QComboBox):
+                if linha_nome in linhas_tipo_vazio:
+                    idx = combo_f.findText('PLACAS')
                 else:
-                    combo.setCurrentIndex(0)
+                    idx = combo_f.findText('FERRAGENS')
+                if idx >= 0:
+                    combo_f.setCurrentIndex(idx)
+        if tipo_idx is not None:
+            combo_t = tabela.cellWidget(r, tipo_idx)
+            if isinstance(combo_t, QComboBox):
+                if linha_nome in linhas_tipo_vazio:
+                    combo_t.setCurrentIndex(0)
+                else:
+                    idx = combo_t.findText('ROUPEIROS CORRER')
+                    if idx >= 0:
+                        combo_t.setCurrentIndex(idx)
     apply_row_selection_style(tabela)
 
 ####################################################################################

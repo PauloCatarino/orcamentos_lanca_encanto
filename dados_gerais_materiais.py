@@ -166,8 +166,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     """
     if escolher_material(ui, row, nome_tabela):
         QMessageBox.information(None, "Material", f"Material selecionado para a linha {row+1}.")
-    else:
-        QMessageBox.warning(None, "Material", "Nenhum Material foi selecionado.")
 
 # Atribui a função do botão "Escolher" à coluna MP
 for col in MATERIAIS_COLUNAS:

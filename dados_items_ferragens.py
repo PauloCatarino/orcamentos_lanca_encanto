@@ -288,8 +288,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     """
     if escolher_ferragens_item(ui, row):
         QMessageBox.information(None, "Ferragem", f"Ferragem selecionada para a linha {row+1}.")
-    else:
-        QMessageBox.warning(None, "Ferragem", "Nenhuma Ferragem foi selecionada.")
 
 
 # Atribui a função do botão "Escolher" à respectiva coluna de MP

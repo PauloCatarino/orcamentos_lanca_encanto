@@ -273,8 +273,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     """
     if escolher_sistemas_correr_item(ui, row):
         QMessageBox.information(None, "Sistemas de Correr", f"Sistema de correr selecionado para a linha {row+1}.")
-    else:
-        QMessageBox.warning(None, "Sistemas de Correr", "Nenhum sistema de correr foi selecionado.")
 
 # Atribui a função do botão "Escolher" à respectiva coluna MP
 for col in SISTEMAS_CORRER_COLUNAS:

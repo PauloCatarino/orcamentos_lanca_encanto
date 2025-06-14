@@ -151,9 +151,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     """
     if escolher_acabamentos(ui, row, nome_tabela):
         QMessageBox.information(None, "Acabamentos", f"Acabamentos selecionado para a linha {row+1}.")
-
-    else:
-        QMessageBox.warning(None, "Acabamentos", "Nenhum acabamentos foi selecionado.")
 # Atribui a função do botão "Escolher" à coluna MP
 for col in ACABAMENTOS_COLUNAS:
     if col['nome'] == 'MP':

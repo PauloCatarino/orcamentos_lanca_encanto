@@ -169,8 +169,6 @@ def on_mp_button_clicked(ui, row, nome_tabela):
     """
     if escolher_ferragens(ui, row, nome_tabela):
         QMessageBox.information(None, "Ferragens", f"Ferragens selecionado para a linha {row+1}.")
-    else:
-        QMessageBox.warning(None, "Ferragens", "Nenhuma Ferragens foi selecionado.")
 
 for col in FERRAGENS_COLUNAS:
     if col['nome'] == 'MP':
