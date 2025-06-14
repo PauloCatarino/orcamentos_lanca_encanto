@@ -240,8 +240,9 @@ def inserir_pecas_selecionadas(ui):
                     # Limpa defs iniciais para MODULO
                     set_item(table, row, 13, "")
                     set_item(table, row, 14, "")
-                    # Define quantidade por defeito
-                    set_item(table, row, 4, "1") # QT_mod -> qantidade por defeito = 1
+                    # Quantidade do módulo é 1 por defeito (mantida internamente)
+                    # mas a célula fica visualmente vazia
+                    set_item(table, row, 4, "") # QT_mod -> qantidade por defeito = 1
                     # Habilita edição e negrito para Descricao_Livre, Comp, Larg, Esp (serão validados depois)
                     for col in [1, 6, 7, 8]:  # Descricao_Livre, Comp, Larg, Esp
                         item_col = table.item(row, col) or QTableWidgetItem("")
@@ -898,10 +899,6 @@ class CelulaEdicaoDelegate(QStyledItemDelegate):
         col = index.column()
         row = index.row()
         table = self.ui.tab_def_pecas
-        if col in [IDX_COMP, IDX_LARG, IDX_ESP]:
-            item_def = table.item(row, IDX_DEF_PECA)
-            if item_def and item_def.text().strip().upper() != "MODULO":
-                return None
         editor = QLineEdit(parent)
         editor.installEventFilter(self)  # Captura eventos de tecla
         return editor
@@ -928,6 +925,15 @@ class CelulaEdicaoDelegate(QStyledItemDelegate):
                     header_text = header.text() if header else ""
                     if not validar_expressao_modulo(texto, row, header_text):
                         return True  # Impede salvar valor inválido
+
+                if col == IDX_QT_MOD:
+                    item_def = table.item(row, IDX_DEF_PECA)
+                    if item_def and item_def.text().strip().upper() == "MODULO" and editor.text().strip():
+                        QMessageBox.warning(
+                            table.window(),
+                            "Linha MODULO",
+                            "QT_mod deve permanecer vazio. O valor usado será 1.")
+                        editor.setText("")
 
                 # Comitar dados e fechar editor
                 self.commitData.emit(editor)
