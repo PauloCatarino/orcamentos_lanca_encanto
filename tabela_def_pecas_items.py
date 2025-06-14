@@ -78,6 +78,7 @@ IDX_COMP_ASS_2 = 35
 IDX_COMP_ASS_3 = 36
 
 
+IDX_DEF_PECA = 2   # Coluna para Def_Peca
 IDX_QT_MOD = 4   # Coluna que contém a quantidade modificada (QT_mod)
 IDX_QT_UND = 5   # Coluna que contém a quantidade unitária (QT_und)
 IDX_COMP = 6   # Coluna para COMP (comprimento, etc.) - Fórmula
