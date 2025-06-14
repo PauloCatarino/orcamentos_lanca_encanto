@@ -239,7 +239,8 @@ def inserir_pecas_selecionadas(ui):
                     # Limpa defs iniciais para MODULO
                     set_item(table, row, 13, "")
                     set_item(table, row, 14, "")
-                    # QT_mod e QT_und são deixados vazios aqui, serão tratados pelo orquestrador
+                    # Define quantidade por defeito
+                    set_item(table, row, 4, "1") # QT_mod -> qantidade por defeito = 1
                     # Habilita edição e negrito para Descricao_Livre, Comp, Larg, Esp (serão validados depois)
                     for col in [1, 6, 7, 8]:  # Descricao_Livre, Comp, Larg, Esp
                         item_col = table.item(row, col) or QTableWidgetItem("")
@@ -893,6 +894,13 @@ class CelulaEdicaoDelegate(QStyledItemDelegate):
         self.ui = ui  # Guarda o objeto ui para uso interno
 
     def createEditor(self, parent, option, index):
+        col = index.column()
+        row = index.row()
+        table = self.ui.tab_def_pecas
+        if col in [IDX_COMP, IDX_LARG, IDX_ESP]:
+            item_def = table.item(row, IDX_DEF_PECA)
+            if item_def and item_def.text().strip().upper() != "MODULO":
+                return None
         editor = QLineEdit(parent)
         editor.installEventFilter(self)  # Captura eventos de tecla
         return editor

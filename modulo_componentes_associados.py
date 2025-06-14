@@ -47,6 +47,7 @@ from utils import safe_item_text, converter_texto_para_valor, set_item # get_val
 IDX_DEF_PECA = 2             # Tipo de peça
 IDX_QT_MOD = 4               # Quantidade modificada (QT_mod) - coluna 4
 IDX_QT_UND = 5               # Quantidade unitária (a ser calculada para associados)
+IDX_COMP = 6                 # Coluna COMP
 IDX_BLK = 12                 # Checkbox BLK - Bloqueia atualização automática
 IDX_MAT_DEFAULT = 13         # Mat_Default
 IDX_TAB_DEFAULT = 14         # Tab_Default
@@ -315,6 +316,10 @@ def processar_qt_und_associado_para_linha(ui, row):
                             ui)
 
     qt_und_associado = int(round(qt_calc))
+
+    if def_peca_associado == "VARAO ROUPEIRO":
+        valor_comp = medidas_principal.get("COMP", "")
+        set_item(t, row, IDX_COMP, valor_comp)
 
     # -------- 5) Escreve QT_und (col. 5) ----------------------------------------
     set_item(t, row, IDX_QT_UND, str(qt_und_associado))

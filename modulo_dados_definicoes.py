@@ -1012,18 +1012,13 @@ def carregar_dados_def_pecas(ui):
         # Desbloqueia sinais SEMPRE
         tbl.blockSignals(False)
         tbl.setProperty("importando_dados", False)   # já não estamos a importar
-        from modulo_orquestrador import atualizar_tudo
-        #atualizar_tudo(ui)                           # recalcula fórmulas, tooltips, custos
-
-        # Chama o orquestrador para re-calcular/processar as linhas carregadas
-        # Isto garantirá que fórmulas, associados, custos, etc., sejam atualizados
-        # após o carregamento inicial da BD.
-        # Importação local da função de orquestração
+        # Após carregar os dados base das peças, este bloco orquestra a atualização completa.
+        # Importa e chama 'atualizar_tudo' para processar as linhas carregadas,
+        # realizar cálculos, atualizar a UI e tratar componentes associados.
+        # Erros durante este processo são capturados e registados.
         try:
-            from modulo_orquestrador import atualizar_tudo
-            print("[INFO] Carregar dados de peças: Chamando orquestrador para processar linhas carregadas.")
-            #atualizar_tudo(ui) # Passa a referência da UI
-        except ImportError:
-            print("[ERRO] Nao foi possivel importar modulo_orquestrador para chamar atualizar_tudo apos carregar dados de pecas.")
+            from modulo_orquestrador import atualizar_tudo # Importa a função central de orquestração.
+            print("[INFO] Carregar dados de peças: processando linhas carregadas.")
+            atualizar_tudo(ui)
         except Exception as e:
-            print(f"[ERRO] Erro ao chamar atualizar_tudo apos carregar dados de pecas: {e}")
+            print(f"[ERRO] Erro ao atualizar dados apos carregar pecas: {e}")

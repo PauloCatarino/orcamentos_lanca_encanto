@@ -79,6 +79,9 @@ from dados_items_sistemas_correr import configurar_dados_items_orcamento_sistema
 from dados_items_acabamentos import configurar_dados_items_orcamento_acabamentos as configurar_dados_items_orcamento_acabamentos
 # Importa a função para carregar os dados da Base Dados SQL do módulo de medidas e da tabela de definições de peças
 from modulo_dados_definicoes import carregar_dados_modulo_medidas, carregar_dados_def_pecas
+from modulo_orquestrador import atualizar_tudo # Importa a função para atualizar tudo após ações de orçamento
+from tab_modulo_medidas_formatacao import aplicar_formatacao # Importa a função para aplicar formatação na tabela de medidas
+
 
 # Variável global para evitar chamadas recursivas durante edição programática
 _editando_programaticamente = False
@@ -354,6 +357,15 @@ def acao_orcamentar_items(main_window):
     configurar_dados_items_orcamento_acabamentos(main_window)
     modulo_dados_definicoes.carregar_dados_modulo_medidas(ui)
     modulo_dados_definicoes.carregar_dados_def_pecas(ui)
+    # Sincroniza H, L, P na tabela de medidas com as dimensões do item
+    tbl_medidas = ui.tab_modulo_medidas
+    if tbl_medidas.rowCount() == 0:
+        tbl_medidas.setRowCount(1)
+    set_item(tbl_medidas, 0, 0, ui.lineEdit_altura_orcamento.text())
+    set_item(tbl_medidas, 0, 1, ui.lineEdit_largura_orcamento.text())
+    set_item(tbl_medidas, 0, 2, ui.lineEdit_profundidade_orcamento.text())
+    for c in (0, 1, 2):
+        aplicar_formatacao(tbl_medidas.item(0, c))
     tabela_def_pecas_items.actualizar_ids_num_orc_ver_orc_tab_modulo_medidas(
         ui,
         ui.lineEdit_item_orcamento.text().strip(),
@@ -361,10 +373,16 @@ def acao_orcamentar_items(main_window):
         ui.lineEdit_versao_orcamento.text().strip(),
     )
 
+    msg = (
+        f"<p>Pretende preencher os dados do item <b>{ui.lineEdit_item_orcamento.text().strip()}</b> "
+        f"com os Dados Gerais atuais?</p>"
+        f"<p><small>Orçamento: <b>{ui.lineEdit_num_orcamento.text().strip()}</b> | "
+        f"Versão: <b>{ui.lineEdit_versao_orcamento.text().strip()}</b></small></p>"
+    )
     resp = QMessageBox.question(
         main_window,
         "Usar Dados Gerais",
-        "Pretende preencher os dados do item com os Dados Gerais atuais?",
+        msg,
         QMessageBox.Yes | QMessageBox.No,
         QMessageBox.Yes,
     )
@@ -372,6 +390,8 @@ def acao_orcamentar_items(main_window):
         from utils import copiar_dados_gerais_para_itens
 
         copiar_dados_gerais_para_itens(ui)
+
+    atualizar_tudo(ui)
 
 
 def navegar_item_orcamento(main_window, direcao):
