@@ -373,23 +373,44 @@ def acao_orcamentar_items(main_window):
         ui.lineEdit_versao_orcamento.text().strip(),
     )
 
-    msg = (
-        f"<p>Pretende preencher os dados do item <b>{ui.lineEdit_item_orcamento.text().strip()}</b> "
-        f"com os Dados Gerais atuais?</p>"
-        f"<p><small>Orçamento: <b>{ui.lineEdit_num_orcamento.text().strip()}</b> | "
-        f"Versão: <b>{ui.lineEdit_versao_orcamento.text().strip()}</b></small></p>"
-    )
-    resp = QMessageBox.question(
-        main_window,
-        "Usar Dados Gerais",
-        msg,
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.Yes,
-    )
-    if resp == QMessageBox.Yes:
-        from utils import copiar_dados_gerais_para_itens
+    def tabela_tem_dados(tabela, col_inicio=5):
+        for r in range(tabela.rowCount()):
+            for c in range(col_inicio, tabela.columnCount()):
+                item = tabela.item(r, c)
+                if item and item.text().strip():
+                    return True
+                w = tabela.cellWidget(r, c)
+                if w:
+                    if hasattr(w, "text") and w.text().strip():
+                        return True
+                    if hasattr(w, "currentText") and w.currentText().strip():
+                        return True
+        return False
 
-        copiar_dados_gerais_para_itens(ui)
+    tabelas = [
+        ui.Tab_Material_11,
+        ui.Tab_Ferragens_11,
+        ui.Tab_Sistemas_Correr_11,
+        ui.Tab_Acabamentos_12,
+    ]
+    if not any(tabela_tem_dados(t) for t in tabelas):
+        msg = (
+            f"<p>Pretende preencher os dados do item <b>{ui.lineEdit_item_orcamento.text().strip()}</b> "
+            f"com os Dados Gerais atuais?</p>"
+            f"<p><small>Orçamento: <b>{ui.lineEdit_num_orcamento.text().strip()}</b> | "
+            f"Versão: <b>{ui.lineEdit_versao_orcamento.text().strip()}</b></small></p>"
+        )
+        resp = QMessageBox.question(
+            main_window,
+            "Usar Dados Gerais",
+            msg,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if resp == QMessageBox.Yes:
+            from utils import copiar_dados_gerais_para_itens
+
+            copiar_dados_gerais_para_itens(ui)
 
     atualizar_tudo(ui)
 
