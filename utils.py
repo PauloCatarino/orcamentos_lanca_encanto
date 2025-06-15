@@ -559,8 +559,9 @@ def apply_row_selection_style(table, color=ROW_SELECTION_COLOR):
     except Exception as e:
         print(f"[ERRO] apply_row_selection_style: {e}")
 
+"""
 def tabela_tem_dados(table):
-    """Retorna True se a tabela possuir algum valor preenchido fora da primeira coluna."""
+    #Retorna True se a tabela possuir algum valor preenchido fora da primeira coluna.
     if table is None:
         return False
     try:
@@ -583,4 +584,39 @@ def tabela_tem_dados(table):
                     return True
     except Exception as e:
         print(f"[ERRO] tabela_tem_dados: {e}")
+    return False
+"""
+    
+def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
+    """Verifica se existem dados gravados para o item nas tabelas de dados dos itens.
+
+    Retorna True se encontrar pelo menos um registo com alguma das colunas
+    principais preenchidas (ref_le, descricao_no_orcamento, ptab, pliq,
+    desc1_plus, desc2_minus, und ou desp). Caso contrário, retorna False.
+    """
+    tabelas = [
+        ("dados_items_materiais", "id_mat"),
+        ("dados_items_ferragens", "id_fer"),
+        ("dados_items_sistemas_correr", "id_sc"),
+        ("dados_items_acabamentos", "id_acb"),
+    ]
+    col_text = ["ref_le", "descricao_no_orcamento", "und"]
+    col_num = ["ptab", "pliq", "desc1_plus", "desc2_minus", "desp"]
+    condicoes = [f"COALESCE({c}, '') <> ''" for c in col_text]
+    condicoes += [f"COALESCE({c}, 0) <> 0" for c in col_num]
+    where_extra = " OR ".join(condicoes)
+    for tabela, col_id in tabelas:
+        try:
+            with obter_cursor(commit_on_exit=False) as cursor:
+                query = (
+                    f"SELECT COUNT(*) FROM {tabela} "
+                    f"WHERE num_orc=%s AND ver_orc=%s AND {col_id}=%s AND ({where_extra})"
+                )
+                cursor.execute(query, (num_orc, ver_orc, item_id))
+                if cursor.fetchone()[0] > 0:
+                    return True
+        except mysql.connector.Error as err:
+            print(f"[ERRO DB] Verificação de dados em {tabela}: {err}")
+        except Exception as e:
+            print(f"[ERRO] Verificação de dados em {tabela}: {e}")
     return False

@@ -59,7 +59,7 @@ from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 from db_connection import obter_cursor
 # Importa a função para configurar os Dados Gerais do Orçamento
 from configurar_guardar_dados_gerais_orcamento import configurar_dados_gerais, carregar_dados_gerais_se_existir
-from utils import (formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item, tabela_tem_dados)
+from utils import (formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item, verificar_dados_itens_salvos)
 
 
 # Importar o módulo necessário para chamar a função de atualização da tab_modulo_medidas
@@ -372,20 +372,18 @@ def acao_orcamentar_items(main_window):
         ui.lineEdit_num_orcamento.text().strip(),
         ui.lineEdit_versao_orcamento.text().strip(),
     )
-    tabelas_itens = [
-        ui.Tab_Material_11,
-        ui.Tab_Ferragens_11,
-        ui.Tab_Sistemas_Correr_11,
-        ui.Tab_Acabamentos_12,
-    ]
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = ui.lineEdit_versao_orcamento.text().strip()
+    item_id = ui.lineEdit_item_orcamento.text().strip()
 
-    if not any(tabela_tem_dados(t) for t in tabelas_itens):
+    if not verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
         msg = (
-            f"<p>Pretende preencher os dados do item <b>{ui.lineEdit_item_orcamento.text().strip()}</b> "
+            f"<p>Pretende preencher os dados do item <b>{item_id}</b> "
             f"com os Dados Gerais atuais?</p>"
-            f"<p><small>Orçamento: <b>{ui.lineEdit_num_orcamento.text().strip()}</b> | "
-            f"Versão: <b>{ui.lineEdit_versao_orcamento.text().strip()}</b></small></p>"
+            f"<p><small>Orçamento: <b>{num_orc}</b> | "
+            f"Versão: <b>{ver_orc}</b></small></p>"
         )
+
         resp = QMessageBox.question(
             main_window,
             "Usar Dados Gerais",
