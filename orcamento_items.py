@@ -59,7 +59,7 @@ from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 from db_connection import obter_cursor
 # Importa a função para configurar os Dados Gerais do Orçamento
 from configurar_guardar_dados_gerais_orcamento import configurar_dados_gerais, carregar_dados_gerais_se_existir
-from utils import formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item
+from utils import (formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item, tabela_tem_dados)
 
 
 # Importar o módulo necessário para chamar a função de atualização da tab_modulo_medidas
@@ -372,28 +372,14 @@ def acao_orcamentar_items(main_window):
         ui.lineEdit_num_orcamento.text().strip(),
         ui.lineEdit_versao_orcamento.text().strip(),
     )
-
-    def tabela_tem_dados(tabela, col_inicio=5):
-        for r in range(tabela.rowCount()):
-            for c in range(col_inicio, tabela.columnCount()):
-                item = tabela.item(r, c)
-                if item and item.text().strip():
-                    return True
-                w = tabela.cellWidget(r, c)
-                if w:
-                    if hasattr(w, "text") and w.text().strip():
-                        return True
-                    if hasattr(w, "currentText") and w.currentText().strip():
-                        return True
-        return False
-
-    tabelas = [
+    tabelas_itens = [
         ui.Tab_Material_11,
         ui.Tab_Ferragens_11,
         ui.Tab_Sistemas_Correr_11,
         ui.Tab_Acabamentos_12,
     ]
-    if not any(tabela_tem_dados(t) for t in tabelas):
+
+    if not any(tabela_tem_dados(t) for t in tabelas_itens):
         msg = (
             f"<p>Pretende preencher os dados do item <b>{ui.lineEdit_item_orcamento.text().strip()}</b> "
             f"com os Dados Gerais atuais?</p>"
@@ -413,7 +399,7 @@ def acao_orcamentar_items(main_window):
             copiar_dados_gerais_para_itens(ui)
 
     atualizar_tudo(ui)
-
+    
 
 def navegar_item_orcamento(main_window, direcao):
     """

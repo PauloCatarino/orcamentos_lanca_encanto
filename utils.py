@@ -558,3 +558,29 @@ def apply_row_selection_style(table, color=ROW_SELECTION_COLOR):
         )
     except Exception as e:
         print(f"[ERRO] apply_row_selection_style: {e}")
+
+def tabela_tem_dados(table):
+    """Retorna True se a tabela possuir algum valor preenchido fora da primeira coluna."""
+    if table is None:
+        return False
+    try:
+        for r in range(table.rowCount()):
+            for c in range(1, table.columnCount()):
+                widget = table.cellWidget(r, c)
+                if widget:
+                    if hasattr(widget, "currentText") and widget.currentText().strip():
+                        return True
+                    if hasattr(widget, "text") and widget.text().strip():
+                        return True
+                    if hasattr(widget, "value"):
+                        try:
+                            if widget.value():
+                                return True
+                        except Exception:
+                            pass
+                item = table.item(r, c)
+                if item and item.text().strip():
+                    return True
+    except Exception as e:
+        print(f"[ERRO] tabela_tem_dados: {e}")
+    return False
