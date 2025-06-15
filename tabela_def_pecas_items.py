@@ -59,6 +59,14 @@ from db_connection import obter_cursor
 # Importa a função para abrir o diálogo de seleção de material (necessário para o botão "Escolher")
 # Importação feita localmente na função escolher_material_item para evitar dependência circular
 
+# Variável global para armazenar dados de linhas copiadas na tab_def_pecas
+_copied_rows_def_pecas = []
+
+
+
+# Importa a função para abrir o diálogo de seleção de material (necessário para o botão "Escolher")
+# Importação feita localmente na função escolher_material_item para evitar dependência circular
+
 # Importa a função auxiliar para atualizar as chaves na tab_modulo_medidas
 # from modulo_dados_definicoes import actualizar_ids_num_orc_ver_orc_tab_modulo_medidas
 
@@ -637,8 +645,58 @@ def update_ids(table):
         table.blockSignals(False)
     print("[INFO] Atualização de IDs concluída.")
 
-# Parte 3: Validação de Entradas para Peças MODULO (mantida, usa validar_expressao_modulo do utils)
 
+
+
+# Função auxiliar para copiar as linhas selecionadas na tab_def_pecas
+def copy_selected_rows(ui):
+    """Copia as linhas selecionadas da tab_def_pecas para uma variável global."""
+    global _copied_rows_def_pecas
+    table = ui.tab_def_pecas
+    selected_rows = sorted({idx.row() for idx in table.selectionModel().selectedRows()})
+    if not selected_rows:
+        QMessageBox.warning(table.window(), "Copiar", "Nenhuma linha selecionada para copiar.")
+        return
+    _copied_rows_def_pecas = []
+    for r in selected_rows:
+        row_items = []
+        for c in range(table.columnCount()):
+            item = table.item(r, c)
+            row_items.append(item.clone() if item else None)
+        has_button = table.cellWidget(r, 33) is not None
+        _copied_rows_def_pecas.append((row_items, has_button))
+    QMessageBox.information(table.window(), "Copiar", f"{len(selected_rows)} linha(s) copiada(s).")
+
+
+# Função auxiliar para colar as linhas copiadas abaixo da seleção atual na Tab_Def_Pecas
+def paste_rows_below(ui):
+    """Insere as linhas previamente copiadas abaixo da seleção atual."""
+    if not _copied_rows_def_pecas:
+        QMessageBox.warning(ui.tab_def_pecas.window(), "Colar", "Nenhuma linha copiada.")
+        return
+    table = ui.tab_def_pecas
+    selected_rows = sorted({idx.row() for idx in table.selectionModel().selectedRows()})
+    insert_row = selected_rows[-1] + 1 if selected_rows else table.rowCount()
+    table.setProperty("importando_dados", True)
+    table.blockSignals(True)
+    try:
+        for row_items, has_button in _copied_rows_def_pecas:
+            table.insertRow(insert_row)
+            for c, item in enumerate(row_items):
+                if item:
+                    table.setItem(insert_row, c, item.clone())
+            if has_button:
+                btn = QPushButton("Escolher")
+                btn.clicked.connect(lambda _, r=insert_row: on_mp_button_clicked(ui, r, "tab_def_pecas"))
+                table.setCellWidget(insert_row, 33, btn)
+            insert_row += 1
+    finally:
+        table.blockSignals(False)
+        table.setProperty("importando_dados", False)
+    update_ids(table)
+    atualizar_tudo(ui)
+
+# Parte 3: Validação de Entradas para Peças MODULO (mantida, usa validar_expressao_modulo do utils)
 
 def validar_input_modulo(item):
     """
@@ -1545,15 +1603,17 @@ def show_context_menu(ui, pos):
     action_delete = menu.addAction("Excluir Linha(s) Selecionada(s)")
     action_insert_above = menu.addAction("Inserir Linha Vazia Acima")
     action_insert_below = menu.addAction("Inserir Linha Vazia Abaixo")
-    action_copy = menu.addAction(
-        "Copiar Linha(s) (Não Implementado)")  # Manter como placeholder
+    action_copy = menu.addAction("Copiar Linha(s) ")  # Manter como placeholder
+    action_paste = menu.addAction("Inserir Linha(s) Copiada(s) Abaixo")
 
     # Desabilitar ações se nenhuma linha estiver selecionada (exceto inserir no final)
     selected_rows = table.selectionModel().selectedRows()
     if not selected_rows:
         action_delete.setEnabled(False)
         action_insert_above.setEnabled(False)
-        action_copy.setEnabled(False)  # Desabilitar copiar se nada selecionado
+        action_copy.setEnabled(False)
+    if not _copied_rows_def_pecas:
+        action_paste.setEnabled(False)  # Desabilitar copiar se nada selecionado
 
     # Executa o menu e espera pela ação do utilizador
     action = menu.exec_(table.viewport().mapToGlobal(pos))
@@ -1707,8 +1767,10 @@ def show_context_menu(ui, pos):
         atualizar_tudo(ui)
 
     elif action == action_copy:
-        # Placeholder para futura implementação
-        print("Ação 'Copiar Linha(s)' selecionada. Funcionalidade a implementar.")
+        copy_selected_rows(ui)
+
+    elif action == action_paste:
+        paste_rows_below(ui)
 
 # Parte 3.1: install_def_peca_delegate (mantida, usa DefPecaDelegate)
 

@@ -22,8 +22,8 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
  Para enviar atualizações para o github
 git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
-git commit -m "52º Commit"
-c                 # envia para o GitHub
+git commit -m "53º Commit"
+git push                  # envia para o GitHub
 
 """
 
