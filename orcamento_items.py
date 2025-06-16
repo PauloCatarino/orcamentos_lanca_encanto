@@ -63,8 +63,8 @@ from utils import (formatar_valor_moeda, converter_texto_para_valor, formatar_va
 #from menu_descricoes import configurar_menu_descricoes # Este módulo é usado para configurar o menu de descrições pré-definidas que existe no separdor orcamento, permite adicionar descricoes a cada item de orçamento
 
 # Importa diálogo e gestor de descrições
-from dialogo_descricoes import DialogoDescricoes
-from descricoes_manager import carregar_descricoes, guardar_descricoes
+from dialogo_descricoes import DialogoDescricoes, configurar_menu_descricoes
+# Importa a função para criar a tabela de orçamento de itens
 # Importar o módulo necessário para chamar a função de atualização da tab_modulo_medidas
 import tabela_def_pecas_items
 
@@ -224,8 +224,8 @@ def configurar_orcamento_ui(main_window):
     configurar_context_menu_groupbox(ui)
     # Configura menu de contexto para duplicar linhas na tabela de artigos
     configurar_context_menu_tabela(ui)
-    # Menu de descrições pré-definidas para o campo de descrição do item dentro do separador de orcamento
-    #configurar_menu_descricoes(ui)
+    # Menu de descrições pré-definidas no campo de descrição
+    configurar_menu_descricoes(ui.plainTextEdit_descricao_orcamento)
 
     # Inicializa o campo de item com "1"
     ui.lineEdit_item_orcamento.setText("1")
@@ -2241,9 +2241,9 @@ def excluir_item_orcamento(ui):
         QMessageBox.critical(None, "Erro", f"Erro: {e}")
 #################################################################################################################################
 # --- Fim das funções de manipulação de itens do orçamento ---
-
+"""
 def configurar_menu_descricoes(ui):
-    """Configura o menu de contexto para o campo de descrição."""
+    #Configura o menu de contexto para o campo de descrição.
     widget = ui.plainTextEdit_descricao_orcamento
     widget.setContextMenuPolicy(Qt.CustomContextMenu)
     widget.customContextMenuRequested.connect(lambda pos: _abrir_menu_descricoes(ui))
@@ -2258,3 +2258,4 @@ def _abrir_menu_descricoes(ui):
             for linha in linhas:
                 texto_atual += "\n\t- " + linha
             ui.plainTextEdit_descricao_orcamento.setPlainText(texto_atual)
+"""

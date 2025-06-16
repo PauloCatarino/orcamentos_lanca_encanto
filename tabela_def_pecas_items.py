@@ -841,8 +841,7 @@ def setup_context_menu(ui, opcoes_por_grupo=None):
         table.customContextMenuRequested.disconnect()
     except TypeError:  # Sinal não estava conectado
         pass
-    table.customContextMenuRequested.connect(
-        lambda pos: show_context_menu(ui, pos))
+    table.customContextMenuRequested.connect(lambda pos: show_context_menu(ui, pos))
 
     # Menu no cabeçalho para largura e visibilidade
     setup_header_menu(ui)
@@ -1898,7 +1897,7 @@ def install_def_peca_delegate(ui, parent, opcoes_por_grupo=None):
 # ---------------------------------------------------------------------------
 # Funções utilitárias para ajustar a visualização da tab_def_pecas
 # ---------------------------------------------------------------------------
-
+# Na tab_def_pecas nos titulos das colunas ao clicar lado direito do rato vai aparecer umas opções para ocultar coluna,mostrar coluna, definir largura da coluna
 def setup_header_menu(ui):
     """Instala um menu de contexto no cabeçalho para ocultar/mostrar colunas
     e ajustar larguras."""

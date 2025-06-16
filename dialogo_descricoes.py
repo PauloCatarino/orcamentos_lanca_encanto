@@ -18,15 +18,32 @@ Este módulo fornece:
 """
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QPushButton, QLineEdit, QAbstractItemView, QInputDialog, QWidgetAction, QMenu)
 from PyQt5.QtCore import Qt
+import os
 
-from descricoes_manager import carregar_descricoes, guardar_descricoes
+FILE_PATH = os.path.join(os.path.dirname(__file__), "descricoes_predefinidas.txt")
+
+
+def carregar_descricoes():
+    """Lê o ficheiro de descrições e retorna uma lista de strings."""
+    if not os.path.exists(FILE_PATH):
+        return []
+    with open(FILE_PATH, "r", encoding="utf-8") as f:
+        linhas = [l.strip() for l in f.readlines() if l.strip()]
+    return linhas
+
+
+def guardar_descricoes(descricoes):
+    """Guarda a lista de descrições no ficheiro associado."""
+    with open(FILE_PATH, "w", encoding="utf-8") as f:
+        for linha in descricoes:
+            f.write(linha.strip() + "\n")
 
 
 class DialogoDescricoes(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Descrições pré-definidas")
-        self.resize(600, 500)
+        self.resize(400, 500)
         # Adiciona botão de ajuda (?) e tooltip resumida
         self.setWindowFlags(self.windowFlags() | Qt.WindowContextHelpButtonHint)
         self.setToolTip(
@@ -87,7 +104,7 @@ class DialogoDescricoes(QDialog):
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Adicionar descrição")
         dlg.setLabelText("Texto:")
-        dlg.resize(600, 200)
+        dlg.resize(500, 200)
         if dlg.exec_() == QDialog.Accepted:
             texto = dlg.textValue()
             if texto.strip():
@@ -129,3 +146,21 @@ class DialogoDescricoes(QDialog):
             if item.checkState() == Qt.Checked:
                 selecionadas.append(item.text())
         return selecionadas
+
+
+def exibir_menu_descricoes(widget, _pos=None):
+    """Abre o diálogo de descrições e insere as linhas selecionadas."""
+    dialog = DialogoDescricoes(widget)
+    if dialog.exec_() == QDialog.Accepted:
+        linhas = dialog.descricoes_selecionadas()
+        if linhas:
+            texto_atual = widget.toPlainText().rstrip()
+            for linha in linhas:
+                texto_atual += "\n\t- " + linha
+            widget.setPlainText(texto_atual)
+
+
+def configurar_menu_descricoes(widget):
+    """Associa o menu de descrições pré-definidas ao widget dado."""
+    widget.setContextMenuPolicy(Qt.CustomContextMenu)
+    widget.customContextMenuRequested.connect(lambda pos: exibir_menu_descricoes(widget, pos))
