@@ -3,28 +3,65 @@
 import os
 from PyQt5 import  QtWidgets
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
+from reportlab.lib.styles import getSampleStyleSheet
 import xlsxwriter
 from orcamentos import _gerar_nome_pasta_orcamento
 
 def _parse_float(value: str) -> float:
-    """Converts a string to float, returning 0.0 when conversion fails."""
-    if value is None:
+    """Converts a string to float, handling thousands separators."""
+    if not value:
         return 0.0
+    txt = str(value).strip()
+    txt = txt.replace('\xa0', '').replace(' ', '')  # remove spaces/nbsp
+    txt = txt.replace('.', '').replace(',', '.')
     try:
-        return float(str(value).strip().replace(',', '.'))
+        return float(txt)
     except ValueError:
         return 0.0
+
+def _first_text(*widgets) -> str:
+    """Return the first non-empty text from given widgets."""
+    for w in widgets:
+        if w is not None:
+            txt = w.text()
+            if txt:
+                return txt
+    return ""
 
 def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     """Preenche a aba de relatório com os dados atuais do orçamento."""
     # Dados do cliente
-    ui.lineEdit_nome_cliente_3.setText(ui.lineEdit_nome_cliente.text())
-    ui.lineEdit_morada_cliente_3.setText(ui.lineEdit_morada_cliente.text())
-    ui.lineEdit_email_cliente_3.setText(ui.lineEdit_email_cliente.text())
-    ui.lineEdit_num_cliente_phc_3.setText(ui.lineEdit_num_cliente_phc.text())
-    ui.lineEdit_telefone_3.setText(ui.lineEdit_telefone.text())
-    ui.lineEdit_telemovel_3.setText(ui.lineEdit_telemovel.text())
+    ui.lineEdit_nome_cliente_3.setText(
+        _first_text( getattr(ui, "lineEdit_nome_cliente", None))
+    )
+    print(f"Nome cliente: {ui.lineEdit_nome_cliente_3.text()}")
+    
+    ui.lineEdit_morada_cliente_3.setText(
+        _first_text(getattr(ui, "lineEdit_morada_cliente", None))
+    )
+    print(f"Morada cliente: {ui.lineEdit_morada_cliente_3.text()}")
+    
+    ui.lineEdit_email_cliente_3.setText(
+        _first_text(getattr(ui, "lineEdit_email_cliente", None))
+    )
+    print(f"Email cliente: {ui.lineEdit_email_cliente_3.text()}")
+    
+    ui.lineEdit_num_cliente_phc_3.setText(
+        _first_text(getattr(ui, "lineEdit_num_cliente_phc", None))
+    )
+    print(f"Num cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}")
+    
+    ui.lineEdit_telefone_3.setText(
+        _first_text(getattr(ui, "lineEdit_telefone", None))
+    )
+    print(f"Telefone: {ui.lineEdit_telefone_3.text()}")
+    
+    ui.lineEdit_telemovel_3.setText(
+        _first_text(getattr(ui, "lineEdit_telemovel", None))
+    )
+    print(f"Telemóvel: {ui.lineEdit_telemovel_3.text()}")
 
     # Dados do orçamento
     data_orc = ui.lineEdit_data.text()
@@ -70,20 +107,88 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
 
 
 def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
-    """Cria um PDF simples com algumas informações do relatório."""
-    c = canvas.Canvas(caminho, pagesize=A4)
-    w, h = A4
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, h - 50, "Relatório de Orçamento")
-    c.setFont("Helvetica", 10)
-    c.drawString(40, h - 70, ui.label_data_orcamento_2.text())
-    c.drawString(
-        200,
-        h - 70,
-        f"{ui.label_num_orcamento_2.text()} / {ui.label_ver_orcamento_2.text()}",
+    """Gera um PDF com os dados do relatório."""
+    doc = SimpleDocTemplate(caminho, pagesize=A4)
+    styles = getSampleStyleSheet()
+
+    elems = []
+    elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
+    elems.append(Paragraph(
+        f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]
+    ))
+    elems.append(
+        Paragraph(
+            f"Número: {ui.label_num_orcamento_2.text()} / {ui.label_ver_orcamento_2.text()}",
+            styles["Normal"],
+        )
     )
-    c.showPage()
-    c.save()
+    elems.append(Spacer(1, 12))
+
+    dados_cli = [
+        f"Nome: {ui.lineEdit_nome_cliente_3.text()}",
+        f"Morada: {ui.lineEdit_morada_cliente_3.text()}",
+        f"Email: {ui.lineEdit_email_cliente_3.text()}",
+        f"Nº Cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}",
+        f"Telefone: {ui.lineEdit_telefone_3.text()}  Telemóvel: {ui.lineEdit_telemovel_3.text()}",
+    ]
+    for d in dados_cli:
+        elems.append(Paragraph(d, styles["Normal"]))
+
+    elems.append(Spacer(1, 12))
+
+    headers = [
+        "Item",
+        "Codigo",
+        "Descrição",
+        "Altura",
+        "Largura",
+        "Profundidade",
+        "Und",
+        "QT",
+        "Preco Unit",
+        "Preco Total",
+    ]
+
+    data = [headers]
+    tw = ui.tableWidget_Items_Linha_Relatorio
+    for r in range(tw.rowCount()):
+        row = []
+        for c in range(tw.columnCount()):
+            itm = tw.item(r, c)
+            txt = itm.text() if itm else ""
+            if c == 2:
+                lines = txt.splitlines()
+                if lines:
+                    first, *rest = lines
+                    formatted = f"<b>{first}</b>"
+                    if rest:
+                        formatted += "<br/><i>" + "<br/>".join(l.strip("\t-") for l in rest) + "</i>"
+                    row.append(Paragraph(formatted, styles["Normal"]))
+                else:
+                    row.append("")
+            else:
+                row.append(txt)
+        data.append(row)
+
+    table = Table(data, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ]
+        )
+    )
+    elems.append(table)
+    elems.append(Spacer(1, 12))
+    elems.append(Paragraph(ui.label_total_qt_2.text(), styles["Normal"]))
+    elems.append(Paragraph(ui.label_subtotal_2.text(), styles["Normal"]))
+    elems.append(Paragraph(ui.label_iva_2.text(), styles["Normal"]))
+    elems.append(Paragraph(ui.label_total_geral_2.text(), styles["Normal"]))
+
+    doc.build(elems)
 
 
 def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
@@ -170,6 +275,7 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     )
     if resp == QtWidgets.QMessageBox.Yes:
         exportar_relatorio(ui)
+
 
 
 
