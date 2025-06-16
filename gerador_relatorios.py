@@ -14,9 +14,11 @@ class GeradorRelatorios(QtWidgets.QWidget):
 
         # 1) carrega o .ui do relatório
         uic.loadUi("orcamentos_le_layout.ui", self)
+        print("UI carregada:", hasattr(self, "botao_exportar_pdf_excel"), 
+            hasattr(self, "tableWidget_artigos"), hasattr(self, "tableWidget_relatorio"))
 
-        # 2) conecta o botão a um novo handler que preenche e pergunta
-        self.pushButton_Export_PDF_Relatorio.clicked.connect(self.handle_export_clicked)
+        # 2) conecta o botão de exportar (nome correto no UI) ao handler
++       self.pushButton_Export_PDF_Relatorio.clicked.connect(self.handle_export_clicked)
 
     def handle_export_clicked(self):
         """
@@ -71,8 +73,8 @@ class GeradorRelatorios(QtWidgets.QWidget):
         self.label_ver_orcamento_3.setText(ver_orc)  # rodapé centro
 
         # --- Itens do Orçamento (tabela do separador Orcamento) ---
-        src = self.tableWidget_artigos
-        dst = self.tableWidget_Items_Linha_Relatorio
+        src = self.tableWidget_artigos # tabela original com os itens que vem do orçamento
+        dst = self.tableWidget_Items_Linha_Relatorio # tabela do relatório
         n = src.rowCount()
         dst.setRowCount(n)
 
@@ -115,6 +117,7 @@ class GeradorRelatorios(QtWidgets.QWidget):
         self.gera_pdf(pdf_path)
         self.gera_excel(xls_path)
 
+        print("handle_export_clicked foi chamado")
         QtWidgets.QMessageBox.information(
             self, "Gerado",
             f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}"
