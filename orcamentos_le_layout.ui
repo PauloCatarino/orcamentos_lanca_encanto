@@ -139,7 +139,7 @@
          </size>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="Relatorio_Orcamento">
          <attribute name="title">
@@ -177,7 +177,7 @@
         </widget>
         <widget class="QWidget" name="Resumo_Consumos_Orcamento_2">
          <attribute name="title">
-          <string>Configurações Peças / Maquinas</string>
+          <string>Resumo_Consumos_Orcamento</string>
          </attribute>
          <layout class="QGridLayout" name="gridLayout_4">
           <item row="0" column="0">
@@ -3165,7 +3165,7 @@
          </size>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="calculo_item">
          <attribute name="title">
