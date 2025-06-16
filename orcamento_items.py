@@ -729,6 +729,7 @@ def abrir_orcamento(main_window):
             ui.lineEdit_nome_cliente1.setText(nome or "")
             ui.lineEdit_morada.setText(morada or "")
             ui.lineEdit_email.setText(email or "")
+            ui.lineEdit_id_cliente.setText(str(id_cli))
             # Preencher telefone se existir o campo na UI
         else:
             print(f"Aviso: Cliente ID {id_cli} não encontrado na BD.")
