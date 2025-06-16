@@ -1,246 +1,165 @@
 # gerador_relatorios.py
-# -*- coding: utf-8 -*-
-"""Geração de relatórios do orçamento em PDF e Excel.
 
-Este módulo contém funções para exportar o resumo do orçamento para
-ficheiros PDF e Excel. Utiliza a biblioteca ``fpdf2`` para o PDF e
-pandas para o Excel.
-"""
-
-from PyQt5.QtWidgets import QTableWidgetItem
-from datetime import datetime
 import os
-import sys
-import subprocess
-import re
-from typing import Tuple, List
+from datetime import datetime
 
-import pandas as pd
-from fpdf import FPDF
-
-
-class OrcamentoPDF(FPDF):
-    """Classe auxiliar para configurar cabeçalho e rodapé do PDF."""
-
-    def __init__(self, num_orc: str, ver_orc: str, data_str: str, cliente_info: List[str]):
-        super().__init__(orientation="P", unit="mm", format="A4")
-        # Se disponível, ativa a codificação cp1252 para permitir caracteres
-        # como o símbolo do Euro. Em versões antigas do ``fpdf`` este atributo
-        # não existe e a biblioteca limita-se ao latin-1.
-        if hasattr(self, "core_fonts_encoding"):
-            self.core_fonts_encoding = "cp1252"
-        self.num_orc = num_orc
-        self.ver_orc = ver_orc
-        self.data_str = data_str
-        self.cliente_info = cliente_info
-        self.set_auto_page_break(auto=True, margin=20)
-
-    def header(self):
-        """Desenha o cabeçalho com o logótipo e dados do cliente."""
-        logo_path = "logo.png"
-        if os.path.exists(logo_path):
-            self.image(logo_path, x=170, y=8, w=30)
-        self.set_font("Helvetica", "B", 12)
-        self.cell(0, 10, "Lança Encanto, Lda", ln=1, align="R")
-        self.set_font("Helvetica", size=9)
-        for linha in self.cliente_info:
-            self.cell(0, 5, linha, ln=1)
-        self.ln(2)
-
-    def footer(self):
-        """Desenha o rodapé com data, número do orçamento e paginação."""
-        self.set_y(-15)
-        self.set_font("Helvetica", size=8)
-        # Data no canto esquerdo
-        self.cell(60, 10, self.data_str, 0, 0, "L")
-        # Número e versão no centro
-        self.cell(60, 10, f"{self.num_orc}_{self.ver_orc}", 0, 0, "C")
-        # Paginação no canto direito
-        self.cell(0, 10, f"{self.page_no()}/{{nb}}", 0, 0, "R")
+from PyQt5 import uic, QtWidgets
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import xlsxwriter
 
 
-def _obter_texto(item: "QTableWidgetItem") -> str:
-    """Return the text of a cell, converting None to an empty string."""
+class GeradorRelatorios(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-    text = item.text() if item else ""
-    text = text.strip()
-    # FPDF 1.x only suporta Latin-1. Para evitar erros de codificação, o símbolo
-    # do Euro é substituído por "EUR" quando não for possível usar cp1252.
-    return text.replace("€", "EUR")
+        # 1) carrega o .ui que definimos (o layout do relatório)
+        uic.loadUi("orcamentos_le_layout.ui", self)
+
+        # 2) liga o botão de exportar ao handler
+        self.pushButton_Export_PDF_Relatorio.clicked.connect(self.on_export_pdf_excel)
+
+    def on_export_pdf_excel(self):
+        # antes de exportar, garante que todos os campos estão atualizados
+        self.preencher_campos_relatorio()
+
+        # cria as pastas de saída (por ex: ./orcamentos/<numero>_<versao>/)
+        num = self.label_num_orcamento_2.text()
+        ver = self.label_ver_orcamento_2.text()
+        pasta = os.path.join("orcamentos", f"{num}_{ver}")
+        os.makedirs(pasta, exist_ok=True)
+
+        # gera PDF e Excel
+        pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
+        xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
+        self.gera_pdf(pdf_path)
+        self.gera_excel(xls_path)
+
+        QtWidgets.QMessageBox.information(self, "Sucesso",
+            f"Relatório exportado como:\n• PDF: {pdf_path}\n• Excel: {xls_path}")
+
+    def preencher_campos_relatorio(self):
+        """Puxa dados dos outros separadores para este relatório."""
+
+        # --- DADOS DO CLIENTE ---
+        # supõe que os LineEdits do separador Clientes têm estes objectNames:
+        nome = self.lineEdit_nome_cliente.text()
+        morada = self.lineEdit_morada_cliente.text()
+        email = self.lineEdit_email_cliente.text()
+        num_phc = self.lineEdit_num_cliente_phc.text()
+        tel = self.lineEdit_telefone.text()
+        telm = self.lineEdit_telemovel.text()
+
+        # preenche o groupBox_dados_cliente_3
+        self.lineEdit_nome_cliente_3.setText(nome)
+        self.lineEdit_morada_cliente_3.setText(morada)
+        self.lineEdit_email_cliente_3.setText(email)
+        self.lineEdit_num_cliente_phc_3.setText(num_phc)
+        self.lineEdit_telefone_3.setText(tel)
+        self.lineEdit_telemovel_3.setText(telm)
+
+        # --- DADOS DO ORÇAMENTO (Consulta Orcamentos) ---
+        data_orc = self.lineEdit_data.text()            # campo lineEdit_data no separador "Consulta Orcamentos"
+        num_orc = self.lineEdit_num_orcamento.text()    # idem
+        ver_orc = self.lineEdit_versao_orcamento.text() # idem
+
+        self.label_data_orcamento_2.setText(data_orc)
+        self.label_num_orcamento_2.setText(num_orc)
+        self.label_ver_orcamento_2.setText(ver_orc)
+
+        # --- ITENS DO ORÇAMENTO (Tabela no separador Orcamento) ---
+        # lê a tabela de artigos (tableWidget_artigos) e copia para tableWidget_Items_Linha_Relatorio
+        tw_src = self.tableWidget_artigos
+        tw_dst = self.tableWidget_Items_Linha_Relatorio
+
+        linhas = tw_src.rowCount()
+        tw_dst.setRowCount(linhas)
+
+        for i in range(linhas):
+            # colunas: 0=Item,1=Codigo,2=Descricao,3=Altura,4=Largura,5=Profundidade,
+            # 6=Und,7=QT,8=Preco_Unit,9=Preco_Total
+            for col in range(10):
+                valor = tw_src.item(i, col).text() if tw_src.item(i, col) else ""
+                tw_dst.setItem(i, col, QtWidgets.QTableWidgetItem(valor))
+
+        # --- CÁLCULOS DOS TOTAIS ---
+        total_qt = 0
+        subtotal = 0.0
+
+        for i in range(linhas):
+            qt = float(tw_dst.item(i, 7).text() or 0)
+            pt = float(tw_dst.item(i, 9).text() or 0)
+            total_qt += qt
+            subtotal += pt
+
+        # preenche os labels
+        self.label_total_qt_2.setText(f"Total QT: {total_qt:g}")
+        self.label_subtotal_2.setText(f"Subtotal: {subtotal:,.2f}")
+        self.label_iva_2.setText("IVA: 23%")
+        total_geral = subtotal * 1.23
+        self.label_total_geral_2.setText(f"Total Geral: {total_geral:,.2f}")
+
+        # --- RODAPÉ A4 ---
+        # data no canto inferior esquerdo
+        self.label_data_2.setText(self.lineEdit_data.text())
+
+        # número de páginas (por agora fixa 1/1; se quiseres cálculo real, divide nºlinhas por linhas_por_página)
+        self.label_paginacao_2.setText("1/1")
+
+    def gera_pdf(self, caminho):
+        """Gera um PDF simples com ReportLab usando o layout A4."""
+        c = canvas.Canvas(caminho, pagesize=A4)
+        width, height = A4
+
+        # cabeçalho (logo + título)
+        # c.drawImage(":/images/logo.png", width - 150, height - 80, width=120, height=60)
+
+        # desenha as strings dos labels no PDF diretamente como exemplo
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(40, height - 50, "Relatório de Orçamento")
+
+        # desenha o conteúdo dos campos principais
+        c.setFont("Helvetica", 10)
+        c.drawString(40, height - 80, self.label_data_orcamento_2.text())
+        c.drawString(200, height - 80, self.label_num_orcamento_2.text())
+        c.drawString(300, height - 80, self.label_ver_orcamento_2.text())
+
+        # TODO: mais desenho de tabelas, totais, rodapé etc.
+
+        c.showPage()
+        c.save()
+
+    def gera_excel(self, caminho):
+        """Gera um .xlsx com os mesmos dados."""
+        wb = xlsxwriter.Workbook(caminho)
+        ws = wb.add_worksheet("Relatorio")
+
+        # escreve cabeçalhos
+        headers = ["Item", "Codigo", "Descricao", "Altura", "Largura",
+                   "Profundidade", "Und", "QT", "Preco_Unit", "Preco_Total"]
+        for c, h in enumerate(headers):
+            ws.write(0, c, h)
+
+        # escrê â linhas
+        tw = self.tableWidget_Items_Linha_Relatorio
+        for r in range(tw.rowCount()):
+            for c in range(tw.columnCount()):
+                texto = tw.item(r, c).text() if tw.item(r, c) else ""
+                ws.write(r+1, c, texto)
+
+        # totais ao fundo
+        ws.write(r+2, 6, "Total QT")
+        ws.write(r+2, 7, float(self.label_total_qt_2.text().split(":")[1]))
+        ws.write(r+3, 8, "Subtotal")
+        ws.write(r+3, 9, float(self.label_subtotal_2.text().split(":")[1].replace(",","")))
+        ws.write(r+4, 8, "Total Geral")
+        ws.write(r+4, 9, float(self.label_total_geral_2.text().split(":")[1].replace(",","")))
+
+        wb.close()
 
 
-def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
-    """Gera ficheiros PDF e Excel com o resumo do orçamento.
-
-    Parâmetros
-    ----------
-    ui : :class:`Ui_MainWindow`
-        Instância da interface principal com os dados preenchidos.
-
-    Retorna
-    -------
-    tuple
-        Caminhos completos do ficheiro PDF e do ficheiro Excel gerados.
-    """
-    num_orc = ui.lineEdit_num_orcamento_2.text().strip()
-    ver_orc = ui.lineEdit_versao.text().strip()
-    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
-    ano = ui.lineEdit_ano.text().strip()
-    pasta_base = ui.lineEdit_orcamentos.text().strip()
-
-    def _gerar_nome_pasta_orcamento(num_orcamento: str, nome_cli: str) -> str:
-        nome_cli_seguro = re.sub(r'[\\/*?:"<>|]+', '', nome_cli.strip().upper().replace(' ', '_'))
-        return f"{num_orcamento}_{nome_cli_seguro}"
-
-    nome_pasta = _gerar_nome_pasta_orcamento(num_orc, nome_cliente)
-    pasta_orc = os.path.join(pasta_base, ano, nome_pasta)
-    if ver_orc != "00":
-        pasta_orc = os.path.join(pasta_orc, ver_orc)
-    os.makedirs(pasta_orc, exist_ok=True)
-
-    tabela = ui.tableWidget_artigos
-    headers = [
-        "Item",
-        "Codigo",
-        "Descricao",
-        "Altura",
-        "Largura",
-        "Profundidade",
-        "Und",
-        "QT",
-        "Preco_Unitario",
-        "Preco_Total",
-    ]
-    col_map = dict(zip(headers, range(10)))
-    dados = []
-    for row in range(tabela.rowCount()):
-        reg = {}
-        for h, idx in col_map.items():
-            reg[h] = _obter_texto(tabela.item(row, idx))
-        dados.append(reg)
-
-    df = pd.DataFrame(dados, columns=headers)
-
-    def _to_float(valor):
-        try:
-            return float(str(valor).replace(",", "."))
-        except ValueError:
-            return 0.0
-
-    subtotal = df["Preco_Total"].apply(_to_float).sum()
-    total_qt = df["QT"].apply(_to_float).sum()
-    iva = subtotal * 0.23
-    total = subtotal + iva
-
-    df_totais = pd.DataFrame([
-        {"Item": "Total QT", "QT": total_qt},
-        {"Item": "Subtotal", "Preco_Total": subtotal},
-        {"Item": "IVA (23%)", "Preco_Total": iva},
-        {"Item": "Total", "Preco_Total": total},
-    ])
-
-    caminho_excel = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.xlsx")
-    pd.concat([df, df_totais], ignore_index=True).to_excel(caminho_excel, index=False)
-
-    cliente_info = [
-        ui.lineEdit_nome_cliente.text().strip(),
-        ui.lineEdit_morada_cliente.text().strip(),
-        ui.lineEdit_email_cliente.text().strip(),
-        ui.lineEdit_num_cliente_phc.text().strip(),
-        ui.lineEdit_telefone.text().strip(),
-        ui.lineEdit_telemovel.text().strip(),
-    ]
-
-    pdf = OrcamentoPDF(
-        num_orc,
-        ver_orc,
-        datetime.now().strftime("%d/%m/%Y"),
-        cliente_info,
-    )
-    pdf.alias_nb_pages()
-    # Se a biblioteca suportar, define a codificação cp1252 para que o símbolo
-    # do Euro seja aceite. Caso contrário, os textos já foram limpos em
-    # ``_obter_texto``.
-    if hasattr(pdf, "core_fonts_encoding"):
-        pdf.core_fonts_encoding = "cp1252"
-    pdf.add_page()
-
-    # Cabeçalho da tabela
-    pdf.set_font("Helvetica", "B", 8)
-    col_widths = [10, 25, 70, 18, 18, 22, 12, 12, 22, 22]
-    for header, width in zip(headers, col_widths):
-        pdf.cell(width, 8, header, 1, 0, "C")
-    pdf.ln()
-
-    line_height = 5
-    for _, row in df.iterrows():
-        desc_lines = str(row["Descricao"]).splitlines() or [""]
-        row_height = line_height * max(1, len(desc_lines))
-
-        pdf.set_font("Helvetica", size=8)
-        pdf.cell(col_widths[0], row_height, str(row["Item"]), 1)
-        pdf.cell(col_widths[1], row_height, str(row["Codigo"]), 1)
-
-        x_desc = pdf.get_x()
-        y_desc = pdf.get_y()
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.multi_cell(col_widths[2], line_height, desc_lines[0], border="LTR")
-        for line in desc_lines[1:-1]:
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.multi_cell(col_widths[2], line_height, line.lstrip(), border="LR")
-        if len(desc_lines) > 1:
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.multi_cell(col_widths[2], line_height, desc_lines[-1].lstrip(), border="LBR")
-        else:
-            pdf.set_y(y_desc)
-            pdf.set_x(x_desc)
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.multi_cell(col_widths[2], row_height, desc_lines[0], border=1)
-
-        pdf.set_xy(x_desc + col_widths[2], y_desc)
-        pdf.set_font("Helvetica", size=8)
-        pdf.cell(col_widths[3], row_height, str(row["Altura"]), 1, 0, "R")
-        pdf.cell(col_widths[4], row_height, str(row["Largura"]), 1, 0, "R")
-        pdf.cell(col_widths[5], row_height, str(row["Profundidade"]), 1, 0, "R")
-        pdf.cell(col_widths[6], row_height, str(row["Und"]), 1, 0, "C")
-        pdf.cell(col_widths[7], row_height, str(row["QT"]), 1, 0, "R")
-        pdf.cell(col_widths[8], row_height, str(row["Preco_Unitario"]), 1, 0, "R")
-        pdf.cell(col_widths[9], row_height, str(row["Preco_Total"]), 1, 0, "R")
-        pdf.ln(row_height)
-
-    # Linha com total de quantidades
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(sum(col_widths[:7]), 8, "Total QT", 1)
-    pdf.cell(col_widths[7], 8, f"{total_qt}", 1, 0, "R")
-    pdf.cell(col_widths[8], 8, "", 1)
-    pdf.cell(col_widths[9], 8, "", 1, ln=1)
-
-    pdf.ln(5)
-    label_width = sum(col_widths[:-1])
-    pdf.cell(label_width, 8, "Subtotal", 1)
-    pdf.cell(col_widths[-1], 8, f"{subtotal:.2f}", 1, ln=1, align="R")
-    pdf.cell(label_width, 8, "IVA (23%)", 1)
-    pdf.cell(col_widths[-1], 8, f"{iva:.2f}", 1, ln=1, align="R")
-    pdf.cell(label_width, 8, "Total", 1)
-    pdf.cell(col_widths[-1], 8, f"{total:.2f}", 1, ln=1, align="R")
-
-    caminho_pdf = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.pdf")
-    print(f"[INFO] O PDF será guardado em: {caminho_pdf}")
-    print(f"[INFO] O Excel será guardado em: {caminho_excel}")
-    pdf.output(caminho_pdf)
-
-    print(f"[INFO] PDF gerado em: {caminho_pdf}")
-    print(f"[INFO] Excel gerado em: {caminho_excel}")
-
-    # Abre o PDF automaticamente para visualização, se possível
-    try:
-        if os.name == "nt":
-            os.startfile(caminho_pdf)
-        elif sys.platform == "darwin":
-            subprocess.run(["open", caminho_pdf], check=False)
-        else:
-            subprocess.run(["xdg-open", caminho_pdf], check=False)
-    except Exception as exc:
-        print(f"[AVISO] Não foi possível abrir o PDF automaticamente: {exc}")
-
-    return caminho_pdf, caminho_excel
+if __name__ == "__main__":
+    app = QtWidgets.QApplication([])
+    window = GeradorRelatorios()
+    window.show()
+    app.exec_()
