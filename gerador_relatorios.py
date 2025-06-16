@@ -157,6 +157,37 @@ class GeradorRelatorios(QtWidgets.QWidget):
 
         wb.close()
 
+def gerar_relatorio_orcamento():
+    """
+    Função de entrada para o main.py:
+    - Instancia GeradorRelatorios
+    - Preenche campos
+    - Gera PDF e Excel na pasta orcamentos/<num>_<versao>/
+    """
+    # Garante que há uma QApplication ativa
+    from PyQt5 import QtWidgets
+    if not QtWidgets.QApplication.instance():
+        app = QtWidgets.QApplication([])
+
+    # Cria o gerador e preenche os campos
+    gerador = GeradorRelatorios()
+    gerador.preencher_campos_relatorio()
+
+    # Cria pasta de saída
+    num = gerador.label_num_orcamento_2.text()
+    ver = gerador.label_ver_orcamento_2.text()
+    pasta = os.path.join("orcamentos", f"{num}_{ver}")
+    os.makedirs(pasta, exist_ok=True)
+
+    # Caminhos
+    pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
+    xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
+
+    # Gera arquivos
+    gerador.gera_pdf(pdf_path)
+    gerador.gera_excel(xls_path)
+
+    print(f"Relatório gerado em:\n • {pdf_path}\n • {xls_path}")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
