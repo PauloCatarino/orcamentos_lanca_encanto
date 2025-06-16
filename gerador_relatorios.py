@@ -10,6 +10,7 @@ pandas para o Excel.
 from datetime import datetime
 import os
 from typing import Tuple
+from PyQt5.QtWidgets import QTableWidgetItem
 
 import pandas as pd
 from fpdf import FPDF
@@ -20,9 +21,11 @@ class OrcamentoPDF(FPDF):
 
     def __init__(self, num_orc: str, ver_orc: str, data_str: str):
         super().__init__(orientation="P", unit="mm", format="A4")
-        # Permite usar caracteres como "€" com as fontes core
-        # cp1252 inclui o símbolo do Euro e evita o erro de codificação
-        self.core_fonts_encoding = "cp1252"
+        # Se disponível, ativa a codificação cp1252 para permitir caracteres
+        # como o símbolo do Euro. Em versões antigas do ``fpdf`` este atributo
+        # não existe e a biblioteca limita-se ao latin-1.
+        if hasattr(self, "core_fonts_encoding"):
+            self.core_fonts_encoding = "cp1252"
         self.num_orc = num_orc
         self.ver_orc = ver_orc
         self.data_str = data_str
@@ -49,8 +52,13 @@ class OrcamentoPDF(FPDF):
         self.cell(0, 10, f"{self.page_no()}/{{nb}}", 0, 0, "R")
 
 
-def _obter_texto(item):
-    return item.text() if item else ""
+def _obter_texto(item: "QTableWidgetItem") -> str:
+    """Return the text of a cell, converting None to an empty string."""
+
+    text = item.text() if item else ""
+    # FPDF 1.x only suporta Latin-1. Para evitar erros de codificação, o símbolo
+    # do Euro é substituído por "EUR" quando não for possível usar cp1252.
+    return text.replace("€", "EUR")
 
 
 def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
@@ -103,8 +111,11 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
 
     pdf = OrcamentoPDF(num_orc, ver_orc, datetime.now().strftime("%d/%m/%Y"))
     pdf.alias_nb_pages()
-    # Utiliza codificação cp1252 para permitir o símbolo do Euro
-    pdf.core_fonts_encoding = "cp1252"
+    # Se a biblioteca suportar, define a codificação cp1252 para que o símbolo
+    # do Euro seja aceite. Caso contrário, os textos já foram limpos em
+    # ``_obter_texto``.
+    if hasattr(pdf, "core_fonts_encoding"):
+        pdf.core_fonts_encoding = "cp1252"
     pdf.add_page()
 
     pdf.set_font("Helvetica", size=12)
