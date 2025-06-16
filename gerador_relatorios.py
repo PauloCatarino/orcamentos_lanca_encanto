@@ -167,23 +167,46 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
 
     # Cabeçalho da tabela
     pdf.set_font("Helvetica", "B", 8)
-    col_widths = [10, 25, 60, 18, 18, 22, 12, 12, 22, 22]
+    col_widths = [10, 25, 70, 18, 18, 22, 12, 12, 22, 22]
     for header, width in zip(headers, col_widths):
         pdf.cell(width, 8, header, 1, 0, "C")
     pdf.ln()
 
-    pdf.set_font("Helvetica", size=8)
+    line_height = 5
     for _, row in df.iterrows():
-        pdf.cell(col_widths[0], 8, str(row["Item"]), 1)
-        pdf.cell(col_widths[1], 8, str(row["Codigo"]), 1)
-        pdf.cell(col_widths[2], 8, str(row["Descricao"]), 1)
-        pdf.cell(col_widths[3], 8, str(row["Altura"]), 1, 0, "R")
-        pdf.cell(col_widths[4], 8, str(row["Largura"]), 1, 0, "R")
-        pdf.cell(col_widths[5], 8, str(row["Profundidade"]), 1, 0, "R")
-        pdf.cell(col_widths[6], 8, str(row["Und"]), 1, 0, "C")
-        pdf.cell(col_widths[7], 8, str(row["QT"]), 1, 0, "R")
-        pdf.cell(col_widths[8], 8, str(row["Preco_Unitario"]), 1, 0, "R")
-        pdf.cell(col_widths[9], 8, str(row["Preco_Total"]), 1, ln=1, align="R")
+        desc_lines = str(row["Descricao"]).splitlines() or [""]
+        row_height = line_height * max(1, len(desc_lines))
+
+        pdf.set_font("Helvetica", size=8)
+        pdf.cell(col_widths[0], row_height, str(row["Item"]), 1)
+        pdf.cell(col_widths[1], row_height, str(row["Codigo"]), 1)
+
+        x_desc = pdf.get_x()
+        y_desc = pdf.get_y()
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.multi_cell(col_widths[2], line_height, desc_lines[0], border="LTR")
+        for line in desc_lines[1:-1]:
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.multi_cell(col_widths[2], line_height, line.lstrip(), border="LR")
+        if len(desc_lines) > 1:
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.multi_cell(col_widths[2], line_height, desc_lines[-1].lstrip(), border="LBR")
+        else:
+            pdf.set_y(y_desc)
+            pdf.set_x(x_desc)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.multi_cell(col_widths[2], row_height, desc_lines[0], border=1)
+
+        pdf.set_xy(x_desc + col_widths[2], y_desc)
+        pdf.set_font("Helvetica", size=8)
+        pdf.cell(col_widths[3], row_height, str(row["Altura"]), 1, 0, "R")
+        pdf.cell(col_widths[4], row_height, str(row["Largura"]), 1, 0, "R")
+        pdf.cell(col_widths[5], row_height, str(row["Profundidade"]), 1, 0, "R")
+        pdf.cell(col_widths[6], row_height, str(row["Und"]), 1, 0, "C")
+        pdf.cell(col_widths[7], row_height, str(row["QT"]), 1, 0, "R")
+        pdf.cell(col_widths[8], row_height, str(row["Preco_Unitario"]), 1, 0, "R")
+        pdf.cell(col_widths[9], row_height, str(row["Preco_Total"]), 1, 0, "R")
+        pdf.ln(row_height)
 
     # Linha com total de quantidades
     pdf.set_font("Helvetica", "B", 8)
@@ -202,6 +225,8 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
     pdf.cell(col_widths[-1], 8, f"{total:.2f}", 1, ln=1, align="R")
 
     caminho_pdf = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.pdf")
+    print(f"[INFO] O PDF será guardado em: {caminho_pdf}")
+    print(f"[INFO] O Excel será guardado em: {caminho_excel}")
     pdf.output(caminho_pdf)
 
     print(f"[INFO] PDF gerado em: {caminho_pdf}")
