@@ -1,5 +1,17 @@
 # gerador_relatorios.py
 
+"""Gerador dos relatórios de orçamento em PDF e Excel.
+
+Este módulo recolhe os dados preenchidos na interface gráfica, calcula os
+totais do orçamento e exporta duas versões do relatório:
+ - PDF criado com ReportLab, incluindo uma tabela de itens e um rodapé com
+   data, número orçamento e versão e paginação 1/2 ; 2/2.
+ - Ficheiro Excel produzido com xlsxwriter contendo os mesmos dados.
+
+A função :func:`gerar_relatorio_orcamento` coordena o processo de preenchimento
+e geração dos ficheiros.
+"""
+
 import os
 from PyQt5 import QtWidgets
 from reportlab.lib.pagesizes import A4
