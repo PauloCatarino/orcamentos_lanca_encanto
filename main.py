@@ -24,6 +24,15 @@ git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
 git commit -m "73º Commit"
 git push                  # envia para o GitHub
+ ______________________________//________________________
+git status                
+git add .                 
+git commit -m "74º Commit"
+
+
+git push 
+
+
 
 """
 

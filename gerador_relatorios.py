@@ -18,7 +18,7 @@ class GeradorRelatorios(QtWidgets.QWidget):
             hasattr(self, "tableWidget_artigos"), hasattr(self, "tableWidget_relatorio"))
 
         # 2) conecta o botão de exportar (nome correto no UI) ao handler
-+        self.pushButton_Export_PDF_Relatorio.clicked.connect(self.handle_export_clicked)
+        self.pushButton_Export_PDF_Relatorio.clicked.connect(self.handle_export_clicked)
 
     def handle_export_clicked(self):
         """
