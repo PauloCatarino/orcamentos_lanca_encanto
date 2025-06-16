@@ -5,6 +5,7 @@ from PyQt5 import  QtWidgets
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import xlsxwriter
+from orcamentos import _gerar_nome_pasta_orcamento
 
 def _parse_float(value: str) -> float:
     """Converts a string to float, returning 0.0 when conversion fails."""
