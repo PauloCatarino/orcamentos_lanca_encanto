@@ -43,7 +43,7 @@ class DialogoDescricoes(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Descrições pré-definidas")
-        self.resize(400, 500)
+        self.resize(600, 500)
         # Adiciona botão de ajuda (?) e tooltip resumida
         self.setWindowFlags(self.windowFlags() | Qt.WindowContextHelpButtonHint)
         self.setToolTip(
@@ -104,7 +104,7 @@ class DialogoDescricoes(QDialog):
         dlg = QInputDialog(self)
         dlg.setWindowTitle("Adicionar descrição")
         dlg.setLabelText("Texto:")
-        dlg.resize(500, 200)
+        dlg.resize(600, 200)
         if dlg.exec_() == QDialog.Accepted:
             texto = dlg.textValue()
             if texto.strip():
