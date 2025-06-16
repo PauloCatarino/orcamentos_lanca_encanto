@@ -29,7 +29,7 @@ Para que o delegate do ComboBox em "Def_Peca" funcione, o grupo de origem do ite
 
 from utils import set_item  # (Já incluído na importação de utils no topo)
 from utils import safe_item_text
-from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle
+from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
 from PyQt5.QtGui import QColor, QPen
 import openpyxl
@@ -1803,3 +1803,54 @@ def install_def_peca_delegate(ui, parent, opcoes_por_grupo=None):
 
 # Parte 6.1: CelulaEdicaoDelegate (mantida, já revisada)
 # class CelulaEdicaoDelegate(QStyledItemDelegate): ...
+
+
+
+# ---------------------------------------------------------------------------
+# Funções utilitárias para ajustar a visualização da tab_def_pecas
+# ---------------------------------------------------------------------------
+
+def definir_larguras_tab_def_pecas(ui):
+    """Define larguras fixas para cada coluna da tab_def_pecas."""
+    tabela = ui.tab_def_pecas
+    header = tabela.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.Fixed)
+    header.setStretchLastSection(False)
+    larguras = [
+        40,   # id
+        200,  # Descricao_Livre
+        160,  # Def_Peca
+        200,  # Descricao
+        60, 60, 60, 60, 60, 50, 50, 50, 50, 120, 120, 80, 80, 80, 100, 200
+    ]
+    num_cols = tabela.columnCount()
+    if len(larguras) < num_cols:
+        larguras += [80] * (num_cols - len(larguras))
+    for idx in range(num_cols):
+        tabela.setColumnWidth(idx, larguras[idx])
+
+
+def configurar_menu_colunas_tab_def_pecas(ui):
+    """Adiciona um menu no cabeçalho para ocultar/mostrar colunas."""
+    header = ui.tab_def_pecas.horizontalHeader()
+    header.setContextMenuPolicy(Qt.CustomContextMenu)
+    header.customContextMenuRequested.connect(
+        lambda pos: _mostrar_menu_colunas(ui.tab_def_pecas, pos)
+    )
+
+
+def _mostrar_menu_colunas(tabela, pos):
+    menu = QMenu()
+    for col in range(tabela.columnCount()):
+        header_item = tabela.horizontalHeaderItem(col)
+        titulo = header_item.text() if header_item else str(col)
+        acao = QAction(titulo, menu)
+        acao.setCheckable(True)
+        acao.setChecked(not tabela.isColumnHidden(col))
+        acao.toggled.connect(lambda checked, c=col: tabela.setColumnHidden(c, not checked))
+        menu.addAction(acao)
+    menu.exec_(tabela.horizontalHeader().mapToGlobal(pos))
+
+# ---------------------------------------------------------------------------
+# FIM das Funções utilitárias para ajustar a visualização da tab_def_pecas
+# ---------------------------------------------------------------------------
