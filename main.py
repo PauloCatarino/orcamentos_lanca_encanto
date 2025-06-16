@@ -27,7 +27,7 @@ git push                  # envia para o GitHub
  ______________________________//________________________
 git status                
 git add .                 
-git commit -m "74º Commit"
+git commit -m "75º Commit"
 
 
 git push 
@@ -427,14 +427,15 @@ class MainApp(QMainWindow):
 
         # Botão para gerar relatório em PDF e Excel
         try:
-            if hasattr(self.ui, 'botao_exportar_pdf_excel'):
-                self.ui.botao_exportar_pdf_excel.clicked.connect(
-                    lambda: gerar_relatorio_orcamento(self.ui))
+            btn = getattr(self.ui, 'pushButton_Export_PDF_Relatorio', None)
+            if btn is not None:
+                btn.clicked.connect(lambda: gerar_relatorio_orcamento(self.ui))
                 print("[INFO] Botão 'Exportar PDF e Excel Orçamento' conectado.")
             else:
                 print("[AVISO] Botão 'Exportar PDF e Excel Orçamento' não encontrado na UI.")
         except Exception as e:
             print(f"[ERRO] Falha ao conectar botão Exportar PDF/Excel: {e}")
+
 
         print("--- Inicialização da UI Concluída ---")
 
