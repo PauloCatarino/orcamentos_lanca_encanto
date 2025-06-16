@@ -13,3 +13,5 @@ __pycache__/
 # Ignorar ficheiros de backup do editor
 *~
 *.bak
+
+*.pdf
