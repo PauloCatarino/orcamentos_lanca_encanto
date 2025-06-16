@@ -7,12 +7,13 @@ ficheiros PDF e Excel. Utiliza a biblioteca ``fpdf2`` para o PDF e
 pandas para o Excel.
 """
 
+from PyQt5.QtWidgets import QTableWidgetItem
 from datetime import datetime
 import os
 import sys
 import subprocess
-from typing import Tuple
-from PyQt5.QtWidgets import QTableWidgetItem
+import re
+from typing import Tuple, List
 
 import pandas as pd
 from fpdf import FPDF
@@ -21,7 +22,7 @@ from fpdf import FPDF
 class OrcamentoPDF(FPDF):
     """Classe auxiliar para configurar cabeçalho e rodapé do PDF."""
 
-    def __init__(self, num_orc: str, ver_orc: str, data_str: str):
+    def __init__(self, num_orc: str, ver_orc: str, data_str: str, cliente_info: List[str]):
         super().__init__(orientation="P", unit="mm", format="A4")
         # Se disponível, ativa a codificação cp1252 para permitir caracteres
         # como o símbolo do Euro. Em versões antigas do ``fpdf`` este atributo
@@ -31,16 +32,20 @@ class OrcamentoPDF(FPDF):
         self.num_orc = num_orc
         self.ver_orc = ver_orc
         self.data_str = data_str
+        self.cliente_info = cliente_info
+        self.set_auto_page_break(auto=True, margin=20)
 
     def header(self):
-        """Desenha o cabeçalho com o logótipo e informações da empresa."""
-        # Logótipo no canto superior direito (caso exista)
+        """Desenha o cabeçalho com o logótipo e dados do cliente."""
         logo_path = "logo.png"
         if os.path.exists(logo_path):
             self.image(logo_path, x=170, y=8, w=30)
         self.set_font("Helvetica", "B", 12)
         self.cell(0, 10, "Lança Encanto, Lda", ln=1, align="R")
-        self.ln(5)
+        self.set_font("Helvetica", size=9)
+        for linha in self.cliente_info:
+            self.cell(0, 5, linha, ln=1)
+        self.ln(2)
 
     def footer(self):
         """Desenha o rodapé com data, número do orçamento e paginação."""
@@ -58,6 +63,7 @@ def _obter_texto(item: "QTableWidgetItem") -> str:
     """Return the text of a cell, converting None to an empty string."""
 
     text = item.text() if item else ""
+    text = text.strip()
     # FPDF 1.x only suporta Latin-1. Para evitar erros de codificação, o símbolo
     # do Euro é substituído por "EUR" quando não for possível usar cp1252.
     return text.replace("€", "EUR")
@@ -76,26 +82,44 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
     tuple
         Caminhos completos do ficheiro PDF e do ficheiro Excel gerados.
     """
-    num_orc = ui.lineEdit_num_orcamento.text().strip()
-    ver_orc = ui.lineEdit_versao_orcamento.text().strip()
-    nome_cliente = ui.lineEdit_nome_cliente.text().strip()
+    num_orc = ui.lineEdit_num_orcamento_2.text().strip()
+    ver_orc = ui.lineEdit_versao.text().strip()
+    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
+    ano = ui.lineEdit_ano.text().strip()
     pasta_base = ui.lineEdit_orcamentos.text().strip()
 
-    pasta_orc = os.path.join(pasta_base, f"{num_orc}_{ver_orc}")
+    def _gerar_nome_pasta_orcamento(num_orcamento: str, nome_cli: str) -> str:
+        nome_cli_seguro = re.sub(r'[\\/*?:"<>|]+', '', nome_cli.strip().upper().replace(' ', '_'))
+        return f"{num_orcamento}_{nome_cli_seguro}"
+
+    nome_pasta = _gerar_nome_pasta_orcamento(num_orc, nome_cliente)
+    pasta_orc = os.path.join(pasta_base, ano, nome_pasta)
+    if ver_orc != "00":
+        pasta_orc = os.path.join(pasta_orc, ver_orc)
     os.makedirs(pasta_orc, exist_ok=True)
 
     tabela = ui.tableWidget_artigos
+    headers = [
+        "Item",
+        "Codigo",
+        "Descricao",
+        "Altura",
+        "Largura",
+        "Profundidade",
+        "Und",
+        "QT",
+        "Preco_Unitario",
+        "Preco_Total",
+    ]
+    col_map = dict(zip(headers, range(10)))
     dados = []
     for row in range(tabela.rowCount()):
-        dados.append({
-            "Codigo": _obter_texto(tabela.item(row, 1)),
-            "Descricao": _obter_texto(tabela.item(row, 2)),
-            "Quantidade": _obter_texto(tabela.item(row, 7)),
-            "Preco_Unitario": _obter_texto(tabela.item(row, 8)),
-            "Preco_Total": _obter_texto(tabela.item(row, 9)),
-        })
+        reg = {}
+        for h, idx in col_map.items():
+            reg[h] = _obter_texto(tabela.item(row, idx))
+        dados.append(reg)
 
-    df = pd.DataFrame(dados)
+    df = pd.DataFrame(dados, columns=headers)
 
     def _to_float(valor):
         try:
@@ -104,14 +128,35 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
             return 0.0
 
     subtotal = df["Preco_Total"].apply(_to_float).sum()
-    total_qt = df["Quantidade"].apply(_to_float).sum()
+    total_qt = df["QT"].apply(_to_float).sum()
     iva = subtotal * 0.23
     total = subtotal + iva
 
-    caminho_excel = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.xlsx")
-    df.to_excel(caminho_excel, index=False)
+    df_totais = pd.DataFrame([
+        {"Item": "Total QT", "QT": total_qt},
+        {"Item": "Subtotal", "Preco_Total": subtotal},
+        {"Item": "IVA (23%)", "Preco_Total": iva},
+        {"Item": "Total", "Preco_Total": total},
+    ])
 
-    pdf = OrcamentoPDF(num_orc, ver_orc, datetime.now().strftime("%d/%m/%Y"))
+    caminho_excel = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.xlsx")
+    pd.concat([df, df_totais], ignore_index=True).to_excel(caminho_excel, index=False)
+
+    cliente_info = [
+        ui.lineEdit_nome_cliente.text().strip(),
+        ui.lineEdit_morada_cliente.text().strip(),
+        ui.lineEdit_email_cliente.text().strip(),
+        ui.lineEdit_num_cliente_phc.text().strip(),
+        ui.lineEdit_telefone.text().strip(),
+        ui.lineEdit_telemovel.text().strip(),
+    ]
+
+    pdf = OrcamentoPDF(
+        num_orc,
+        ver_orc,
+        datetime.now().strftime("%d/%m/%Y"),
+        cliente_info,
+    )
     pdf.alias_nb_pages()
     # Se a biblioteca suportar, define a codificação cp1252 para que o símbolo
     # do Euro seja aceite. Caso contrário, os textos já foram limpos em
@@ -120,34 +165,41 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
         pdf.core_fonts_encoding = "cp1252"
     pdf.add_page()
 
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(0, 10, f"Cliente: {nome_cliente}", ln=1)
-    pdf.cell(0, 10, f"Orçamento Nº {num_orc} - Versão {ver_orc}", ln=1)
-    pdf.ln(5)
-
     # Cabeçalho da tabela
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(30, 8, "Código", 1)
-    pdf.cell(90, 8, "Descrição", 1)
-    pdf.cell(20, 8, "Qt", 1, align="R")
-    pdf.cell(25, 8, "P.Unit", 1, align="R")
-    pdf.cell(25, 8, "Total", 1, ln=1, align="R")
+    pdf.set_font("Helvetica", "B", 8)
+    col_widths = [10, 25, 60, 18, 18, 22, 12, 12, 22, 22]
+    for header, width in zip(headers, col_widths):
+        pdf.cell(width, 8, header, 1, 0, "C")
+    pdf.ln()
 
-    pdf.set_font("Helvetica", size=10)
+    pdf.set_font("Helvetica", size=8)
     for _, row in df.iterrows():
-        pdf.cell(30, 8, str(row["Codigo"]), 1)
-        pdf.cell(90, 8, str(row["Descricao"]), 1)
-        pdf.cell(20, 8, str(row["Quantidade"]), 1, align="R")
-        pdf.cell(25, 8, str(row["Preco_Unitario"]), 1, align="R")
-        pdf.cell(25, 8, str(row["Preco_Total"]), 1, ln=1, align="R")
+        pdf.cell(col_widths[0], 8, str(row["Item"]), 1)
+        pdf.cell(col_widths[1], 8, str(row["Codigo"]), 1)
+        pdf.cell(col_widths[2], 8, str(row["Descricao"]), 1)
+        pdf.cell(col_widths[3], 8, str(row["Altura"]), 1, 0, "R")
+        pdf.cell(col_widths[4], 8, str(row["Largura"]), 1, 0, "R")
+        pdf.cell(col_widths[5], 8, str(row["Profundidade"]), 1, 0, "R")
+        pdf.cell(col_widths[6], 8, str(row["Und"]), 1, 0, "C")
+        pdf.cell(col_widths[7], 8, str(row["QT"]), 1, 0, "R")
+        pdf.cell(col_widths[8], 8, str(row["Preco_Unitario"]), 1, 0, "R")
+        pdf.cell(col_widths[9], 8, str(row["Preco_Total"]), 1, ln=1, align="R")
+
+    # Linha com total de quantidades
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(sum(col_widths[:7]), 8, "Total QT", 1)
+    pdf.cell(col_widths[7], 8, f"{total_qt}", 1, 0, "R")
+    pdf.cell(col_widths[8], 8, "", 1)
+    pdf.cell(col_widths[9], 8, "", 1, ln=1)
 
     pdf.ln(5)
-    pdf.cell(140, 8, "Subtotal", 1)
-    pdf.cell(25, 8, f"{subtotal:.2f}", 1, ln=1, align="R")
-    pdf.cell(140, 8, "IVA (23%)", 1)
-    pdf.cell(25, 8, f"{iva:.2f}", 1, ln=1, align="R")
-    pdf.cell(140, 8, "Total", 1)
-    pdf.cell(25, 8, f"{total:.2f}", 1, ln=1, align="R")
+    label_width = sum(col_widths[:-1])
+    pdf.cell(label_width, 8, "Subtotal", 1)
+    pdf.cell(col_widths[-1], 8, f"{subtotal:.2f}", 1, ln=1, align="R")
+    pdf.cell(label_width, 8, "IVA (23%)", 1)
+    pdf.cell(col_widths[-1], 8, f"{iva:.2f}", 1, ln=1, align="R")
+    pdf.cell(label_width, 8, "Total", 1)
+    pdf.cell(col_widths[-1], 8, f"{total:.2f}", 1, ln=1, align="R")
 
     caminho_pdf = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.pdf")
     pdf.output(caminho_pdf)

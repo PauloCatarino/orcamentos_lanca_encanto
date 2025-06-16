@@ -20,10 +20,7 @@ import os
 import datetime
 import re
 import mysql.connector # Importar para capturar erros específicos
-from PyQt5.QtWidgets import (
-    QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, QDialog,
-    QComboBox, QPlainTextEdit
-)
+from PyQt5.QtWidgets import (QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, QDialog, QComboBox, QPlainTextEdit)
 from PyQt5.QtCore import QProcess, Qt  
 from apagar_orcamento_le_layout import Ui_Dialog  # Interface da janela de exclusão
 from utils import (
