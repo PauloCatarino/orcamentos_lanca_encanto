@@ -5,7 +5,7 @@ from PyQt5 import QtWidgets
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 import xlsxwriter
 from db_connection import obter_cursor
@@ -86,22 +86,22 @@ class FooterCanvas(canvas.Canvas):
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
-        super().showPage()
+        self._startPage()
 
     def save(self):
         page_count = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
             self._draw_footer(page_count)
-            super().showPage()
-        super().save()
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
 
     def _draw_footer(self, page_count: int):
         width, _ = A4
-        margin = 40
         self.setFont("Helvetica", 9)
-        self.drawString(margin, 20, self.data_str)
-        self.drawCentredString(width / 2, 20, self.num_ver)
+        page_num = self.getPageNumber()
+        footer = f"{self.data_str}   {self.num_ver}   {page_num}/{page_count}"
+        self.drawCentredString(width / 2, 20, footer)
 
 def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     """Preenche a aba de relatório com os dados atuais do orçamento."""
@@ -305,10 +305,16 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     )
     elems.append(table)
     elems.append(Spacer(1, 12))
-    elems.append(Paragraph(ui.label_total_qt_2.text(), styles["Normal"]))
-    elems.append(Paragraph(ui.label_subtotal_2.text(), styles["Normal"]))
-    elems.append(Paragraph(ui.label_iva_2.text(), styles["Normal"]))
-    elems.append(Paragraph(ui.label_total_geral_2.text(), styles["Normal"]))
+    right_style = ParagraphStyle(
+        "right", parent=styles["Normal"], alignment=2
+    )
+    total_style = ParagraphStyle(
+        "total", parent=right_style, fontSize=12, leading=14
+    )
+    elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
+    elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
+    elems.append(Paragraph(ui.label_iva_2.text(), right_style))
+    elems.append(Paragraph(ui.label_total_geral_2.text(), total_style))
 
     doc.build(
         elems,

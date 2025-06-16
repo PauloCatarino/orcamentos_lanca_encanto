@@ -304,11 +304,17 @@
              <widget class="QLabel" name="label_total_geral_2">
               <property name="geometry">
                <rect>
-                <x>110</x>
+                <x>1800</x>
                 <y>768</y>
-                <width>1065</width>
-                <height>13</height>
+                <width>300</width>
+                <height>20</height>
                </rect>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+                <bold>true</bold>
+               </font>
               </property>
               <property name="text">
                <string>Total Geral:</string>
@@ -317,10 +323,10 @@
              <widget class="QLabel" name="label_total_qt_2">
               <property name="geometry">
                <rect>
-                <x>110</x>
+                <x>1600</x>
                 <y>710</y>
-                <width>2137</width>
-                <height>13</height>
+                <width>200</width>
+                <height>20</height>
                </rect>
               </property>
               <property name="text">
@@ -343,10 +349,10 @@
              <widget class="QLabel" name="label_subtotal_2">
               <property name="geometry">
                <rect>
-                <x>110</x>
+                <x>1800</x>
                 <y>730</y>
-                <width>1065</width>
-                <height>13</height>
+                <width>300</width>
+                <height>20</height>
                </rect>
               </property>
               <property name="text">
