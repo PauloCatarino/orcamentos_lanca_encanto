@@ -6,6 +6,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import xlsxwriter
 
+def _parse_float(value: str) -> float:
+    """Converts a string to float, returning 0.0 when conversion fails."""
+    if value is None:
+        return 0.0
+    try:
+        return float(str(value).strip().replace(',', '.'))
+    except ValueError:
+        return 0.0
+
 def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     """Preenche a aba de relatório com os dados atuais do orçamento."""
     # Dados do cliente
@@ -33,20 +42,21 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     dst = ui.tableWidget_Items_Linha_Relatorio
     n = src.rowCount()
     dst.setRowCount(n)
+    # Copia colunas 1-10 da tabela de artigos (ignora a coluna 0 "id_item")
     for i in range(n):
         for c in range(10):
-            item = src.item(i, c)
+            item = src.item(i, c + 1)
             txt = item.text() if item else ""
             dst.setItem(i, c, QtWidgets.QTableWidgetItem(txt))
 
     # Totais
-    total_qt = 0
+    total_qt = 0.0
     subtotal = 0.0
     for i in range(n):
         qt_item = dst.item(i, 7)
         pt_item = dst.item(i, 9)
-        qt = float(qt_item.text()) if qt_item else 0
-        pt = float(pt_item.text()) if pt_item else 0
+        qt = _parse_float(qt_item.text() if qt_item else "")
+        pt = _parse_float(pt_item.text() if pt_item else "")
         total_qt += qt
         subtotal += pt
 
@@ -103,26 +113,35 @@ def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
             ws.write(r + 1, c, txt)
 
     row_total = tw.rowCount()
-    ws.write(row_total + 1, 7, float(ui.label_total_qt_2.text().split(":")[1]))
-    ws.write(
-        row_total + 2,
-        9,
-        float(ui.label_subtotal_2.text().split(":")[1].replace(",", "")),
-    )
-    ws.write(
-        row_total + 3,
-        9,
-        float(ui.label_total_geral_2.text().split(":")[1].replace(",", "")),
-    )
+    qt_text = ui.label_total_qt_2.text().split(":", 1)[-1]
+    subtotal_text = ui.label_subtotal_2.text().split(":", 1)[-1]
+    total_geral_text = ui.label_total_geral_2.text().split(":", 1)[-1]
+    ws.write(row_total + 1, 7, _parse_float(qt_text))
+    ws.write(row_total + 2, 9, _parse_float(subtotal_text.replace(",", "")))
+    ws.write(row_total + 3, 9, _parse_float(total_geral_text.replace(",", "")))
     wb.close()
 
 
+def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
+    """Obtém (e cria, se necessário) o caminho onde guardar os relatórios."""
+    caminho_base = ui.lineEdit_orcamentos.text().strip()
+    ano = ui.lineEdit_ano.text().strip()
+    num = ui.lineEdit_num_orcamento_2.text().strip()
+    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    nome_pasta = _gerar_nome_pasta_orcamento(num, nome_cliente)
+    pasta = os.path.join(caminho_base, ano, nome_pasta)
+    if versao != "00":
+        pasta = os.path.join(pasta, versao)
+    os.makedirs(pasta, exist_ok=True)
+    return pasta
+
+
 def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
-    """Gera os ficheiros PDF e Excel numa pasta específica."""
+    """Gera os ficheiros PDF e Excel na pasta do orçamento."""
+    pasta = _obter_caminho_pasta_orcamento(ui)
     num = ui.label_num_orcamento_2.text()
     ver = ui.label_ver_orcamento_2.text()
-    pasta = os.path.join("orcamentos", f"{num}_{ver}")
-    os.makedirs(pasta, exist_ok=True)
 
     pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
     xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
@@ -130,6 +149,7 @@ def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
     gera_pdf(ui, pdf_path)
     gera_excel(ui, xls_path)
 
+    print(f"Relatórios guardados em:\nPDF: {pdf_path}\nXLSX: {xls_path}")
     QtWidgets.QMessageBox.information(
         getattr(ui, "tabWidget_orcamento", None),
         "Gerado",
