@@ -158,18 +158,34 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     # Totais
     total_qt = 0.0
     subtotal = 0.0
+    print(f"Iniciando cálculo de totais. Número de linhas: {n}")
+
     for i in range(n):
         qt_item = dst.item(i, 8)
-        pt_item = dst.item(i, 10)
-        qt = _parse_float(qt_item.text() if qt_item else "")
-        pt = _parse_float(pt_item.text() if pt_item else "")
+        pt_item = dst.item(i, 9)  # Nota: mudei de coluna 10 para 9 - verificar se está correto
+        
+        qt_text = qt_item.text() if qt_item else ""
+        pt_text = pt_item.text() if pt_item else ""
+        
+        print(f"Linha {i}: QT raw='{qt_text}', PT raw='{pt_text}'")
+        
+        qt = _parse_float(qt_text)
+        pt = _parse_float(pt_text)
+        
+        print(f"Linha {i}: QT parsed={qt}, PT parsed={pt}")
+        
         total_qt += qt
         subtotal += pt
+        
+        print(f"Linha {i}: total_qt acumulado={total_qt}, subtotal acumulado={subtotal}")
+
+    print(f"Totais finais: total_qt={total_qt}, subtotal={subtotal}")
 
     ui.label_total_qt_2.setText(f"Total QT: {total_qt:g}")
     ui.label_subtotal_2.setText(f"Subtotal: {subtotal:,.2f}")
     ui.label_iva_2.setText("IVA: 23%")
     total_geral = subtotal * 1.23
+    print(f"Total geral calculado: {total_geral}")
     ui.label_total_geral_2.setText(f"Total Geral: {total_geral:,.2f}")
     ui.label_paginacao_2.setText("1/1")
 
@@ -182,7 +198,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         leftMargin=10,
         rightMargin=10,
         topMargin=10,
-        bottomMargin=10,
+        bottomMargin=50,
     )   # Margens folha a4
     styles = getSampleStyleSheet()
 
