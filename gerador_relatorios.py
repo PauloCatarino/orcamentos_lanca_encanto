@@ -237,7 +237,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     ))
     elems.append(
         Paragraph(
-            f"Número: {ui.label_num_orcamento_2.text()} / {ui.label_ver_orcamento_2.text()}",
+            f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
             styles["Normal"],
         )
     )
@@ -320,7 +320,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         elems,
         canvasmaker=lambda *a, **kw: FooterCanvas(
             ui.label_data_orcamento_2.text(),
-            f"{ui.label_num_orcamento_2.text()} / {ui.label_ver_orcamento_2.text()}",
+            f"{ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
             *a,
             **kw,
         ),

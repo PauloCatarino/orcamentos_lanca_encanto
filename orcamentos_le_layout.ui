@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>4</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -313,6 +313,7 @@
               <property name="font">
                <font>
                 <pointsize>12</pointsize>
+                <weight>75</weight>
                 <bold>true</bold>
                </font>
               </property>
@@ -336,10 +337,10 @@
              <widget class="QLabel" name="label_iva_2">
               <property name="geometry">
                <rect>
-                <x>110</x>
+                <x>1820</x>
                 <y>749</y>
-                <width>1065</width>
-                <height>13</height>
+                <width>201</width>
+                <height>16</height>
                </rect>
               </property>
               <property name="text">
@@ -362,7 +363,7 @@
              <widget class="QLabel" name="label_paginacao_2">
               <property name="geometry">
                <rect>
-                <x>1524</x>
+                <x>1690</x>
                 <y>1000</y>
                 <width>91</width>
                 <height>31</height>
@@ -455,9 +456,9 @@
              <widget class="QLabel" name="label_ver_orcamento_3">
               <property name="geometry">
                <rect>
-                <x>637</x>
+                <x>1010</x>
                 <y>990</y>
-                <width>146</width>
+                <width>31</width>
                 <height>29</height>
                </rect>
               </property>
@@ -468,9 +469,9 @@
              <widget class="QLabel" name="label_num_orcamento_3">
               <property name="geometry">
                <rect>
-                <x>440</x>
+                <x>920</x>
                 <y>990</y>
-                <width>147</width>
+                <width>51</width>
                 <height>29</height>
                </rect>
               </property>
@@ -496,8 +497,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>2985</width>
-                 <height>2995</height>
+                 <width>1200</width>
+                 <height>2500</height>
                 </rect>
                </property>
                <property name="minimumSize">
