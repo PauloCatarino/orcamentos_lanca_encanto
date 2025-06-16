@@ -22,7 +22,7 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
  Para enviar atualizações para o github
 git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
-git commit -m "61º Commit"
+git commit -m "62º Commit"
 git push                  # envia para o GitHub
 
 """
@@ -57,6 +57,8 @@ from dados_items_materiais import configurar_tabela_material, inicializar_dados_
 from dados_items_ferragens import configurar_tabela_ferragens, inicializar_dados_items_ferragens
 from dados_items_sistemas_correr import configurar_tabela_sistemas_correr, inicializar_dados_items_sistemas_correr
 from dados_items_acabamentos import configurar_tabela_acabamentos, inicializar_dados_items_acabamentos
+
+from gerador_relatorios import gerar_relatorio_orcamento # Gerar relatórios do orçamento em PDF e Excel este é o módulo que gera os relatórios do orçamento em PDF e Excel,  e será enviado por mail
 
 # Atualiza os 6 QListWidget com os nomes das peças lidos do ficheiro Excel 'TAB_DEF_PECAS.XLSX'.
 from menu_grupos_def_pecas import atualizar_grupos_pecas
@@ -413,6 +415,17 @@ class MainApp(QMainWindow):
             # print("[INFO] Botão Importar Dados Gerais conectado.")
         except Exception as e:
             print(f"[ERRO] Falha ao conectar botão Importar Dados Gerais: {e}")
+
+        # Botão para gerar relatório em PDF e Excel
+        try:
+            if hasattr(self.ui, 'botao_exportar_pdf_excel'):
+                self.ui.botao_exportar_pdf_excel.clicked.connect(
+                    lambda: gerar_relatorio_orcamento(self.ui))
+                print("[INFO] Botão 'Exportar PDF e Excel Orçamento' conectado.")
+            else:
+                print("[AVISO] Botão 'Exportar PDF e Excel Orçamento' não encontrado na UI.")
+        except Exception as e:
+            print(f"[ERRO] Falha ao conectar botão Exportar PDF/Excel: {e}")
 
         print("--- Inicialização da UI Concluída ---")
 
