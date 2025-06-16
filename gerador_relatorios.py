@@ -1,12 +1,15 @@
 # gerador_relatorios.py
 
 import os
-from PyQt5 import  QtWidgets
+from PyQt5 import QtWidgets
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfgen import canvas
 import xlsxwriter
+from db_connection import obter_cursor
+
 from orcamentos import _gerar_nome_pasta_orcamento
 
 def _parse_float(value: str) -> float:
@@ -30,37 +33,102 @@ def _first_text(*widgets) -> str:
                 return txt
     return ""
 
+def _obter_dados_cliente(cliente_id: str):
+    """Retorna dados do cliente a partir do id."""
+    if not cliente_id:
+        return None
+    try:
+        with obter_cursor() as cur:
+            cur.execute(
+                "SELECT nome, morada, email, numero_cliente_phc, telefone, telemovel FROM clientes WHERE id=%s",
+                (cliente_id,),
+            )
+            return cur.fetchone()
+    except Exception as e:
+        print(f"Erro ao obter dados do cliente {cliente_id}: {e}")
+        return None
+
+
+class FooterCanvas(canvas.Canvas):
+    def __init__(self, data_str: str, num_ver: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_str = data_str
+        self.num_ver = num_ver
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        super().showPage()
+
+    def save(self):
+        page_count = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_footer(page_count)
+            super().showPage()
+        super().save()
+
+    def _draw_footer(self, page_count: int):
+        width, _ = A4
+        margin = 40
+        self.setFont("Helvetica", 9)
+        self.drawString(margin, 20, self.data_str)
+        self.drawCentredString(width / 2, 20, self.num_ver)
+
 def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     """Preenche a aba de relatório com os dados atuais do orçamento."""
     # Dados do cliente
-    ui.lineEdit_nome_cliente_3.setText(
-        _first_text( getattr(ui, "lineEdit_nome_cliente", None))
+    cliente_id = _first_text(
+        getattr(ui, "lineEdit_id_cliente", None),
+        getattr(ui, "lineEdit_idCliente_noOrc", None),
     )
+    dados_cli = _obter_dados_cliente(cliente_id)
+
+    if dados_cli:
+        nome, morada, email, num_phc, tel, telm = dados_cli
+        ui.lineEdit_nome_cliente_3.setText(nome or "")
+        ui.lineEdit_morada_cliente_3.setText(morada or "")
+        ui.lineEdit_email_cliente_3.setText(email or "")
+        ui.lineEdit_num_cliente_phc_3.setText(num_phc or "")
+        ui.lineEdit_telefone_3.setText(tel or "")
+        ui.lineEdit_telemovel_3.setText(telm or "")
+    else:
+        ui.lineEdit_nome_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_nome_cliente", None))
+        )
+        ui.lineEdit_morada_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_morada_cliente", None))
+        )
+        ui.lineEdit_email_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_email_cliente", None))
+        )
+        ui.lineEdit_num_cliente_phc_3.setText(
+            _first_text(getattr(ui, "lineEdit_num_cliente_phc", None))
+        )
+        ui.lineEdit_telefone_3.setText(
+            _first_text(getattr(ui, "lineEdit_telefone", None))
+        )
+        ui.lineEdit_telemovel_3.setText(
+            _first_text(getattr(ui, "lineEdit_telemovel", None))
+        )
+
+
+
     print(f"Nome cliente: {ui.lineEdit_nome_cliente_3.text()}")
     
-    ui.lineEdit_morada_cliente_3.setText(
-        _first_text(getattr(ui, "lineEdit_morada_cliente", None))
-    )
+  
     print(f"Morada cliente: {ui.lineEdit_morada_cliente_3.text()}")
     
-    ui.lineEdit_email_cliente_3.setText(
-        _first_text(getattr(ui, "lineEdit_email_cliente", None))
-    )
+   
     print(f"Email cliente: {ui.lineEdit_email_cliente_3.text()}")
     
-    ui.lineEdit_num_cliente_phc_3.setText(
-        _first_text(getattr(ui, "lineEdit_num_cliente_phc", None))
-    )
+   
     print(f"Num cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}")
     
-    ui.lineEdit_telefone_3.setText(
-        _first_text(getattr(ui, "lineEdit_telefone", None))
-    )
+   
     print(f"Telefone: {ui.lineEdit_telefone_3.text()}")
     
-    ui.lineEdit_telemovel_3.setText(
-        _first_text(getattr(ui, "lineEdit_telemovel", None))
-    )
+   
     print(f"Telemóvel: {ui.lineEdit_telemovel_3.text()}")
 
     # Dados do orçamento
@@ -91,8 +159,8 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     total_qt = 0.0
     subtotal = 0.0
     for i in range(n):
-        qt_item = dst.item(i, 7)
-        pt_item = dst.item(i, 9)
+        qt_item = dst.item(i, 8)
+        pt_item = dst.item(i, 10)
         qt = _parse_float(qt_item.text() if qt_item else "")
         pt = _parse_float(pt_item.text() if pt_item else "")
         total_qt += qt
@@ -108,7 +176,14 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
 
 def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     """Gera um PDF com os dados do relatório."""
-    doc = SimpleDocTemplate(caminho, pagesize=A4)
+    doc = SimpleDocTemplate(
+        caminho,
+        pagesize=A4,
+        leftMargin=10,
+        rightMargin=10,
+        topMargin=10,
+        bottomMargin=10,
+    )   # Margens folha a4
     styles = getSampleStyleSheet()
 
     elems = []
@@ -135,16 +210,16 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         elems.append(Paragraph(d, styles["Normal"]))
 
     elems.append(Spacer(1, 12))
-
+    # Nomes para colunas apresentar no Relatorio PDF
     headers = [
         "Item",
         "Codigo",
         "Descrição",
-        "Altura",
-        "Largura",
-        "Profundidade",
+        "Alt",
+        "Larg",
+        "Prof",
         "Und",
-        "QT",
+        "Qt",
         "Preco Unit",
         "Preco Total",
     ]
@@ -166,6 +241,8 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
                     row.append(Paragraph(formatted, styles["Normal"]))
                 else:
                     row.append("")
+            elif c == 9:
+                row.append(Paragraph(f"<b>{txt}</b>", styles["Normal"]))
             else:
                 row.append(txt)
         data.append(row)
@@ -178,6 +255,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
                 ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
                 ("FONTSIZE", (0, 0), (-1, 0), 9),
                 ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
             ]
         )
     )
@@ -188,7 +266,15 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     elems.append(Paragraph(ui.label_iva_2.text(), styles["Normal"]))
     elems.append(Paragraph(ui.label_total_geral_2.text(), styles["Normal"]))
 
-    doc.build(elems)
+    doc.build(
+        elems,
+        canvasmaker=lambda *a, **kw: FooterCanvas(
+            ui.label_data_orcamento_2.text(),
+            f"{ui.label_num_orcamento_2.text()} / {ui.label_ver_orcamento_2.text()}",
+            *a,
+            **kw,
+        ),
+    )
 
 
 def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
