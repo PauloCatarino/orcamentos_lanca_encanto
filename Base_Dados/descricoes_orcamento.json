@@ -1,10 +1,13 @@
-[
-  "Interiores AGL_MLM_LINHO_CANCUN_10/16/19mm",
-  "Frentes MDF_HIDROFUGO_BRANCO_B3822/MA_19mm",
-  "Portas Abrir",
-  "Bloco 3 Gavetas",
-  "Dobradiças BLUM com amortecedor",
-  "Corrediças EMUCA SILVER Extração Total com Amortecedor",
-  "Puxador 'J' Fresado na Porta",
-  "Puxador TIC_TAC"
-]
+{
+  "_comentario": "Este ficheiro armazena descrições de componentes utilizadas nas linhas do orçamento.",
+  "descricoes": [
+    "Interiores AGL_MLM_LINHO_CANCUN_10/16/19mm",
+    "Frentes MDF_HIDROFUGO_BRANCO_B3822/MA_19mm",
+    "Portas Abrir",
+    "Bloco 3 Gavetas",
+    "Dobradiças BLUM com amortecedor",
+    "Corrediças EMUCA SILVER Extração Total com Amortecedor",
+    "Puxador 'J' Fresado na Porta",
+    "Puxador TIC_TAC"
+  ]
+}

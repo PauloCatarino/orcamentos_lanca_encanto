@@ -22,7 +22,7 @@ pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
  Para enviar atualizações para o github
 git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
-git commit -m "55º Commit"
+git commit -m "56º Commit"
 git push                  # envia para o GitHub
 
 """
@@ -63,7 +63,7 @@ from menu_grupos_def_pecas import atualizar_grupos_pecas
 # Configura os QListWidget para permitir a seleção de múltiplos itens e alternar o estado de check ao clicar na linha.
 from tabela_def_pecas_items import configurar_selecao_qt_lists
 # Adiciona linhas na tabela "tab_def_pecas" a partir de peças selecionadas nos 6 GRUPOS QListWidget
-from tabela_def_pecas_items import (conectar_inserir_def_pecas_tab_items, inserir_pecas_selecionadas,setup_context_menu, on_item_changed_def_pecas, definir_larguras_tab_def_pecas, configurar_menu_colunas_tab_def_pecas,)
+from tabela_def_pecas_items import (conectar_inserir_def_pecas_tab_items, inserir_pecas_selecionadas,setup_context_menu, on_item_changed_def_pecas,definir_larguras_iniciais)
 # Importe a função calcular_orlas do módulo calculo_orlas e atualizar os preços e materias primas tab_def_pecas.
 from modulo_orquestrador import atualizar_tudo
 
@@ -259,8 +259,7 @@ class MainApp(QMainWindow):
             conectar_inserir_def_pecas_tab_items(self.ui)  # Conecta botão "Inserir Peças"
             # Configura menu de contexto e delegates
             setup_context_menu(self.ui, None)
-            definir_larguras_tab_def_pecas(self.ui) # Define larguras das colunas na tab_def_pecas
-            configurar_menu_colunas_tab_def_pecas(self.ui) # Configura o menu de colunas da tabela tab_def_pecas com opções de ocultar ou mostrar colunas
+            definir_larguras_iniciais(self.ui)
             # Configura clique simples nos QListWidget
             configurar_selecao_qt_lists(self.ui)
 

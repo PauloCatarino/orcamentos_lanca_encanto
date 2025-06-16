@@ -20,33 +20,43 @@ BASE_PATH = os.path.join("Base_Dados", "descricoes_orcamento.json")
 
 
 def carregar_descricoes():
-    """Lê o ficheiro JSON de descrições ou devolve lista vazia."""
+    """Lê o ficheiro JSON e devolve só a lista de descrições."""
     if not os.path.exists(BASE_PATH):
         return []
     try:
         with open(BASE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
+            dados = json.load(f)
+            # Espera que o ficheiro tenha a estrutura com 'descricoes'
+            if isinstance(dados, dict) and "descricoes" in dados:
+                return dados["descricoes"]
+            elif isinstance(dados, list):
+                return dados  # compatibilidade antiga
+            else:
+                return []
+    except Exception as e:
+        print(f"[ERRO] Ao ler descrições: {e}")
         return []
 
 
 def guardar_descricoes(desc_list):
-    """Guarda a lista de descrições no ficheiro JSON."""
+    """Guarda as descrições mantendo o comentário (caso exista)."""
     try:
+        dados_a_gravar = {
+            "_comentario": "Este ficheiro armazena descrições de componentes utilizadas nas linhas do orçamento.",
+            "descricoes": desc_list
+        }
         with open(BASE_PATH, "w", encoding="utf-8") as f:
-            json.dump(desc_list, f, indent=2, ensure_ascii=False)
+            json.dump(dados_a_gravar, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"[ERRO] Ao guardar descrições: {e}")
 
 
 class DescricaoPredefinidaDialog(QDialog):
-    """Diálogo para selecionar e gerir descrições pré-definidas."""
-
     def __init__(self, descricoes, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Descrições Pré-definidas") 
         self.setMinimumSize(600, 400)
-        self.descricoes = descricoes[:]  # copia
+        self.descricoes = descricoes[:]  # Cópia
         self._setup_ui()
 
     def _setup_ui(self):
@@ -98,7 +108,7 @@ class DescricaoPredefinidaDialog(QDialog):
             item.setHidden(not all(p in item_text for p in partes))
 
     def _adicionar(self):
-        text, ok = QInputDialog.getText(self, "Adicionar Descrição", "Texto:") 
+        text, ok = QInputDialog.getText(self, "Adicionar Descrição", "Texto:")
         if ok and text.strip():
             self.descricoes.append(text.strip())
             self._recarregar_lista()
@@ -109,7 +119,7 @@ class DescricaoPredefinidaDialog(QDialog):
             QMessageBox.warning(self, "Editar", "Selecione uma descrição para editar.")
             return
         item = items[0]
-        text, ok = QInputDialog.getText(self, "Editar Descrição", "Texto:", text=item.text()) # este menu deve ser maior em altura e largura
+        text, ok = QInputDialog.getText(self, "Editar Descrição", "Texto:", text=item.text())
         if ok and text.strip():
             idx = self.lista.row(item)
             self.descricoes[idx] = text.strip()
@@ -125,7 +135,11 @@ class DescricaoPredefinidaDialog(QDialog):
         self._recarregar_lista()
 
     def descricoes_selecionadas(self):
-        return [self.lista.item(i).text() for i in range(self.lista.count()) if self.lista.item(i).checkState() == Qt.Checked]
+        return [
+            self.lista.item(i).text()
+            for i in range(self.lista.count())
+            if self.lista.item(i).checkState() == Qt.Checked
+        ]
 
 
 def exibir_menu_descricoes(ui, pos):

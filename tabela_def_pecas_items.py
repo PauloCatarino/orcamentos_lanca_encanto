@@ -62,6 +62,92 @@ from db_connection import obter_cursor
 # Variável global para armazenar dados de linhas copiadas na tab_def_pecas
 _copied_rows_def_pecas = []
 
+# Larguras padrão para cada coluna da tab_def_pecas
+DEFAULT_COLUMN_WIDTHS = [
+    40,   # id
+    200,  # Descricao_Livre
+    160,  # Def_Peca
+    200,  # Descricao
+    80,   # QT_mod
+    80,   # QT_und
+    80,   # Comp
+    80,   # Larg
+    80,   # Esp
+    80,   # MPs
+    80,   # MO
+    80,   # Orla
+    80,   # BLK
+    80,   # Mat_Default
+    80,   # Tab_Default
+    80,   # ids
+    80,   # num_orc
+    80,   # ver_orc
+    80,   # ref_le
+    200,  # descricao_no_orcamento
+    60,   # ptab
+    60,   # pliq
+    80,   # desc1_plus
+    80,   # desc2_minus
+    60,   # und
+    80,   # desp
+    80,   # corres_orla_0_4
+    80,   # corres_orla_1_0
+    100,  # tipo
+    100,  # familia
+    80,   # comp_mp
+    80,   # larg_mp
+    80,   # esp_mp
+    80,   # MP
+    80,   # COMP_ASS_1
+    80,   # COMP_ASS_2
+    80,   # COMP_ASS_3
+    60,   # ORLA_C1
+    60,   # ORLA_C2
+    60,   # ORLA_L1
+    60,   # ORLA_L2
+    80,   # ML_C1
+    80,   # ML_C2
+    80,   # ML_L1
+    80,   # ML_L2
+    80,   # CUSTO_ML_C1
+    80,   # CUSTO_ML_C2
+    80,   # CUSTO_ML_L1
+    80,   # CUSTO_ML_L2
+    80,   # QT_Total
+    80,   # Comp_res
+    80,   # Larg_res
+    80,   # Esp_res
+    80,   # Gravar_Modulo
+    80,   # AREA_M2_und
+    80,   # SPP_ML_und
+    80,   # CP09_CUSTO_MP
+    80,   # CUSTO_MP_und
+    80,   # CUSTO_MP_Total
+    80,   # ACB_SUP
+    80,   # ACB_INF
+    80,   # ACB_SUP_und
+    80,   # ACB_INF_und
+    80,   # CP01_SEC
+    80,   # CP01_SEC_und
+    80,   # CP02_ORL
+    80,   # CP02_ORL_und
+    80,   # CP03_CNC
+    80,   # CP03_CNC_und
+    80,   # CP04_ABD
+    80,   # CP04_ABD_und
+    80,   # CP05_PRENSA
+    80,   # CP05_PRENSA_und
+    80,   # CP06_ESQUAD
+    80,   # CP06_ESQUAD_und
+    80,   # CP07_EMBALAGEM
+    80,   # CP07_EMBALAGEM_und
+    80,   # CP08_MAO_DE_OBRA
+    80,   # CP08_MAO_DE_OBRA_und
+    80,   # Soma_Custo_und
+    80,   # Soma_Custo_Total
+    80,   # Soma_Custo_ACB
+]
+
 
 
 # Importa a função para abrir o diálogo de seleção de material (necessário para o botão "Escolher")
@@ -757,6 +843,9 @@ def setup_context_menu(ui, opcoes_por_grupo=None):
         pass
     table.customContextMenuRequested.connect(
         lambda pos: show_context_menu(ui, pos))
+
+    # Menu no cabeçalho para largura e visibilidade
+    setup_header_menu(ui)
 
     # Instala o delegate para a coluna "Def_Peca" (coluna 2)
     # Passa ui, table (como parent), e o dicionário opcoes_por_grupo posicionalmente
@@ -1810,46 +1899,47 @@ def install_def_peca_delegate(ui, parent, opcoes_por_grupo=None):
 # Funções utilitárias para ajustar a visualização da tab_def_pecas
 # ---------------------------------------------------------------------------
 
-def definir_larguras_tab_def_pecas(ui):
-    """Define larguras fixas para cada coluna da tab_def_pecas."""
-    tabela = ui.tab_def_pecas
-    header = tabela.horizontalHeader()
-    header.setSectionResizeMode(QHeaderView.Fixed)
-    header.setStretchLastSection(False)
-    larguras = [
-        40,   # id
-        200,  # Descricao_Livre
-        160,  # Def_Peca
-        200,  # Descricao
-        60, 60, 60, 60, 60, 50, 50, 50, 50, 120, 120, 80, 80, 80, 100, 200
-    ]
-    num_cols = tabela.columnCount()
-    if len(larguras) < num_cols:
-        larguras += [80] * (num_cols - len(larguras))
-    for idx in range(num_cols):
-        tabela.setColumnWidth(idx, larguras[idx])
-
-
-def configurar_menu_colunas_tab_def_pecas(ui):
-    """Adiciona um menu no cabeçalho para ocultar/mostrar colunas."""
+def setup_header_menu(ui):
+    """Instala um menu de contexto no cabeçalho para ocultar/mostrar colunas
+    e ajustar larguras."""
     header = ui.tab_def_pecas.horizontalHeader()
     header.setContextMenuPolicy(Qt.CustomContextMenu)
-    header.customContextMenuRequested.connect(
-        lambda pos: _mostrar_menu_colunas(ui.tab_def_pecas, pos)
-    )
+    header.customContextMenuRequested.connect(lambda pos: _mostrar_menu_colunas(ui, pos))
 
 
-def _mostrar_menu_colunas(tabela, pos):
+def _mostrar_menu_colunas(ui, pos):
+    table = ui.tab_def_pecas
+    header = table.horizontalHeader()
+    col = header.logicalIndexAt(pos)
+    if col < 0:
+        return
     menu = QMenu()
-    for col in range(tabela.columnCount()):
-        header_item = tabela.horizontalHeaderItem(col)
-        titulo = header_item.text() if header_item else str(col)
-        acao = QAction(titulo, menu)
-        acao.setCheckable(True)
-        acao.setChecked(not tabela.isColumnHidden(col))
-        acao.toggled.connect(lambda checked, c=col: tabela.setColumnHidden(c, not checked))
-        menu.addAction(acao)
-    menu.exec_(tabela.horizontalHeader().mapToGlobal(pos))
+    action_hide = menu.addAction("Ocultar Coluna")
+    action_width = menu.addAction("Definir Largura...")
+    submenu = menu.addMenu("Mostrar Colunas")
+    for i in range(table.columnCount()):
+        text = table.horizontalHeaderItem(i).text() or f"Col {i}"
+        act = submenu.addAction(text)
+        act.setCheckable(True)
+        act.setChecked(not table.isColumnHidden(i))
+        act.triggered.connect(lambda checked, idx=i: table.setColumnHidden(idx, not checked))
+
+    chosen = menu.exec_(header.mapToGlobal(pos))
+    if chosen == action_hide:
+        table.setColumnHidden(col, True)
+    elif chosen == action_width:
+        from PyQt5.QtWidgets import QInputDialog
+        w, ok = QInputDialog.getInt(table, "Largura da Coluna", "Largura:", table.columnWidth(col), 20, 1000, 1)
+        if ok:
+            table.setColumnWidth(col, w)
+
+
+def definir_larguras_iniciais(ui):
+    """Aplica as larguras padrão definidas em ``DEFAULT_COLUMN_WIDTHS``."""
+    table = ui.tab_def_pecas
+    for i, largura in enumerate(DEFAULT_COLUMN_WIDTHS):
+        if i < table.columnCount():
+            table.setColumnWidth(i, largura)
 
 # ---------------------------------------------------------------------------
 # FIM das Funções utilitárias para ajustar a visualização da tab_def_pecas

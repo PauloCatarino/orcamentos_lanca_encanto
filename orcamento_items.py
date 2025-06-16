@@ -53,7 +53,7 @@ Observação: Certifique-se de que a função get_connection(), importada do mó
 import datetime
 import mysql.connector  # Adicionado para erros específicos
 from PyQt5.QtCore import QDate, Qt, QTimer  # Importado QTimer
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QTreeWidgetItem,  QMenu
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QTreeWidgetItem,  QMenu, QDialog
 from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 # Importa a função de conexão MySQL (já configurada no módulo de conexão)
 from db_connection import obter_cursor
@@ -62,7 +62,9 @@ from configurar_guardar_dados_gerais_orcamento import configurar_dados_gerais, c
 from utils import (formatar_valor_moeda, converter_texto_para_valor, formatar_valor_percentual, set_item, verificar_dados_itens_salvos)
 from menu_descricoes import configurar_menu_descricoes # Este módulo é usado para configurar o menu de descrições pré-definidas que existe no separdor orcamento, permite adicionar descricoes a cada item de orçamento
 
-
+# Importa diálogo e gestor de descrições
+from dialogo_descricoes import DialogoDescricoes
+from descricoes_manager import carregar_descricoes, guardar_descricoes
 # Importar o módulo necessário para chamar a função de atualização da tab_modulo_medidas
 import tabela_def_pecas_items
 
@@ -2239,3 +2241,20 @@ def excluir_item_orcamento(ui):
         QMessageBox.critical(None, "Erro", f"Erro: {e}")
 #################################################################################################################################
 # --- Fim das funções de manipulação de itens do orçamento ---
+
+def configurar_menu_descricoes(ui):
+    """Configura o menu de contexto para o campo de descrição."""
+    widget = ui.plainTextEdit_descricao_orcamento
+    widget.setContextMenuPolicy(Qt.CustomContextMenu)
+    widget.customContextMenuRequested.connect(lambda pos: _abrir_menu_descricoes(ui))
+
+
+def _abrir_menu_descricoes(ui):
+    dialog = DialogoDescricoes(ui.plainTextEdit_descricao_orcamento)
+    if dialog.exec_() == QDialog.Accepted:
+        linhas = dialog.descricoes_selecionadas()
+        if linhas:
+            texto_atual = ui.plainTextEdit_descricao_orcamento.toPlainText().rstrip()
+            for linha in linhas:
+                texto_atual += "\n\t- " + linha
+            ui.plainTextEdit_descricao_orcamento.setPlainText(texto_atual)
