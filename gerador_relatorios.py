@@ -9,6 +9,8 @@ pandas para o Excel.
 
 from datetime import datetime
 import os
+import sys
+import subprocess
 from typing import Tuple
 from PyQt5.QtWidgets import QTableWidgetItem
 
@@ -149,5 +151,19 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
 
     caminho_pdf = os.path.join(pasta_orc, f"Relatorio_{num_orc}_{ver_orc}.pdf")
     pdf.output(caminho_pdf)
+
+    print(f"[INFO] PDF gerado em: {caminho_pdf}")
+    print(f"[INFO] Excel gerado em: {caminho_excel}")
+
+    # Abre o PDF automaticamente para visualização, se possível
+    try:
+        if os.name == "nt":
+            os.startfile(caminho_pdf)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", caminho_pdf], check=False)
+        else:
+            subprocess.run(["xdg-open", caminho_pdf], check=False)
+    except Exception as exc:
+        print(f"[AVISO] Não foi possível abrir o PDF automaticamente: {exc}")
 
     return caminho_pdf, caminho_excel
