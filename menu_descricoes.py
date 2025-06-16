@@ -44,7 +44,8 @@ class DescricaoPredefinidaDialog(QDialog):
 
     def __init__(self, descricoes, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Descrições Pré-definidas")
+        self.setWindowTitle("Descrições Pré-definidas") 
+        self.setMinimumSize(600, 400)
         self.descricoes = descricoes[:]  # copia
         self._setup_ui()
 
@@ -97,7 +98,7 @@ class DescricaoPredefinidaDialog(QDialog):
             item.setHidden(not all(p in item_text for p in partes))
 
     def _adicionar(self):
-        text, ok = QInputDialog.getText(self, "Adicionar Descrição", "Texto:")
+        text, ok = QInputDialog.getText(self, "Adicionar Descrição", "Texto:") 
         if ok and text.strip():
             self.descricoes.append(text.strip())
             self._recarregar_lista()
@@ -108,7 +109,7 @@ class DescricaoPredefinidaDialog(QDialog):
             QMessageBox.warning(self, "Editar", "Selecione uma descrição para editar.")
             return
         item = items[0]
-        text, ok = QInputDialog.getText(self, "Editar Descrição", "Texto:", text=item.text())
+        text, ok = QInputDialog.getText(self, "Editar Descrição", "Texto:", text=item.text()) # este menu deve ser maior em altura e largura
         if ok and text.strip():
             idx = self.lista.row(item)
             self.descricoes[idx] = text.strip()
