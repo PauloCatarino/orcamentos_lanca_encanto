@@ -20,8 +20,9 @@ class OrcamentoPDF(FPDF):
 
     def __init__(self, num_orc: str, ver_orc: str, data_str: str):
         super().__init__(orientation="P", unit="mm", format="A4")
-        # Permite usar caracteres fora de latin-1 (ex.: símbolo do Euro)
-        self.core_fonts_encoding = "utf-8"
+        # Permite usar caracteres como "€" com as fontes core
+        # cp1252 inclui o símbolo do Euro e evita o erro de codificação
+        self.core_fonts_encoding = "cp1252"
         self.num_orc = num_orc
         self.ver_orc = ver_orc
         self.data_str = data_str
@@ -102,8 +103,8 @@ def gerar_relatorio_orcamento(ui) -> Tuple[str, str]:
 
     pdf = OrcamentoPDF(num_orc, ver_orc, datetime.now().strftime("%d/%m/%Y"))
     pdf.alias_nb_pages()
-    # Garantir suporte a caracteres Unicode no documento
-    pdf.core_fonts_encoding = "utf-8"
+    # Utiliza codificação cp1252 para permitir o símbolo do Euro
+    pdf.core_fonts_encoding = "cp1252"
     pdf.add_page()
 
     pdf.set_font("Helvetica", size=12)
