@@ -13,15 +13,43 @@ from db_connection import obter_cursor
 from orcamentos import _gerar_nome_pasta_orcamento
 
 def _parse_float(value: str) -> float:
-    """Converts a string to float, handling thousands separators."""
+    """Converts a string to float, handling thousands separators and currency symbols."""
     if not value:
         return 0.0
+    
     txt = str(value).strip()
-    txt = txt.replace('\xa0', '').replace(' ', '')  # remove spaces/nbsp
-    txt = txt.replace('.', '').replace(',', '.')
+    print(f"DEBUG _parse_float: valor original='{txt}'")
+    
+    # Remove símbolos de moeda e espaços
+    txt = txt.replace('€', '').replace('$', '').replace('\xa0', '').replace(' ', '')
+    print(f"DEBUG _parse_float: após remover símbolos='{txt}'")
+    
+    # Se contém vírgula, assumimos formato português/europeu (1.234,56)
+    if ',' in txt:
+        # Separa a parte decimal
+        partes = txt.split(',')
+        if len(partes) == 2:
+            # Remove pontos da parte inteira (separadores de milhares)
+            parte_inteira = partes[0].replace('.', '')
+            parte_decimal = partes[1]
+            txt = f"{parte_inteira}.{parte_decimal}"
+            print(f"DEBUG _parse_float: formato europeu convertido='{txt}'")
+    else:
+        # Se não tem vírgula, pode ser formato americano ou número simples
+        # Apenas remove pontos se houver mais de um (separadores de milhares)
+        pontos = txt.count('.')
+        if pontos > 1:
+            # Remove todos os pontos exceto o último
+            partes = txt.split('.')
+            txt = ''.join(partes[:-1]) + '.' + partes[-1]
+            print(f"DEBUG _parse_float: múltiplos pontos corrigidos='{txt}'")
+    
     try:
-        return float(txt)
-    except ValueError:
+        resultado = float(txt)
+        print(f"DEBUG _parse_float: resultado final={resultado}")
+        return resultado
+    except ValueError as e:
+        print(f"DEBUG _parse_float: erro ao converter '{txt}': {e}")
         return 0.0
 
 def _first_text(*widgets) -> str:
@@ -161,7 +189,7 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     print(f"Iniciando cálculo de totais. Número de linhas: {n}")
 
     for i in range(n):
-        qt_item = dst.item(i, 8)
+        qt_item = dst.item(i, 7)
         pt_item = dst.item(i, 9)  # Nota: mudei de coluna 10 para 9 - verificar se está correto
         
         qt_text = qt_item.text() if qt_item else ""
@@ -172,7 +200,7 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
         qt = _parse_float(qt_text)
         pt = _parse_float(pt_text)
         
-        print(f"Linha {i}: QT parsed={qt}, PT parsed={pt}")
+        print(f"Linha {i}: QT parsed={qt}, PT_preco total parsed={pt}")
         
         total_qt += qt
         subtotal += pt
