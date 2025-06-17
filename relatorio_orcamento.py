@@ -391,18 +391,27 @@ def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
 
 
 def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
-    """Obtém (e cria, se necessário) o caminho onde guardar os relatórios."""
+    """Retorna o caminho da pasta onde guardar os relatórios do orçamento.
+
+    A estrutura passou a conter sempre subpastas de versão, começando por
+    ``00``. Este helper cria a pasta da versão solicitada (e a ``00`` caso
+    ainda não exista) antes de devolvê-la.
+    """
     caminho_base = ui.lineEdit_orcamentos.text().strip()
     ano = ui.lineEdit_ano.text().strip()
     num = ui.lineEdit_num_orcamento_2.text().strip()
     nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
     versao = ui.lineEdit_versao.text().strip()
     nome_pasta = _gerar_nome_pasta_orcamento(num, nome_cliente)
-    pasta = os.path.join(caminho_base, ano, nome_pasta)
+    pasta_mae = os.path.join(caminho_base, ano, nome_pasta)
+    pasta_versao = os.path.join(pasta_mae, versao)
+
+    # Garante que a versão '00' existe, mesmo que estivermos noutra versão
     if versao != "00":
-        pasta = os.path.join(pasta, versao)
-    os.makedirs(pasta, exist_ok=True)
-    return pasta
+        os.makedirs(os.path.join(pasta_mae, "00"), exist_ok=True)
+
+    os.makedirs(pasta_versao, exist_ok=True)
+    return pasta_versao
 
 
 def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
