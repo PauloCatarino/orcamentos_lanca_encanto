@@ -401,7 +401,12 @@ def inserir_linha_orcamento(ui):
 
 def abrir_criar_pasta_orcamento():
     """
-    Cria ou abre a pasta do orçamento com base nos dados configurados no formulário.
+    Cria ou abre a pasta do orçamento com base nos dados configurados no
+    formulário.
+
+    Estrutura das pastas: <Ano>/<Num_Cliente>/<Versao>
+    A primeira versão é sempre ``00`` e todas as versões ficam separadas em
+    subpastas dentro da pasta "mãe" do orçamento.
     """
     try:
         caminho_base = ui.lineEdit_orcamentos.text().strip()
@@ -426,16 +431,20 @@ def abrir_criar_pasta_orcamento():
             return
         caminho_orcamento = os.path.join(caminho_ano, nome_pasta_orcamento)
 
-        # Verifica se o caminho base do ano existe, se não, cria
-        # Se a versão for diferente de "00", cria/abre subpasta da versão
+        # A partir de agora cada orçamento possui subpastas para as versões
+        # começando em '00'. Logo, o caminho final inclui sempre a versão.
+        caminho_final = os.path.join(caminho_orcamento, versao)
+
+        # Garante que a pasta da versão '00' exista mesmo quando se trabalha
+        # noutra versão (útil para orçamentos antigos ou criação direta da '01').
         if versao != "00":
-            caminho_final = os.path.join(caminho_orcamento, versao)
-        else:
-            caminho_final = caminho_orcamento
+            caminho_zero = os.path.join(caminho_orcamento, "00")
+            if not os.path.exists(caminho_zero):
+                os.makedirs(caminho_zero, exist_ok=True)
 
         # Cria o diretório se não existir (incluindo diretórios pai)
         if not os.path.exists(caminho_final):
-            os.makedirs(caminho_final)
+            os.makedirs(caminho_final,exist_ok=True)
             QMessageBox.information(None, "Sucesso", f"Pasta do Orçamento criada:\n{caminho_final}")
         else:
             QMessageBox.information(None, "Informação", f"Abrindo pasta existente:\n{caminho_final}")
@@ -649,16 +658,18 @@ def abrir_janela_apagar_orcamento(ui):
                 erros.append("Caminho base dos orçamentos inválido.")
             else:
                 caminho_ano = os.path.join(caminho_base, ano_orcamento)
-                caminho_orcamento = os.path.join(caminho_ano, nome_pasta_base) # Usa nome gerado
+                caminho_orcamento = os.path.join(caminho_ano, nome_pasta_base)  # Usa nome gerado
                 caminho_final_apagar = None
-                if versao_orcamento != "00":
-                    caminho_versao = os.path.join(caminho_orcamento, versao_orcamento)
-                    if os.path.isdir(caminho_versao): caminho_final_apagar = caminho_versao
-                    elif os.path.isdir(caminho_orcamento): caminho_final_apagar = caminho_orcamento # Fallback para pasta principal
-                    else: erros.append(f"Pasta não encontrada: {caminho_versao} ou {caminho_orcamento}")
+                caminho_versao = os.path.join(caminho_orcamento, versao_orcamento)
+
+                # Nova estrutura: pastas de versão sempre existentes. Contudo,
+                # mantemos um fallback para orçamentos antigos sem subpastas.
+                if os.path.isdir(caminho_versao):
+                    caminho_final_apagar = caminho_versao
+                elif os.path.isdir(caminho_orcamento):
+                    caminho_final_apagar = caminho_orcamento  # compatibilidade antiga
                 else:
-                    if os.path.isdir(caminho_orcamento): caminho_final_apagar = caminho_orcamento
-                    else: erros.append(f"Pasta não encontrada: {caminho_orcamento}")
+                    erros.append(f"Pasta não encontrada: {caminho_versao} ou {caminho_orcamento}")
 
                 if caminho_final_apagar:
                     print(f"Tentando excluir pasta: {caminho_final_apagar}")
