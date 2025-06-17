@@ -1,4 +1,4 @@
-# gerador_relatorios.py
+# relatorio_orcamento.py
 
 """Gerador dos relatórios de orçamento em PDF e Excel.
 

@@ -27,7 +27,7 @@ git push                  # envia para o GitHub
  ______________________________//________________________
 git status                
 git add .                 
-git commit -m "85º Commit"
+git commit -m "86º Commit"
 
 
 git push 
@@ -67,7 +67,7 @@ from dados_items_ferragens import configurar_tabela_ferragens, inicializar_dados
 from dados_items_sistemas_correr import configurar_tabela_sistemas_correr, inicializar_dados_items_sistemas_correr
 from dados_items_acabamentos import configurar_tabela_acabamentos, inicializar_dados_items_acabamentos
 
-from gerador_relatorios import gerar_relatorio_orcamento # Gerar relatórios do orçamento em PDF e Excel este é o módulo que gera os relatórios do orçamento em PDF e Excel,  e será enviado por mail
+from relatorio_orcamento import gerar_relatorio_orcamento # Gerar relatórios do orçamento em PDF e Excel este é o módulo que gera os relatórios do orçamento em PDF e Excel,  e será enviado por mail
 
 # Atualiza os 6 QListWidget com os nomes das peças lidos do ficheiro Excel 'TAB_DEF_PECAS.XLSX'.
 from menu_grupos_def_pecas import atualizar_grupos_pecas
