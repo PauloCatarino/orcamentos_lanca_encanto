@@ -14,6 +14,7 @@ e geração dos ficheiros.
 
 import os
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QHeaderView
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
@@ -194,6 +195,19 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
             item = src.item(i, c + 1)
             txt = item.text() if item else ""
             dst.setItem(i, c, QtWidgets.QTableWidgetItem(txt))
+
+    # Configurações de apresentação da tabela de itens
+    # Ajusta larguras das colunas na tabelo do separadro Relatorio_orcamento
+    # Nota: as larguras são fixas, mas podem ser ajustadas conforme necessário
+    larguras = [60, 100, 1600, 80, 80, 80, 60, 80, 150, 151]
+    header = dst.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.Interactive)
+    for idx, largura in enumerate(larguras):
+        if idx < dst.columnCount():
+            dst.setColumnWidth(idx, largura)
+    dst.setWordWrap(True)
+    dst.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+    dst.resizeRowsToContents()
 
     # Totais
     total_qt = 0.0
