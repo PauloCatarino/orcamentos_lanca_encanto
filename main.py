@@ -1,6 +1,8 @@
-"""
+r"""
 main.py
 =======
+Módulo principal do software de orçamentos.
+...
 Módulo principal do software de orçamentos.
 Este módulo integra e 
 gura os diversos componentes da interface (...)
@@ -40,7 +42,10 @@ crtl + swift + p    escolher  o interpretador -> Python 3.12.8(venv)
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
  .\venv\Scripts\Activate.ps1
 
- (venv) PS C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\ORCAMENTO_V2\orcamentos_lanca_encanto> 
+r
+...
+ r(venv) PS C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\ORCAMENTO_V2\orcamentos_lanca_encanto> 
+...
 
 ______________________________//________________________
 

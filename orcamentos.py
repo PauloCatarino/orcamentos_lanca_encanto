@@ -17,6 +17,8 @@ que deve retornar uma conexão MySQL configurada (host, usuário, senha, base de
 """
 
 import os
+import pandas as pd
+from openpyxl import load_workbook
 import datetime
 import re
 import mysql.connector # Importar para capturar erros específicos
@@ -398,6 +400,36 @@ def inserir_linha_orcamento(ui):
         print(f"Erro inesperado ao inserir orçamento: {e}")
         QMessageBox.critical(None, "Erro Inesperado", f"Erro ao inserir orçamento:\n{e}")
 
+def criar_excel_resumo(orcam_path, num_orcamento, versao, template_path=None):
+    """
+    Cria o ficheiro Excel de resumo de custos dentro da pasta do orçamento.
+    Se existir um template, copia-o. Caso contrário, cria um Excel vazio com separadores base.
+    """
+    # Falta criar uma template de excel com os separadores necessários e se possivel com graficos e resumos dos varios resumos para paresentar no menu do separador Resumo_Consumos_Orcamento_2
+
+    nome_ficheiro = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
+    caminho_excel = os.path.join(orcam_path, nome_ficheiro)
+
+    if os.path.exists(caminho_excel):
+        print(f"O ficheiro Excel de resumo já existe: {caminho_excel}")
+        return
+
+    if template_path and os.path.exists(template_path):
+        # Copiar template existente
+        import shutil
+        shutil.copy(template_path, caminho_excel)
+        print(f"Excel de resumo criado a partir de template: {caminho_excel}")
+    else:
+        # Criar um Excel simples com separadores base
+        with pd.ExcelWriter(caminho_excel, engine='xlsxwriter') as writer:
+            # Cria sheets básicos - adapta conforme as tuas necessidades!
+            pd.DataFrame(columns=['Categoria', 'Descrição', 'Custo']).to_excel(writer, sheet_name='Placas', index=False)
+            pd.DataFrame(columns=['Tipo', 'Descrição', 'Valor']).to_excel(writer, sheet_name='Ferragens', index=False)
+            pd.DataFrame(columns=['Tipo', 'Comprimento', 'Valor']).to_excel(writer, sheet_name='Orlas', index=False)
+            pd.DataFrame(columns=['Margem', 'Valor']).to_excel(writer, sheet_name='Margens', index=False)
+        print(f"Excel de resumo criado de raiz: {caminho_excel}")
+
+    return caminho_excel
 
 def abrir_criar_pasta_orcamento():
     """

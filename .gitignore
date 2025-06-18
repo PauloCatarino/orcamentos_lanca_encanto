@@ -1,17 +1,31 @@
-# Ignorar ficheiros compilados do Python
+# Ficheiros compilados Python
 __pycache__/
 *.pyc
 *.pyo
 
-# Ignorar ficheiros de configuração do VSCode
+# Ficheiros de configuração VSCode e outros IDEs
 .vscode/
+.idea/
+*.code-workspace
 
-# Ignorar ficheiros temporários do sistema
+# Ficheiros temporários do sistema
 *.swp
 *.tmp
-
-# Ignorar ficheiros de backup do editor
-*~
+*.log
 *.bak
+*~
 
+# Ficheiros PDF e ficheiros de relatórios
 *.pdf
+
+# Ambiente virtual Python
+venv/
+.env/
+
+# Ficheiros de bases de dados locais (caso uses SQLite em testes)
+*.sqlite3
+
+# Ficheiros de exportação temporária Excel/CSV
+*.xlsx
+*.xls
+*.csv
