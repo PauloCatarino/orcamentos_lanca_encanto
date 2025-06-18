@@ -14,7 +14,7 @@ e geração dos ficheiros.
 
 import os
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QHeaderView
+from PyQt5.QtWidgets import QHeaderView, QMessageBox
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
@@ -24,6 +24,7 @@ import xlsxwriter
 from db_connection import obter_cursor
 
 from orcamentos import _gerar_nome_pasta_orcamento
+from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resumos?
 
 def _parse_float(value: str) -> float:
     """Converts a string to float, handling thousands separators and currency symbols."""
@@ -447,7 +448,33 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     if resp == QtWidgets.QMessageBox.Yes:
         exportar_relatorio(ui)
 
+def on_gerar_relatorio_consumos_clicked():
+    """
+    Handler para o botão 'Gerar Relatório de Consumos'.
+    """
+    # Obter os dados dos campos da UI
+    num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    ano = ui.lineEdit_ano.text().strip()
+    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
+    caminho_base = ui.lineEdit_orcamentos.text().strip()
 
+    # Calcular caminho da pasta (igual ao que fazes ao criar a pasta!)
+    from orcamentos import _gerar_nome_pasta_orcamento  # importa se estiver noutro ficheiro
+    nome_pasta_orc = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente)
+    caminho_pasta = os.path.join(caminho_base, ano, nome_pasta_orc, versao)
+
+    # Caminho para o Excel de resumo
+    ficheiro_excel = os.path.join(
+        caminho_pasta, f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
+    )
+
+    # Chamar a função que atualiza o Excel
+    try:
+        gerar_resumos_excel(ficheiro_excel, num_orcamento, versao)
+        QMessageBox.information(None, "Resumos Atualizados", f"Relatório de consumos atualizado com sucesso em:\n{ficheiro_excel}")
+    except Exception as e:
+        QMessageBox.critical(None, "Erro", f"Erro ao gerar relatório de consumos:\n{e}")
 
 
 # Se executares este ficheiro diretamente:
@@ -457,6 +484,7 @@ if __name__ == "__main__":
     main_win = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(main_win)
-    ui.pushButton_Export_PDF_Relatorio.clicked.connect(lambda: gerar_relatorio_orcamento(ui))
+    ui.pushButton_Export_PDF_Relatorio.clicked.connect(lambda: gerar_relatorio_orcamento(ui)) # conecta o botão de exportação PDF do Relatório do orçamento
+    ui.pushButton_Gerar_Relatorio_Consumos.clicked.connect(on_gerar_relatorio_consumos_clicked) # Conecta o botão de gerar relatório de consumos em ficheiro Excel e preenche os campos necessários
     main_win.show()
     app.exec_()

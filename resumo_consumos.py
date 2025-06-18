@@ -16,11 +16,12 @@
 
 import re
 import sys
+import os
 import pandas as pd
 import numpy as np
 
 # Importa função para ler tabelas do MySQL
-sys.path.append(".")
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 from src.db import carregar_tabela
 
 
@@ -404,7 +405,51 @@ def resumo_margens_excel(excel_path, num_orcamento, versao):
 ######################################################################
 # 7. Main (executa tudo, exporta para Excel)
 ######################################################################
+# resumo_consumos.py (no início do ficheiro, após imports)
+def gerar_resumos_excel(path_excel, num_orc, versao):
+    """
+    Atualiza/gera todos os resumos no Excel indicado, para o orçamento e versão dados.
+    """
+    import pandas as pd
 
+
+    # 1. Carregar dados da BD
+    pecas = carregar_tabela("dados_def_pecas")
+    orcamentos = carregar_tabela("orcamentos")
+    orcamento_items = carregar_tabela("orcamento_items")
+
+    # 2. Gerar os DataFrames de resumo
+    df_resumogeral = resumo_geral_pecas(pecas)
+    df_resumo_placas = resumo_placas(pecas, num_orc, versao)
+    df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
+    df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
+    df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
+
+    # 3. Exportar para o Excel (escreve/atualiza cada separador)
+    with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+        df_resumogeral.to_excel(writer, sheet_name="Resumo Geral", index=False)
+        df_resumo_placas.to_excel(writer, sheet_name="Resumo Placas", index=False)
+        df_resumo_orlas.to_excel(writer, sheet_name="Resumo Orlas", index=False)
+        df_resumo_ferragens.to_excel(writer, sheet_name="Resumo Ferragens", index=False)
+        df_resumo_maquinas_mo.to_excel(writer, sheet_name="Resumo Maquinas_MO", index=False)
+        orcamentos.to_excel(writer, sheet_name="Orcamentos", index=False)
+        orcamento_items.to_excel(writer, sheet_name="Orcamento_Items", index=False)
+
+    # 4. Separador Margens (lendo do Excel)
+    df_resumo_margens = resumo_margens_excel(path_excel, num_orc, versao)
+    with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+        df_resumo_margens.to_excel(writer, sheet_name="Resumo Margens", index=False)
+
+    print(f"Resumos gerados/atualizados em: {path_excel}")
+
+
+
+
+
+
+
+
+"""
 def main():
     # 1) Parâmetros do orçamento de referência a analisar
     num_orc, versao = "250001", "01"
@@ -443,3 +488,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+"""

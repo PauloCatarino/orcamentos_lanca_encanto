@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -479,6 +479,19 @@
                <string>250001</string>
               </property>
              </widget>
+             <widget class="QPushButton" name="pushButton_Gerar_Relatorio_Consumos">
+              <property name="geometry">
+               <rect>
+                <x>740</x>
+                <y>70</y>
+                <width>301</width>
+                <height>41</height>
+               </rect>
+              </property>
+              <property name="text">
+               <string>Gerar Relatorio Consumos</string>
+              </property>
+             </widget>
             </widget>
            </widget>
           </widget>
@@ -497,8 +510,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>1200</width>
-                 <height>2500</height>
+                 <width>2484</width>
+                 <height>2627</height>
                 </rect>
                </property>
                <property name="minimumSize">
@@ -4769,8 +4782,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -4979,8 +4992,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5181,8 +5194,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5369,8 +5382,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5603,7 +5616,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>1200</width>
+             <width>2422</width>
              <height>6000</height>
             </rect>
            </property>
