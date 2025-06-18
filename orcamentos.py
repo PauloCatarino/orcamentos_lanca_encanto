@@ -407,7 +407,7 @@ def criar_excel_resumo(orcam_path, num_orcamento, versao, template_path=None):
     """
     # Falta criar uma template de excel com os separadores necessários e se possivel com graficos e resumos dos varios resumos para paresentar no menu do separador Resumo_Consumos_Orcamento_2
 
-    nome_ficheiro = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
+    nome_ficheiro = f"Resumo_Custos_{num_orcamento}_{versao}.xltx"  # Usar extensão xltx para template
     caminho_excel = os.path.join(orcam_path, nome_ficheiro)
 
     if os.path.exists(caminho_excel):
@@ -439,6 +439,9 @@ def abrir_criar_pasta_orcamento():
     Estrutura das pastas: <Ano>/<Num_Cliente>/<Versao>
     A primeira versão é sempre ``00`` e todas as versões ficam separadas em
     subpastas dentro da pasta "mãe" do orçamento.
+
+    Agora, também cria o Excel de resumo de custos (vazio ou a partir do template)
+    dentro da pasta do orçamento.
     """
     try:
         caminho_base = ui.lineEdit_orcamentos.text().strip()
@@ -480,6 +483,24 @@ def abrir_criar_pasta_orcamento():
             QMessageBox.information(None, "Sucesso", f"Pasta do Orçamento criada:\n{caminho_final}")
         else:
             QMessageBox.information(None, "Informação", f"Abrindo pasta existente:\n{caminho_final}")
+
+        # --- CRIAÇÃO DO EXCEL DE RESUMO ---
+        try:
+            # Vai buscar o número de orçamento e versão dos campos da UI
+            num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
+            versao = ui.lineEdit_versao.text().strip()
+            
+            # Caminho absoluto para o template No futuro, pode ser configurável e colocar como variavel nas configurações do separador
+            # OBS: Ajuste o caminho do template conforme necessário - Excel modelo Resumos Custos
+            template_path = r"C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\Base_Dados_Orcamento\MODELO_Resumo_Custos.xltx"
+            
+            # Chama a função que vai criar o Excel de resumo na pasta do orçamento
+            criar_excel_resumo(caminho_final, num_orcamento, versao, template_path)
+        except Exception as exc:
+            print(f"Erro ao criar Excel de resumo: {exc}")
+        # --- FIM DO BLOCO DE CRIAÇÃO DO EXCEL ---
+        # --- FIM DA CRIAÇÃO/ABERTURA DA PASTA ---
+
 
         # Tenta abrir a pasta no explorador de arquivos (Windows)
         # Para outros OS, pode ser necessário ajustar o comando
