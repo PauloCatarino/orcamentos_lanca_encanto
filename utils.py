@@ -17,6 +17,7 @@ Observação:
 import datetime
 import math
 import re
+import os
 import mysql.connector
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView
 from PyQt5.QtCore import Qt
@@ -620,3 +621,19 @@ def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
         except Exception as e:
             print(f"[ERRO] Verificação de dados em {tabela}: {e}")
     return False
+
+def obter_caminho_excel_resumo_atual(ui):
+    """
+    Devolve o caminho do ficheiro Excel de resumos para o orçamento e versão atuais,
+    com base nos campos da interface.
+    """
+    num_orc = ui.lineEdit_num_orcamento_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    caminho_pasta_orc = ui.lineEdit_path_pasta_orcamento.text().strip()
+
+    if not caminho_pasta_orc or not num_orc or not versao:
+        print("[DEBUG] Falta preencher caminho, número ou versão!")
+        return ""
+
+    nome_ficheiro = f"Resumo_Custos_{num_orc}_{versao}.xlsx"
+    return os.path.join(caminho_pasta_orc, nome_ficheiro)

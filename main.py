@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "93 Commit"
+git commit -m "94 Commit"
 git push origin main
 
 
@@ -84,6 +84,7 @@ from dados_items_sistemas_correr import configurar_tabela_sistemas_correr, inici
 from dados_items_acabamentos import configurar_tabela_acabamentos, inicializar_dados_items_acabamentos
 
 from relatorio_orcamento import gerar_relatorio_orcamento # Gerar relatórios do orçamento em PDF e Excel este é o módulo que gera os relatórios do orçamento em PDF e Excel,  e será enviado por mail
+from dashboard_resumos_custos import mostrar_dashboard_resumos # Mostrar o dashboard de resumos de custos no separador 'Relatórios -> Resumo de Custos Orcamento'
 
 # Atualiza os 6 QListWidget com os nomes das peças lidos do ficheiro Excel 'TAB_DEF_PECAS.XLSX'.
 from menu_grupos_def_pecas import atualizar_grupos_pecas
@@ -98,6 +99,7 @@ from modulo_orquestrador import atualizar_tudo
 from controle_edicao_manual_blk import conectar_eventos_edicao_manual, on_cell_changed_for_blk_logic
 # Função para obter o texto de um item de tabela, retornando uma string vazia se o item for None
 from utils import safe_item_text, set_item, apply_row_selection_style
+from relatorio_orcamento import on_gerar_relatorio_consumos_clicked # Gerar relatório de consumos no separador Relatorios -> Resumo de Consumos no Orcamento
 
 
 # Modulo que trada Este módulo é responsável por todas as interações com a base de dados referentes à gravação, carregamento, e gestão de "Módulos Guardados".
@@ -451,6 +453,14 @@ class MainApp(QMainWindow):
                 print("[AVISO] Botão 'Exportar PDF e Excel Orçamento' não encontrado na UI.")
         except Exception as e:
             print(f"[ERRO] Falha ao conectar botão Exportar PDF/Excel: {e}")
+
+        # Botão para gerar relatório de consumos que está no separador "Relatórios -> Resumo de Consumos no Orcamento"
+        btn_consumos = getattr(self.ui, "pushButton_Gerar_Relatorio_Consumos", None)
+        if btn_consumos is not None:
+            btn_consumos.clicked.connect(lambda: on_gerar_relatorio_consumos_clicked(self.ui))
+            print("[INFO] Botão 'Gerar Relatório de Consumos' conectado.")
+        else:
+            print("[AVISO] Botão 'Gerar Relatório de Consumos' não encontrado na UI.")
 
 
         print("--- Inicialização da UI Concluída ---")

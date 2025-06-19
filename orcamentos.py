@@ -407,7 +407,7 @@ def criar_excel_resumo(orcam_path, num_orcamento, versao, template_path=None):
     """
     # Falta criar uma template de excel com os separadores necessários e se possivel com graficos e resumos dos varios resumos para paresentar no menu do separador Resumo_Consumos_Orcamento_2
 
-    nome_ficheiro = f"Resumo_Custos_{num_orcamento}_{versao}.xltx"  # Usar extensão xltx para template
+    nome_ficheiro = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"  # Usar extensão xltx para template
     caminho_excel = os.path.join(orcam_path, nome_ficheiro)
 
     if os.path.exists(caminho_excel):
@@ -492,7 +492,7 @@ def abrir_criar_pasta_orcamento():
             
             # Caminho absoluto para o template No futuro, pode ser configurável e colocar como variavel nas configurações do separador
             # OBS: Ajuste o caminho do template conforme necessário - Excel modelo Resumos Custos
-            template_path = r"C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\Base_Dados_Orcamento\MODELO_Resumo_Custos.xltx"
+            template_path = r"C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\Base_Dados_Orcamento\MODELO_Resumo_Custos.xlsx"
             
             # Chama a função que vai criar o Excel de resumo na pasta do orçamento
             criar_excel_resumo(caminho_final, num_orcamento, versao, template_path)

@@ -14,8 +14,8 @@
    <string>Orçamento</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout">
-    <item row="0" column="0">
+   <layout class="QVBoxLayout" name="verticalLayout_5">
+    <item>
      <widget class="QTabWidget" name="tabWidget_orcamento">
       <property name="sizeIncrement">
        <size>
@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -133,7 +133,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="Relatorio_Orcamento">
            <attribute name="title">
@@ -499,36 +499,69 @@
            <attribute name="title">
             <string>Resumo_Consumos_Orcamento</string>
            </attribute>
-           <layout class="QGridLayout" name="gridLayout_4">
-            <item row="0" column="0">
-             <widget class="QScrollArea" name="scrollArea_2">
-              <property name="widgetResizable">
-               <bool>true</bool>
-              </property>
-              <widget class="QWidget" name="scrollAreaWidgetContents_2">
-               <property name="geometry">
-                <rect>
-                 <x>0</x>
-                 <y>0</y>
-                 <width>2484</width>
-                 <height>2627</height>
-                </rect>
-               </property>
-               <property name="minimumSize">
-                <size>
-                 <width>1200</width>
-                 <height>2500</height>
-                </size>
-               </property>
-              </widget>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QScrollArea" name="scrollArea_6">
+            <property name="geometry">
+             <rect>
+              <x>29</x>
+              <y>10</y>
+              <width>2400</width>
+              <height>2591</height>
+             </rect>
+            </property>
+            <property name="widgetResizable">
+             <bool>true</bool>
+            </property>
+            <widget class="QWidget" name="frame_resumos">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>2398</width>
+               <height>2589</height>
+              </rect>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>1200</width>
+               <height>2500</height>
+              </size>
+             </property>
+            </widget>
+           </widget>
           </widget>
           <widget class="QWidget" name="tab_2">
            <attribute name="title">
             <string>Page</string>
            </attribute>
+           <widget class="QScrollArea" name="scrollArea_5">
+            <property name="geometry">
+             <rect>
+              <x>15</x>
+              <y>8</y>
+              <width>2450</width>
+              <height>2611</height>
+             </rect>
+            </property>
+            <property name="widgetResizable">
+             <bool>true</bool>
+            </property>
+            <widget class="QWidget" name="scrollAreaWidgetContents_4">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>2448</width>
+               <height>2609</height>
+              </rect>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>1200</width>
+               <height>2500</height>
+              </size>
+             </property>
+            </widget>
+           </widget>
           </widget>
          </widget>
         </item>
@@ -1140,7 +1173,7 @@
          <rect>
           <x>0</x>
           <y>210</y>
-          <width>2511</width>
+          <width>2461</width>
           <height>901</height>
          </rect>
         </property>
@@ -1499,7 +1532,7 @@
           <rect>
            <x>1300</x>
            <y>18</y>
-           <width>1201</width>
+           <width>1171</width>
            <height>25</height>
           </rect>
          </property>
@@ -1657,7 +1690,7 @@
           <rect>
            <x>2000</x>
            <y>50</y>
-           <width>500</width>
+           <width>471</width>
            <height>81</height>
           </rect>
          </property>
