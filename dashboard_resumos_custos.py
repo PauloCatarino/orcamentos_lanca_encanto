@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QTableWidgetItem, QTabWidget, QWidget, QVBoxLayout, 
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from dashboard_resumos_custos import *  # noqa
 
 # -------------------------------------------------------------
 # Função para criar QTableWidget a partir de um DataFrame
