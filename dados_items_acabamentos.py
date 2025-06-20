@@ -587,7 +587,12 @@ def guardar_dados_item_orcamento_tab_acabamentos(parent):
             if key_db in dados_linha: continue
             col_ui = ui_to_db_mapping.get(key_db);
             if col_ui is None: continue
-            cell = tabela.item(r, col_ui); valor_str = cell.text().strip() if cell else ""
+            widget = tabela.cellWidget(r, col_ui)
+            if isinstance(widget, QComboBox):
+                valor_str = widget.currentText().strip()
+            else:
+                cell = tabela.item(r, col_ui)
+                valor_str = cell.text().strip() if cell else ""
             valor_final = None
             if key_db in campos_moeda:
                 try: valor_final = converter_texto_para_valor(valor_str, "moeda") if valor_str else None

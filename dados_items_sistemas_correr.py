@@ -559,8 +559,12 @@ def guardar_dados_item_orcamento_tab_sistemas_correr_3(parent):
              col_ui = ui_to_db_mapping.get(key_db)
              if col_ui is None: continue # Segurança: se a coluna não estiver mapeada
 
-             cell = tabela.item(r, col_ui)
-             valor_str = cell.text().strip() if cell else ""
+             widget = tabela.cellWidget(r, col_ui)
+             if isinstance(widget, QComboBox):
+                 valor_str = widget.currentText().strip()
+             else:
+                 cell = tabela.item(r, col_ui)
+                 valor_str = cell.text().strip() if cell else ""
              valor_final = None # Usar None para representar NULL na BD
 
              if key_db in campos_moeda:

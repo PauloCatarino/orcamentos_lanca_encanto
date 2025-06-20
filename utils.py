@@ -625,32 +625,4 @@ def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
 
 # Função para obter o caminho do Excel de resumos do orçamento atual    
 
-"""
-def obter_caminho_excel_resumo_atual(ui):
-    etorna o caminho do ficheiro Excel de resumos do orçamento atual.
 
-    A interface já possui campos para o ano, número do orçamento, versão,
-    nome do cliente e a pasta base dos orçamentos. Esta função reconstrói o
-    caminho a partir desses campos, evitando depender de um ``lineEdit`` que
-    não existe mais (``lineEdit_path_pasta_orcamento``).
-    
-
-    num_orc = ui.lineEdit_num_orcamento_2.text().strip()
-    versao = ui.lineEdit_versao.text().strip()
-    ano = ui.lineEdit_ano.text().strip()
-    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
-    caminho_base = ui.lineEdit_orcamentos.text().strip()
-
-    if not all([num_orc, versao, ano, nome_cliente, caminho_base]):
-        print("[DEBUG] Falta preencher dados para determinar o caminho do Excel!")
-        return ""
-
-    from orcamentos import _gerar_nome_pasta_orcamento
-
-    nome_pasta = _gerar_nome_pasta_orcamento(num_orc, nome_cliente)
-    pasta = os.path.join(caminho_base, ano, nome_pasta, versao)
-
-    nome_ficheiro = f"Resumo_Custos_{num_orc}_{versao}.xlsx"
-    return os.path.join(pasta, nome_ficheiro)
-
-"""
