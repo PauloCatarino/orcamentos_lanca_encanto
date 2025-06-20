@@ -866,23 +866,39 @@ def carregar_dados_def_pecas(ui):
                     texto_final_ui = str(val_bd)
                 elif isinstance(val_bd, Decimal):
                     # Formatar Decimal
-                    if val_bd == val_bd.to_integral_value(): # É um inteiro?
+                    if val_bd == val_bd.to_integral_value():
                         texto_final_ui = str(int(val_bd))
-                    else: # Tem casas decimais
+                    else:
                         if col_index_ui in moeda_indices_ui:
                             texto_final_ui = formatar_valor_moeda(val_bd)
                         elif col_index_ui in percent_indices_ui:
                             texto_final_ui = formatar_valor_percentual(val_bd)
-                        elif col_index_ui == 5: # Qt_und (arredondar para inteiro na UI)
+                        elif col_index_ui == 5:  # Qt_und (arredondar para inteiro)
                             texto_final_ui = str(int(round(val_bd)))
-                        else: # Outros decimais (formato geral com 2 casas)
+                        else:
                             texto_final_ui = f"{val_bd:.2f}".replace('.', ',')
                 elif col_index_ui in bool_indices_ui:
                     # Colunas booleanas (checkboxes) - não definimos texto aqui, só o estado
-                    pass # O estado do check será definido abaixo
+                    pass
                 else:
-                    # Outros tipos (INT, VARCHAR, etc.) -> Converter para string
-                    texto_final_ui = str(val_bd)
+                    # Outros tipos (INT, FLOAT, VARCHAR, etc.)
+                    if col_index_ui in moeda_indices_ui:
+                        try:
+                            texto_final_ui = formatar_valor_moeda(float(val_bd))
+                        except Exception:
+                            texto_final_ui = str(val_bd)
+                    elif col_index_ui in percent_indices_ui:
+                        try:
+                            texto_final_ui = formatar_valor_percentual(float(val_bd))
+                        except Exception:
+                            texto_final_ui = str(val_bd)
+                    elif col_index_ui == 5:
+                        try:
+                            texto_final_ui = str(int(round(float(val_bd))))
+                        except Exception:
+                            texto_final_ui = str(val_bd)
+                    else:
+                        texto_final_ui = str(val_bd)
 
                 # 2. Criação do QTableWidgetItem
                 item_ui = QTableWidgetItem()

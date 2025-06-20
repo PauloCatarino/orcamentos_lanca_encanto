@@ -77,8 +77,8 @@ DEFAULT_COLUMN_WIDTHS = [
     30,   # MO
     30,   # Orla
     30,   # BLK
-    130,   # Mat_Default
-    100,   # Tab_Default
+    160,  # Mat_Default
+    100,  # Tab_Default
     30,   # ids
     50,   # num_orc
     20,   # ver_orc
@@ -92,8 +92,8 @@ DEFAULT_COLUMN_WIDTHS = [
     50,   # desp
     65,   # corres_orla_0_4
     65,   # corres_orla_1_0
-    10,  # tipo
-    10,  # familia
+    10,   # tipo
+    10,   # familia
     50,   # comp_mp
     50,   # larg_mp
     50,   # esp_mp
