@@ -245,9 +245,17 @@ def atualizar_tudo(ui):
                         cor_a_aplicar_nesta_linha = COLOR_PRIMARY_WITH_ASS_BG
                     # else: cor_fundo_padrao_tabela (já definida)
                 
+                blk_item_cor = table.item(r_cor, IDX_BLK)
+                linha_blk_ativa = blk_item_cor and blk_item_cor.checkState() == Qt.Checked
+
                 for c_item_cor in range(table.columnCount()):
+                    # Se a linha está com BLK ativo, preserva a cor das colunas 18-32
+                    if linha_blk_ativa and 18 <= c_item_cor <= 32:
+                        continue
+
                     it = table.item(r_cor, c_item_cor) or QTableWidgetItem()
-                    if table.item(r_cor, c_item_cor) is None: table.setItem(r_cor, c_item_cor, it)
+                    if table.item(r_cor, c_item_cor) is None:
+                        table.setItem(r_cor, c_item_cor, it)
                     it.setBackground(cor_a_aplicar_nesta_linha)
             print(f"[INFO] Ciclo {ciclos_executados}: Revalidação de cores de fundo concluída.")
             # --- FIM ETAPA DE REVALIDAÇÃO DE CORES ---
