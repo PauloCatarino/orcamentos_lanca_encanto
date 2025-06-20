@@ -394,7 +394,7 @@ def resumo_margens_excel(excel_path, num_orcamento, versao):
     id_orcamento = id_orcamento.iloc[0]
 
     # Filtrar itens associados
-    itens = orcamento_items[orcamento_items['id_orcamento'] == str(id_orcamento)].copy()
+    itens = orcamento_items[orcamento_items['id_orcamento'].astype(str) == str(id_orcamento)].copy()
 
     # Funções auxiliares
     def safe_mean(col):
@@ -454,13 +454,13 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     print(f"--- Linhas orcamento_items: {len(orcamento_items)}")
 
     # Filtra orcamentos/orcamento_items para só mostrar os do orçamento/versão atual
-    orcamentos_filtrados = orcamentos[
-        (orcamentos['num_orcamento'].astype(str) == str(num_orc)) &
-        (orcamentos['versao'].astype(str) == str(versao))
-    ].copy()
+    num_orc_f = str(num_orc).strip()
+    ver_f = str(versao).zfill(2)
+
+    orcamentos_filtrados = orcamentos[(orcamentos['num_orcamento'].astype(str).str.strip() == num_orc_f) & (orcamentos['versao'].astype(str).str.zfill(2) == ver_f)].copy()
     if 'id' in orcamentos_filtrados.columns and not orcamentos_filtrados.empty:
-        id_orcamento = orcamentos_filtrados.iloc[0]['id']
-        orcamento_items_filtrados = orcamento_items[orcamento_items['id_orcamento'] == str(id_orcamento)].copy()
+        id_orcamento = int(orcamentos_filtrados.iloc[0]['id'])
+        orcamento_items_filtrados = orcamento_items[orcamento_items['id_orcamento'].astype(int) == id_orcamento].copy()
     else:
         orcamento_items_filtrados = pd.DataFrame(columns=orcamento_items.columns)
     # 2. Gerar os DataFrames de resumo
