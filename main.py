@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "98 Commit"
+git commit -m "99 Commit"
 git push origin main
 
 
@@ -459,16 +459,19 @@ class MainApp(QMainWindow):
         # Botão para gerar relatório de consumos que está no separador "Relatórios -> Resumo de Consumos no Orcamento"
         btn_consumos = getattr(self.ui, "pushButton_Gerar_Relatorio_Consumos", None)
         if btn_consumos is not None:
+            # A conexão agora aponta para a função correta
             btn_consumos.clicked.connect(lambda: on_gerar_relatorio_consumos_clicked(self.ui))
             print("[INFO] Botão 'Gerar Relatório de Consumos' conectado.")
         else:
             print("[AVISO] Botão 'Gerar Relatório de Consumos' não encontrado na UI.")
 
-
+        # !! ALTERAÇÃO CRUCIAL !!
         # Adicionar um layout ao QWidget 'frame_resumos' para que possa receber o dashboard.
-        # Isto é crucial para que a função mostrar_dashboard_resumos consiga limpar e adicionar widgets.
-        layout_resumos = QVBoxLayout(self.ui.frame_resumos)
-        self.ui.frame_resumos.setLayout(layout_resumos)
+        if self.ui.frame_resumos.layout() is None:
+            layout_resumos = QVBoxLayout(self.ui.frame_resumos)
+            self.ui.frame_resumos.setLayout(layout_resumos)
+            print("[INFO Main] Layout para o dashboard de resumos foi configurado.")
+
         print("--- Inicialização da UI Concluída ---")
 
     def abrirImportarDialog(self):
@@ -841,7 +844,7 @@ class MainApp(QMainWindow):
 
 # Bloco principal de execução
 if __name__ == "__main__":
-    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWidgets import QApplication, QVBoxLayout
     app = QApplication(sys.argv)
     window = MainApp()
     window.show()

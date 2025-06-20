@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -502,10 +502,10 @@
            <widget class="QScrollArea" name="scrollArea_6">
             <property name="geometry">
              <rect>
-              <x>29</x>
+              <x>8</x>
               <y>10</y>
-              <width>2400</width>
-              <height>2591</height>
+              <width>2471</width>
+              <height>1261</height>
              </rect>
             </property>
             <property name="widgetResizable">
@@ -516,8 +516,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>2398</width>
-               <height>2589</height>
+               <width>2452</width>
+               <height>2500</height>
               </rect>
              </property>
              <property name="minimumSize">

@@ -1,18 +1,13 @@
 # resumo_consumos.py
 # Gera todos os resumos (Placas, Orlas, Ferragens, Maquinas/MO, Margens) para um orçamento selecionado.
-
-"""
-    MySQL
-  |
-  |__ db.py (carregar_tabela)
-         |
-         |__ pandas DataFrames: pecas, orcamentos, orcamento_items, etc
-                   |
-                   |__ resumo_consumos.py (gera todos os resumos)
-                              |
-                              |__ Excel com TODOS os dados + resumos
-
-"""
+# =============================================================================
+# Este módulo:
+#   - Gera todos os resumos de custos (Placas, Orlas, Ferragens, Máquinas/MO, Margens)
+#     para um orçamento específico.
+#   - Lê dados das tabelas do MySQL (ou simula se não existir).
+#   - Cria DataFrames formatados prontos para exportação para Excel.
+#   - Pode ser usado como backend de relatórios e dashboards.
+# =============================================================================
 
 import re
 import sys
@@ -20,16 +15,22 @@ import os
 import pandas as pd
 import numpy as np
 
-# Importa função para ler tabelas do MySQL
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-from src.db import carregar_tabela
+# =============================================================================
+# Bloco: Importação dinâmica da função de carregar tabelas do MySQL
+# =============================================================================
+try:
+    sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+    from src.db import carregar_tabela
+except ImportError:
+    print("AVISO: Módulo 'src.db' não encontrado. As funções podem falhar.")
+    def carregar_tabela(nome_tabela):
+        print(f"Simulando carga da tabela: {nome_tabela}")
+        return pd.DataFrame()
 
-
-######################################################################
+# =============================================================================
 # 1. Constantes e utilitários
-######################################################################
-
-# Lista de todas as colunas da tabela dados_def_pecas (para garantir estrutura)
+# =============================================================================
+# Lista com todos os campos esperados para garantir exportação e compatibilidade.
 COLUNAS_DADOS_DEF_PECAS = [
     'id', 'descricao_livre', 'def_peca', 'descricao', 'qt_mod', 'qt_und', 'comp', 'larg', 'esp', 'mps', 'mo', 'orla', 'blk',
     'mat_default', 'tab_default', 'ids', 'num_orc', 'ver_orc', 'ref_le', 'descricao_no_orcamento', 'ptab', 'pliq', 'des1plus',
@@ -42,44 +43,52 @@ COLUNAS_DADOS_DEF_PECAS = [
     'cp07_embalagem_und', 'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'soma_custo_und', 'soma_custo_total', 'soma_custo_acb'
 ]
 
-######################################################################
-# 1A. Resumo Geral (filtra só o orçamento/versão)
-######################################################################
+# =============================================================================
+# 1A. Função: resumo_geral_pecas
+# =============================================================================
+# Descrição:
+# Filtra todas as peças de um orçamento/versão e devolve todas as colunas essenciais.
+# =============================================================================
 def resumo_geral_pecas(df_pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
-    """Garante que todas as 82 colunas estão presentes e ordenadas."""
+    if df_pecas.empty:
+        return pd.DataFrame(columns=COLUNAS_DADOS_DEF_PECAS)
     df = df_pecas.copy()
-    # Filtrar só pelas peças do orçamento/versão correto!
     df = df[
         (df['num_orc'].astype(str) == str(num_orc)) &
         (df['ver_orc'].astype(str) == str(versao))
     ].copy()
+    # Garante que todas as colunas estão presentes, mesmo que vazias
     for col in COLUNAS_DADOS_DEF_PECAS:
         if col not in df.columns:
             df[col] = None
-    df = df[COLUNAS_DADOS_DEF_PECAS]
-    return df
+    return df[COLUNAS_DADOS_DEF_PECAS]
 
-######################################################################
-# 2. Função para Resumo de Placas
-######################################################################
+# =============================================================================
+# 2. Função: resumo_placas
+# =============================================================================
+# Descrição:
+# Resume o consumo e custos das placas usadas, calculando área, quantidade,
+# desperdício, custo total teórico e real.
+# =============================================================================
 def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
-    """
-    Cria o resumo de placas para o orçamento indicado, agrupando por descricao_no_orcamento.
-    Calcula:
-    - m2_consumidos = soma (area_m2_und * qt_total * (1 + desp/100))
-    - qt_placas_utilizadas = ceil(m2_consumidos / area_placa)
-    - custo_placas_utilizadas = qt_placas_utilizadas * area_placa * pliq
-    Resumo das placas usadas no orçamento:
-    - Agrupa por descricao_no_orcamento
-    - Calcula área de placa, M2 consumidos, número de placas, custos totais
-    """
-    df = pecas[(pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))].copy()
+    cols_esperadas = [
+        'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp',
+        'qt_placas_utilizadas', 'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas'
+    ]
+    if pecas.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    df = pecas[
+        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
+    ].copy()
     df = df[df['und'] == 'M2']
-    df['comp_mp'] = df['comp_mp'].astype(float)
-    df['larg_mp'] = df['larg_mp'].astype(float)
+    if df.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    # Garantir que todas as colunas numéricas estão no formato correto
+    for col in ['comp_mp', 'larg_mp', 'area_m2_und', 'qt_total', 'desp', 'pliq', 'custo_mp_total']:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    # Calcula área da placa e área consumida com desperdício
     df['area_placa'] = (df['comp_mp'] / 1000) * (df['larg_mp'] / 1000)
-    # ATENÇÃO: Desperdício (%)  o valor de desperdicio nao é dado em percentagem, mas sim em decimal (ex: 0.05 para 5%) ->desp = 0.05
-    df['m2_consumidos'] = (df['area_m2_und'].astype(float) * df['qt_total'].astype(float) * (1 + df['desp'].astype(float)))
+    df['m2_consumidos'] = (df['area_m2_und'] * df['qt_total'] * (1 + df['desp']))
     grouped = df.groupby('descricao_no_orcamento').agg(
         ref_le=('ref_le', 'first'),
         pliq=('pliq', 'first'),
@@ -92,64 +101,50 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
         m2_consumidos=('m2_consumidos', 'sum'),
         custo_mp_total=('custo_mp_total', 'sum')
     ).reset_index()
-    grouped['qt_placas_utilizadas'] = np.ceil(grouped['m2_consumidos'] / grouped['area_placa'])
+    grouped['qt_placas_utilizadas'] = np.ceil(grouped['m2_consumidos'] / grouped['area_placa'].replace(0, np.nan))
     grouped['custo_placas_utilizadas'] = grouped['qt_placas_utilizadas'] * grouped['area_placa'] * grouped['pliq']
-    grouped = grouped[
-        [
-            'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp',
-            'comp_mp', 'larg_mp', 'esp_mp', 'qt_placas_utilizadas',
-            'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas'
-        ]
-    ]
-    grouped['area_placa'] = grouped['area_placa'].round(3)
-    grouped['m2_consumidos'] = grouped['m2_consumidos'].round(3)
-    grouped['custo_mp_total'] = grouped['custo_mp_total'].round(2)
-    grouped['custo_placas_utilizadas'] = grouped['custo_placas_utilizadas'].round(2)
-    return grouped
+    # Arredonda valores para melhor leitura
+    for col in ['area_placa', 'm2_consumidos']:
+        grouped[col] = grouped[col].round(3)
+    for col in ['custo_mp_total', 'custo_placas_utilizadas']:
+        grouped[col] = grouped[col].round(2)
+    return grouped[cols_esperadas]
 
-######################################################################
-# 3. Função para Resumo de Orlas 
-######################################################################
+# =============================================================================
+# 3. Função: resumo_orlas
+# =============================================================================
+# Descrição:
+# Cria resumo do consumo e custo de orlas, considerando cada lado
+# das peças e os respetivos códigos, largura e espessura.
+# =============================================================================
 def get_largura_fator(esp_peca):
+    # Calcula largura e fator de conversão com base na espessura da peça
     try:
         esp = float(esp_peca) if esp_peca is not None else 0.0
     except (TypeError, ValueError):
         esp = 0.0
-    if esp <= 0:
-        return 0.0, 0.0
-    if esp < 20:
-        return 23.0, 1000.0 / 23.0
-    elif esp < 31:
-        return 35.0, 1000.0 / 35.0
-    elif esp < 40:
-        return 45.0, 1000.0 / 45.0
-    else:
-        return 60.0, 1000.0 / 60.0
+    if esp <= 0: return 0.0, 0.0
+    if esp < 20: return 23.0, 1000.0 / 23.0
+    elif esp < 31: return 35.0, 1000.0 / 35.0
+    elif esp < 40: return 45.0, 1000.0 / 45.0
+    else: return 60.0, 1000.0 / 60.0
 
 def get_orla_codes(def_peca):
-    """Extrai os 4 algarismos do padrão [xxxx] em qualquer parte do campo def_peca."""
-    if def_peca is None:
-        return [0, 0, 0, 0]
+    # Extrai os códigos dos lados de orla a partir do campo 'def_peca'
+    if def_peca is None: return [0, 0, 0, 0]
     m = re.search(r"\[(\d{4})\]", str(def_peca))
-    if not m:
-        return [0, 0, 0, 0]
+    if not m: return [0, 0, 0, 0]
     return [int(x) for x in m.group(1)]
-   
+
 def clean_ref(ref):
-    """Remove espaços e converte nulos para string vazia."""
-    if pd.isnull(ref):
-        return ''
+    # Remove espaços e nulos nas referências
+    if pd.isnull(ref): return ''
     return str(ref).strip()
 
 def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Cria o resumo de orlas, separando por referência, espessura e largura,
-    analisando cada lado da peça, conforme o código [xxxx] em def_peca.
-    Resumo das orlas usadas no orçamento:
-    - Agrupa por referência de orla, espessura e largura
-    - Soma ml e custo total para cada referência/espessura/largura
-    """
     df = pecas[(pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))].copy()
+    if df.empty:
+        return pd.DataFrame(columns=['ref_orla', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
     df['orla_codes'] = df['def_peca'].apply(get_orla_codes)
     df['largura_orla'], df['fator_conv'] = zip(*df['esp_mp'].apply(get_largura_fator))
     resumo = []
@@ -163,25 +158,12 @@ def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
             code = orla_codes[i]
             ml = float(ml_lados[i]) if not pd.isnull(ml_lados[i]) else 0.0
             custo = float(custo_lados[i]) if not pd.isnull(custo_lados[i]) else 0.0
-            if code == 0 or ml == 0:
-                continue  # Sem orla neste lado
-            if code == 1:
-                espessura = '0.4mm'
-                ref = clean_ref(row['corres_orla_0_4'])
-            elif code == 2:
-                espessura = '1.0mm'
-                ref = clean_ref(row['corres_orla_1_0'])
-            else:
-                continue
-            if not ref:
-                continue
-            resumo.append({
-                'ref_orla': ref,
-                'espessura_orla': espessura,
-                'largura_orla': largura,
-                'ml': ml,
-                'custo': custo
-            })
+            if code == 0 or ml == 0: continue
+            if code == 1: espessura, ref = '0.4mm', clean_ref(row['corres_orla_0_4'])
+            elif code == 2: espessura, ref = '1.0mm', clean_ref(row['corres_orla_1_0'])
+            else: continue
+            if not ref: continue
+            resumo.append({'ref_orla': ref, 'espessura_orla': espessura, 'largura_orla': largura, 'ml': ml, 'custo': custo})
     df_resumo = pd.DataFrame(resumo)
     if df_resumo.empty:
         return pd.DataFrame(columns=['ref_orla', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
@@ -189,359 +171,213 @@ def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
         ml_total=('ml', 'sum'),
         custo_total=('custo', 'sum')
     )
-    grupo['ml_total'] = grupo['ml_total'].round(2)
-    grupo['custo_total'] = grupo['custo_total'].round(2)
+    grupo['ml_total'], grupo['custo_total'] = grupo['ml_total'].round(2), grupo['custo_total'].round(2)
     return grupo
 
-######################################################################
-# 4. Função para Resumo de Ferragens
-######################################################################
+# =============================================================================
+# 4. Função: resumo_ferragens
+# =============================================================================
+# Descrição:
+# Cria resumo dos consumos e custos das ferragens (itens cujo código ref_le
+# começa por 'FER'), agrupando quantidade, metros lineares e custos.
+# =============================================================================
 def resumo_ferragens(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Gera resumo de ferragens só para o orçamento/versão.
-    - Agrupa por referência (ref_le) e descrição (descricao_no_orcamento)
-    - Soma os totais das colunas já calculadas
-    - Inclui apenas linhas em que ref_le começa por 'FER'
-    - Para 'und' == 'ml', a coluna custo_mp_und fica 0.
-    - spp_ml_total = spp_ml_und * qt_total
-    """
+    cols_esperadas = [
+        'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp',
+        'qt_total', 'spp_ml_total', 'custo_mp_und', 'custo_mp_total'
+    ]
+    if pecas.empty:
+        return pd.DataFrame(columns=cols_esperadas)
     df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
+        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
     ].copy()
-
-    # Filtra apenas linhas de ferragens (ref_le começa com 'FER')
     df = df[df['ref_le'].astype(str).str.startswith("FER")]
-
-    # Calcular spp_ml_total = spp_ml_und * qt_total
-    df['spp_ml_und'] = df['spp_ml_und'].astype(float)
-    df['qt_total'] = df['qt_total'].astype(float)
+    if df.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    for col in ['spp_ml_und', 'qt_total', 'custo_mp_und', 'custo_mp_total']:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     df['spp_ml_total'] = df['spp_ml_und'] * df['qt_total']
-
-    # Agrupa e agrega os campos
-    grupo = df.groupby(['ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp']).agg(
+    grupo = df.groupby([
+        'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp'
+    ]).agg(
         qt_total=('qt_total', 'sum'),
         spp_ml_total=('spp_ml_total', 'sum'),
         custo_mp_und=('custo_mp_und', 'sum'),
         custo_mp_total=('custo_mp_total', 'sum')
     ).reset_index()
-
-    # Corrigir custo_mp_und para ferragens em ml
+    # Se unidade é 'ml', custo unitário deve ser zero
     grupo['custo_mp_und'] = np.where(grupo['und'].str.lower() == 'ml', 0, grupo['custo_mp_und'])
+    for col in ['qt_total', 'spp_ml_total', 'custo_mp_und', 'custo_mp_total']:
+        grupo[col] = grupo[col].round(2)
+    return grupo[cols_esperadas]
 
-    # Arredonda as somas
-    grupo['qt_total'] = grupo['qt_total'].round(2)
-    grupo['spp_ml_total'] = grupo['spp_ml_total'].round(2)
-    grupo['custo_mp_und'] = grupo['custo_mp_und'].round(2)
-    grupo['custo_mp_total'] = grupo['custo_mp_total'].round(2)
-
-    return grupo[
-        ['ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp', 'qt_total', 'spp_ml_total', 'custo_mp_und', 'custo_mp_total']
-    ]
-
-######################################################################
-# 5. Função para Resumo de Maquinas/Mão de Obra (MO)
-######################################################################
+# =============================================================================
+# 5. Função: resumo_maquinas_mo
+# =============================================================================
+# Descrição:
+# Gera resumo de custos de operações de máquinas e mão de obra.
+# Agrupa por operação: seccionadora, orladora, CNC, ABD, prensa, etc.
+# Calcula metros, nº peças, custo total de cada operação.
+# =============================================================================
 def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Resumo dos custos das máquinas e mão de obra não-maquinas.
-    Soma os totais por operação:
-    - Seccionadora, Orladora, CNC, ABD, Prensa, Esquadrejadora, Embalamento, Mão de Obra
-    - Resumo dos custos das máquinas e mão de obra, enriquecido com info de ml e nº de peças para Corte, Orlagem, CNC, ABD.
-    - Resumo dos custos das máquinas e mão de obra, incluindo apenas peças que passam por cada operação (cpXX >= 1).
-    """
+    cols_esperadas = ["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]
+    if pecas.empty:
+        return pd.DataFrame(columns=cols_esperadas)
     df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
+        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
     ].copy()
-
-    # Seccionadora (Corte)
-    df_corte = df[df['cp01_sec'].astype(float) >= 1].copy()
-    pecas_cortadas = df_corte['qt_total'].astype(float).sum().round(0)
-    custo_corte = (df_corte['qt_total'].astype(float) * df_corte['cp01_sec_und'].astype(float)).sum().round(2)
-    ml_corte = ((df_corte['comp_res'].astype(float)*2 + df_corte['larg_res'].astype(float)*2) * df_corte['qt_total'].astype(float) / 1000).sum().round(2)
-
-    # Orladora (Orlagem)
-    df_orla = df[df['cp02_orl'].astype(float) >= 1].copy()
-    # Calcula quantas vezes cada peça passa na orladora
-    df_orla['orl_passagens'] = (
-        (df_orla['orla_c1'].astype(float) > 0).astype(int) +
-        (df_orla['orla_c2'].astype(float) > 0).astype(int) +
-        (df_orla['orla_l1'].astype(float) > 0).astype(int) +
-        (df_orla['orla_l2'].astype(float) > 0).astype(int)
+    if df.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    numeric_cols = [
+        'cp01_sec', 'cp01_sec_und', 'cp02_orl', 'cp02_orl_und', 'cp03_cnc', 'cp03_cnc_und', 'cp04_abd', 'cp04_abd_und',
+        'cp05_prensa', 'cp05_prensa_und', 'cp06_esquad', 'cp06_esquad_und', 'cp07_embalagem', 'cp07_embalagem_und',
+        'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'qt_total', 'comp_res', 'larg_res', 'orla_c1', 'orla_c2',
+        'orla_l1', 'orla_l2', 'ml_c1', 'ml_c2', 'ml_l1', 'ml_l2'
+    ]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    def get_cost(df_filtered, cost_col, qty_col='qt_total'):
+        return (df_filtered[cost_col] * df_filtered[qty_col]).sum().round(2)
+    custo_corte = get_cost(df.loc[df['cp01_sec'] >= 1], 'cp01_sec_und')
+    custo_orladora = get_cost(df.loc[df['cp02_orl'] >= 1], 'cp02_orl_und')
+    custo_cnc = get_cost(df.loc[df['cp03_cnc'] >= 1], 'cp03_cnc_und')
+    custo_abd = get_cost(df.loc[df['cp04_abd'] >= 1], 'cp04_abd_und')
+    custo_prensa = get_cost(df.loc[df['cp05_prensa'] >= 1], 'cp05_prensa_und')
+    custo_esquad = get_cost(df.loc[df['cp06_esquad'] >= 1], 'cp06_esquad_und')
+    custo_embal = get_cost(df.loc[df['cp07_embalagem'] >= 1], 'cp07_embalagem_und')
+    custo_mo = get_cost(df.loc[df['cp08_mao_de_obra'] >= 1], 'cp08_mao_de_obra_und')
+    # Cálculo dos metros lineares e nº peças (Corte e Orlagem)
+    df_corte = df.loc[df['cp01_sec'] >= 1]
+    ml_corte = ((df_corte['comp_res'] * 2 + df_corte['larg_res'] * 2) * df_corte['qt_total'] / 1000).sum().round(2)
+    pecas_cortadas = df_corte['qt_total'].sum()
+    df_orla = df.loc[df['cp02_orl'] >= 1].copy()
+    df_orla['passagens'] = (
+        (df_orla['orla_c1'] > 0).astype(int) +
+        (df_orla['orla_c2'] > 0).astype(int) +
+        (df_orla['orla_l1'] > 0).astype(int) +
+        (df_orla['orla_l2'] > 0).astype(int)
     )
-    pecas_orladas = (df_orla['orl_passagens'] * df_orla['qt_total'].astype(float)).sum().round(0)
-    custo_orladora = (df_orla['cp02_orl_und'].astype(float) * df_orla['qt_total'].astype(float)).sum().round(2)
-    ml_orla = (df_orla['ml_c1'].astype(float) + df_orla['ml_c2'].astype(float) + df_orla['ml_l1'].astype(float) + df_orla['ml_l2'].astype(float)).sum().round(2)
-
-    # CNC (Mecanizações)
-    df_cnc = df[df['cp03_cnc'].astype(float) >= 1].copy()
-    pecas_cnc = df_cnc['qt_total'].astype(float).sum().round(0)
-    custo_cnc = (df_cnc['cp03_cnc_und'].astype(float) * df_cnc['qt_total'].astype(float)).sum().round(2)
-
-    # ABD (Mecanizações)
-    df_abd = df[df['cp04_abd'].astype(float) >= 1].copy()
-    pecas_abd = df_abd['qt_total'].astype(float).sum().round(0)
-    custo_abd = (df_abd['cp04_abd_und'].astype(float) * df_abd['qt_total'].astype(float)).sum().round(2)
-
-    # Esquadrejadora (Cortes Manuais)
-    df_esquad = df[df['cp06_esquad'].astype(float) >= 1].copy()
-    custo_esquad = (df_esquad['cp06_esquad_und'].astype(float) * df_esquad['qt_total'].astype(float)).sum().round(2)
-
-    # Embalamento (Paletização)
-    df_embal = df[df['cp07_embalagem'].astype(float) >= 1].copy()
-    custo_embal = (df_embal['cp07_embalagem_und'].astype(float) * df_embal['qt_total'].astype(float)).sum().round(2)
-
-    # Mão de Obra (MO geral)
-    df_mo = df[df['cp08_mao_de_obra'].astype(float) >= 1].copy()
-    custo_mo = (df_mo['cp08_mao_de_obra_und'].astype(float) * df_mo['qt_total'].astype(float)).sum().round(2)
-
-    # Prensa (Montagem)
-    df_prensa = df[df['cp05_prensa'].astype(float) >= 1].copy()
-    # Soma o custo da prensa, mas não considera nº de peças (já está agregado)
-    custo_prensa = (df_prensa['cp05_prensa_und'].astype(float) * df_prensa['qt_total'].astype(float)).sum().round(2)
-
-    # Seccionadora (Corte) - Verifica se há peças cortadas
-    # Montar DataFrame para exportar
+    ml_orla = (df_orla['ml_c1'] + df_orla['ml_c2'] + df_orla['ml_l1'] + df_orla['ml_l2']).sum().round(2)
+    pecas_orladas = (df_orla['passagens'] * df_orla['qt_total']).sum()
+    pecas_cnc = df.loc[df['cp03_cnc'] >= 1, 'qt_total'].sum()
+    pecas_abd = df.loc[df['cp04_abd'] >= 1, 'qt_total'].sum()
     rows = [
-        {
-            "Operação": "Seccionadora (Corte)",
-            "Custo Total (€)": custo_corte,
-            "ML Corte": ml_corte,
-            "Nº Peças": int(pecas_cortadas)
-        },
-        {
-            "Operação": "Orladora (Orlagem)",
-            "Custo Total (€)": custo_orladora,
-            "ML Orlado": ml_orla,
-            "Nº Peças": int(pecas_orladas)
-        },
-        {
-            "Operação": "CNC (Mecanizações)",
-            "Custo Total (€)": custo_cnc,
-            "Nº Peças": int(pecas_cnc)
-        },
-        {
-            "Operação": "ABD (Mecanizações)",
-            "Custo Total (€)": custo_abd,
-            "Nº Peças": int(pecas_abd)
-        },
-        {
-            "Operação": "Prensa (Montagem)",
-            "Custo Total (€)": custo_prensa
-        },
-        {
-            "Operação": "Esquadrejadora (Cortes Manuais)",
-            "Custo Total (€)": custo_esquad
-        },
-        {
-            "Operação": "Embalamento (Paletização)",
-            "Custo Total (€)": custo_embal
-        },
-        {
-            "Operação": "Mão de Obra (MO geral)",
-            "Custo Total (€)": custo_mo
-        }
+        {"Operação": "Seccionadora (Corte)", "Custo Total (€)": custo_corte, "ML Corte": ml_corte, "Nº Peças": int(pecas_cortadas)},
+        {"Operação": "Orladora (Orlagem)", "Custo Total (€)": custo_orladora, "ML Orlado": ml_orla, "Nº Peças": int(pecas_orladas)},
+        {"Operação": "CNC (Mecanizações)", "Custo Total (€)": custo_cnc, "Nº Peças": int(pecas_cnc)},
+        {"Operação": "ABD (Mecanizações)", "Custo Total (€)": custo_abd, "Nº Peças": int(pecas_abd)},
+        {"Operação": "Prensa (Montagem)", "Custo Total (€)": custo_prensa},
+        {"Operação": "Esquadrejadora (Cortes Manuais)", "Custo Total (€)": custo_esquad},
+        {"Operação": "Embalamento (Paletização)", "Custo Total (€)": custo_embal},
+        {"Operação": "Mão de Obra (MO geral)", "Custo Total (€)": custo_mo}
     ]
+    return pd.DataFrame(rows, columns=cols_esperadas).fillna('')
 
-    # Ajustar DataFrame para campos diferentes por linha
-    df_final = pd.DataFrame(rows)
-    for col in ["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]:
-        if col not in df_final.columns:
-            df_final[col] = ""
-    df_final = df_final[["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]]
-
-    return df_final
-
-######################################################################
-# 6. Função para Resumo de Margens (lendo já do Excel)
-######################################################################
+# =============================================================================
+# 6. Função: resumo_margens_excel
+# =============================================================================
+# Descrição:
+# Lê diretamente do ficheiro Excel os dados das margens e custos admin,
+# devolve DataFrame com percentagens e valores.
+# =============================================================================
 def resumo_margens_excel(excel_path, num_orcamento, versao):
-    """
-    - Lê os separadores 'Orcamentos' e 'Orcamento_Items' do Excel e gera um resumo das margens, custos admin, ajustes.
-    - Gera um resumo das margens, custos administrativos e ajustes de um orçamento,
-        a partir dos separadores 'Orcamentos' e 'Orcamento_Items' de um ficheiro Excel.
+    cols_esperadas = ["Tipo", "Percentagem (%)", "Valor (€)"]
+    try:
+        orcamentos = pd.read_excel(excel_path, sheet_name="Orcamentos", dtype=str)
+        orcamento_items = pd.read_excel(excel_path, sheet_name="Orcamento_Items", dtype=str)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"AVISO: Não foi possível ler 'Orcamentos' ou 'Orcamento_Items' de {excel_path}: {e}")
+        return pd.DataFrame(columns=cols_esperadas)
 
-    Parâmetros:
-        excel_path (str): Caminho para o ficheiro Excel.
-        num_orcamento (str/int): Número do orçamento a analisar (ex: "250001").
-        versao (str/int): Versão do orçamento a analisar (ex: "01").
-
-    Retorna:
-        df_resumo (DataFrame): DataFrame formatado para exportação para o Excel.
-    """
-
-    # 1. Ler os separadores relevantes do Excel
-    orcamentos = pd.read_excel(excel_path, sheet_name="Orcamentos", dtype=str)
-    orcamento_items = pd.read_excel(excel_path, sheet_name="Orcamento_Items", dtype=str)
-
-    # 2. Normalizar todas as versões para str, sem zeros à esquerda
-    num_orcamento_formatado = str(num_orcamento)
-    versao_formatada = str(versao).zfill(2)
-
-    print("Depois eliminar -> num_orcamento_formatado:", num_orcamento_formatado)
-    print("Depois eliminar -> versao_formatada:", versao_formatada)
-    print(orcamentos[['id','num_orcamento','versao']])  # debug para conferir valores
-
-    # Filtrar a linha correta no Excel
-    id_orcamento = orcamentos.loc[
-        (orcamentos['num_orcamento'].str.strip() == num_orcamento_formatado) &
-        (orcamentos['versao'].str.strip().str.zfill(2) == versao_formatada), 'id'
+    num_orcamento_formatado = str(num_orcamento).strip()
+    versao_formatada = str(versao).strip().zfill(2)
+    id_orc_series = orcamentos.loc[
+        (orcamentos['num_orcamento'].astype(str).str.strip() == num_orcamento_formatado) &
+        (orcamentos['versao'].astype(str).str.strip().apply(lambda x: x.zfill(2)) == versao_formatada), 'id'
     ]
-    if id_orcamento.empty:
-        print("Orçamento não encontrado!")
-        return pd.DataFrame()
-    id_orcamento = id_orcamento.iloc[0]
-
-    # Filtrar itens associados
+    if id_orc_series.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    id_orcamento = id_orc_series.iloc[0]
     itens = orcamento_items[orcamento_items['id_orcamento'].astype(str) == str(id_orcamento)].copy()
-
-    # Funções auxiliares
-    def safe_mean(col):
-        try:
-            return pd.to_numeric(itens[col], errors="coerce").mean()
-        except Exception:
-            return 0
-
-    def safe_sum(col):
-        try:
-            return pd.to_numeric(itens[col], errors="coerce").sum()
-        except Exception:
-            return 0
-
-    resumo = {
-        "Margem (%)": round(safe_mean('margem_lucro_perc')*100, 2),
-        "Valor Margem (€)": round(safe_sum('valor_margem'), 2),
-        "Custos Admin (%)": round(safe_mean('custos_admin_perc')*100, 2),
-        "Valor Custos Admin (€)": round(safe_sum('valor_custos_admin'), 2),
-        "Ajustes 1 (%)": round(safe_mean('ajustes1_perc')*100, 2),
-        "Valor Ajustes 1 (€)": round(safe_sum('valor_ajustes1'), 2),
-        "Ajustes 2 (%)": round(safe_mean('ajustes2_perc')*100, 2),
-        "Valor Ajustes 2 (€)": round(safe_sum('valor_ajustes2'), 2),
+    if itens.empty:
+        return pd.DataFrame(columns=cols_esperadas)
+    def safe_mean(col): return pd.to_numeric(itens[col], errors="coerce").mean()
+    def safe_sum(col): return pd.to_numeric(itens[col], errors="coerce").sum()
+    resumo_dict = {
+        "Margem": (safe_mean('margem_lucro_perc') * 100, safe_sum('valor_margem')),
+        "Custos Admin": (safe_mean('custos_admin_perc') * 100, safe_sum('valor_custos_admin')),
+        "Ajustes 1": (safe_mean('ajustes1_perc') * 100, safe_sum('valor_ajustes1')),
+        "Ajustes 2": (safe_mean('ajustes2_perc') * 100, safe_sum('valor_ajustes2'))
     }
+    data = [
+        {"Tipo": k, "Percentagem (%)": f"{v[0]:.2f}%" if pd.notna(v[0]) else "0.00%", "Valor (€)": v[1] if pd.notna(v[1]) else 0}
+        for k, v in resumo_dict.items()
+    ]
+    return pd.DataFrame(data, columns=cols_esperadas)
 
-    # Criar DataFrame para Excel
-    df_resumo = pd.DataFrame([
-        {"Tipo": "Margem", "Percentagem (%)": resumo["Margem (%)"], "Valor (€)": resumo["Valor Margem (€)"]},
-        {"Tipo": "Custos Admin", "Percentagem (%)": resumo["Custos Admin (%)"], "Valor (€)": resumo["Valor Custos Admin (€)"]},
-        {"Tipo": "Ajustes 1", "Percentagem (%)": resumo["Ajustes 1 (%)"], "Valor (€)": resumo["Valor Ajustes 1 (€)"]},
-        {"Tipo": "Ajustes 2", "Percentagem (%)": resumo["Ajustes 2 (%)"], "Valor (€)": resumo["Valor Ajustes 2 (€)"]},
-    ])
-    return df_resumo
-
-
-
-######################################################################
-# 7. Main: Executa todos os resumos e exporta para Excel
-######################################################################
-# resumo_consumos.py (no início do ficheiro, após imports)
+# =============================================================================
+# 7. Função principal: gerar_resumos_excel
+# =============================================================================
+# Descrição:
+# Executa todos os resumos, lê dados do MySQL (ou simulado), grava
+# cada resumo numa folha do ficheiro Excel indicado. Pode ser usado em batch.
+# =============================================================================
 def gerar_resumos_excel(path_excel, num_orc, versao):
-    """
-    Atualiza/gera todos os resumos no Excel indicado, para o orçamento e versão dados.
-    """
-  
+    print(f"===> A GERAR RESUMOS EXCEL PARA: {path_excel}")
+    print(f"===> ORÇAMENTO: {num_orc} | VERSÃO: {versao}")
+    if not os.path.exists(path_excel):
+        pd.DataFrame().to_excel(path_excel, index=False)
+        print(f"--- Ficheiro Excel criado em: {path_excel}")
 
-    print(f"===> GERAR RESUMOS EXCEL PARA: {path_excel}")
-    print(f"===> NUM_ORC: {num_orc} | VERSAO: {versao}")
-
-    # 1. Carregar dados da BD
+    # Carrega tabelas (de bd MySQL ou simulação)
     pecas = carregar_tabela("dados_def_pecas")
     orcamentos = carregar_tabela("orcamentos")
     orcamento_items = carregar_tabela("orcamento_items")
+    print(f"--- Linhas carregadas | Peças: {len(pecas)}, Orçamentos: {len(orcamentos)}, Itens: {len(orcamento_items)}")
 
-    print(f"--- Linhas dados_def_pecas: {len(pecas)}")
-    print(f"--- Linhas orcamentos: {len(orcamentos)}")
-    print(f"--- Linhas orcamento_items: {len(orcamento_items)}")
-
-    # Filtra orcamentos/orcamento_items para só mostrar os do orçamento/versão atual
     num_orc_f = str(num_orc).strip()
-    ver_f = str(versao).zfill(2)
+    ver_f = str(versao).strip().zfill(2)
 
-    orcamentos_filtrados = orcamentos[(orcamentos['num_orcamento'].astype(str).str.strip() == num_orc_f) & (orcamentos['versao'].astype(str).str.zfill(2) == ver_f)].copy()
-    if 'id' in orcamentos_filtrados.columns and not orcamentos_filtrados.empty:
+    orcamentos_filtrados = orcamentos[
+        (orcamentos['num_orcamento'].astype(str).str.strip() == num_orc_f) &
+        (orcamentos['versao'].astype(str).str.strip().apply(lambda x: x.zfill(2)) == ver_f)
+    ].copy()
+    id_orcamento = None
+    if not orcamentos_filtrados.empty and 'id' in orcamentos_filtrados.columns:
         id_orcamento = int(orcamentos_filtrados.iloc[0]['id'])
         orcamento_items_filtrados = orcamento_items[orcamento_items['id_orcamento'].astype(int) == id_orcamento].copy()
     else:
         orcamento_items_filtrados = pd.DataFrame(columns=orcamento_items.columns)
-    # 2. Gerar os DataFrames de resumo
+
+    # Executa cada resumo
     df_resumogeral = resumo_geral_pecas(pecas, num_orc, versao)
     df_resumo_placas = resumo_placas(pecas, num_orc, versao)
     df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
     df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
     df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
 
-    # 3. Exportar para o Excel (escreve/atualiza cada separador)
+    # Gravação principal dos resumos no Excel
     try:
         with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
             df_resumogeral.to_excel(writer, sheet_name="Resumo Geral", index=False)
-            print(f"Resumo geral: {len(df_resumogeral)} linhas")
             df_resumo_placas.to_excel(writer, sheet_name="Resumo Placas", index=False)
-            print(f"Resumo placas: {len(df_resumo_placas)} linhas")
             df_resumo_orlas.to_excel(writer, sheet_name="Resumo Orlas", index=False)
-            print(f"Resumo orlas: {len(df_resumo_orlas)} linhas")
             df_resumo_ferragens.to_excel(writer, sheet_name="Resumo Ferragens", index=False)
-            print(f"Resumo ferragens: {len(df_resumo_ferragens)} linhas")
             df_resumo_maquinas_mo.to_excel(writer, sheet_name="Resumo Maquinas_MO", index=False)
-            print(f"Resumo máquinas/MO: {len(df_resumo_maquinas_mo)} linhas")
             orcamentos_filtrados.to_excel(writer, sheet_name="Orcamentos", index=False)
             orcamento_items_filtrados.to_excel(writer, sheet_name="Orcamento_Items", index=False)
-        print("Gravação concluída")
+        print("--- Gravação dos resumos principais concluída.")
     except Exception as exc:
-        print(f"ERRO ao gravar no Excel: {exc}")
-
-    print(f"Gravando no Excel: {path_excel}")
-    # 4. Separador Margens (lendo do Excel)
-    df_resumo_margens = resumo_margens_excel(path_excel, num_orc, versao)
-    with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        df_resumo_margens.to_excel(writer, sheet_name="Resumo Margens", index=False)
-
-    print(f"Resumos gerados/atualizados em: {path_excel}")
-
-
-
-
-
-
-
-
-"""
-def main():
-    # 1) Parâmetros do orçamento de referência a analisar
-    num_orc, versao = "250001", "01"
-    file_name = f"Resumo_{num_orc}_{versao}.xlsx"
-
-    # 2) Carregar dados do MySQL completos das peças da base de dados (tabela dados_def_pecas + orcaementos + orcamento_items)
-    pecas = carregar_tabela("dados_def_pecas")
-    orcamentos = carregar_tabela("orcamentos")
-    orcamento_items = carregar_tabela("orcamento_items")
-
-    # 2) Gerar todos os resumos exceto margens
-    df_resumogeral = resumo_geral_pecas(pecas)
-    df_resumo_placas = resumo_placas(pecas, num_orc, versao)
-    df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
-    df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
-    df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
+        print(f"ERRO CRÍTICO ao gravar resumos principais no Excel: {exc}")
+        return
     
-    # 3) Exportar para Excel (todos os dados, inclusive orcamentos)
-    with pd.ExcelWriter(file_name, engine="xlsxwriter") as writer:
-        df_resumogeral.to_excel(writer, sheet_name="Resumo Geral", index=False)
-        df_resumo_placas.to_excel(writer, sheet_name="Resumo Placas", index=False)
-        df_resumo_orlas.to_excel(writer, sheet_name="Resumo Orlas", index=False)
-        df_resumo_ferragens.to_excel(writer, sheet_name="Resumo Ferragens", index=False)
-        df_resumo_maquinas_mo.to_excel(writer, sheet_name="Resumo Maquinas_MO", index=False)
-        orcamentos.to_excel(writer, sheet_name="Orcamentos", index=False)
-        orcamento_items.to_excel(writer, sheet_name="Orcamento_Items", index=False)
+    # Gravação do resumo de margens (folha separada)
+    df_resumo_margens = resumo_margens_excel(path_excel, num_orc, versao)
+    try:
+        with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            df_resumo_margens.to_excel(writer, sheet_name="Resumo Margens", index=False)
+        print("--- Gravação do resumo de margens concluída.")
+    except Exception as exc:
+        print(f"ERRO CRÍTICO ao gravar resumo de margens no Excel: {exc}")
 
-    # 4) Agora gera o resumo de margens LENDO do Excel já criado
-    df_resumo_margens = resumo_margens_excel(file_name, num_orc, versao)
-
-    # 5) Adiciona o separador de margens ao Excel usando openpyxl (sem apagar os outros separadores)
-    with pd.ExcelWriter(file_name, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        df_resumo_margens.to_excel(writer, sheet_name="Resumo Margens", index=False)
-
-    print(f"Excel gerado: {file_name}")
-
-if __name__ == "__main__":
-    main()
-
-"""
+    print(f"===> RESUMOS GERADOS/ATUALIZADOS COM SUCESSO EM: {path_excel}")

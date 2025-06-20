@@ -1,20 +1,25 @@
 # relatorio_orcamento.py
 
-"""Gerador dos relatórios de orçamento em PDF e Excel.
+# =============================================================================
+# Geração de relatórios de orçamento (PDF e Excel)
+# - Preenche os dados do orçamento na interface (cliente, totais, tabela de itens).
+# - Gera ficheiros PDF (com ReportLab) e Excel (com xlsxwriter) prontos a enviar ao cliente.
+# - Integra-se com as funções de dashboard/resumos de custos.
+# - Permite gerir pasta de cada orçamento e garantir organização dos ficheiros.
 
-Este módulo recolhe os dados preenchidos na interface gráfica, calcula os
-totais do orçamento e exporta duas versões do relatório:
- - PDF criado com ReportLab, incluindo uma tabela de itens e um rodapé com
-   data, número orçamento e versão e paginação 1/2 ; 2/2.
- - Ficheiro Excel produzido com xlsxwriter contendo os mesmos dados.
-
-A função :func:`gerar_relatorio_orcamento` coordena o processo de preenchimento
-e geração dos ficheiros.
-"""
+# Este módulo recolhe os dados preenchidos na interface gráfica, calcula os
+# totais do orçamento e exporta duas versões do relatório:
+# - PDF criado com ReportLab, incluindo uma tabela de itens e um rodapé com
+#   data, número orçamento e versão e paginação 1/2 ; 2/2.
+# - Ficheiro Excel produzido com xlsxwriter contendo os mesmos dados.
+#
+# A função :func:`gerar_relatorio_orcamento` coordena o processo de preenchimento
+# e geração dos ficheiros.
+# =============================================================================
 
 import os
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QHeaderView, QMessageBox
+from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
@@ -25,13 +30,19 @@ from db_connection import obter_cursor
 
 from orcamentos import _gerar_nome_pasta_orcamento # importa se estiver noutro ficheiro
 from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resumos?    
-#from utils import obter_caminho_excel_resumo_atual  # Se colocares em utils.py    
 
 
 
 
 
 
+
+# =============================================================================
+# Função: _parse_float
+# =============================================================================
+# Converte um texto (com símbolo € ou separadores de milhares) para float,
+# garantindo compatibilidade entre formatos (pt/EN).
+# =============================================================================
 def _parse_float(value: str) -> float:
     """Converts a string to float, handling thousands separators and currency symbols."""
     if not value:
@@ -72,6 +83,12 @@ def _parse_float(value: str) -> float:
         print(f"DEBUG _parse_float: erro ao converter '{txt}': {e}")
         return 0.0
 
+# =============================================================================
+# Função: _first_text
+# =============================================================================
+# Retorna o primeiro texto preenchido de uma lista de widgets.
+# Usado para buscar dados de cliente da interface (procurando por vários campos).
+# =============================================================================
 def _first_text(*widgets) -> str:
     """Return the first non-empty text from given widgets."""
     for w in widgets:
@@ -81,6 +98,11 @@ def _first_text(*widgets) -> str:
                 return txt
     return ""
 
+# =============================================================================
+# Função: _obter_dados_cliente
+# =============================================================================
+# Consulta a base de dados pelo ID do cliente e devolve os dados para o relatório.
+# =============================================================================
 def _obter_dados_cliente(cliente_id: str):
     """Retorna dados do cliente a partir do id."""
     if not cliente_id:
@@ -96,7 +118,11 @@ def _obter_dados_cliente(cliente_id: str):
         print(f"Erro ao obter dados do cliente {cliente_id}: {e}")
         return None
 
-
+# =============================================================================
+# Classe FooterCanvas
+# =============================================================================
+# Canvas customizado para desenhar o rodapé do PDF (data, nº orçamento/versão, página).
+# =============================================================================
 class FooterCanvas(canvas.Canvas):
     def __init__(self, data_str: str, num_ver: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -123,9 +149,18 @@ class FooterCanvas(canvas.Canvas):
         footer = f"{self.data_str}   {self.num_ver}   {page_num}/{page_count}"
         self.drawCentredString(width / 2, 20, footer)
 
+# =============================================================================
+# Função: preencher_campos_relatorio
+# =============================================================================
+# Preenche na interface (UI) todos os campos do relatório, incluindo:
+# - Dados de cliente (nome, morada, contacto, etc.)
+# - Dados do orçamento (nº, versão, data)
+# - Tabela de itens do orçamento
+# - Cálculo de totais, subtotal, total geral, etc.
+# =============================================================================
 def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     """Preenche a aba de relatório com os dados atuais do orçamento."""
-    # Dados do cliente
+    # 2. Preencher dados do orçamento
     cliente_id = _first_text(
         getattr(ui, "lineEdit_id_cliente", None),
         getattr(ui, "lineEdit_idCliente_noOrc", None),
@@ -162,24 +197,7 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
 
 
 
-    print(f"Nome cliente: {ui.lineEdit_nome_cliente_3.text()}")
-    
-  
-    print(f"Morada cliente: {ui.lineEdit_morada_cliente_3.text()}")
-    
-   
-    print(f"Email cliente: {ui.lineEdit_email_cliente_3.text()}")
-    
-   
-    print(f"Num cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}")
-    
-   
-    print(f"Telefone: {ui.lineEdit_telefone_3.text()}")
-    
-   
-    print(f"Telemóvel: {ui.lineEdit_telemovel_3.text()}")
-
-    # Dados do orçamento
+    # 2. Preencher dados do orçamento
     data_orc = ui.lineEdit_data.text()
     num_orc = ui.lineEdit_num_orcamento.text()
     ver_orc = ui.lineEdit_versao_orcamento.text()
@@ -191,7 +209,7 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     ui.label_ver_orcamento_2.setText(ver_orc)
     ui.label_ver_orcamento_3.setText(ver_orc)
 
-    # Itens do orçamento
+    # 3. Copiar tabela de artigos para tabela de relatório
     src = ui.tableWidget_artigos
     dst = ui.tableWidget_Items_Linha_Relatorio
     n = src.rowCount()
@@ -203,9 +221,10 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
             txt = item.text() if item else ""
             dst.setItem(i, c, QtWidgets.QTableWidgetItem(txt))
 
+    # 4. Ajustar colunas e linhas para visualização
     # Configurações de apresentação da tabela de itens
     # Ajusta larguras das colunas na tabelo do separadro Relatorio_orcamento
-    # Nota: as larguras são fixas, mas podem ser ajustadas conforme necessário
+    # Nota: as larguras colunas são fixas, mas podem ser ajustadas conforme necessário
     larguras = [60, 100, 1600, 80, 80, 80, 60, 80, 150, 151]
     header = dst.horizontalHeader()
     header.setSectionResizeMode(QHeaderView.Interactive)
@@ -216,10 +235,9 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
     dst.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
     dst.resizeRowsToContents()
 
-    # Totais
+    # 5. Calcular totais (quantidade, subtotal, total geral)
     total_qt = 0.0
     subtotal = 0.0
-    print(f"Iniciando cálculo de totais. Número de linhas: {n}")
 
     for i in range(n):
         qt_item = dst.item(i, 7)
@@ -228,29 +246,29 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
         qt_text = qt_item.text() if qt_item else ""
         pt_text = pt_item.text() if pt_item else ""
         
-        print(f"Linha {i}: QT raw='{qt_text}', PT raw='{pt_text}'")
         
         qt = _parse_float(qt_text)
         pt = _parse_float(pt_text)
         
-        print(f"Linha {i}: QT parsed={qt}, PT_preco total parsed={pt}")
         
         total_qt += qt
         subtotal += pt
         
-        print(f"Linha {i}: total_qt acumulado={total_qt}, subtotal acumulado={subtotal}")
 
-    print(f"Totais finais: total_qt={total_qt}, subtotal={subtotal}")
 
     ui.label_total_qt_2.setText(f"Total QT: {total_qt:g}")
     ui.label_subtotal_2.setText(f"Subtotal: {subtotal:,.2f}")
     ui.label_iva_2.setText("IVA: 23%")
     total_geral = subtotal * 1.23
-    print(f"Total geral calculado: {total_geral}")
     ui.label_total_geral_2.setText(f"Total Geral: {total_geral:,.2f}")
     ui.label_paginacao_2.setText("1/1")
 
-
+# =============================================================================
+# Função: gera_pdf
+# =============================================================================
+# Gera um ficheiro PDF com todos os dados do orçamento, incluindo:
+# - Cabeçalho, dados do cliente, tabela de itens, totais e rodapé paginado.
+# =============================================================================
 def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     """Gera um PDF com os dados do relatório."""
     doc = SimpleDocTemplate(
@@ -265,15 +283,11 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
 
     elems = []
     elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
+    elems.append(Paragraph(f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]))
     elems.append(Paragraph(
-        f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]
+        f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
+        styles["Normal"],
     ))
-    elems.append(
-        Paragraph(
-            f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
-            styles["Normal"],
-        )
-    )
     elems.append(Spacer(1, 12))
 
     dados_cli = [
@@ -338,12 +352,8 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     )
     elems.append(table)
     elems.append(Spacer(1, 12))
-    right_style = ParagraphStyle(
-        "right", parent=styles["Normal"], alignment=2
-    )
-    total_style = ParagraphStyle(
-        "total", parent=right_style, fontSize=12, leading=14
-    )
+    right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=2)
+    total_style = ParagraphStyle("total", parent=right_style, fontSize=12, leading=14)
     elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
     elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
     elems.append(Paragraph(ui.label_iva_2.text(), right_style))
@@ -354,12 +364,15 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         canvasmaker=lambda *a, **kw: FooterCanvas(
             ui.label_data_orcamento_2.text(),
             f"{ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
-            *a,
-            **kw,
+            *a, **kw,
         ),
     )
 
-
+# =============================================================================
+# Função: gera_excel
+# =============================================================================
+# Gera um ficheiro Excel com a tabela de itens e totais do orçamento.
+# =============================================================================
 def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
     """Gera um ficheiro Excel com a tabela de itens."""
     wb = xlsxwriter.Workbook(caminho)
@@ -396,7 +409,12 @@ def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
     ws.write(row_total + 3, 9, _parse_float(total_geral_text.replace(",", "")))
     wb.close()
 
-
+# =============================================================================
+# Função: _obter_caminho_pasta_orcamento
+# =============================================================================
+# Devolve o caminho onde guardar relatórios para este orçamento/versão.
+# Garante que as pastas existem (versão '00' e a versão atual).
+# =============================================================================
 def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
     """Retorna o caminho da pasta onde guardar os relatórios do orçamento.
 
@@ -414,6 +432,7 @@ def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
     pasta_versao = os.path.join(pasta_mae, versao)
 
     # Garante que a versão '00' existe, mesmo que estivermos noutra versão
+    # Cria pastas se necessário
     if versao != "00":
         os.makedirs(os.path.join(pasta_mae, "00"), exist_ok=True)
 
@@ -421,6 +440,12 @@ def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
     return pasta_versao
 
 
+# =============================================================================
+# Função: exportar_relatorio
+# =============================================================================
+# Gera os ficheiros PDF e Excel do orçamento na pasta correta.
+# Mostra mensagem ao utilizador no final.
+# =============================================================================
 def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
     """Gera os ficheiros PDF e Excel na pasta do orçamento."""
     pasta = _obter_caminho_pasta_orcamento(ui)
@@ -440,7 +465,11 @@ def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
         f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}",
     )
 
-
+# =============================================================================
+# Função: gerar_relatorio_orcamento
+# =============================================================================
+# Processo completo: preenche os campos, pergunta ao utilizador e gera os ficheiros.
+# =============================================================================
 def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     """Fluxo completo de geração do relatório."""
     preencher_campos_relatorio(ui)
@@ -453,6 +482,12 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     )
     if resp == QtWidgets.QMessageBox.Yes:
         exportar_relatorio(ui)
+# =============================================================================
+# Função: on_gerar_relatorio_consumos_clicked
+# =============================================================================
+# Handler para o botão 'Gerar Relatório de Consumos'.
+# Gera o ficheiro Excel de resumo, mostra dashboard e seleciona o separador correto.
+# =============================================================================
 
 def on_gerar_relatorio_consumos_clicked(ui):
     """
@@ -460,10 +495,7 @@ def on_gerar_relatorio_consumos_clicked(ui):
     Esta função agora determina corretamente o caminho do ficheiro, gera o Excel de resumo
     e exibe o dashboard na UI.
     """
-    print("===> Handler chamado!")  # Debug
     # Obter os dados dos campos da UI
-
-
     print("===> Handler para gerar relatório de consumos chamado!")
 
     # 1. Obter o caminho da pasta do orçamento usando a função existente e fiável
@@ -480,15 +512,23 @@ def on_gerar_relatorio_consumos_clicked(ui):
     # 2. Construir o nome e o caminho completo do ficheiro Excel de resumos
     num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
     versao = ui.lineEdit_versao.text().strip()
+
+    if not num_orcamento or not versao:
+        QMessageBox.warning(None, "Dados Incompletos", "Por favor, preencha o número do orçamento e a versão antes de gerar o relatório.")
+        return
+
     nome_ficheiro_excel = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
     caminho_completo_excel = os.path.join(pasta_orcamento, nome_ficheiro_excel)
 
     # 3. Chamar a função que atualiza o Excel
     try:
+        # Importa-se aqui para evitar dependências circulares na inicialização
         from resumo_consumos import gerar_resumos_excel  # Importa-se aqui para evitar dependências circulares
         print(f"===> A gerar resumos para o ficheiro: {caminho_completo_excel}")
         gerar_resumos_excel(caminho_completo_excel, num_orcamento, versao)
-        QMessageBox.information(None, "Resumos Atualizados", f"Relatório de consumos atualizado com sucesso em:\n{caminho_completo_excel}")
+        # Não mostramos esta mensagem, pois o dashboard a seguir é a confirmação visual
+        # QMessageBox.information(None, "Resumos Atualizados", f"Relatório de consumos atualizado com sucesso em:\n{caminho_completo_excel}")
+        
     except Exception as e:
         QMessageBox.critical(None, "Erro", f"Erro ao gerar o ficheiro Excel de resumos:\n{e}")
         import traceback
@@ -497,19 +537,20 @@ def on_gerar_relatorio_consumos_clicked(ui):
 
     # 4. Mostrar o dashboard no separador correspondente
     try:
+        # Importa-se aqui para evitar dependências circulares
         from dashboard_resumos_custos import mostrar_dashboard_resumos  # Importa-se aqui
         print(f"===> A gerar dashboard com dados de: {caminho_completo_excel}")
 
         # Verifica se o ficheiro Excel realmente existe antes de tentar lê-lo
         if not os.path.exists(caminho_completo_excel):
-            QMessageBox.warning(None, "Ficheiro não encontrado", f"O ficheiro de resumos não foi encontrado:\n{caminho_completo_excel}")
+            QMessageBox.warning(None, "Ficheiro não encontrado", f"O ficheiro de resumos não foi encontrado após a tentativa de criação:\n{caminho_completo_excel}")
             return
 
-        # Mostra o dashboard no frame do separador
-        # (ui.frame_resumos é o QWidget/QFrame dentro do separador "Resumo_Consumos_Orcamento_2")
+        # Mostra o dashboard no QFrame 'frame_resumos'
+        # Este QFrame está dentro do separador "Resumo_Consumos_Orcamento_2"
         mostrar_dashboard_resumos(ui.frame_resumos, caminho_completo_excel)
 
-        # 5. Mudar para o separador do dashboard
+        # 5. Mudar para o separador do dashboard para o utilizador ver o resultado
         # Primeiro, seleciona o separador principal 'Relatorios'
         ui.tabWidget_orcamento.setCurrentWidget(ui.tab_relatorios)
         # Depois, seleciona o separador interno 'Resumo_Consumos_Orcamento'
@@ -521,14 +562,24 @@ def on_gerar_relatorio_consumos_clicked(ui):
         traceback.print_exc()
 
 
-# Se executares este ficheiro diretamente:
+# =============================================================================
+# Main para testes: Executa o fluxo todo se correr diretamente este ficheiro
+# =============================================================================
 if __name__ == "__main__":
     from orcamentos_le_layout import Ui_MainWindow
     app = QtWidgets.QApplication([])
     main_win = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(main_win)
-    ui.pushButton_Export_PDF_Relatorio.clicked.connect(lambda: gerar_relatorio_orcamento(ui)) # conecta o botão de exportação PDF do Relatório do orçamento
-    ui.pushButton_Gerar_Relatorio_Consumos.clicked.connect(on_gerar_relatorio_consumos_clicked) # Conecta o botão de gerar relatório de consumos em ficheiro Excel e preenche os campos necessários
+    
+    # Adicionar layout ao frame_resumos para que os testes funcionem
+    if ui.frame_resumos.layout() is None:
+        layout_resumos = QVBoxLayout(ui.frame_resumos)
+        ui.frame_resumos.setLayout(layout_resumos)
+        
+    ui.pushButton_Export_PDF_Relatorio.clicked.connect(lambda: gerar_relatorio_orcamento(ui)) 
+    # A linha abaixo foi corrigida, estava a chamar a função diretamente em vez de um lambda
+    ui.pushButton_Gerar_Relatorio_Consumos.clicked.connect(lambda: on_gerar_relatorio_consumos_clicked(ui)) 
+    
     main_win.show()
     app.exec_()

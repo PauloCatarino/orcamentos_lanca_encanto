@@ -66,86 +66,86 @@ _copied_rows_def_pecas = []
 DEFAULT_COLUMN_WIDTHS = [
     40,   # id
     200,  # Descricao_Livre
-    160,  # Def_Peca
+    180,  # Def_Peca
     200,  # Descricao
-    80,   # QT_mod
-    80,   # QT_und
-    80,   # Comp
-    80,   # Larg
-    80,   # Esp
-    80,   # MPs
-    80,   # MO
-    80,   # Orla
-    80,   # BLK
-    80,   # Mat_Default
-    80,   # Tab_Default
-    80,   # ids
-    80,   # num_orc
-    80,   # ver_orc
+    60,   # QT_mod
+    50,   # QT_und
+    50,   # Comp
+    50,   # Larg
+    40,   # Esp
+    30,   # MPs
+    30,   # MO
+    30,   # Orla
+    30,   # BLK
+    130,   # Mat_Default
+    100,   # Tab_Default
+    30,   # ids
+    50,   # num_orc
+    20,   # ver_orc
     80,   # ref_le
-    200,  # descricao_no_orcamento
-    60,   # ptab
-    60,   # pliq
-    80,   # desc1_plus
-    80,   # desc2_minus
-    60,   # und
-    80,   # desp
-    80,   # corres_orla_0_4
-    80,   # corres_orla_1_0
-    100,  # tipo
-    100,  # familia
-    80,   # comp_mp
-    80,   # larg_mp
-    80,   # esp_mp
+    360,  # descricao_no_orcamento
+    50,   # ptab
+    50,   # pliq
+    50,   # desc1_plus
+    50,   # desc2_minus
+    40,   # und
+    50,   # desp
+    65,   # corres_orla_0_4
+    65,   # corres_orla_1_0
+    10,  # tipo
+    10,  # familia
+    50,   # comp_mp
+    50,   # larg_mp
+    50,   # esp_mp
     80,   # MP
     80,   # COMP_ASS_1
     80,   # COMP_ASS_2
     80,   # COMP_ASS_3
-    60,   # ORLA_C1
-    60,   # ORLA_C2
-    60,   # ORLA_L1
-    60,   # ORLA_L2
-    80,   # ML_C1
-    80,   # ML_C2
-    80,   # ML_L1
-    80,   # ML_L2
-    80,   # CUSTO_ML_C1
-    80,   # CUSTO_ML_C2
-    80,   # CUSTO_ML_L1
-    80,   # CUSTO_ML_L2
-    80,   # QT_Total
-    80,   # Comp_res
-    80,   # Larg_res
-    80,   # Esp_res
+    20,   # ORLA_C1
+    20,   # ORLA_C2
+    20,   # ORLA_L1
+    20,   # ORLA_L2
+    20,   # ML_C1
+    20,   # ML_C2
+    20,   # ML_L1
+    20,   # ML_L2
+    40,   # CUSTO_ML_C1
+    40,   # CUSTO_ML_C2
+    40,   # CUSTO_ML_L1
+    40,   # CUSTO_ML_L2
+    40,   # QT_Total
+    60,   # Comp_res
+    60,   # Larg_res
+    60,   # Esp_res
     80,   # Gravar_Modulo
-    80,   # AREA_M2_und
-    80,   # SPP_ML_und
-    80,   # CP09_CUSTO_MP
-    80,   # CUSTO_MP_und
-    80,   # CUSTO_MP_Total
-    80,   # ACB_SUP
-    80,   # ACB_INF
-    80,   # ACB_SUP_und
-    80,   # ACB_INF_und
-    80,   # CP01_SEC
+    50,   # AREA_M2_und
+    50,   # SPP_ML_und
+    50,   # CP09_CUSTO_MP
+    50,   # CUSTO_MP_und
+    50,   # CUSTO_MP_Total
+    70,   # ACB_SUP
+    70,   # ACB_INF
+    70,   # ACB_SUP_und
+    70,   # ACB_INF_und
+    20,   # CP01_SEC
     80,   # CP01_SEC_und
-    80,   # CP02_ORL
+    20,   # CP02_ORL
     80,   # CP02_ORL_und
-    80,   # CP03_CNC
+    20,   # CP03_CNC
     80,   # CP03_CNC_und
-    80,   # CP04_ABD
+    20,   # CP04_ABD
     80,   # CP04_ABD_und
-    80,   # CP05_PRENSA
+    20,   # CP05_PRENSA
     80,   # CP05_PRENSA_und
-    80,   # CP06_ESQUAD
+    20,   # CP06_ESQUAD
     80,   # CP06_ESQUAD_und
-    80,   # CP07_EMBALAGEM
+    20,   # CP07_EMBALAGEM
     80,   # CP07_EMBALAGEM_und
-    80,   # CP08_MAO_DE_OBRA
+    20,   # CP08_MAO_DE_OBRA
     80,   # CP08_MAO_DE_OBRA_und
-    80,   # Soma_Custo_und
-    80,   # Soma_Custo_Total
-    80,   # Soma_Custo_ACB
+    100,   # Soma_Custo_und
+    100,   # Soma_Custo_Total
+    100,   # Soma_Custo_ACB
 ]
 
 

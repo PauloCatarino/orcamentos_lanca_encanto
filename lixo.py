@@ -1,426 +1,454 @@
-# resumo_consumos.py
-# Gera todos os resumos (Placas, Orlas, Ferragens, Maquinas/MO, Margens) para um orçamento selecionado.
+# =============================================================================
+# relatorio_orcamento.py
+# =============================================================================
+# Geração de relatórios de orçamento (PDF e Excel)
+# - Preenche os dados do orçamento na interface (cliente, totais, tabela de itens).
+# - Gera ficheiros PDF (com ReportLab) e Excel (com xlsxwriter) prontos a enviar ao cliente.
+# - Integra-se com as funções de dashboard/resumos de custos.
+# - Permite gerir pasta de cada orçamento e garantir organização dos ficheiros.
 
-import re
-import sys
+# Este módulo recolhe os dados preenchidos na interface gráfica, calcula os
+# totais do orçamento e exporta duas versões do relatório:
+# - PDF criado com ReportLab, incluindo uma tabela de itens e um rodapé com
+#   data, número orçamento e versão e paginação 1/2 ; 2/2.
+# - Ficheiro Excel produzido com xlsxwriter contendo os mesmos dados.
+#
+# A função :func:`gerar_relatorio_orcamento` coordena o processo de preenchimento
+# e geração dos ficheiros.
+# =============================================================================
+
 import os
-import pandas as pd
-import numpy as np
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
+import xlsxwriter
+from db_connection import obter_cursor
 
-# Importa função para ler tabelas do MySQL
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-from src.db import carregar_tabela
+from orcamentos import _gerar_nome_pasta_orcamento
+from resumo_consumos import gerar_resumos_excel
 
-######################################################################
-# 1. Constantes e utilitários
-######################################################################
-COLUNAS_DADOS_DEF_PECAS = [
-    'id', 'descricao_livre', 'def_peca', 'descricao', 'qt_mod', 'qt_und', 'comp', 'larg', 'esp', 'mps', 'mo', 'orla', 'blk',
-    'mat_default', 'tab_default', 'ids', 'num_orc', 'ver_orc', 'ref_le', 'descricao_no_orcamento', 'ptab', 'pliq', 'des1plus',
-    'des1minus', 'und', 'desp', 'corres_orla_0_4', 'corres_orla_1_0', 'tipo', 'familia', 'comp_mp', 'larg_mp', 'esp_mp', 'mp',
-    'comp_ass_1', 'comp_ass_2', 'comp_ass_3', 'orla_c1', 'orla_c2', 'orla_l1', 'orla_l2', 'ml_c1', 'ml_c2', 'ml_l1', 'ml_l2',
-    'custo_ml_c1', 'custo_ml_c2', 'custo_ml_l1', 'custo_ml_l2', 'qt_total', 'comp_res', 'larg_res', 'esp_res', 'gravar_modulo',
-    'area_m2_und', 'spp_ml_und', 'cp09_custo_mp', 'custo_mp_und', 'custo_mp_total', 'acb_sup', 'acb_inf', 'acb_sup_und',
-    'acb_inf_und', 'cp01_sec', 'cp01_sec_und', 'cp02_orl', 'cp02_orl_und', 'cp03_cnc', 'cp03_cnc_und', 'cp04_abd',
-    'cp04_abd_und', 'cp05_prensa', 'cp05_prensa_und', 'cp06_esquad', 'cp06_esquad_und', 'cp07_embalagem',
-    'cp07_embalagem_und', 'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'soma_custo_und', 'soma_custo_total', 'soma_custo_acb'
-]
-
-######################################################################
-# 1A. Resumo Geral (filtra só o orçamento/versão)
-######################################################################
-def resumo_geral_pecas(df_pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
-    df = df_pecas.copy()
-    # Filtrar só pelas peças do orçamento/versão correto!
-    df = df[
-        (df['num_orc'].astype(str) == str(num_orc)) &
-        (df['ver_orc'].astype(str) == str(versao))
-    ].copy()
-    for col in COLUNAS_DADOS_DEF_PECAS:
-        if col not in df.columns:
-            df[col] = None
-    df = df[COLUNAS_DADOS_DEF_PECAS]
-    return df
-
-######################################################################
-# 2. Função para Resumo de Placas
-######################################################################
-def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
-    """
-    Cria o resumo de placas para o orçamento indicado, agrupando por descricao_no_orcamento.
-    Calcula m2_consumidos = area_m2_und * qt_total * (1 + desp/100)
-    """
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
-    df = df[df['und'] == 'M2']
-    df['comp_mp'] = df['comp_mp'].astype(float)
-    df['larg_mp'] = df['larg_mp'].astype(float)
-    df['area_placa'] = (df['comp_mp'] / 1000) * (df['larg_mp'] / 1000)
-    # ATENÇÃO: Desperdício (%)
-    df['m2_consumidos'] = (
-        df['area_m2_und'].astype(float) * df['qt_total'].astype(float) * (1 + df['desp'].astype(float)/100)
-    )
-    grouped = df.groupby('descricao_no_orcamento').agg(
-        ref_le=('ref_le', 'first'),
-        pliq=('pliq', 'first'),
-        und=('und', 'first'),
-        desp=('desp', 'first'),
-        comp_mp=('comp_mp', 'first'),
-        larg_mp=('larg_mp', 'first'),
-        esp_mp=('esp_mp', 'first'),
-        area_placa=('area_placa', 'first'),
-        m2_consumidos=('m2_consumidos', 'sum'),
-        custo_mp_total=('custo_mp_total', 'sum')
-    ).reset_index()
-    grouped['qt_placas_utilizadas'] = np.ceil(grouped['m2_consumidos'] / grouped['area_placa'])
-    grouped['custo_placas_utilizadas'] = grouped['qt_placas_utilizadas'] * grouped['area_placa'] * grouped['pliq']
-    grouped = grouped[
-        [
-            'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp',
-            'comp_mp', 'larg_mp', 'esp_mp', 'qt_placas_utilizadas',
-            'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas'
-        ]
-    ]
-    grouped['area_placa'] = grouped['area_placa'].round(3)
-    grouped['m2_consumidos'] = grouped['m2_consumidos'].round(3)
-    grouped['custo_mp_total'] = grouped['custo_mp_total'].round(2)
-    grouped['custo_placas_utilizadas'] = grouped['custo_placas_utilizadas'].round(2)
-    return grouped
-
-######################################################################
-# 3. Função para Resumo de Orlas (sem alteração nesta fase)
-######################################################################
-def get_largura_fator(esp_peca):
-    try:
-        esp = float(esp_peca) if esp_peca is not None else 0.0
-    except (TypeError, ValueError):
-        esp = 0.0
-    if esp <= 0:
-        return 0.0, 0.0
-    if esp < 20:
-        return 23.0, 1000.0 / 23.0
-    elif esp < 31:
-        return 35.0, 1000.0 / 35.0
-    elif esp < 40:
-        return 45.0, 1000.0 / 45.0
+# =============================================================================
+# Função: _parse_float
+# =============================================================================
+# Converte um texto (com símbolo € ou separadores de milhares) para float,
+# garantindo compatibilidade entre formatos (pt/EN).
+# =============================================================================
+def _parse_float(value: str) -> float:
+    if not value:
+        return 0.0
+    txt = str(value).strip()
+    txt = txt.replace('€', '').replace('$', '').replace('\xa0', '').replace(' ', '')
+    # Tratamento de formatos tipo '1.234,56' ou '1,234.56'
+    if ',' in txt:
+        partes = txt.split(',')
+        if len(partes) == 2:
+            parte_inteira = partes[0].replace('.', '')
+            parte_decimal = partes[1]
+            txt = f"{parte_inteira}.{parte_decimal}"
     else:
-        return 60.0, 1000.0 / 60.0
+        pontos = txt.count('.')
+        if pontos > 1:
+            partes = txt.split('.')
+            txt = ''.join(partes[:-1]) + '.' + partes[-1]
+    try:
+        return float(txt)
+    except ValueError:
+        return 0.0
 
-def get_orla_codes(def_peca):
-    """Extrai os 4 algarismos do padrão [xxxx] em qualquer parte do campo def_peca."""
-    if def_peca is None:
-        return [0, 0, 0, 0]
-    m = re.search(r"\[(\d{4})\]", str(def_peca))
-    if not m:
-        return [0, 0, 0, 0]
-    return [int(x) for x in m.group(1)]
-   
-def clean_ref(ref):
-    """Remove espaços e converte nulos para string vazia."""
-    if pd.isnull(ref):
-        return ''
-    return str(ref).strip()
+# =============================================================================
+# Função: _first_text
+# =============================================================================
+# Retorna o primeiro texto preenchido de uma lista de widgets.
+# Usado para buscar dados de cliente da interface (procurando por vários campos).
+# =============================================================================
+def _first_text(*widgets) -> str:
+    for w in widgets:
+        if w is not None:
+            txt = w.text()
+            if txt:
+                return txt
+    return ""
 
-def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Cria o resumo de orlas por referência, espessura e largura.
-    """
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
-    df['orla_codes'] = df['def_peca'].apply(get_orla_codes)
-    df['largura_orla'], df['fator_conv'] = zip(*df['esp_mp'].apply(get_largura_fator))
-    resumo = []
-    for idx, row in df.iterrows():
-        lados = ['c1', 'c2', 'l1', 'l2']
-        ml_lados = [row['ml_c1'], row['ml_c2'], row['ml_l1'], row['ml_l2']]
-        custo_lados = [row['custo_ml_c1'], row['custo_ml_c2'], row['custo_ml_l1'], row['custo_ml_l2']]
-        orla_codes = row['orla_codes']
-        largura = row['largura_orla']
-        for i, lado in enumerate(lados):
-            code = orla_codes[i]
-            ml = float(ml_lados[i]) if not pd.isnull(ml_lados[i]) else 0.0
-            custo = float(custo_lados[i]) if not pd.isnull(custo_lados[i]) else 0.0
-            if code == 0 or ml == 0:
-                continue  # Sem orla neste lado
-            if code == 1:
-                espessura = '0.4mm'
-                ref = clean_ref(row['corres_orla_0_4'])
-            elif code == 2:
-                espessura = '1.0mm'
-                ref = clean_ref(row['corres_orla_1_0'])
+# =============================================================================
+# Função: _obter_dados_cliente
+# =============================================================================
+# Consulta a base de dados pelo ID do cliente e devolve os dados para o relatório.
+# =============================================================================
+def _obter_dados_cliente(cliente_id: str):
+    if not cliente_id:
+        return None
+    try:
+        with obter_cursor() as cur:
+            cur.execute(
+                "SELECT nome, morada, email, numero_cliente_phc, telefone, telemovel FROM clientes WHERE id=%s",
+                (cliente_id,),
+            )
+            return cur.fetchone()
+    except Exception as e:
+        print(f"Erro ao obter dados do cliente {cliente_id}: {e}")
+        return None
+
+# =============================================================================
+# Classe FooterCanvas
+# =============================================================================
+# Canvas customizado para desenhar o rodapé do PDF (data, nº orçamento/versão, página).
+# =============================================================================
+class FooterCanvas(canvas.Canvas):
+    def __init__(self, data_str: str, num_ver: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_str = data_str
+        self.num_ver = num_ver
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        page_count = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_footer(page_count)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def _draw_footer(self, page_count: int):
+        width, _ = A4
+        self.setFont("Helvetica", 9)
+        page_num = self.getPageNumber()
+        footer = f"{self.data_str}   {self.num_ver}   {page_num}/{page_count}"
+        self.drawCentredString(width / 2, 20, footer)
+
+# =============================================================================
+# Função: preencher_campos_relatorio
+# =============================================================================
+# Preenche na interface (UI) todos os campos do relatório, incluindo:
+# - Dados de cliente (nome, morada, contacto, etc.)
+# - Dados do orçamento (nº, versão, data)
+# - Tabela de itens do orçamento
+# - Cálculo de totais, subtotal, total geral, etc.
+# =============================================================================
+def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
+    c
+    cliente_id = _first_text(
+        getattr(ui, "lineEdit_id_cliente", None),
+        getattr(ui, "lineEdit_idCliente_noOrc", None),
+    )
+    dados_cli = _obter_dados_cliente(cliente_id)
+    if dados_cli:
+        nome, morada, email, num_phc, tel, telm = dados_cli
+        ui.lineEdit_nome_cliente_3.setText(nome or "")
+        ui.lineEdit_morada_cliente_3.setText(morada or "")
+        ui.lineEdit_email_cliente_3.setText(email or "")
+        ui.lineEdit_num_cliente_phc_3.setText(num_phc or "")
+        ui.lineEdit_telefone_3.setText(tel or "")
+        ui.lineEdit_telemovel_3.setText(telm or "")
+    else:
+        ui.lineEdit_nome_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_nome_cliente", None))
+        )
+        ui.lineEdit_morada_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_morada_cliente", None))
+        )
+        ui.lineEdit_email_cliente_3.setText(
+            _first_text(getattr(ui, "lineEdit_email_cliente", None))
+        )
+        ui.lineEdit_num_cliente_phc_3.setText(
+            _first_text(getattr(ui, "lineEdit_num_cliente_phc", None))
+        )
+        ui.lineEdit_telefone_3.setText(
+            _first_text(getattr(ui, "lineEdit_telefone", None))
+        )
+        ui.lineEdit_telemovel_3.setText(
+            _first_text(getattr(ui, "lineEdit_telemovel", None))
+        )
+
+    # 2. Preencher dados do orçamento
+    data_orc = ui.lineEdit_data.text()
+    num_orc = ui.lineEdit_num_orcamento.text()
+    ver_orc = ui.lineEdit_versao_orcamento.text()
+    ui.label_data_orcamento_2.setText(data_orc)
+    ui.label_data_2.setText(data_orc)
+    ui.label_num_orcamento_2.setText(num_orc)
+    ui.label_num_orcamento_3.setText(num_orc)
+    ui.label_ver_orcamento_2.setText(ver_orc)
+    ui.label_ver_orcamento_3.setText(ver_orc)
+
+    # 3. Copiar tabela de artigos para tabela de relatório
+    src = ui.tableWidget_artigos
+    dst = ui.tableWidget_Items_Linha_Relatorio
+    n = src.rowCount()
+    dst.setRowCount(n)
+    for i in range(n):
+        for c in range(10):  # Colunas 1-10 (ignora coluna 0: id_item)
+            item = src.item(i, c + 1)
+            txt = item.text() if item else ""
+            dst.setItem(i, c, QtWidgets.QTableWidgetItem(txt))
+
+    # 4. Ajustar colunas e linhas para visualização
+    larguras = [60, 100, 1600, 80, 80, 80, 60, 80, 150, 151]
+    header = dst.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.Interactive)
+    for idx, largura in enumerate(larguras):
+        if idx < dst.columnCount():
+            dst.setColumnWidth(idx, largura)
+    dst.setWordWrap(True)
+    dst.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+    dst.resizeRowsToContents()
+
+    # 5. Calcular totais (quantidade, subtotal, total geral)
+    total_qt = 0.0
+    subtotal = 0.0
+    for i in range(n):
+        qt_item = dst.item(i, 7)
+        pt_item = dst.item(i, 9)
+        qt_text = qt_item.text() if qt_item else ""
+        pt_text = pt_item.text() if pt_item else ""
+        qt = _parse_float(qt_text)
+        pt = _parse_float(pt_text)
+        total_qt += qt
+        subtotal += pt
+    ui.label_total_qt_2.setText(f"Total QT: {total_qt:g}")
+    ui.label_subtotal_2.setText(f"Subtotal: {subtotal:,.2f}")
+    ui.label_iva_2.setText("IVA: 23%")
+    total_geral = subtotal * 1.23
+    ui.label_total_geral_2.setText(f"Total Geral: {total_geral:,.2f}")
+    ui.label_paginacao_2.setText("1/1")
+
+# =============================================================================
+# Função: gera_pdf
+# =============================================================================
+# Gera um ficheiro PDF com todos os dados do orçamento, incluindo:
+# - Cabeçalho, dados do cliente, tabela de itens, totais e rodapé paginado.
+# =============================================================================
+def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
+    doc = SimpleDocTemplate(
+        caminho, pagesize=A4,
+        leftMargin=10, rightMargin=10, topMargin=10, bottomMargin=50
+    )
+    styles = getSampleStyleSheet()
+    elems = []
+    elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
+    elems.append(Paragraph(f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]))
+    elems.append(Paragraph(
+        f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
+        styles["Normal"],
+    ))
+    elems.append(Spacer(1, 12))
+    dados_cli = [
+        f"Nome: {ui.lineEdit_nome_cliente_3.text()}",
+        f"Morada: {ui.lineEdit_morada_cliente_3.text()}",
+        f"Email: {ui.lineEdit_email_cliente_3.text()}",
+        f"Nº Cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}",
+        f"Telefone: {ui.lineEdit_telefone_3.text()}  Telemóvel: {ui.lineEdit_telemovel_3.text()}",
+    ]
+    for d in dados_cli:
+        elems.append(Paragraph(d, styles["Normal"]))
+    elems.append(Spacer(1, 12))
+    headers = [
+        "Item", "Codigo", "Descrição", "Alt", "Larg", "Prof",
+        "Und", "Qt", "Preco Unit", "Preco Total"
+    ]
+    data = [headers]
+    tw = ui.tableWidget_Items_Linha_Relatorio
+    for r in range(tw.rowCount()):
+        row = []
+        for c in range(tw.columnCount()):
+            itm = tw.item(r, c)
+            txt = itm.text() if itm else ""
+            if c == 2:
+                lines = txt.splitlines()
+                if lines:
+                    first, *rest = lines
+                    formatted = f"<b>{first}</b>"
+                    if rest:
+                        formatted += "<br/><i>" + "<br/>".join(l.strip("\t-") for l in rest) + "</i>"
+                    row.append(Paragraph(formatted, styles["Normal"]))
+                else:
+                    row.append("")
+            elif c == 9:
+                row.append(Paragraph(f"<b>{txt}</b>", styles["Normal"]))
             else:
-                continue
-            if not ref:
-                continue
-            resumo.append({
-                'ref_orla': ref,
-                'espessura_orla': espessura,
-                'largura_orla': largura,
-                'ml': ml,
-                'custo': custo
-            })
-    df_resumo = pd.DataFrame(resumo)
-    if df_resumo.empty:
-        return pd.DataFrame(columns=['ref_orla', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
-    grupo = df_resumo.groupby(['ref_orla', 'espessura_orla', 'largura_orla'], as_index=False).agg(
-        ml_total=('ml', 'sum'),
-        custo_total=('custo', 'sum')
+                row.append(txt)
+        data.append(row)
+    table = Table(data, repeatRows=1)
+    table.setStyle(
+        TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("VALIGN", (0, 1), (-1, -1), "MIDDLE"),
+        ])
     )
-    grupo['ml_total'] = grupo['ml_total'].round(2)
-    grupo['custo_total'] = grupo['custo_total'].round(2)
-    return grupo
-
-######################################################################
-# 4. Função para Resumo de Ferragens (ajustada para spp_ml_total)
-######################################################################
-def resumo_ferragens(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Resumo de ferragens só para o orçamento/versão.
-    spp_ml_total = spp_ml_und * qt_total
-    """
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
-    # Ferragens: ref_le começa com 'FER'
-    df = df[df['ref_le'].astype(str).str.startswith("FER")]
-
-    # Calcular spp_ml_total = spp_ml_und * qt_total
-    df['spp_ml_und'] = df['spp_ml_und'].astype(float)
-    df['qt_total'] = df['qt_total'].astype(float)
-    df['spp_ml_total'] = df['spp_ml_und'] * df['qt_total']
-
-    grupo = df.groupby(['ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp']).agg(
-        qt_total=('qt_total', 'sum'),
-        spp_ml_total=('spp_ml_total', 'sum'),
-        custo_mp_und=('custo_mp_und', 'sum'),
-        custo_mp_total=('custo_mp_total', 'sum')
-    ).reset_index()
-
-    # Corrigir custo_mp_und para ferragens em ml
-    grupo['custo_mp_und'] = np.where(grupo['und'].str.lower() == 'ml', 0, grupo['custo_mp_und'])
-    grupo['qt_total'] = grupo['qt_total'].round(2)
-    grupo['spp_ml_total'] = grupo['spp_ml_total'].round(2)
-    grupo['custo_mp_und'] = grupo['custo_mp_und'].round(2)
-    grupo['custo_mp_total'] = grupo['custo_mp_total'].round(2)
-
-    return grupo[
-        ['ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp', 'qt_total', 'spp_ml_total', 'custo_mp_und', 'custo_mp_total']
-    ]
-
-######################################################################
-# 5. Função para Resumo de Maquinas/Mão de Obra (MO) (fórmulas detalhadas)
-######################################################################
-def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
-    """
-    Resumo dos custos das máquinas e mão de obra por operação.
-    Cálculos ajustados conforme especificações do Paulo.
-    """
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) &
-        (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
-
-    # Seccionadora (Corte)
-    df_corte = df[df['cp01_sec'].astype(float) >= 0].copy()
-    pecas_cortadas = df_corte['qt_total'].astype(float).sum().round(0)
-    custo_corte = (df_corte['qt_total'].astype(float) * df_corte['cp01_sec_und'].astype(float)).sum().round(2)
-    ml_corte = ((df_corte['comp_res'].astype(float)*2 + df_corte['larg_res'].astype(float)*2) * df_corte['qt_total'].astype(float) / 1000).sum().round(2)
-
-    # Orladora (Orlagem)
-    df_orla = df[df['cp02_orl'].astype(float) >= 1].copy()
-    # Calcula quantas vezes cada peça passa na orladora
-    df_orla['orl_passagens'] = (
-        (df_orla['orla_c1'].astype(float) > 0).astype(int) +
-        (df_orla['orla_c2'].astype(float) > 0).astype(int) +
-        (df_orla['orla_l1'].astype(float) > 0).astype(int) +
-        (df_orla['orla_l2'].astype(float) > 0).astype(int)
+    elems.append(table)
+    elems.append(Spacer(1, 12))
+    right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=2)
+    total_style = ParagraphStyle("total", parent=right_style, fontSize=12, leading=14)
+    elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
+    elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
+    elems.append(Paragraph(ui.label_iva_2.text(), right_style))
+    elems.append(Paragraph(ui.label_total_geral_2.text(), total_style))
+    doc.build(
+        elems,
+        canvasmaker=lambda *a, **kw: FooterCanvas(
+            ui.label_data_orcamento_2.text(),
+            f"{ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
+            *a, **kw,
+        ),
     )
-    pecas_orladas = (df_orla['orl_passagens'] * df_orla['qt_total'].astype(float)).sum().round(0)
-    custo_orladora = (df_orla['cp02_orl_und'].astype(float) * df_orla['qt_total'].astype(float)).sum().round(2)
-    ml_orla = (df_orla['ml_c1'].astype(float) + df_orla['ml_c2'].astype(float) + df_orla['ml_l1'].astype(float) + df_orla['ml_l2'].astype(float)).sum().round(2)
 
-    # CNC (Mecanizações)
-    df_cnc = df[df['cp03_cnc'].astype(float) >= 1].copy()
-    pecas_cnc = df_cnc['qt_total'].astype(float).sum().round(0)
-    custo_cnc = (df_cnc['cp03_cnc_und'].astype(float) * df_cnc['qt_total'].astype(float)).sum().round(2)
-
-    # ABD (Mecanizações)
-    df_abd = df[df['cp04_abd'].astype(float) >= 1].copy()
-    pecas_abd = df_abd['qt_total'].astype(float).sum().round(0)
-    custo_abd = (df_abd['cp04_abd_und'].astype(float) * df_abd['qt_total'].astype(float)).sum().round(2)
-
-    # Esquadrejadora (Cortes Manuais)
-    df_esquad = df[df['cp06_esquad'].astype(float) >= 0].copy()
-    custo_esquad = (df_esquad['cp06_esquad_und'].astype(float) * df_esquad['qt_total'].astype(float)).sum().round(2)
-
-    # Embalamento (Paletização)
-    df_embal = df[df['cp07_embalagem'].astype(float) >= 0].copy()
-    custo_embal = (df_embal['cp07_embalagem_und'].astype(float) * df_embal['qt_total'].astype(float)).sum().round(2)
-
-    # Mão de Obra (MO geral)
-    df_mo = df[df['cp08_mao_de_obra'].astype(float) >= 0].copy()
-    custo_mo = (df_mo['cp08_mao_de_obra_und'].astype(float) * df_mo['qt_total'].astype(float)).sum().round(2)
-
-    rows = [
-        {
-            "Operação": "Seccionadora (Corte)",
-            "Custo Total (€)": custo_corte,
-            "ML Corte": ml_corte,
-            "Nº Peças": int(pecas_cortadas)
-        },
-        {
-            "Operação": "Orladora (Orlagem)",
-            "Custo Total (€)": custo_orladora,
-            "ML Orlado": ml_orla,
-            "Nº Peças": int(pecas_orladas)
-        },
-        {
-            "Operação": "CNC (Mecanizações)",
-            "Custo Total (€)": custo_cnc,
-            "Nº Peças": int(pecas_cnc)
-        },
-        {
-            "Operação": "ABD (Mecanizações)",
-            "Custo Total (€)": custo_abd,
-            "Nº Peças": int(pecas_abd)
-        },
-        {
-            "Operação": "Esquadrejadora (Cortes Manuais)",
-            "Custo Total (€)": custo_esquad
-        },
-        {
-            "Operação": "Embalamento (Paletização)",
-            "Custo Total (€)": custo_embal
-        },
-        {
-            "Operação": "Mão de Obra (MO geral)",
-            "Custo Total (€)": custo_mo
-        }
+# =============================================================================
+# Função: gera_excel
+# =============================================================================
+# Gera um ficheiro Excel com a tabela de itens e totais do orçamento.
+# =============================================================================
+def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
+    wb = xlsxwriter.Workbook(caminho)
+    ws = wb.add_worksheet("Relatório")
+    headers = [
+        "Item", "Codigo", "Descricao", "Altura", "Largura", "Profundidade",
+        "Und", "QT", "Preco_Unit", "Preco_Total"
     ]
+    for col, h in enumerate(headers):
+        ws.write(0, col, h)
+    tw = ui.tableWidget_Items_Linha_Relatorio
+    for r in range(tw.rowCount()):
+        for c in range(tw.columnCount()):
+            item = tw.item(r, c)
+            txt = item.text() if item else ""
+            ws.write(r + 1, c, txt)
+    row_total = tw.rowCount()
+    qt_text = ui.label_total_qt_2.text().split(":", 1)[-1]
+    subtotal_text = ui.label_subtotal_2.text().split(":", 1)[-1]
+    total_geral_text = ui.label_total_geral_2.text().split(":", 1)[-1]
+    ws.write(row_total + 1, 7, _parse_float(qt_text))
+    ws.write(row_total + 2, 9, _parse_float(subtotal_text.replace(",", "")))
+    ws.write(row_total + 3, 9, _parse_float(total_geral_text.replace(",", "")))
+    wb.close()
 
-    # Preenche colunas vazias para formato visual limpo
-    df_final = pd.DataFrame(rows)
-    for col in ["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]:
-        if col not in df_final.columns:
-            df_final[col] = ""
-    df_final = df_final[["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]]
-    return df_final
+# =============================================================================
+# Função: _obter_caminho_pasta_orcamento
+# =============================================================================
+# Devolve o caminho onde guardar relatórios para este orçamento/versão.
+# Garante que as pastas existem (versão '00' e a versão atual).
+# =============================================================================
+def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
+    caminho_base = ui.lineEdit_orcamentos.text().strip()
+    ano = ui.lineEdit_ano.text().strip()
+    num = ui.lineEdit_num_orcamento_2.text().strip()
+    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    nome_pasta = _gerar_nome_pasta_orcamento(num, nome_cliente)
+    pasta_mae = os.path.join(caminho_base, ano, nome_pasta)
+    pasta_versao = os.path.join(pasta_mae, versao)
+    # Cria pastas se necessário
+    if versao != "00":
+        os.makedirs(os.path.join(pasta_mae, "00"), exist_ok=True)
+    os.makedirs(pasta_versao, exist_ok=True)
+    return pasta_versao
 
-######################################################################
-# 6. Função para Resumo de Margens (sem alteração)
-######################################################################
-def resumo_margens_excel(excel_path, num_orcamento, versao):
-    """
-    Lê os separadores 'Orcamentos' e 'Orcamento_Items' do Excel e gera um resumo das margens, custos admin, ajustes.
-    """
-    orcamentos = pd.read_excel(excel_path, sheet_name="Orcamentos", dtype=str)
-    orcamento_items = pd.read_excel(excel_path, sheet_name="Orcamento_Items", dtype=str)
-    num_orcamento_formatado = str(num_orcamento)
-    versao_formatada = str(versao).zfill(2)
+# =============================================================================
+# Função: exportar_relatorio
+# =============================================================================
+# Gera os ficheiros PDF e Excel do orçamento na pasta correta.
+# Mostra mensagem ao utilizador no final.
+# =============================================================================
+def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
+    pasta = _obter_caminho_pasta_orcamento(ui)
+    num = ui.label_num_orcamento_2.text()
+    ver = ui.label_ver_orcamento_2.text()
+    pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
+    xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
+    gera_pdf(ui, pdf_path)
+    gera_excel(ui, xls_path)
+    print(f"Relatórios guardados em:\nPDF: {pdf_path}\nXLSX: {xls_path}")
+    QtWidgets.QMessageBox.information(
+        getattr(ui, "tabWidget_orcamento", None),
+        "Gerado",
+        f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}",
+    )
 
-    id_orcamento = orcamentos.loc[
-        (orcamentos['num_orcamento'].str.strip() == num_orcamento_formatado) &
-        (orcamentos['versao'].str.strip().str.zfill(2) == versao_formatada), 'id'
-    ]
-    if id_orcamento.empty:
-        return pd.DataFrame()
-    id_orcamento = id_orcamento.iloc[0]
+# =============================================================================
+# Função: gerar_relatorio_orcamento
+# =============================================================================
+# Processo completo: preenche os campos, pergunta ao utilizador e gera os ficheiros.
+# =============================================================================
+def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
+    preencher_campos_relatorio(ui)
+    resp = QtWidgets.QMessageBox.question(
+        getattr(ui, "tabWidget_orcamento", None),
+        "Confirmar geração",
+        "Campos preenchidos.\nDeseja gerar o PDF e o Excel agora?",
+        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        QtWidgets.QMessageBox.Yes,
+    )
+    if resp == QtWidgets.QMessageBox.Yes:
+        exportar_relatorio(ui)
 
-    itens = orcamento_items[orcamento_items['id_orcamento'] == str(id_orcamento)].copy()
-
-    def safe_mean(col):
-        try:
-            return pd.to_numeric(itens[col], errors="coerce").mean()
-        except Exception:
-            return 0
-    def safe_sum(col):
-        try:
-            return pd.to_numeric(itens[col], errors="coerce").sum()
-        except Exception:
-            return 0
-    resumo = {
-        "Margem (%)": round(safe_mean('margem_lucro_perc')*100, 2),
-        "Valor Margem (€)": round(safe_sum('valor_margem'), 2),
-        "Custos Admin (%)": round(safe_mean('custos_admin_perc')*100, 2),
-        "Valor Custos Admin (€)": round(safe_sum('valor_custos_admin'), 2),
-        "Ajustes 1 (%)": round(safe_mean('ajustes1_perc')*100, 2),
-        "Valor Ajustes 1 (€)": round(safe_sum('valor_ajustes1'), 2),
-        "Ajustes 2 (%)": round(safe_mean('ajustes2_perc')*100, 2),
-        "Valor Ajustes 2 (€)": round(safe_sum('valor_ajustes2'), 2),
-    }
-    df_resumo = pd.DataFrame([
-        {"Tipo": "Margem", "Percentagem (%)": resumo["Margem (%)"], "Valor (€)": resumo["Valor Margem (€)"]},
-        {"Tipo": "Custos Admin", "Percentagem (%)": resumo["Custos Admin (%)"], "Valor (€)": resumo["Valor Custos Admin (€)"]},
-        {"Tipo": "Ajustes 1", "Percentagem (%)": resumo["Ajustes 1 (%)"], "Valor (€)": resumo["Valor Ajustes 1 (€)"]},
-        {"Tipo": "Ajustes 2", "Percentagem (%)": resumo["Ajustes 2 (%)"], "Valor (€)": resumo["Valor Ajustes 2 (€)"]},
-    ])
-    return df_resumo
-
-######################################################################
-# 7. Main: Executa todos os resumos e exporta para Excel
-######################################################################
-def gerar_resumos_excel(path_excel, num_orc, versao):
-    """
-    Atualiza/gera todos os resumos no Excel indicado, para o orçamento e versão dados.
-    """
-    print(f"===> GERAR RESUMOS EXCEL PARA: {path_excel}")
-    print(f"===> NUM_ORC: {num_orc} | VERSAO: {versao}")
-
-    # 1. Carregar dados da BD
-    pecas = carregar_tabela("dados_def_pecas")
-    orcamentos = carregar_tabela("orcamentos")
-    orcamento_items = carregar_tabela("orcamento_items")
-
-    print(f"--- Linhas dados_def_pecas: {len(pecas)}")
-    print(f"--- Linhas orcamentos: {len(orcamentos)}")
-    print(f"--- Linhas orcamento_items: {len(orcamento_items)}")
-
-    # Filtra orcamentos/orcamento_items para só mostrar os do orçamento/versão atual
-    orcamentos_filtrados = orcamentos[
-        (orcamentos['num_orcamento'].astype(str) == str(num_orc)) &
-        (orcamentos['versao'].astype(str) == str(versao))
-    ].copy()
-    if 'id' in orcamentos_filtrados.columns and not orcamentos_filtrados.empty:
-        id_orcamento = orcamentos_filtrados.iloc[0]['id']
-        orcamento_items_filtrados = orcamento_items[orcamento_items['id_orcamento'] == str(id_orcamento)].copy()
-    else:
-        orcamento_items_filtrados = pd.DataFrame(columns=orcamento_items.columns)
-
-    # 2. Gerar os DataFrames de resumo
-    df_resumogeral = resumo_geral_pecas(pecas, num_orc, versao)
-    df_resumo_placas = resumo_placas(pecas, num_orc, versao)
-    df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
-    df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
-    df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
-
-    # 3. Exportar para o Excel (escreve/atualiza cada separador)
+# =============================================================================
+# Função: on_gerar_relatorio_consumos_clicked
+# =============================================================================
+# Handler para o botão 'Gerar Relatório de Consumos'.
+# Gera o ficheiro Excel de resumo, mostra dashboard e seleciona o separador correto.
+# =============================================================================
+def on_gerar_relatorio_consumos_clicked(ui):
+    print("===> Handler chamado!")
     try:
-        with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-            df_resumogeral.to_excel(writer, sheet_name="Resumo Geral", index=False)
-            print(f"Resumo geral: {len(df_resumogeral)} linhas")
-            df_resumo_placas.to_excel(writer, sheet_name="Resumo Placas", index=False)
-            print(f"Resumo placas: {len(df_resumo_placas)} linhas")
-            df_resumo_orlas.to_excel(writer, sheet_name="Resumo Orlas", index=False)
-            print(f"Resumo orlas: {len(df_resumo_orlas)} linhas")
-            df_resumo_ferragens.to_excel(writer, sheet_name="Resumo Ferragens", index=False)
-            print(f"Resumo ferragens: {len(df_resumo_ferragens)} linhas")
-            df_resumo_maquinas_mo.to_excel(writer, sheet_name="Resumo Maquinas_MO", index=False)
-            print(f"Resumo máquinas/MO: {len(df_resumo_maquinas_mo)} linhas")
-            orcamentos_filtrados.to_excel(writer, sheet_name="Orcamentos", index=False)
-            orcamento_items_filtrados.to_excel(writer, sheet_name="Orcamento_Items", index=False)
-        print("Gravação concluída")
-    except Exception as exc:
-        print(f"ERRO ao gravar no Excel: {exc}")
+        pasta_orcamento = _obter_caminho_pasta_orcamento(ui)
+        if not pasta_orcamento or not os.path.exists(pasta_orcamento):
+            QMessageBox.warning(None, "Caminho Inválido", f"A pasta do orçamento não foi encontrada ou não pôde ser criada:\n{pasta_orcamento}")
+            return
+    except Exception as e:
+        QMessageBox.critical(None, "Erro Crítico", f"Falha ao obter o caminho da pasta do orçamento:\n{e}")
+        return
+    num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    if not num_orcamento or not versao:
+        QMessageBox.warning(None, "Dados Incompletos", "Por favor, preencha o número do orçamento e a versão antes de gerar o relatório.")
+        return
+    nome_ficheiro_excel = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
+    caminho_completo_excel = os.path.join(pasta_orcamento, nome_ficheiro_excel)
+    try:
+        from resumo_consumos import gerar_resumos_excel
+        print(f"===> A gerar resumos para o ficheiro: {caminho_completo_excel}")
+        gerar_resumos_excel(caminho_completo_excel, num_orcamento, versao)
+    except Exception as e:
+        QMessageBox.critical(None, "Erro", f"Erro ao gerar o ficheiro Excel de resumos:\n{e}")
+        import traceback
+        traceback.print_exc()
+        return
+    try:
+        from dashboard_resumos_custos import mostrar_dashboard_resumos
+        print(f"===> A gerar dashboard com dados de: {caminho_completo_excel}")
+        if not os.path.exists(caminho_completo_excel):
+            QMessageBox.warning(None, "Ficheiro não encontrado", f"O ficheiro de resumos não foi encontrado após a tentativa de criação:\n{caminho_completo_excel}")
+            return
+        mostrar_dashboard_resumos(ui.frame_resumos, caminho_completo_excel)
+        ui.tabWidget_orcamento.setCurrentWidget(ui.tab_relatorios)
+        ui.Relatorio_Orcamento_2.setCurrentWidget(ui.Resumo_Consumos_Orcamento_2)
+    except Exception as e:
+        QMessageBox.critical(None, "Erro de Dashboard", f"Ocorreu um erro ao exibir o dashboard:\n{e}")
+        import traceback
+        traceback.print_exc()
 
-    print(f"Gravando no Excel: {path_excel}")
-    # 4. Separador Margens (lendo do Excel)
-    df_resumo_margens = resumo_margens_excel(path_excel, num_orc, versao)
-    with pd.ExcelWriter(path_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        df_resumo_margens.to_excel(writer, sheet_name="Resumo Margens", index=False)
-
-    print(f"Resumos gerados/atualizados em: {path_excel}")
+# =============================================================================
+# Main para testes: Executa o fluxo todo se correr diretamente este ficheiro
+# =============================================================================
+if __name__ == "__main__":
+    from orcamentos_le_layout import Ui_MainWindow
+    app = QtWidgets.QApplication([])
+    main_win = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(main_win)
+    if ui.frame_resumos.layout() is None:
+        layout_resumos = QVBoxLayout(ui.frame_resumos)
+        ui.frame_resumos.setLayout(layout_resumos)
+    ui.pushButton_Export_PDF_Relatorio.clicked.connect(lambda: gerar_relatorio_orcamento(ui))
+    ui.pushButton_Gerar_Relatorio_Consumos.clicked.connect(lambda: on_gerar_relatorio_consumos_clicked(ui))
+    main_win.show()
+    app.exec_()
