@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "103 Commit"
+git commit -m "104 Commit"
 git push origin main
 
 
@@ -56,12 +56,18 @@ import modulo_dados_definicoes
 # Configuração visual e eventos para a tabela 'tab_modulo_medidas'
 from tab_modulo_medidas_formatacao import setup_tab_modulo_medidas
 import sys
+import os
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QHBoxLayout, QPushButton, QComboBox, QDialog, QTableWidgetItem, QVBoxLayout
+from PyQt5.QtGui import QIcon
 # Importa o módulo de conexão com a base de dados
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
 # Interface gerada pelo Qt Designer
 from orcamentos_le_layout import Ui_MainWindow
 from importar_dados_gerais_por_modelo import ImportarDadosGeralDialog
+
+# Caminho absoluto para o ícone da aplicação
+# Este icom 'martelo' esta localizado na raiz do projeto, na mesma pasta que este ficheiro main.py
+ICON_PATH = os.path.join(os.path.dirname(__file__), "martelo.png")
 
 
 # Módulos de funcionalidades
@@ -126,7 +132,9 @@ class MainApp(QMainWindow):
         # Inicializa a interface gráfica a partir do ficheiro gerado pelo Qt Designer
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        # Configura o título da janela principal
+        # Configura o título e o ícone da janela principal
+        self.setWindowTitle("Martelo")
+        self.setWindowIcon(QIcon(ICON_PATH))
         # Aplicar estilo de seleção de linha às principais tabelas
         for tbl in [
             self.ui.tableWidget_tabela_clientes,
@@ -846,6 +854,7 @@ class MainApp(QMainWindow):
 if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication, QVBoxLayout
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(ICON_PATH))
     window = MainApp()
     window.show()
     sys.exit(app.exec_())
