@@ -78,10 +78,8 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
     df['comp_mp'] = df['comp_mp'].astype(float)
     df['larg_mp'] = df['larg_mp'].astype(float)
     df['area_placa'] = (df['comp_mp'] / 1000) * (df['larg_mp'] / 1000)
-    # ATENÇÃO: Desperdício (%)
-    df['m2_consumidos'] = (
-        df['area_m2_und'].astype(float) * df['qt_total'].astype(float) * (1 + df['desp'].astype(float)/100)
-    )
+    # ATENÇÃO: Desperdício (%)  o valor de desperdicio nao é dado em percentagem, mas sim em decimal (ex: 0.05 para 5%) ->desp = 0.05
+    df['m2_consumidos'] = (df['area_m2_und'].astype(float) * df['qt_total'].astype(float) * (1 + df['desp'].astype(float)))
     grouped = df.groupby('descricao_no_orcamento').agg(
         ref_le=('ref_le', 'first'),
         pliq=('pliq', 'first'),
@@ -258,7 +256,7 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
     ].copy()
 
     # Seccionadora (Corte)
-    df_corte = df[df['cp01_sec'].astype(float) >= 0].copy()
+    df_corte = df[df['cp01_sec'].astype(float) >= 1].copy()
     pecas_cortadas = df_corte['qt_total'].astype(float).sum().round(0)
     custo_corte = (df_corte['qt_total'].astype(float) * df_corte['cp01_sec_und'].astype(float)).sum().round(2)
     ml_corte = ((df_corte['comp_res'].astype(float)*2 + df_corte['larg_res'].astype(float)*2) * df_corte['qt_total'].astype(float) / 1000).sum().round(2)
@@ -287,19 +285,19 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
     custo_abd = (df_abd['cp04_abd_und'].astype(float) * df_abd['qt_total'].astype(float)).sum().round(2)
 
     # Esquadrejadora (Cortes Manuais)
-    df_esquad = df[df['cp06_esquad'].astype(float) >= 0].copy()
+    df_esquad = df[df['cp06_esquad'].astype(float) >= 1].copy()
     custo_esquad = (df_esquad['cp06_esquad_und'].astype(float) * df_esquad['qt_total'].astype(float)).sum().round(2)
 
     # Embalamento (Paletização)
-    df_embal = df[df['cp07_embalagem'].astype(float) >= 0].copy()
+    df_embal = df[df['cp07_embalagem'].astype(float) >= 1].copy()
     custo_embal = (df_embal['cp07_embalagem_und'].astype(float) * df_embal['qt_total'].astype(float)).sum().round(2)
 
     # Mão de Obra (MO geral)
-    df_mo = df[df['cp08_mao_de_obra'].astype(float) >= 0].copy()
+    df_mo = df[df['cp08_mao_de_obra'].astype(float) >= 1].copy()
     custo_mo = (df_mo['cp08_mao_de_obra_und'].astype(float) * df_mo['qt_total'].astype(float)).sum().round(2)
 
     # Prensa (Montagem)
-    df_prensa = df[df['cp05_prensa'].astype(float) >= 0].copy()
+    df_prensa = df[df['cp05_prensa'].astype(float) >= 1].copy()
     # Soma o custo da prensa, mas não considera nº de peças (já está agregado)
     custo_prensa = (df_prensa['cp05_prensa_und'].astype(float) * df_prensa['qt_total'].astype(float)).sum().round(2)
 
