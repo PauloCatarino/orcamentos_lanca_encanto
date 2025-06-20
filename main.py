@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "95 Commit"
+git commit -m "96 Commit"
 git push origin main
 
 
@@ -56,7 +56,8 @@ import modulo_dados_definicoes
 # Configuração visual e eventos para a tabela 'tab_modulo_medidas'
 from tab_modulo_medidas_formatacao import setup_tab_modulo_medidas
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QHBoxLayout, QPushButton, QComboBox, QDialog, QTableWidgetItem
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QHBoxLayout, QPushButton, QComboBox, QDialog, QTableWidgetItem, QVBoxLayout
+# Importa o módulo de conexão com a base de dados
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
 # Interface gerada pelo Qt Designer
 from orcamentos_le_layout import Ui_MainWindow
@@ -125,6 +126,7 @@ class MainApp(QMainWindow):
         # Inicializa a interface gráfica a partir do ficheiro gerado pelo Qt Designer
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        # Configura o título da janela principal
         # Aplicar estilo de seleção de linha às principais tabelas
         for tbl in [
             self.ui.tableWidget_tabela_clientes,
@@ -463,6 +465,10 @@ class MainApp(QMainWindow):
             print("[AVISO] Botão 'Gerar Relatório de Consumos' não encontrado na UI.")
 
 
+        # Adicionar um layout ao QWidget 'frame_resumos' para que possa receber o dashboard.
+        # Isto é crucial para que a função mostrar_dashboard_resumos consiga limpar e adicionar widgets.
+        layout_resumos = QVBoxLayout(self.ui.frame_resumos)
+        self.ui.frame_resumos.setLayout(layout_resumos)
         print("--- Inicialização da UI Concluída ---")
 
     def abrirImportarDialog(self):

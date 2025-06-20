@@ -23,9 +23,13 @@ from reportlab.pdfgen import canvas
 import xlsxwriter
 from db_connection import obter_cursor
 
-from orcamentos import _gerar_nome_pasta_orcamento
+from orcamentos import _gerar_nome_pasta_orcamento # importa se estiver noutro ficheiro
 from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resumos?    
-from utils import obter_caminho_excel_resumo_atual  # Se colocares em utils.py    
+#from utils import obter_caminho_excel_resumo_atual  # Se colocares em utils.py    
+
+
+
+
 
 
 def _parse_float(value: str) -> float:
@@ -453,44 +457,68 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
 def on_gerar_relatorio_consumos_clicked(ui):
     """
     Handler para o botão 'Gerar Relatório de Consumos'.
+    Esta função agora determina corretamente o caminho do ficheiro, gera o Excel de resumo
+    e exibe o dashboard na UI.
     """
     print("===> Handler chamado!")  # Debug
     # Obter os dados dos campos da UI
+
+
+    print("===> Handler para gerar relatório de consumos chamado!")
+
+    # 1. Obter o caminho da pasta do orçamento usando a função existente e fiável
+    try:
+        # NOTA: Isto assume que _obter_caminho_pasta_orcamento está no mesmo ficheiro (relatorio_orcamento.py)
+        pasta_orcamento = _obter_caminho_pasta_orcamento(ui)
+        if not pasta_orcamento or not os.path.exists(pasta_orcamento):
+            QMessageBox.warning(None, "Caminho Inválido", f"A pasta do orçamento não foi encontrada ou não pôde ser criada:\n{pasta_orcamento}")
+            return
+    except Exception as e:
+        QMessageBox.critical(None, "Erro Crítico", f"Falha ao obter o caminho da pasta do orçamento:\n{e}")
+        return
+
+    # 2. Construir o nome e o caminho completo do ficheiro Excel de resumos
     num_orcamento = ui.lineEdit_num_orcamento_2.text().strip()
     versao = ui.lineEdit_versao.text().strip()
-    ano = ui.lineEdit_ano.text().strip()
-    nome_cliente = ui.lineEdit_nome_cliente_2.text().strip()
-    caminho_base = ui.lineEdit_orcamentos.text().strip()
+    nome_ficheiro_excel = f"Resumo_Custos_{num_orcamento}_{versao}.xlsx"
+    caminho_completo_excel = os.path.join(pasta_orcamento, nome_ficheiro_excel)
 
-    # Calcular caminho da pasta (igual ao que fazes ao criar a pasta!)
-    from orcamentos import _gerar_nome_pasta_orcamento  # importa se estiver noutro ficheiro
-    nome_pasta_orc = _gerar_nome_pasta_orcamento(num_orcamento, nome_cliente)
-    caminho_pasta = os.path.join(caminho_base, ano, nome_pasta_orc, versao)
-
-    # Caminho para o Excel de resumo
-    ficheiro_excel = os.path.join(caminho_pasta, f"Resumo_Custos_{num_orcamento}_{versao}.xlsx")
-
-    # Chamar a função que atualiza o Excel
+    # 3. Chamar a função que atualiza o Excel
     try:
-        from resumo_consumos import gerar_resumos_excel
-        gerar_resumos_excel(ficheiro_excel, num_orcamento, versao)
-        # MOSTRAR DASHBOARD NO SEPARADOR
-        from dashboard_resumos_custos import mostrar_dashboard_resumos # mostra o dashboard de resumos de custos
-        print(f"===> Gerando dashboard com ficheiro: {ficheiro_excel}")
-        # Limpa e mostra o dashboard (usa o frame do separador!)
-        path_excel = obter_caminho_excel_resumo_atual(ui) # Obtém caminho do excel de resumos do orçamento atual
-        print("[DEBUG] Caminho do excel de resumos ---->:", path_excel)
-        if not os.path.exists(path_excel):
-            print(f"Ficheiro de resumos não existe: {path_excel}")
-            return
-        mostrar_dashboard_resumos(ui.frame_resumos, ficheiro_excel)
-
-        # Troca automaticamente para o separador "Resumo_Consumos_Orcamento_2"
-        ui.tabWidget.setCurrentWidget(ui.tab_Resumo_Consumos_Orcamento_2)
-
-        QtWidgets.QMessageBox.information(None, "Resumos Atualizados", f"Relatório de consumos atualizado com sucesso em:\n{ficheiro_excel}")
+        from resumo_consumos import gerar_resumos_excel  # Importa-se aqui para evitar dependências circulares
+        print(f"===> A gerar resumos para o ficheiro: {caminho_completo_excel}")
+        gerar_resumos_excel(caminho_completo_excel, num_orcamento, versao)
+        QMessageBox.information(None, "Resumos Atualizados", f"Relatório de consumos atualizado com sucesso em:\n{caminho_completo_excel}")
     except Exception as e:
-        QtWidgets.QMessageBox.critical(None, "Erro", f"Erro ao gerar relatório de consumos:\n{e}")
+        QMessageBox.critical(None, "Erro", f"Erro ao gerar o ficheiro Excel de resumos:\n{e}")
+        import traceback
+        traceback.print_exc()
+        return  # Aborta se a geração do Excel falhar
+
+    # 4. Mostrar o dashboard no separador correspondente
+    try:
+        from dashboard_resumos_custos import mostrar_dashboard_resumos  # Importa-se aqui
+        print(f"===> A gerar dashboard com dados de: {caminho_completo_excel}")
+
+        # Verifica se o ficheiro Excel realmente existe antes de tentar lê-lo
+        if not os.path.exists(caminho_completo_excel):
+            QMessageBox.warning(None, "Ficheiro não encontrado", f"O ficheiro de resumos não foi encontrado:\n{caminho_completo_excel}")
+            return
+
+        # Mostra o dashboard no frame do separador
+        # (ui.frame_resumos é o QWidget/QFrame dentro do separador "Resumo_Consumos_Orcamento_2")
+        mostrar_dashboard_resumos(ui.frame_resumos, caminho_completo_excel)
+
+        # 5. Mudar para o separador do dashboard
+        # Primeiro, seleciona o separador principal 'Relatorios'
+        ui.tabWidget_orcamento.setCurrentWidget(ui.tab_relatorios)
+        # Depois, seleciona o separador interno 'Resumo_Consumos_Orcamento'
+        ui.Relatorio_Orcamento_2.setCurrentWidget(ui.Resumo_Consumos_Orcamento_2)
+
+    except Exception as e:
+        QMessageBox.critical(None, "Erro de Dashboard", f"Ocorreu um erro ao exibir o dashboard:\n{e}")
+        import traceback
+        traceback.print_exc()
 
 
 # Se executares este ficheiro diretamente:
