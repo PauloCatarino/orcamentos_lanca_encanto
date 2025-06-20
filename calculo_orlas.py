@@ -234,6 +234,10 @@ def calcular_orlas_para_linha(ui, row):
     if qt_total_val <= 0:
         qt_total_val = 1  # Para evitar multiplicar por zero, assume 1 como fallback # Qt_Total pode ser zero se não houver peças a calcular.
     # Se a quantidade total for zero ou inválida, não faz sentido calcular orlas
+    # Verifica se a coluna Orla (checkbox - col 11) está ativa
+    orla_chk_item = table.item(row, 11)
+    orla_checkbox_ativo = orla_chk_item and orla_chk_item.checkState() == Qt.Checked
+
     # Obtém o texto da coluna Def_Peca para extrair o código da orla
     def_peca_text = safe_item_text(table, row, IDX_DEF_PECA)
     orla_code = extract_orla_code(def_peca_text)  # Retorna string "XXXX" ou "0000"
@@ -241,6 +245,16 @@ def calcular_orlas_para_linha(ui, row):
     # Obtém as referências de orla fina e grossa da linha
     ref_orla_fina = safe_item_text(table, row, IDX_REF_ORLA_FINA).strip()
     ref_orla_grossa = safe_item_text(table, row, IDX_REF_ORLA_GROSSA).strip()
+
+    # Se o checkbox Orla estiver ativo, todas as colunas de orla devem ser 0
+    if orla_checkbox_ativo:
+        for idx in [IDX_ORLA_C1, IDX_ORLA_C2, IDX_ORLA_L1, IDX_ORLA_L2]:
+            set_item(table, row, idx, "")
+        for idx in ML_COLUMNS_IDX:
+            set_item(table, row, idx, "0.0")
+        for idx in CUSTO_ML_COLUMNS_IDX:
+            set_item(table, row, idx, formatar_valor_moeda(0.0))
+        return
 
     # --- Processar cada lado da orla ---
     # Define os mapeamentos de lado para dígito no código e referência de orla

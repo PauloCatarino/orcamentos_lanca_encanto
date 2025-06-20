@@ -414,12 +414,15 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     # CP02_ORL_und (col 66)
     cp02_orl_base = converter_texto_para_valor(safe_item_text(table, row, IDX_CP02_ORL_BASE), "moeda")
     orl_und = 0.0
+    # Verifica se o checkbox Orla (coluna 11) está ativo
+    item_orla_chk = table.item(row, 11)
+    orla_checkbox_ativo = item_orla_chk and item_orla_chk.checkState() == Qt.Checked
     soma_ml_orlas = converter_texto_para_valor(safe_item_text(table, row, IDX_ML_C1), "moeda") + \
                     converter_texto_para_valor(safe_item_text(table, row, IDX_ML_C2), "moeda") + \
                     converter_texto_para_valor(safe_item_text(table, row, IDX_ML_L1), "moeda") + \
                     converter_texto_para_valor(safe_item_text(table, row, IDX_ML_L2), "moeda") # Soma ML orlas (calculado em modulo_calculo_orlas)
 
-    if cp02_orl_base >= 1 and soma_ml_orlas > 0 and qt_total > 0: # Qt_Total usado como divisor? Regra original confusa. Custo Orla por Peça / Qt_Total?
+    if not orla_checkbox_ativo and cp02_orl_base >= 1 and soma_ml_orlas > 0 and qt_total > 0: # Qt_Total usado como divisor? Regra original confusa. Custo Orla por Peça / Qt_Total?
             # Regra original: CP02_ORL_und = (Soma ML orlas) * Orladora / QT_TOTAL
             # Isto parece CUSTO TOTAL orla para o item / QT_TOTAL de peças.
             # MAS a descrição diz custo por PEÇA, não por ITEM.
@@ -445,6 +448,10 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
             orl_und = custo_orla_total_item / qt_total # Custo de orla por PEÇA
             formula_orl_tooltip = f"(Soma ML * VALOR_ORLADORA) / Qt_Total\n= ({soma_ml_orlas:.2f} m * {VALOR_ORLADORA:.2f} €/ML) / {qt_total:.0f} = {round(orl_und, 2):.2f}€"
     else:
+        if orla_checkbox_ativo:
+            orl_und = 0.0
+            formula_orl_tooltip = "0 (Orla checkbox ativo)"
+        else:
             orl_und = 0.0
             formula_orl_tooltip = "0"
 
@@ -586,6 +593,8 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     # Custo TOTAL das orlas por unidade de peça (Soma dos CUSTO_ML_xx, col 45-48)
     # Estes já estão em € por UNIDADE de peça
     custo_orla_total_und = custo_ml_c1 + custo_ml_c2 + custo_ml_l1 + custo_ml_l2
+    if orla_checkbox_ativo:
+        custo_orla_total_und = 0.0
 
     # Soma_Custo_Total (col 80) = (Soma_Custo_und (máquinas) + CUSTO_MP_und + Custo_Orla_Total_und) * Qt_Total
     # NOTA: O CUSTO_MP_und (col 57) JÁ FOI CALCULADO E AJUSTADO (respeitando CP09 e MPs checkbox)
