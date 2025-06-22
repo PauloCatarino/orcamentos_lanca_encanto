@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # calculadora_consumos.py
 
+
+# não tenho a certeza se este script está ser usados pelo programa?
+
 """Funções de cálculo para o Resumo de Consumos de um orçamento.
 
 Este módulo contém rotinas que agregam e calculam os consumos de

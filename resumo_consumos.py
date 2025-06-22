@@ -20,7 +20,7 @@ import numpy as np
 # =============================================================================
 try:
     sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-    from src.db import carregar_tabela
+    from db import carregar_tabela
 except ImportError:
     print("AVISO: Módulo 'src.db' não encontrado. As funções podem falhar.")
     def carregar_tabela(nome_tabela):
