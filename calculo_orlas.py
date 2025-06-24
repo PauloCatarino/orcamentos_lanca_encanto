@@ -130,16 +130,17 @@ def get_orla_width_factor(esp_peca):
 
 
 # --- Função auxiliar: consulta dados da orla na DB ---
-def get_orla_data(ref_phc):
+def get_orla_data(ref_le):
     """
     Consulta a tabela 'materias_primas' na base de dados para obter
-    a espessura (ESP_MP), preço líquido (pliq) em €/m², e desperdício (desp)
-    de um material de orla com base na sua referência (REF_PHC).
+    a espessura (``ESP_MP``), o preço líquido (``pliq``) em €/m² e o
+    desperdício (``desp``) de um material de orla a partir da sua
+    referência ``ref_le``.
 
-    Parâmetros:
-    -----------
-    ref_phc : str
-        A referência do material de orla a procurar.
+    Parâmetros
+    ----------
+    ref_le : str
+        Referência ``ref_le`` do material de orla a procurar.
 
     Retorna:
     --------
@@ -148,8 +149,8 @@ def get_orla_data(ref_phc):
     Retorna (0.0, 0.0, 0.0) se a referência for inválida ou não encontrada.
     """
     # Trata referência vazia ou inválida
-    if not ref_phc or not isinstance(ref_phc, str) or not ref_phc.strip():
-        # print(f"[AVISO] get_orla_data: Referência de orla inválida/vazia ({ref_phc}).")
+    if not ref_le or not isinstance(ref_le, str) or not ref_le.strip():
+        # print(f"[AVISO] get_orla_data: Referência de orla inválida/vazia ({ref_le}).")
         return 0.0, 0.0, 0.0
 
     esp_mp = 0.0
@@ -160,8 +161,8 @@ def get_orla_data(ref_phc):
         # Utiliza o gestor de contexto para obter e fechar cursor/conexão
         with obter_cursor() as cursor:
             # Usar backticks para nomes de colunas/tabelas se contiverem caracteres especiais ou forem palavras reservadas
-            query = "SELECT `ESP_MP`, `pliq`, `desp` FROM `materias_primas` WHERE `REF_PHC` = %s"
-            cursor.execute(query, (ref_phc,))
+            query = "SELECT `ESP_MP`, `pliq`, `desp` FROM `materias_primas` WHERE `Ref_LE` = %s"
+            cursor.execute(query, (ref_le,))
             result = cursor.fetchone()
 
         # Processa o resultado FORA do bloco 'with'
@@ -181,18 +182,18 @@ def get_orla_data(ref_phc):
             except (ValueError, TypeError):
                 desp_orla_fracao = 0.0
 
-            # print(f"[DEBUG] get_orla_data: REF_PHC '{ref_phc}' encontrado. Esp={esp_mp}, PliQ={pliq_val}, Desp(fracao)={desp_orla_fracao}") # Debug
+            # print(f"[DEBUG] get_orla_data: Ref_LE '{ref_le}' encontrado. Esp={esp_mp}, PliQ={pliq_val}, Desp(fracao)={desp_orla_fracao}")
             return esp_mp, pliq_val, desp_orla_fracao
         else:
-            # print(f"[AVISO] get_orla_data: REF_PHC '{ref_phc}' não encontrado na DB 'materias_primas'.") # Debug/Aviso
+            # print(f"[AVISO] get_orla_data: Ref_LE '{ref_le}' não encontrado na DB 'materias_primas'.") # Debug/Aviso
             return 0.0, 0.0, 0.0 # Retorna zeros se não encontrar a referência
             
     except mysql.connector.Error as db_err:
-        print(f"[ERRO DB] Erro ao consultar DB 'materias_primas' para REF_PHC '{ref_phc}': {db_err}")
+        print(f"[ERRO DB] Erro ao consultar DB 'materias_primas' para Ref_LE '{ref_le}': {db_err}")
         # Não mostrar QMessageBox aqui, pois pode ser chamado muitas vezes no loop
         return 0.0, 0.0, 0.0 # Retorna zeros em caso de erro de base de dados
     except Exception as e:
-        print(f"[ERRO INESPERADO] em get_orla_data para REF_PHC '{ref_phc}': {e}")
+        print(f"[ERRO INESPERADO] em get_orla_data para Ref_LE '{ref_le}': {e}")
         import traceback
         traceback.print_exc() # Para ver a stack trace
         return 0.0, 0.0, 0.0 # Retorna zeros em caso de erro inesperado
