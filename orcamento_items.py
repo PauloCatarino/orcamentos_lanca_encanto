@@ -52,7 +52,7 @@ Observação: Certifique-se de que a função get_connection(), importada do mó
 
 import datetime
 import mysql.connector  # Adicionado para erros específicos
-from PyQt5.QtCore import QDate, Qt, QTimer  # Importado QTimer
+from PyQt5.QtCore import QDate, Qt, QTimer, QObject, QEvent  # Importado QTimer
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QTreeWidgetItem,  QMenu, QDialog
 from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 # Importa a função de conexão MySQL (já configurada no módulo de conexão)
@@ -249,14 +249,6 @@ def configurar_orcamento_ui(main_window):
     # Inicializa o campo de item com "1"
     ui.lineEdit_item_orcamento.setText("1")
 
-    # Conexões para expandir/recolher a descrição
-    ui.tableWidget_artigos.verticalHeader().sectionClicked.connect(
-        lambda r: toggle_row_expansion(ui.tableWidget_artigos, r))
-    ui.tableWidget_artigos.cellDoubleClicked.connect(
-        lambda r, c: toggle_row_expansion(ui.tableWidget_artigos, r)
-        if c == COL_DESCRICAO else None)
-    ui.tableWidget_artigos.expanded_rows = set()
-    rebuild_row_headers(ui.tableWidget_artigos)
 # NOVO: Função de validação para os lineEdits de percentagem
 
 
@@ -300,21 +292,53 @@ def _validate_percentage_input(line_edit, min_val, max_val):
         # CORRIGIDO: Usar line_edit.window() como parent para QMessageBox
         QMessageBox.warning(line_edit.window(), "Entrada Inválida",
                             "Por favor, insira um valor numérico válido para a percentagem (ex: 15, 5.5%).")
+        line_edit.setText("")  # Limpa o campo se a conversão falhar
+
         
-        
+class _ClearOnFocusFilter(QObject):
+    """Limpa o QLineEdit quando recebe foco para facilitar a edição."""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.FocusIn:
+            obj.clear()
+        return False
+
+
+def _setup_percentage_line_edit(line_edit):
+    """Aplica configuração de edição simplificada ao QLineEdit de percentagem."""
+    filtro = _ClearOnFocusFilter(line_edit)
+    line_edit.installEventFilter(filtro)
+    # Guardar referência para evitar coleta de lixo
+    if not hasattr(line_edit, "_focus_filter"):
+        line_edit._focus_filter = filtro
+
+
+def _on_global_percentage_edit(ui, line_edit, column_idx, force_margin=False):
+    """Valida o valor editado e, se confirmado, aplica a todas as linhas."""
+    _validate_percentage_input(line_edit, 0, 99)
+    _prompt_apply_global_percentage(ui, line_edit, column_idx, force_margin)
+
+
 def _prompt_apply_global_percentage(ui, line_edit, column_idx, force_margin=False):
     """Pergunta ao usuário se deseja aplicar o novo valor de percentagem a todas
     as linhas da tabela e aplica caso confirmado."""
-    valor = converter_texto_para_valor(line_edit.text(), "percentual")
-    if QMessageBox.question(
-        ui.tabWidget_orcamento,
-        "Aplicar Percentagem",
-        "Aplicar o novo valor a todas as linhas do orçamento?",
-        QMessageBox.Yes | QMessageBox.No,
-    ) == QMessageBox.Yes:
-        _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor)
-        atualizar_custos_e_precos_itens(
-            ui, force_global_margin_update=force_margin)
+    if getattr(ui, "_prompt_active", False):
+        return
+
+    ui._prompt_active = True
+    try:
+        valor = converter_texto_para_valor(line_edit.text(), "percentual")
+        if QMessageBox.question(
+            ui.tabWidget_orcamento,
+            "Aplicar Percentagem",
+            "Aplicar o novo valor a todas as linhas do orçamento?",
+            QMessageBox.Yes | QMessageBox.No,
+        ) == QMessageBox.Yes:
+            _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor)
+            atualizar_custos_e_precos_itens(
+                ui, force_global_margin_update=force_margin)
+    finally:
+        ui._prompt_active = False
 
 
 def _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor):
@@ -330,40 +354,6 @@ def _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor):
     finally:
         _editando_programaticamente = False
 
-
-
-def _ensure_header_item(tbl, row):
-    """Garante que o verticalHeaderItem existe e atualiza o texto [+]/[-]."""
-    item = tbl.verticalHeaderItem(row)
-    if item is None:
-        item = QTableWidgetItem()
-        tbl.setVerticalHeaderItem(row, item)
-    expanded = hasattr(tbl, "expanded_rows") and row in tbl.expanded_rows
-    sinal = "-" if expanded else "+"
-    item.setText(f"{row + 1} {sinal}")
-
-
-def rebuild_row_headers(tbl):
-    """Reinicia os cabeçalhos e as alturas das linhas para o estado recolhido."""
-    if not hasattr(tbl, "expanded_rows"):
-        tbl.expanded_rows = set()
-    tbl.expanded_rows.clear()
-    for row in range(tbl.rowCount()):
-        tbl.setRowHeight(row, ROW_COLLAPSED_HEIGHT)
-        _ensure_header_item(tbl, row)
-
-
-def toggle_row_expansion(tbl, row):
-    """Expande ou recolhe a linha indicada, ajustando altura e cabeçalho."""
-    if not hasattr(tbl, "expanded_rows"):
-        tbl.expanded_rows = set()
-    if row in tbl.expanded_rows:
-        tbl.setRowHeight(row, ROW_COLLAPSED_HEIGHT)
-        tbl.expanded_rows.remove(row)
-    else:
-        tbl.setRowHeight(row, ROW_EXPANDED_HEIGHT)
-        tbl.expanded_rows.add(row)
-    _ensure_header_item(tbl, row)
 
 
 def mapeia_dados_items_orcamento(main_window):
