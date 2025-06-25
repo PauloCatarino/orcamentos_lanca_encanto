@@ -20,8 +20,6 @@ from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, i
 #from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
 from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item
 from modulo_orquestrador import atualizar_tudo
-from orcamento_items import navegar_item_orcamento
-
 
 def executar_guardar_dados_orcamento(main_window):
     """Carrega dinamicamente a função de gravação e executa-a.
@@ -423,7 +421,8 @@ def acao_importar_dados(main_window, nome_tabela):
     else:
         QMessageBox.information(main_window, "Info", f"Importar para '{nome_tabela}' ainda não implementado.")   
 
-# --- Mapeamento de colunas para a tabela de peças ---     
+# --- Mapeamento de colunas para a tabela de peças ---
+# Este mapeamento é usado para aplicar os dados da linha selecionada em Dados Gerais             
 MAPPING_PECAS_COLS = {
     3: 1, 18: 5, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
     25: 12, 26: 13, 27: 14, 28: 15, 29: 16, 30: 17, 31: 18, 32: 19
@@ -435,6 +434,9 @@ TAB_MAPPING = {
     "sistemas_correr": ("Tab_Sistemas_Correr", "Tab_Sistemas_Correr_11"),
     "acabamentos": ("Tab_Acabamentos", "Tab_Acabamentos_12"),
 }
+
+# Colunas das tabelas de itens que devem ser atualizadas ao aplicar uma linha
+ITEM_COLS_TO_UPDATE = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 
 
 def aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela):
@@ -459,7 +461,7 @@ def aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela):
     if linha_dest == -1:
         QMessageBox.warning(main_window, "Aviso", "Linha correspondente não encontrada nos Items.")
         return
-    for c in range(1, 20):
+    for c in ITEM_COLS_TO_UPDATE:
         w_src = tbl_geral.cellWidget(row, c)
         w_dst = tbl_item.cellWidget(linha_dest, c)
         if w_src and isinstance(w_src, QComboBox):
@@ -491,11 +493,24 @@ def aplicar_linha_todos_itens_e_pecas(main_window, nome_tabela):
     ui = main_window.ui
     tree = ui.tab_artigos_11
     total = tree.topLevelItemCount()
+    from orcamento_items import navegar_item_orcamento
+    from modulo_dados_definicoes import salvar_dados_def_pecas
+    if nome_tabela == "materiais":
+        from dados_items_materiais import guardar_dados_item_orcamento_tab_material as guardar_item
+    elif nome_tabela == "ferragens":
+        from dados_items_ferragens import guardar_dados_item_orcamento_tab_ferragens as guardar_item
+    elif nome_tabela == "sistemas_correr":
+        from dados_items_sistemas_correr import guardar_dados_item_orcamento_tab_sistemas_correr_3 as guardar_item
+    else:
+        from dados_items_acabamentos import guardar_dados_item_orcamento_tab_acabamentos as guardar_item
+
     indice_original = getattr(main_window, "navegacao_index", 0)
     for idx in range(total):
         if idx != getattr(main_window, "navegacao_index", 0):
             navegar_item_orcamento(main_window, idx - getattr(main_window, "navegacao_index", 0))
         aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela)
+        guardar_item(main_window)
+        atualizar_tudo(ui)
+        salvar_dados_def_pecas(ui)
     if indice_original != getattr(main_window, "navegacao_index", 0):
-        navegar_item_orcamento(main_window, indice_original - getattr(main_window, "navegacao_index", 0))
-    atualizar_tudo(ui)
+        navegar_item_orcamento(main_window, indice_original - getattr(main_window, "navegacao_index", 0))    
