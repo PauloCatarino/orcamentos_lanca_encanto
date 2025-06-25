@@ -978,7 +978,6 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
     finally:
         _editando_programaticamente = False  # Libera a flag
         tbl.resizeColumnsToContents()  # Ajusta largura das colunas
-        rebuild_row_headers(tbl)
 
 
 def inserir_item_orcamento(ui):
