@@ -20,6 +20,8 @@ from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, i
 #from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
 from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item
 from modulo_orquestrador import atualizar_tudo
+from orcamento_items import navegar_item_orcamento
+
 
 def executar_guardar_dados_orcamento(main_window):
     """Carrega dinamicamente a função de gravação e executa-a.
@@ -95,7 +97,7 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar_alterar(
             main_window.ui.Tab_Material,
             lambda: limpar_linha_por_tab(main_window, "materiais"),
-            lambda: aplicar_linha_para_item_e_pecas(main_window)
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "materiais")
         )
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
@@ -111,7 +113,11 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_fer.clicked.connect(lambda: acao_guardar_dados(main_window, "ferragens"))
         btn_importar_fer.clicked.connect(lambda: acao_importar_dados(main_window, "ferragens"))
         btn_limpar_fer.clicked.connect(lambda: limpar_linha_por_tab(main_window, "ferragens"))
-        adicionar_menu_limpar(main_window.ui.Tab_Ferragens, lambda: limpar_linha_por_tab(main_window, "ferragens"))
+        adicionar_menu_limpar_alterar(
+            main_window.ui.Tab_Ferragens,
+            lambda: limpar_linha_por_tab(main_window, "ferragens"),
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "ferragens")
+        )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Ferragens", f"Erro: {e}")
 
@@ -124,7 +130,11 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_sc.clicked.connect(lambda: acao_guardar_dados(main_window, "sistemas_correr"))
         btn_importar_sc.clicked.connect(lambda: acao_importar_dados(main_window, "sistemas_correr"))
         btn_limpar_sc.clicked.connect(lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
-        adicionar_menu_limpar(main_window.ui.Tab_Sistemas_Correr,lambda: limpar_linha_por_tab(main_window, "sistemas_correr"))
+        adicionar_menu_limpar_alterar(
+            main_window.ui.Tab_Sistemas_Correr,
+            lambda: limpar_linha_por_tab(main_window, "sistemas_correr"),
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "sistemas_correr")
+        )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Sistemas Correr", f"Erro: {e}")
 
@@ -137,7 +147,11 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_acab.clicked.connect(lambda: acao_guardar_dados(main_window, "acabamentos"))
         btn_importar_acab.clicked.connect(lambda: acao_importar_dados(main_window, "acabamentos"))
         btn_limpar_acab.clicked.connect(lambda: limpar_linha_por_tab(main_window, "acabamentos"))
-        adicionar_menu_limpar(main_window.ui.Tab_Acabamentos, lambda: limpar_linha_por_tab(main_window, "acabamentos"))
+        adicionar_menu_limpar_alterar(
+            main_window.ui.Tab_Acabamentos,
+            lambda: limpar_linha_por_tab(main_window, "acabamentos"),
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "acabamentos")
+        )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Acabamentos", f"Erro: {e}")
 
@@ -407,13 +421,28 @@ def acao_importar_dados(main_window, nome_tabela):
         }
         importar_dados_gerais_com_opcao(main_window, "acabamentos", mapeamento)
     else:
-        QMessageBox.information(main_window, "Info", f"Importar para '{nome_tabela}' ainda não implementado.")        
+        QMessageBox.information(main_window, "Info", f"Importar para '{nome_tabela}' ainda não implementado.")   
 
-def aplicar_linha_para_item_e_pecas(main_window):
+# --- Mapeamento de colunas para a tabela de peças ---     
+MAPPING_PECAS_COLS = {
+    3: 1, 18: 5, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
+    25: 12, 26: 13, 27: 14, 28: 15, 29: 16, 30: 17, 31: 18, 32: 19
+}
+
+TAB_MAPPING = {
+    "materiais": ("Tab_Material", "Tab_Material_11"),
+    "ferragens": ("Tab_Ferragens", "Tab_Ferragens_11"),
+    "sistemas_correr": ("Tab_Sistemas_Correr", "Tab_Sistemas_Correr_11"),
+    "acabamentos": ("Tab_Acabamentos", "Tab_Acabamentos_12"),
+}
+
+
+def aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela):
     """Aplica a linha selecionada em Dados Gerais ao item atual e tab_def_pecas."""
     ui = main_window.ui
-    tbl_geral = ui.Tab_Material
-    tbl_item = ui.Tab_Material_11
+    tab_geral, tab_item_name = TAB_MAPPING[nome_tabela]
+    tbl_geral = getattr(ui, tab_geral)
+    tbl_item = getattr(ui, tab_item_name)
     row = tbl_geral.currentRow()
     if row < 0:
         QMessageBox.warning(main_window, "Aviso", "Selecione uma linha em Dados Gerais.")
@@ -442,16 +471,12 @@ def aplicar_linha_para_item_e_pecas(main_window):
         else:
             texto = tbl_geral.item(row, c).text() if tbl_geral.item(row, c) else ""
             set_item(tbl_item, linha_dest, c, texto)
-    mapping = {
-        3: 1, 18: 5, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
-        25: 12, 26: 13, 27: 14, 28: 15, 29: 16, 30: 17, 31: 18, 32: 19
-    }
     tbl_pecas = ui.tab_def_pecas
     for r in range(tbl_pecas.rowCount()):
         mat_item = tbl_pecas.item(r, 13)
         tab_item = tbl_pecas.item(r, 14)
-        if mat_item and tab_item and mat_item.text() == nome_linha and tab_item.text() == "Tab_Material_11":
-            for col_def, col_src in mapping.items():
+        if mat_item and tab_item and mat_item.text() == nome_linha and tab_item.text() == tab_item_name:
+            for col_def, col_src in MAPPING_PECAS_COLS.items():
                 w_src = tbl_item.cellWidget(linha_dest, col_src)
                 if w_src and isinstance(w_src, QComboBox):
                     valor = w_src.currentText()
@@ -459,4 +484,18 @@ def aplicar_linha_para_item_e_pecas(main_window):
                     itm = tbl_item.item(linha_dest, col_src)
                     valor = itm.text() if itm else ""
                 set_item(tbl_pecas, r, col_def, valor)
+
+
+def aplicar_linha_todos_itens_e_pecas(main_window, nome_tabela):
+    """Aplica a linha selecionada em Dados Gerais a todos os itens do orçamento."""
+    ui = main_window.ui
+    tree = ui.tab_artigos_11
+    total = tree.topLevelItemCount()
+    indice_original = getattr(main_window, "navegacao_index", 0)
+    for idx in range(total):
+        if idx != getattr(main_window, "navegacao_index", 0):
+            navegar_item_orcamento(main_window, idx - getattr(main_window, "navegacao_index", 0))
+        aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela)
+    if indice_original != getattr(main_window, "navegacao_index", 0):
+        navegar_item_orcamento(main_window, indice_original - getattr(main_window, "navegacao_index", 0))
     atualizar_tudo(ui)

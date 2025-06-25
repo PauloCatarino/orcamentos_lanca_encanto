@@ -507,7 +507,9 @@ def adicionar_menu_limpar_alterar(tabela, callback_limpar, callback_alterar):
     def abrir_menu2(pos):
         menu = QMenu(tabela)
         acao_limpar = menu.addAction("Limpar linha(s) selecionada(s)")
-        acao_aplicar = menu.addAction("Aplicar no Item Atual")
+        acao_aplicar = menu.addAction(
+            "Atualizar dados para todos os items do orçamento e Tab_def_pecas"
+        )
         acao_ret = menu.exec_(tabela.mapToGlobal(pos))
         if acao_ret == acao_limpar:
             callback_limpar()
