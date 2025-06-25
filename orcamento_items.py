@@ -132,6 +132,10 @@ IDX_SOMA_CUSTO_ACB_DB = 81  # Soma_Custo_ACB
 # Cor para células editadas manualmente
 COLOR_MANUAL_EDIT = QColor(255, 255, 150)  # Amarelo claro
 
+# Altura padrão das linhas e altura quando expandidas
+ROW_COLLAPSED_HEIGHT = 28
+ROW_EXPANDED_HEIGHT = 120
+
 
 def configurar_orcamento_ui(main_window):
     """
@@ -152,6 +156,21 @@ def configurar_orcamento_ui(main_window):
         lambda: _validate_percentage_input(ui.lineEdit_ajustes_1, 0, 99))
     ui.lineEdit_ajustes_2.textChanged.connect(
         lambda: _validate_percentage_input(ui.lineEdit_ajustes_2, 0, 99))
+
+    # Perguntar se deve aplicar percentagens globais a todas as linhas
+    ui.lineEdit_margem_lucro.editingFinished.connect(
+        lambda: _prompt_apply_global_percentage(
+            ui, ui.lineEdit_margem_lucro, COL_MARGEM_PERC, force_margin=True))
+    ui.lineEdit_custos_administrativos.editingFinished.connect(
+        lambda: _prompt_apply_global_percentage(
+            ui, ui.lineEdit_custos_administrativos, COL_CUSTOS_ADMIN_PERC))
+    ui.lineEdit_ajustes_1.editingFinished.connect(
+        lambda: _prompt_apply_global_percentage(
+            ui, ui.lineEdit_ajustes_1, COL_AJUSTES1_PERC))
+    ui.lineEdit_ajustes_2.editingFinished.connect(
+        lambda: _prompt_apply_global_percentage(
+            ui, ui.lineEdit_ajustes_2, COL_AJUSTES2_PERC))
+
 
     # Botão "Abrir Orçamento"
     ui.pushButton_abrir_orcamento.clicked.connect(
@@ -229,6 +248,15 @@ def configurar_orcamento_ui(main_window):
 
     # Inicializa o campo de item com "1"
     ui.lineEdit_item_orcamento.setText("1")
+
+    # Conexões para expandir/recolher a descrição
+    ui.tableWidget_artigos.verticalHeader().sectionClicked.connect(
+        lambda r: toggle_row_expansion(ui.tableWidget_artigos, r))
+    ui.tableWidget_artigos.cellDoubleClicked.connect(
+        lambda r, c: toggle_row_expansion(ui.tableWidget_artigos, r)
+        if c == COL_DESCRICAO else None)
+    ui.tableWidget_artigos.expanded_rows = set()
+    rebuild_row_headers(ui.tableWidget_artigos)
 # NOVO: Função de validação para os lineEdits de percentagem
 
 
@@ -272,7 +300,70 @@ def _validate_percentage_input(line_edit, min_val, max_val):
         # CORRIGIDO: Usar line_edit.window() como parent para QMessageBox
         QMessageBox.warning(line_edit.window(), "Entrada Inválida",
                             "Por favor, insira um valor numérico válido para a percentagem (ex: 15, 5.5%).")
-        line_edit.setText("")  # Limpa o campo se a conversão falhar
+        
+        
+def _prompt_apply_global_percentage(ui, line_edit, column_idx, force_margin=False):
+    """Pergunta ao usuário se deseja aplicar o novo valor de percentagem a todas
+    as linhas da tabela e aplica caso confirmado."""
+    valor = converter_texto_para_valor(line_edit.text(), "percentual")
+    if QMessageBox.question(
+        ui.tabWidget_orcamento,
+        "Aplicar Percentagem",
+        "Aplicar o novo valor a todas as linhas do orçamento?",
+        QMessageBox.Yes | QMessageBox.No,
+    ) == QMessageBox.Yes:
+        _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor)
+        atualizar_custos_e_precos_itens(
+            ui, force_global_margin_update=force_margin)
+
+
+def _aplicar_percentagem_a_todas_linhas(ui, column_idx, valor):
+    """Define o mesmo valor percentual em todas as linhas para a coluna indicada."""
+    tbl = ui.tableWidget_artigos
+    global _editando_programaticamente
+    _editando_programaticamente = True
+    try:
+        for row in range(tbl.rowCount()):
+            item = set_item(
+                tbl, row, column_idx, formatar_valor_percentual(valor))
+            item.setBackground(tbl.palette().base().color())
+    finally:
+        _editando_programaticamente = False
+
+
+
+def _ensure_header_item(tbl, row):
+    """Garante que o verticalHeaderItem existe e atualiza o texto [+]/[-]."""
+    item = tbl.verticalHeaderItem(row)
+    if item is None:
+        item = QTableWidgetItem()
+        tbl.setVerticalHeaderItem(row, item)
+    expanded = hasattr(tbl, "expanded_rows") and row in tbl.expanded_rows
+    sinal = "-" if expanded else "+"
+    item.setText(f"{row + 1} {sinal}")
+
+
+def rebuild_row_headers(tbl):
+    """Reinicia os cabeçalhos e as alturas das linhas para o estado recolhido."""
+    if not hasattr(tbl, "expanded_rows"):
+        tbl.expanded_rows = set()
+    tbl.expanded_rows.clear()
+    for row in range(tbl.rowCount()):
+        tbl.setRowHeight(row, ROW_COLLAPSED_HEIGHT)
+        _ensure_header_item(tbl, row)
+
+
+def toggle_row_expansion(tbl, row):
+    """Expande ou recolhe a linha indicada, ajustando altura e cabeçalho."""
+    if not hasattr(tbl, "expanded_rows"):
+        tbl.expanded_rows = set()
+    if row in tbl.expanded_rows:
+        tbl.setRowHeight(row, ROW_COLLAPSED_HEIGHT)
+        tbl.expanded_rows.remove(row)
+    else:
+        tbl.setRowHeight(row, ROW_EXPANDED_HEIGHT)
+        tbl.expanded_rows.add(row)
+    _ensure_header_item(tbl, row)
 
 
 def mapeia_dados_items_orcamento(main_window):
@@ -897,6 +988,7 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
     finally:
         _editando_programaticamente = False  # Libera a flag
         tbl.resizeColumnsToContents()  # Ajusta largura das colunas
+        rebuild_row_headers(tbl)
 
 
 def inserir_item_orcamento(ui):
