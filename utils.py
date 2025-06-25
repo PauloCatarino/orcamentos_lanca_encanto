@@ -500,7 +500,21 @@ def adicionar_menu_limpar(tabela, callback):
             callback()
 
     tabela.setContextMenuPolicy(Qt.CustomContextMenu)
-    tabela.customContextMenuRequested.connect(abrir_menu)
+    
+def adicionar_menu_limpar_alterar(tabela, callback_limpar, callback_alterar):
+    """Menu de contexto com limpar e aplicar alteração."""
+    from PyQt5.QtWidgets import QMenu
+    def abrir_menu2(pos):
+        menu = QMenu(tabela)
+        acao_limpar = menu.addAction("Limpar linha(s) selecionada(s)")
+        acao_aplicar = menu.addAction("Aplicar no Item Atual")
+        acao_ret = menu.exec_(tabela.mapToGlobal(pos))
+        if acao_ret == acao_limpar:
+            callback_limpar()
+        elif acao_ret == acao_aplicar:
+            callback_alterar()
+    tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+    tabela.customContextMenuRequested.connect(abrir_menu2)
 
 
 def copiar_valores_tabela(origem, destino):

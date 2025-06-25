@@ -18,7 +18,8 @@ from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
 #from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
-from utils import adicionar_menu_limpar
+from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item
+from modulo_orquestrador import atualizar_tudo
 
 def executar_guardar_dados_orcamento(main_window):
     """Carrega dinamicamente a função de gravação e executa-a.
@@ -91,7 +92,11 @@ def configurar_botoes_dados_gerais(main_window):
         btn_guardar_mat.clicked.connect(lambda: acao_guardar_dados(main_window, "materiais"))
         btn_importar_mat.clicked.connect(lambda: acao_importar_dados(main_window, "materiais"))
         btn_limpar_mat.clicked.connect(lambda: limpar_linha_por_tab(main_window, "materiais"))
-        adicionar_menu_limpar(main_window.ui.Tab_Material, lambda: limpar_linha_por_tab(main_window, "materiais"))
+        adicionar_menu_limpar_alterar(
+            main_window.ui.Tab_Material,
+            lambda: limpar_linha_por_tab(main_window, "materiais"),
+            lambda: aplicar_linha_para_item_e_pecas(main_window)
+        )
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
     except Exception as e:
@@ -403,3 +408,55 @@ def acao_importar_dados(main_window, nome_tabela):
         importar_dados_gerais_com_opcao(main_window, "acabamentos", mapeamento)
     else:
         QMessageBox.information(main_window, "Info", f"Importar para '{nome_tabela}' ainda não implementado.")        
+
+def aplicar_linha_para_item_e_pecas(main_window):
+    """Aplica a linha selecionada em Dados Gerais ao item atual e tab_def_pecas."""
+    ui = main_window.ui
+    tbl_geral = ui.Tab_Material
+    tbl_item = ui.Tab_Material_11
+    row = tbl_geral.currentRow()
+    if row < 0:
+        QMessageBox.warning(main_window, "Aviso", "Selecione uma linha em Dados Gerais.")
+        return
+    nome_linha = tbl_geral.item(row, 0).text() if tbl_geral.item(row, 0) else ""
+    if not nome_linha:
+        return
+    linha_dest = -1
+    for r in range(tbl_item.rowCount()):
+        it = tbl_item.item(r, 0)
+        if it and it.text() == nome_linha:
+            linha_dest = r
+            break
+    if linha_dest == -1:
+        QMessageBox.warning(main_window, "Aviso", "Linha correspondente não encontrada nos Items.")
+        return
+    for c in range(1, 20):
+        w_src = tbl_geral.cellWidget(row, c)
+        w_dst = tbl_item.cellWidget(linha_dest, c)
+        if w_src and isinstance(w_src, QComboBox):
+            texto = w_src.currentText()
+            if w_dst and isinstance(w_dst, QComboBox):
+                w_dst.setCurrentText(texto)
+            else:
+                set_item(tbl_item, linha_dest, c, texto)
+        else:
+            texto = tbl_geral.item(row, c).text() if tbl_geral.item(row, c) else ""
+            set_item(tbl_item, linha_dest, c, texto)
+    mapping = {
+        3: 1, 18: 5, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11,
+        25: 12, 26: 13, 27: 14, 28: 15, 29: 16, 30: 17, 31: 18, 32: 19
+    }
+    tbl_pecas = ui.tab_def_pecas
+    for r in range(tbl_pecas.rowCount()):
+        mat_item = tbl_pecas.item(r, 13)
+        tab_item = tbl_pecas.item(r, 14)
+        if mat_item and tab_item and mat_item.text() == nome_linha and tab_item.text() == "Tab_Material_11":
+            for col_def, col_src in mapping.items():
+                w_src = tbl_item.cellWidget(linha_dest, col_src)
+                if w_src and isinstance(w_src, QComboBox):
+                    valor = w_src.currentText()
+                else:
+                    itm = tbl_item.item(linha_dest, col_src)
+                    valor = itm.text() if itm else ""
+                set_item(tbl_pecas, r, col_def, valor)
+    atualizar_tudo(ui)
