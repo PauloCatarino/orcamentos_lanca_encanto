@@ -136,6 +136,49 @@ COLOR_MANUAL_EDIT = QColor(255, 255, 150)  # Amarelo claro
 ROW_COLLAPSED_HEIGHT = 28
 ROW_EXPANDED_HEIGHT = 120
 
+def init_row_expansion(table):
+    """Inicializa controle de expansão de linhas e conecta o clique no cabeçalho."""
+    table._expanded_rows = set()
+    table.verticalHeader().sectionClicked.connect(
+        lambda row: toggle_row_height(table, row)
+    )
+    refresh_header_icons(table)
+
+
+def toggle_row_height(table, row):
+    """Alterna a altura da linha entre expandida e recolhida."""
+    expanded = getattr(table, "_expanded_rows", set())
+    if row in expanded:
+        table.setRowHeight(row, ROW_COLLAPSED_HEIGHT)
+        expanded.remove(row)
+        icon = "+"
+    else:
+        table.setRowHeight(row, ROW_EXPANDED_HEIGHT)
+        expanded.add(row)
+        icon = "-"
+    _set_header_icon(table, row, icon)
+
+
+def refresh_header_icons(table):
+    """Garante que todas as linhas tenham o ícone correto no cabeçalho."""
+    expanded = getattr(table, "_expanded_rows", set())
+    for r in range(table.rowCount()):
+        icon = "-" if r in expanded else "+"
+        if not table.verticalHeaderItem(r):
+            table.setVerticalHeaderItem(r, QTableWidgetItem(icon))
+        else:
+            table.verticalHeaderItem(r).setText(icon)
+        if r not in expanded:
+            table.setRowHeight(r, ROW_COLLAPSED_HEIGHT)
+
+
+def _set_header_icon(table, row, text):
+    item = table.verticalHeaderItem(row)
+    if item is None:
+        item = QTableWidgetItem(text)
+        table.setVerticalHeaderItem(row, item)
+    else:
+        item.setText(text)
 
 def configurar_orcamento_ui(main_window):
     """
@@ -227,6 +270,9 @@ def configurar_orcamento_ui(main_window):
     ui.tableWidget_artigos.setHorizontalHeaderLabels(header_labels)
     ui.tableWidget_artigos.setColumnHidden(
         COL_ID_ITEM, True)  # Ocultar coluna id_item
+
+    # Inicializa funcionalidade de expandir/recolher linhas
+    init_row_expansion(ui.tableWidget_artigos)
 
     # Permite edição direta na tabela
     ui.tableWidget_artigos.setEditTriggers(
@@ -987,6 +1033,7 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
     finally:
         _editando_programaticamente = False  # Libera a flag
         tbl.resizeColumnsToContents()  # Ajusta largura das colunas
+        refresh_header_icons(tbl)
 
 
 def inserir_item_orcamento(ui):
