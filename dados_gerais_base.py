@@ -14,7 +14,7 @@ Observação:
 """
 
 import mysql.connector # Adicionado para erros específicos
-from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QPushButton, QMessageBox, QHeaderView, QTableWidget
+from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QPushButton, QMessageBox, QHeaderView, QTableWidget,QAbstractItemView
 from PyQt5.QtCore import Qt
 from orcamentos import obter_cursor
 
@@ -145,8 +145,8 @@ def configurar_tabela_dados_gerais_ui(ui, nome_tabela, colunas, linhas):
     headers = [col['nome'] for col in colunas]
     table_widget.setHorizontalHeaderLabels(headers)
     table_widget.verticalHeader().setVisible(False)
-    # Permitir seleção por célula ou linha? SelectItems é mais flexível
-    table_widget.setSelectionBehavior(QTableWidget.SelectItems)
+    # Selecionar linhas completas para melhor visualização
+    table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
 
     # Configura cada coluna
     for col_idx, col_def in enumerate(colunas):
