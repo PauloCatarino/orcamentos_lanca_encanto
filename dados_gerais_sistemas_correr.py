@@ -176,7 +176,8 @@ def definir_larguras_tab_sistemas_correr(ui):
     header.setSectionResizeMode(QHeaderView.Fixed)
     header.setStretchLastSection(False)
 
-    larguras = SISTEMAS_CORRER_COLUNAS_LARGURAS.copy()
+    # Apenas as larguras são necessárias para setColumnWidth
+    larguras = [l[2] if isinstance(l, tuple) else l for l in SISTEMAS_CORRER_COLUNAS_LARGURAS]
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
