@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt
 from dados_gerais_base import criar_tabela_dados_gerais, configurar_tabela_dados_gerais_ui, get_distinct_values
 # mostrar diálogo de seleção de material um menu onde utilizador pode escolher o material da tabela das materias primas
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
-from utils import formatar_valor_moeda, formatar_valor_percentual, original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter
+from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu)
 # Importa a lista de colunas a limpar (agora definida em dados_gerais_mp.py)
 from dados_gerais_mp import COLUNAS_LIMPAR_ACABAMENTOS
 
@@ -39,6 +39,32 @@ ACABAMENTOS_COLUNAS = [
     {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True,
         'texto_botao': 'Escolher', 'funcao_botao': None}  # A função será definida abaixo
 ]
+# Larguras padrão de cada coluna da tabela
+ACABAMENTOS_COLUNAS_LARGURAS = [
+    (0,  'acabamentos',            200),
+    (1,  'descricao',              200),
+    (2,  'id_acb',                  50),
+    (3,  'num_orc',                110),
+    (4,  'ver_orc',                 50),
+    (5,  'ref_le',                 100),
+    (6,  'descricao_no_orcamento', 400),
+    (7,  'ptab',                    60),
+    (8,  'pliq',                    60),
+    (9,  'desc1_plus',              60),
+    (10, 'desc2_minus',             60),
+    (11, 'und',                     50),
+    (12, 'desp',                    50),
+    (13, 'corres_orla_0_4',        180),
+    (14, 'corres_orla_1_0',        110),
+    (15, 'tipo',                   120),
+    (16, 'familia',                120),
+    (17, 'comp_mp',                 90),
+    (18, 'larg_mp',                 90),
+    (19, 'esp_mp',                  90),
+    (20, 'MP',                     100),
+]
+# As larguras devem ser ajustadas conforme necessário para a interface
+
 
 ACABAMENTOS_LINHAS = [
     'Acab_Lacar_Face_Sup', 'Acab_Lacar_Face_Inf', 'Acab_Verniz_Face_Sup',
@@ -133,7 +159,7 @@ def definir_larguras_tab_acabamentos(ui):
     header.setSectionResizeMode(QHeaderView.Fixed)
     header.setStretchLastSection(False)
 
-    larguras = [200, 200, 50, 110, 50, 100, 400, 60, 60, 60, 60, 50, 50, 180, 110, 120, 120, 90, 90, 90, 100]
+    larguras = ACABAMENTOS_COLUNAS_LARGURAS.copy()
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
@@ -185,6 +211,7 @@ def configurar_acabamentos_ui(ui):
     # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'ACABAMENTOS'
     configurar_tabela_dados_gerais_ui(ui, 'acabamentos', ACABAMENTOS_COLUNAS, ACABAMENTOS_LINHAS)
     definir_larguras_tab_acabamentos(ui)
+    install_header_width_menu(ui.Tab_Acabamentos)
 
     from utils import apply_row_selection_style
     tabela = ui.Tab_Acabamentos

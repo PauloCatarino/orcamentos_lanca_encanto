@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from dados_gerais_base import criar_tabela_dados_gerais, configurar_tabela_dados_gerais_ui, get_distinct_values
 # Diálogo de seleção de material (já implementado em outro módulo)
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
-from utils import formatar_valor_moeda, formatar_valor_percentual, original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter
+from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu)
 from dados_gerais_mp import COLUNAS_LIMPAR_MATERIAIS  # Lista de colunas para limpeza, se necessário
 
 # Definição das colunas para a tabela de Materiais
@@ -51,6 +51,32 @@ MATERIAIS_COLUNAS = [
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True,
         'texto_botao': 'Escolher', 'funcao_botao': None}  # A função será definida abaixo
+]
+
+# Definição das larguras fixas para cada coluna da tabela de Materiais
+# As larguras são definidas em pixels e podem ser ajustadas conforme necessário.
+MATERIAIS_COLUNAS_LARGURAS = [
+    (0,  'material',                180),
+    (1,  'descricao',               300),
+    (2,  'id_mat',                   50),
+    (3,  'num_orc',                 150),
+    (4,  'ver_orc',                  50),
+    (5,  'ref_le',                  110),
+    (6,  'descricao_no_orcamento',  400),
+    (7,  'ptab',                     80),
+    (8,  'pliq',                     80),
+    (9,  'desc1_plus',               60),
+    (10, 'desc2_minus',              60),
+    (11, 'und',                      50),
+    (12, 'desp',                     50),
+    (13, 'corres_orla_0_4',         120),
+    (14, 'corres_orla_1_0',         120),
+    (15, 'tipo',                    120),
+    (16, 'familia',                 120),
+    (17, 'comp_mp',                  90),
+    (18, 'larg_mp',                  90),
+    (19, 'esp_mp',                   90),
+    (20, 'MP',                      100),
 ]
 
 # Definição dos nomes das linhas (exemplo fixo)
@@ -151,7 +177,7 @@ def definir_larguras_tab_material(ui):
     header.setSectionResizeMode(QHeaderView.Fixed)
     header.setStretchLastSection(False)
 
-    larguras = [200, 200, 50, 110, 50, 100, 400, 60, 60, 60, 60, 50, 50, 180, 110, 120, 120, 90, 90, 90, 100]
+    larguras = MATERIAIS_COLUNAS_LARGURAS.copy()
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
@@ -185,6 +211,7 @@ def configurar_materiais_ui(ui):
     # Configura a tabela de Dados Gerais na interface na coluna familia preenche com 'PLACAS' & coluna tipo sem filtro
     configurar_tabela_dados_gerais_ui(ui, 'materiais', MATERIAIS_COLUNAS, MATERIAIS_LINHAS)
     definir_larguras_tab_material(ui)
+    install_header_width_menu(ui.Tab_Material)
 
     from utils import apply_row_selection_style
     tabela = ui.Tab_Material

@@ -500,6 +500,7 @@ def adicionar_menu_limpar(tabela, callback):
             callback()
 
     tabela.setContextMenuPolicy(Qt.CustomContextMenu)
+    tabela.customContextMenuRequested.connect(abrir_menu)
     
 def adicionar_menu_limpar_alterar(tabela, callback_limpar, callback_alterar):
     """Menu de contexto com limpar e aplicar alteração."""
@@ -576,34 +577,36 @@ def apply_row_selection_style(table, color=ROW_SELECTION_COLOR):
     except Exception as e:
         print(f"[ERRO] apply_row_selection_style: {e}")
 
-"""
-def tabela_tem_dados(table):
-    #Retorna True se a tabela possuir algum valor preenchido fora da primeira coluna.
-    if table is None:
-        return False
-    try:
-        for r in range(table.rowCount()):
-            for c in range(1, table.columnCount()):
-                widget = table.cellWidget(r, c)
-                if widget:
-                    if hasattr(widget, "currentText") and widget.currentText().strip():
-                        return True
-                    if hasattr(widget, "text") and widget.text().strip():
-                        return True
-                    if hasattr(widget, "value"):
-                        try:
-                            if widget.value():
-                                return True
-                        except Exception:
-                            pass
-                item = table.item(r, c)
-                if item and item.text().strip():
-                    return True
-    except Exception as e:
-        print(f"[ERRO] tabela_tem_dados: {e}")
-    return False
-"""
-    
+def install_header_width_menu(table):
+    """Habilita menu de contexto no cabeçalho para ocultar colunas e ajustar largura."""
+    from PyQt5.QtWidgets import QMenu, QInputDialog
+    header = table.horizontalHeader()
+    header.setContextMenuPolicy(Qt.CustomContextMenu)
+
+    def _show_menu(pos):
+        col = header.logicalIndexAt(pos)
+        if col < 0:
+            return
+        menu = QMenu()
+        action_hide = menu.addAction("Ocultar Coluna")
+        action_width = menu.addAction("Definir Largura...")
+        submenu = menu.addMenu("Mostrar Colunas")
+        for i in range(table.columnCount()):
+            text = table.horizontalHeaderItem(i).text() or f"Col {i}"
+            act = submenu.addAction(text)
+            act.setCheckable(True)
+            act.setChecked(not table.isColumnHidden(i))
+            act.triggered.connect(lambda checked, idx=i: table.setColumnHidden(idx, not checked))
+        chosen = menu.exec_(header.mapToGlobal(pos))
+        if chosen == action_hide:
+            table.setColumnHidden(col, True)
+        elif chosen == action_width:
+            w, ok = QInputDialog.getInt(table, "Largura da Coluna", "Largura:", table.columnWidth(col), 20, 1000, 1)
+            if ok:
+                table.setColumnWidth(col, w)
+
+    header.customContextMenuRequested.connect(_show_menu)
+     
 def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
     """Verifica se existem dados gravados para o item nas tabelas de dados dos itens.
 
