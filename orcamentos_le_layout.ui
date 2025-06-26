@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>4</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -3645,7 +3645,7 @@
                 <x>10</x>
                 <y>120</y>
                 <width>2311</width>
-                <height>661</height>
+                <height>521</height>
                </rect>
               </property>
               <property name="minimumSize">
@@ -3663,7 +3663,7 @@
                  <x>0</x>
                  <y>0</y>
                  <width>2309</width>
-                 <height>659</height>
+                 <height>519</height>
                 </rect>
                </property>
                <property name="minimumSize">
@@ -3687,7 +3687,7 @@
                      <x>10</x>
                      <y>23</y>
                      <width>431</width>
-                     <height>611</height>
+                     <height>471</height>
                     </rect>
                    </property>
                   </widget>
@@ -3707,7 +3707,7 @@
                      <x>10</x>
                      <y>23</y>
                      <width>431</width>
-                     <height>611</height>
+                     <height>471</height>
                     </rect>
                    </property>
                   </widget>
@@ -3730,7 +3730,7 @@
                      <x>10</x>
                      <y>23</y>
                      <width>441</width>
-                     <height>281</height>
+                     <height>231</height>
                     </rect>
                    </property>
                   </widget>
@@ -3738,9 +3738,9 @@
                    <property name="geometry">
                     <rect>
                      <x>0</x>
-                     <y>310</y>
+                     <y>260</y>
                      <width>461</width>
-                     <height>271</height>
+                     <height>231</height>
                     </rect>
                    </property>
                    <property name="title">
@@ -3755,7 +3755,7 @@
                       <x>10</x>
                       <y>20</y>
                       <width>441</width>
-                      <height>251</height>
+                      <height>211</height>
                      </rect>
                     </property>
                    </widget>
@@ -3776,7 +3776,7 @@
                      <x>10</x>
                      <y>26</y>
                      <width>431</width>
-                     <height>311</height>
+                     <height>231</height>
                     </rect>
                    </property>
                   </widget>
@@ -3784,9 +3784,9 @@
                    <property name="geometry">
                     <rect>
                      <x>10</x>
-                     <y>340</y>
+                     <y>260</y>
                      <width>451</width>
-                     <height>251</height>
+                     <height>231</height>
                     </rect>
                    </property>
                    <property name="title">
@@ -3801,7 +3801,7 @@
                       <x>0</x>
                       <y>20</y>
                       <width>431</width>
-                      <height>221</height>
+                      <height>211</height>
                      </rect>
                     </property>
                    </widget>
@@ -3822,7 +3822,7 @@
                      <x>10</x>
                      <y>23</y>
                      <width>431</width>
-                     <height>561</height>
+                     <height>471</height>
                     </rect>
                    </property>
                   </widget>
@@ -3831,32 +3831,11 @@
                </layout>
               </widget>
              </widget>
-             <widget class="QPushButton" name="Atualizar_Grupos_Pecas">
-              <property name="geometry">
-               <rect>
-                <x>320</x>
-                <y>790</y>
-                <width>361</width>
-                <height>31</height>
-               </rect>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>15</pointsize>
-               </font>
-              </property>
-              <property name="toolTip">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Este botão pode importar os dados apenas para o item a orçamentar  para o preenchimento das 4 tabelas em simultaneo&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-              </property>
-              <property name="text">
-               <string>Atualizar Grupos Definicao de Pecas</string>
-              </property>
-             </widget>
              <widget class="QPushButton" name="Inserir_Pecas_Selecionadas">
               <property name="geometry">
                <rect>
                 <x>30</x>
-                <y>790</y>
+                <y>640</y>
                 <width>281</width>
                 <height>31</height>
                </rect>
@@ -4029,9 +4008,9 @@
               <property name="geometry">
                <rect>
                 <x>10</x>
-                <y>890</y>
-                <width>2351</width>
-                <height>661</height>
+                <y>720</y>
+                <width>2411</width>
+                <height>831</height>
                </rect>
               </property>
               <property name="horizontalScrollBarPolicy">
@@ -4457,8 +4436,8 @@
              <widget class="QPushButton" name="Atualizar_Precos">
               <property name="geometry">
                <rect>
-                <x>690</x>
-                <y>790</y>
+                <x>670</x>
+                <y>640</y>
                 <width>251</width>
                 <height>31</height>
                </rect>
@@ -4481,9 +4460,9 @@
               <property name="geometry">
                <rect>
                 <x>10</x>
-                <y>820</y>
+                <y>670</y>
                 <width>2001</width>
-                <height>61</height>
+                <height>51</height>
                </rect>
               </property>
               <property name="font">
@@ -4718,8 +4697,8 @@
              <widget class="QPushButton" name="Guardar_Dados_Items">
               <property name="geometry">
                <rect>
-                <x>960</x>
-                <y>790</y>
+                <x>950</x>
+                <y>640</y>
                 <width>251</width>
                 <height>31</height>
                </rect>
@@ -4741,8 +4720,8 @@
              <widget class="QPushButton" name="Guardar_Modulo">
               <property name="geometry">
                <rect>
-                <x>1220</x>
-                <y>790</y>
+                <x>1210</x>
+                <y>640</y>
                 <width>251</width>
                 <height>31</height>
                </rect>
@@ -4765,7 +4744,7 @@
               <property name="geometry">
                <rect>
                 <x>1470</x>
-                <y>790</y>
+                <y>640</y>
                 <width>251</width>
                 <height>31</height>
                </rect>
@@ -4788,7 +4767,7 @@
               <property name="geometry">
                <rect>
                 <x>1730</x>
-                <y>790</y>
+                <y>640</y>
                 <width>281</width>
                 <height>31</height>
                </rect>
@@ -4815,8 +4794,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>2451</width>
+             <height>1065</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5025,8 +5004,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>2451</width>
+             <height>1065</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5227,8 +5206,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>2451</width>
+             <height>1065</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5415,8 +5394,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>2451</width>
+             <height>1065</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5649,7 +5628,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>1200</width>
+             <width>2422</width>
              <height>6000</height>
             </rect>
            </property>

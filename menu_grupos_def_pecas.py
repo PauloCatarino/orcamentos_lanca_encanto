@@ -141,6 +141,8 @@ def conectar_botoes_configuracao(ui):
     """
     Conecta o botão 'Atualizar_Grupos_Pecas' ao método de atualização e
     ativa a funcionalidade de clique em cada QListWidget.
+    Este botão de 'Atualizar Grupos de Peças' deve chamar a função `atualizar_grupos_pecas` é feito de forma automatica, na pratica este botão não existe.
+    Além disso, torna cada QListWidget clicável para alternar o check ao clicar na linha
     """
     
     # Configurar cada QListWidget para alternar o check ao clicar na linha

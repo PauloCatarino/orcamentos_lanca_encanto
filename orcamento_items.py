@@ -481,6 +481,15 @@ def acao_orcamentar_items(main_window):
             from utils import copiar_dados_gerais_para_itens
 
             copiar_dados_gerais_para_itens(ui)
+            from dados_items_materiais import guardar_dados_item_orcamento_tab_material
+            from dados_items_ferragens import guardar_dados_item_orcamento_tab_ferragens
+            from dados_items_sistemas_correr import guardar_dados_item_orcamento_tab_sistemas_correr_3
+            from dados_items_acabamentos import guardar_dados_item_orcamento_tab_acabamentos
+
+            guardar_dados_item_orcamento_tab_material(main_window)
+            guardar_dados_item_orcamento_tab_ferragens(main_window)
+            guardar_dados_item_orcamento_tab_sistemas_correr_3(main_window)
+            guardar_dados_item_orcamento_tab_acabamentos(main_window)
 
     atualizar_tudo(ui)
     
