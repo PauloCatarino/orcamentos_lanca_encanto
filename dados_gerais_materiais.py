@@ -177,7 +177,8 @@ def definir_larguras_tab_material(ui):
     header.setSectionResizeMode(QHeaderView.Fixed)
     header.setStretchLastSection(False)
 
-    larguras = MATERIAIS_COLUNAS_LARGURAS.copy()
+    # Extrai apenas os valores de largura (terceiro elemento de cada tupla)
+    larguras = [l[2] if isinstance(l, tuple) else l for l in MATERIAIS_COLUNAS_LARGURAS]
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
