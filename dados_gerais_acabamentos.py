@@ -23,8 +23,20 @@ ACABAMENTOS_COLUNAS = [
         'visivel': True, 'editavel': True},
     {'nome': 'ptab', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'pliq', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'desc1_plus', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'desc2_minus', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {
+        'nome': 'desc1_plus',
+        'tipo': 'REAL',
+        'visivel': True,
+        'editavel': True,
+        'header': 'Margem'
+    },
+    {
+        'nome': 'desc2_minus',
+        'tipo': 'REAL',
+        'visivel': True,
+        'editavel': True,
+        'header': 'Desconto'
+    },
     {'nome': 'und', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'desp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_0_4', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},

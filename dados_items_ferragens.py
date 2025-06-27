@@ -50,8 +50,20 @@ FERRAGENS_COLUNAS = [
     {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT',    'visivel': True,  'editavel': True},
     {'nome': 'ptab',                   'tipo': 'REAL',    'visivel': True,  'editavel': True},
     {'nome': 'pliq',                   'tipo': 'REAL',    'visivel': True,  'editavel': True},
-    {'nome': 'desc1_plus',             'tipo': 'REAL',    'visivel': True,  'editavel': True},
-    {'nome': 'desc2_minus',            'tipo': 'REAL',    'visivel': True,  'editavel': True},
+    {
+        'nome': 'desc1_plus',
+        'tipo': 'REAL',
+        'visivel': True,
+        'editavel': True,
+        'header': 'Margem'
+    },
+    {
+        'nome': 'desc2_minus',
+        'tipo': 'REAL',
+        'visivel': True,
+        'editavel': True,
+        'header': 'Desconto'
+    },
     {'nome': 'und',                    'tipo': 'TEXT',    'visivel': True,  'editavel': True},
     {'nome': 'desp',                   'tipo': 'REAL',    'visivel': True,  'editavel': True},
     {'nome': 'corres_orla_0_4',        'tipo': 'TEXT',    'visivel': True,  'editavel': True},
@@ -385,7 +397,7 @@ def configurar_tabela_ferragens(parent):
     tabela.setRowCount(num_rows)
 
     # Define o nome das colunas no cabeçalho
-    headers = [col['nome'] for col in FERRAGENS_COLUNAS]
+    headers = [col.get('header', col['nome']) for col in FERRAGENS_COLUNAS]
     tabela.setHorizontalHeaderLabels(headers)
     tabela.verticalHeader().setVisible(False)
 
