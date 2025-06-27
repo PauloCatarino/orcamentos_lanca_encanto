@@ -1111,15 +1111,27 @@ class CelulaEdicaoDelegate(QStyledItemDelegate):
             painter.drawRect(option.rect.adjusted(1, 1, -1, -1))
 
     def setModelData(self, editor, model, index):
-        # A EDIÇÃO É SEMPRE ACEITE, NÃO HÁ VERIFICAÇÃO DE BLK AQUI PARA IMPEDIR.
-        # O sinal cellChanged (conectado a on_cell_changed_for_blk_logic)
-        # tratará de aplicar a formatação verde e ativar BLK se a edição
-        # for nas colunas 18-32.
+        """Valida e define o texto editado na célula."""
+
         valor = editor.text()
+
+        # Verificar se a coluna editada corresponde a um dos campos de fórmula.
+        row = index.row()
+        col = index.column()
+        table = self.ui.tab_def_pecas
+        header_item = table.horizontalHeaderItem(col)
+        header_text = header_item.text() if header_item else ""
+
+        if col in [IDX_QT_MOD, IDX_COMP, IDX_LARG, IDX_ESP]:
+            texto = valor.strip().upper()
+            if not validar_expressao_modulo(texto, row, header_text):
+                # Expressão inválida: não salva o novo valor
+                return
+
+        # Caso a validação passe (ou não seja uma coluna de fórmula), salva
         model.setData(index, valor, Qt.EditRole)
-        # A formatação e ativação de BLK serão tratadas pelo cellChanged.
-        # A chamada ao orquestrador, se necessária, também é despoletada pelo
-        # cellChanged ou pelo eventFilter (para fórmulas).
+        # O processamento adicional (formatação, BLK, orquestrador) continua
+        # a ser tratado pelo sinal cellChanged associado à tabela.
 
 
 # Parte 9: Insere automaticamente os componentes associados (refatorada para ser chamada pelo orquestrador)
