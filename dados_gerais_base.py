@@ -142,7 +142,7 @@ def configurar_tabela_dados_gerais_ui(ui, nome_tabela, colunas, linhas):
     table_widget.setColumnCount(num_cols)
     table_widget.setRowCount(num_rows)
 
-    headers = [col['nome'] for col in colunas]
+    headers = [col.get('header', col['nome']) for col in colunas]
     table_widget.setHorizontalHeaderLabels(headers)
     table_widget.verticalHeader().setVisible(False)
     # Selecionar linhas completas para melhor visualização
