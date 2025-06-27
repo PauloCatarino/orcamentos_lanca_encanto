@@ -273,7 +273,8 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
     try:
         row_count_ui = table.rowCount()
         print(f"  Preenchendo {min(len(registros), row_count_ui)} linhas na tabela UI '{table.objectName()}'.")
-        for i in range(min(len(registros), row_count_ui)):
+        num_regs = len(registros)
+        for i in range(min(num_regs, row_count_ui)):
             registro_bd = registros[i]
             dados_mapeados = mapear_registro_gerais(registro_bd, col_names)  # Mapeia dados da BD para índices UI
 
@@ -324,6 +325,21 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
                     item_id = QTableWidgetItem()
                     table.setItem(i, 2, item_id)
                 item_id.setText(str(i))
+
+        # Preenche linhas extras sem registro vindo do BD
+        for i in range(num_regs, row_count_ui):
+            if table.columnCount() > 2:
+                item_id = table.item(i, 2) or QTableWidgetItem()
+                item_id.setText(str(i))
+                table.setItem(i, 2, item_id)
+            if table.columnCount() > 3:
+                item_num = table.item(i, 3) or QTableWidgetItem()
+                item_num.setText(num_orc)
+                table.setItem(i, 3, item_num)
+            if table.columnCount() > 4:
+                item_ver = table.item(i, 4) or QTableWidgetItem()
+                item_ver.setText(ver_orc)
+                table.setItem(i, 4, item_ver)
             
 
         # A informação de carregamento automático foi removida para evitar
