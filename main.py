@@ -4,7 +4,7 @@ main.py
 Módulo principal do software de orçamentos.
 ...
 Módulo principal do software de orçamentos.
-Este módulo integra e 
+Este módulo integra e atualizar dad
 gura os diversos componentes da interface (...)
 e conecta os módulos responsáveis por gerenciar:
   - Clientes
@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "116 Commit"
+git commit -m "117 Commit"
 git push origin main
 
 

@@ -21,6 +21,9 @@ from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, i
 from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item
 from modulo_orquestrador import atualizar_tudo
 
+# Índice da coluna BLK na tabela tab_def_pecas
+IDX_BLK = 12 
+
 def executar_guardar_dados_orcamento(main_window):
     """Carrega dinamicamente a função de gravação e executa-a.
 
@@ -474,18 +477,48 @@ def aplicar_linha_para_item_e_pecas_single(main_window, nome_tabela):
             texto = tbl_geral.item(row, c).text() if tbl_geral.item(row, c) else ""
             set_item(tbl_item, linha_dest, c, texto)
     tbl_pecas = ui.tab_def_pecas
+    linhas_alvo = []
+    linhas_bloqueadas = []
     for r in range(tbl_pecas.rowCount()):
         mat_item = tbl_pecas.item(r, 13)
         tab_item = tbl_pecas.item(r, 14)
         if mat_item and tab_item and mat_item.text() == nome_linha and tab_item.text() == tab_item_name:
-            for col_def, col_src in MAPPING_PECAS_COLS.items():
-                w_src = tbl_item.cellWidget(linha_dest, col_src)
-                if w_src and isinstance(w_src, QComboBox):
-                    valor = w_src.currentText()
-                else:
-                    itm = tbl_item.item(linha_dest, col_src)
-                    valor = itm.text() if itm else ""
-                set_item(tbl_pecas, r, col_def, valor)
+            linhas_alvo.append(r)
+            blk_it = tbl_pecas.item(r, IDX_BLK)
+            if blk_it and blk_it.checkState() == Qt.Checked:
+                linhas_bloqueadas.append(r)
+
+    atualizar_bloq = True
+    if linhas_bloqueadas:
+        msgs = []
+        for r in linhas_bloqueadas:
+            ids = tbl_pecas.item(r, 15).text() if tbl_pecas.item(r, 15) else ""
+            num_orc = tbl_pecas.item(r, 16).text() if tbl_pecas.item(r, 16) else ""
+            ver_orc = tbl_pecas.item(r, 17).text() if tbl_pecas.item(r, 17) else ""
+            msgs.append(f"ids: {ids} num_orc: {num_orc} ver_orc: {ver_orc}")
+        msg_txt = "Linhas bloqueadas encontradas:\n" + "\n".join(msgs) + "\nDeseja atualizar estas linhas bloqueadas?"
+        resp = QMessageBox.question(main_window, "Linhas bloqueadas", msg_txt, QMessageBox.Yes | QMessageBox.No)
+        if resp != QMessageBox.Yes:
+            atualizar_bloq = False
+
+    tbl_pecas.blockSignals(True)
+    tbl_pecas.setProperty("importando_dados", True)
+    for r in linhas_alvo:
+        blk_it = tbl_pecas.item(r, IDX_BLK)
+        if blk_it and blk_it.checkState() == Qt.Checked:
+            if not atualizar_bloq:
+                continue
+            blk_it.setCheckState(Qt.Unchecked)
+        for col_def, col_src in MAPPING_PECAS_COLS.items():
+            w_src = tbl_item.cellWidget(linha_dest, col_src)
+            if w_src and isinstance(w_src, QComboBox):
+                valor = w_src.currentText()
+            else:
+                itm = tbl_item.item(linha_dest, col_src)
+                valor = itm.text() if itm else ""
+            set_item(tbl_pecas, r, col_def, valor)
+    tbl_pecas.setProperty("importando_dados", False)
+    tbl_pecas.blockSignals(False)
 
 
 def aplicar_linha_todos_itens_e_pecas(main_window, nome_tabela):
