@@ -83,6 +83,7 @@ SISTEMAS_CORRER_LINHAS = [
     'SC_Calha_Porta_Horizontal_Sup_SPP', 'SC_Calha_Porta_Horizontal_Inf_SPP',
     'SC_Painel_Porta_Correr_1', 'SC_Painel_Porta_Correr_2',
     'SC_Painel_Porta_Correr_3', 'SC_Painel_Porta_Correr_4',
+    'SC_Painel_Porta_Correr_5',
     'SC_Espelho_Porta_Correr_1', 'SC_Espelho_Porta_Correr_2',
     'SC_Acessorio_1', 'SC_Acessorio_2', 'SC_Acessorio_3',
     'SC_Acessorio_4_SPP', 'SC_Acessorio_5_SPP'
@@ -224,6 +225,7 @@ def configurar_sistemas_correr_ui(ui):
         'SC_Painel_Porta_Correr_2',
         'SC_Painel_Porta_Correr_3',
         'SC_Painel_Porta_Correr_4',
+        'SC_Painel_Porta_Correr_5',
         'SC_Espelho_Porta_Correr_1',
         'SC_Espelho_Porta_Correr_2'
     }
