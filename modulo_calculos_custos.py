@@ -85,7 +85,7 @@ IDX_CP03_CNC_BASE = 67       # CP03_CNC (do Excel)
 IDX_CP04_ABD_BASE = 69       # CP04_ABD (do Excel)
 IDX_CP05_PRENSA_BASE = 71    # CP05_PRENSA (do Excel)
 IDX_CP06_ESQUAD_BASE = 73    # CP06_ESQUAD (do Excel)
-IDX_CP07_EMBALAGEM_BASE = 75 # CP12_EMBALAGEM (do Excel)
+IDX_CP07_EMBALAGEM_BASE = 75 # CP07_EMBALAGEM (do Excel)
 IDX_CP08_MAO_DE_OBRA_BASE = 77 # CP08_MAO_DE_OBRA (do Excel)
 
 # Índices das colunas de resultados dos cálculos (a serem preenchidas)
@@ -121,9 +121,7 @@ MAP_EXCEL_CP_TO_UI = {
     'CP04_ABD': IDX_CP04_ABD_BASE,
     'CP05_PRENSA': IDX_CP05_PRENSA_BASE,
     'CP06_ESQUAD': IDX_CP06_ESQUAD_BASE,
-    # Atenção: A descrição original tinha CP12_EMBALAGEM no Excel para CP07_EMBALAGEM na UI
-    # Mantenho o nome do Excel aqui como chave
-    'CP12_EMBALAGEM': IDX_CP07_EMBALAGEM_BASE, # Mapeia nome do Excel para índice da UI
+    'CP07_EMBALAGEM': IDX_CP07_EMBALAGEM_BASE, # Mapeia nome do Excel para índice da UI
     'CP08_MAO_DE_OBRA': IDX_CP08_MAO_DE_OBRA_BASE
 }
 

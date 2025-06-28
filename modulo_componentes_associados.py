@@ -353,8 +353,17 @@ regras_qt_und = {
                               6 if m["COMP"] >= 650 and m["LARG"] < 800 else 8,
         "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP≥650 & LARG<800 | 8 caso contrário"
     },
-
-    "SUPORTE PRATELEIRA": {
+    "PES_2": {
+        "formula": lambda m: 4 if m["COMP"] < 650 and m["LARG"] < 800 else \
+                              6 if m["COMP"] >= 650 and m["LARG"] < 800 else 8,
+        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP≥650 & LARG<800 | 8 caso contrário"
+    },
+    "SUPORTE PRATELEIRA_1": {
+        "formula": lambda m: 8 if m["COMP"] >= 1100 and m["LARG"] >= 800 else \
+                              6 if m["COMP"] >= 1100 else 4,
+        "tooltip": "4 por defeito | 6 se COMP≥1100 | 8 se COMP≥1100 & LARG≥800"
+    },
+    "SUPORTE PRATELEIRA_2": {
         "formula": lambda m: 8 if m["COMP"] >= 1100 and m["LARG"] >= 800 else \
                               6 if m["COMP"] >= 1100 else 4,
         "tooltip": "4 por defeito | 6 se COMP≥1100 | 8 se COMP≥1100 & LARG≥800"
@@ -370,17 +379,24 @@ regras_qt_und = {
         "tooltip": "2 suportes por varão (assumindo 1 varão por peça principal)"
     },
 
-    "DOBRADICA": {
+    "DOBRADICA_1": {
         "formula": lambda m: (
-            # Lógica base dependendo do COMP
             (
                 2 if float(m.get("COMP", 0)) < 850 else
                 3 if float(m.get("COMP", 0)) < 1600 else
-                # Cálculo para COMP >= 1600: 2 + parte inteira de ((COMP - 240) / 750)
-                # Usamos m.get("COMP", 0) para segurança caso a chave não exista
                 2 + int((float(m.get("COMP", 0)) - 2 * 120) / 750)
             )
-            # Adiciona 1 se LARG >= 605
+            + (1 if float(m.get("LARG", 0)) >= 605 else 0)
+        ),
+        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, >=1600mm: 2+(úteis/750mm) +1 se LARG >= 605mm"
+    },
+    "DOBRADICA_2": {
+        "formula": lambda m: (
+            (
+                2 if float(m.get("COMP", 0)) < 850 else
+                3 if float(m.get("COMP", 0)) < 1600 else
+                2 + int((float(m.get("COMP", 0)) - 2 * 120) / 750)
+            )
             + (1 if float(m.get("LARG", 0)) >= 605 else 0)
         ),
         "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, >=1600mm: 2+(úteis/750mm) +1 se LARG >= 605mm"
@@ -390,8 +406,17 @@ regras_qt_und = {
         # NOTA: Regra original usava qt_und da porta. Isso é feito abaixo na função.
         "default": 1, # Valor base antes de multiplicar pelo QT_und do principal
         "tooltip": "1 puxador por porta Quantidade = QT_und da peça principal."
+    },
+    "PUXADOR STD": {
+        "default": 1,
+        "tooltip": "1 puxador por porta Quantidade = QT_und da peça principal."
+    },
+    "PUXADOR FRESADO J": {
+        "default": 1,
+        "tooltip": "1 puxador por porta Quantidade = QT_und da peça principal."
     }
 }
+
 
 
 ##########################################################################
