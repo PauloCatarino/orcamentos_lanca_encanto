@@ -156,7 +156,7 @@ def escolher_material(ui, linha_tab, nome_tabela):
             elif campo == 'desc2_minus':
                 dminus = converter_texto_para_valor(valor, "percentual")
         
-        novo_pliq = round((ptab_valor * (1 - dplus)) * (1 + dminus), 2)
+        novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
         
         tbl_materiais.blockSignals(False)
@@ -246,11 +246,11 @@ def on_item_changed_materiais(item):
             ptab_item = table.item(row, 7)
             ptab_text = ptab_item.text() if ptab_item else "0"
             ptab_valor = converter_texto_para_valor(ptab_text, "moeda")
-            
-            desc1_item = table.item(row, 9)
-            desc2_item = table.item(row, 10)
-            desc1_text = desc1_item.text() if desc1_item else "0%"
-            desc2_text = desc2_item.text() if desc2_item else "0%"
+            # ptab (col 7), desc1_plus (col 9), desc2_minus (col 10), pliq (col 8).
+            desc1_item = table.item(row, 9) # coluna desc1_plus
+            desc2_item = table.item(row, 10) # coluna desc2_minus
+            desc1_text = desc1_item.text() if desc1_item else "0%" # valor percentual
+            desc2_text = desc2_item.text() if desc2_item else "0%" # valor percentual
             dplus = converter_texto_para_valor(desc1_text, "percentual")
             dminus = converter_texto_para_valor(desc2_text, "percentual")
             # Recalcula PLIQ usando a fórmula:

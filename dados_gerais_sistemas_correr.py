@@ -154,7 +154,7 @@ def escolher_sistemas_correr(ui, linha_tab, nome_tabela):
             elif campo == 'desc2_minus':
                 dminus = converter_texto_para_valor(valor, "percentual")
         
-        novo_pliq = round(ptab_valor * (1 + dminus) * (1 - dplus), 2)
+        novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
         
         tbl_sistemas_correr.blockSignals(False)
