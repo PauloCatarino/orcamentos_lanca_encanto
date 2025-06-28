@@ -347,7 +347,10 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
                 row.append(txt)
         data.append(row)
 
-    table = Table(data, repeatRows=1)
+    # Ajuste de larguras para que a coluna 'Descrição' fique mais larga no PDF
+    # As medidas estão em pontos (1/72 inch) e devem totalizar a largura útil da página
+    col_widths = [25, 60, 245, 25, 25, 25, 25, 25, 60, 60]
+    table = Table(data, repeatRows=1, colWidths=col_widths)
     table.setStyle(
         TableStyle(
             [
