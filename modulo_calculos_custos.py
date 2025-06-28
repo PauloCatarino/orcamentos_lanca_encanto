@@ -47,6 +47,7 @@ CNC_PRECO_PECA_BAIXO = 2.0          # €/peça se AREA_M2_und <= 0.7
 CNC_PRECO_PECA_MEDIO = 2.5         # €/peça se AREA_M2_und < 1 (mas > 0.7)
 CNC_PRECO_PECA_ALTO = 3.0          # €/peça se AREA_M2_und >= 1
 VALOR_ABD = 0.80                 # €/peça para a máquina ABD
+EUROS_HORA_CNC = 60.0            # €/hora para a máquina CNC
 EUROS_HORA_PRENSA = 22.0          # €/hora para a máquina Prensa
 EUROS_HORA_ESQUAD = 20.0          # €/hora para a máquina Esquadrejadora
 EUROS_EMBALAGEM_M3 = 50.0         # €/M³ para Embalagem
@@ -460,26 +461,48 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     if item_orl_und: item_orl_und.setToolTip(f"Fórmula: {formula_orl_tooltip}")
 
 
-    # CP03_CNC_und (col 68)
+    # CP03_CNC_und (col 68) # --- Cálculo do custo unitário de CNC (CP03_CNC_und, col 68) ---
     cp03_cnc_base = converter_texto_para_valor(safe_item_text(table, row, IDX_CP03_CNC_BASE), "moeda")
     cnc_und = 0.0
     area_m2_for_cnc = converter_texto_para_valor(safe_item_text(table, row, IDX_AREA_M2), "moeda") # Usa a área calculada
     cnc_formula_tooltip = "0"
-    if cp03_cnc_base >= 1:
-        if area_m2_for_cnc > 0: # Apenas calcula se a área for maior que zero
+    # --- Cálculo do custo unitário de CNC (CP03_CNC_und, col 68) ---
+    # Nova lógica:
+    # Se cp03_cnc_base == 0: custo é 0
+    # Se cp03_cnc_base == 1: calcula pelo escalão de área (baixo/médio/alto)
+    # Se cp03_cnc_base >= 2: valor indica minutos, calcula custo proporcional ao tempo (€/h / 60)
+    if cp03_cnc_base == 0:
+        cnc_und = 0.0
+        cnc_formula_tooltip = "0 (CP03_CNC base = 0)"
+    elif cp03_cnc_base == 1:
+        # Calcula pelo escalão de área
+        if area_m2_for_cnc > 0:
             if area_m2_for_cnc <= 0.7:
                 cnc_und = CNC_PRECO_PECA_BAIXO
                 cnc_formula_tooltip = f"{CNC_PRECO_PECA_BAIXO:.2f} €/peça (Área <= 0.7 m²)"
-            elif area_m2_for_cnc < 1.0: # Entre 0.7 e 1.0
+            elif area_m2_for_cnc < 1.0:
                 cnc_und = CNC_PRECO_PECA_MEDIO
                 cnc_formula_tooltip = f"{CNC_PRECO_PECA_MEDIO:.2f} €/peça (0.7 < Área < 1.0 m²)"
-            else: # >= 1.0
+            else:
                 cnc_und = CNC_PRECO_PECA_ALTO
                 cnc_formula_tooltip = f"{CNC_PRECO_PECA_ALTO:.2f} €/peça (Área >= 1.0 m²)"
-        # else: Área é 0, cnc_und permanece 0.0
-    set_item(table, row, IDX_CP03_CNC_UND, formatar_valor_moeda(round(cnc_und, 2))) # Formata como moeda
-    item_cnc_und = table.item(row, IDX_CP03_CNC_UND) # Obtém item
-    if item_cnc_und: item_cnc_und.setToolTip(f"Fórmula: {cnc_formula_tooltip}")
+        else:
+            cnc_und = 0.0
+            cnc_formula_tooltip = "0 (Área <= 0)"
+    elif cp03_cnc_base >= 2:
+        # O valor indica minutos, calcula custo proporcional ao tempo
+        cnc_und = cp03_cnc_base * EUROS_HORA_CNC / 60.0
+        cnc_formula_tooltip = (
+            f"CP03_CNC_base * EUROS_HORA_CNC / 60\n"
+            f"= {cp03_cnc_base:.2f} min * {EUROS_HORA_CNC:.2f} €/h / 60\n"
+            f"= {round(cnc_und, 2):.2f}€"
+        )
+
+    # Preenche o valor calculado na tabela e adiciona o tooltip explicativo
+    set_item(table, row, IDX_CP03_CNC_UND, formatar_valor_moeda(round(cnc_und, 2)))
+    item_cnc_und = table.item(row, IDX_CP03_CNC_UND)
+    if item_cnc_und:
+        item_cnc_und.setToolTip(f"Fórmula: {cnc_formula_tooltip}")
 
 
     # CP04_ABD_und (col 70)

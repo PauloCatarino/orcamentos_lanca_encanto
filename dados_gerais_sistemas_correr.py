@@ -31,36 +31,20 @@ SISTEMAS_CORRER_COLUNAS = [
     {'nome': 'ver_orc', 'tipo': 'INTEGER', 'visivel': False},
     {'nome': 'ref_le', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
     {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-
     {'nome': 'ptab', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'pliq', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {
-        'nome': 'desc1_plus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Margem'
-    },
-    {
-        'nome': 'desc2_minus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Desconto'
-    },
+    {'nome': 'desc1_plus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Margem'},
+    {'nome': 'desc2_minus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Desconto'},
     {'nome': 'und', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'desp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_0_4', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_1_0', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
-    'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "FERRAGENS")},
-    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
-    'combobox': True, 'opcoes': lambda: ["FERRAGENS", "PLACAS"]},
+    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "FERRAGENS")},
+    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: ["FERRAGENS", "PLACAS"]},
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True,
-        'texto_botao': 'Escolher', 'funcao_botao': None},  # Função será atribuída abaixo
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
 ]
 # Definição das larguras das colunas para a tabela de Sistemas Correr
 # As larguras são definidas em pixels e devem ser ajustadas conforme necessário
@@ -305,7 +289,7 @@ def on_item_changed_sistemas_correr(item):
             dminus = converter_texto_para_valor(desc2_text, "percentual")
             # Recalcula PLIQ usando a fórmula:
             # PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
-            novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+            novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         except Exception:
             novo_pliq = 0.0
 

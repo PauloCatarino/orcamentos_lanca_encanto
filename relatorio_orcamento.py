@@ -353,7 +353,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     elems.append(table)
     elems.append(Spacer(1, 12))
     right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=2)
-    total_style = ParagraphStyle("total", parent=right_style, fontSize=12, leading=14)
+    total_style = ParagraphStyle("total", parent=right_style, fontSize=8, leading=14)
     elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
     elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
     elems.append(Paragraph(ui.label_iva_2.text(), right_style))
