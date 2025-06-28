@@ -45,6 +45,7 @@ from PyQt5.QtGui import QPixmap
 import os
 # Importar as funções de BD do módulo de gestão de módulos
 import modulo_gestao_modulos_db 
+from dialogo_importar_modulo import DialogoImportarModulo
 
 class DialogoGravarModulo(QDialog):
     def __init__(self, pecas_selecionadas, modulo_existente_id=None, nome_mod_existente="", desc_mod_existente="", img_path_existente="", parent=None):
@@ -71,6 +72,9 @@ class DialogoGravarModulo(QDialog):
         self.txt_nome_modulo.setPlaceholderText("Ex: Módulo Base Cozinha 700mm")
         form_layout.addWidget(self.lbl_nome)
         form_layout.addWidget(self.txt_nome_modulo)
+        # Novo botão para escolher um módulo existente
+        self.btn_selecionar_modulo = QPushButton("Selecionar Módulo Existente...")
+        form_layout.addWidget(self.btn_selecionar_modulo)
 
         # Descrição do Módulo
         self.lbl_descricao = QLabel("Descrição (Opcional):")
@@ -129,6 +133,7 @@ class DialogoGravarModulo(QDialog):
         # --- Conexões ---
         self.btn_escolher_imagem.clicked.connect(self.escolher_imagem)
         self.btn_remover_imagem.clicked.connect(self.remover_imagem)
+        self.btn_selecionar_modulo.clicked.connect(self.selecionar_modulo_existente)
         self.btn_gravar.clicked.connect(self.confirmar_e_gravar_modulo)
         self.btn_cancelar.clicked.connect(self.reject)
 
@@ -176,6 +181,23 @@ class DialogoGravarModulo(QDialog):
         self.lbl_imagem_preview.setText("Sem imagem")
         self.lbl_imagem_preview.setPixmap(QPixmap()) # Limpa o pixmap
         self.caminho_imagem_selecionada = ""
+
+    def selecionar_modulo_existente(self):
+        dialog = DialogoImportarModulo(self)
+        dialog.setWindowTitle("Selecionar Módulo Existente")
+        dialog.btn_importar.setText("Selecionar")
+        if dialog.exec_() == QDialog.Accepted:
+            mod_id = dialog.get_selected_module_id()
+            dados = modulo_gestao_modulos_db.obter_modulo_por_id(mod_id)
+            if dados:
+                self.modulo_id_para_atualizar = mod_id
+                self.txt_nome_modulo.setText(dados.get('nome_modulo', ''))
+                self.txt_descricao_modulo.setPlainText(dados.get('descricao_modulo', ''))
+                caminho_img = dados.get('caminho_imagem_modulo', '')
+                if caminho_img and os.path.exists(caminho_img):
+                    self.carregar_preview_imagem(caminho_img)
+                else:
+                    self.remover_imagem()
 
     def confirmar_e_gravar_modulo(self):
         nome_modulo = self.txt_nome_modulo.text().strip()
