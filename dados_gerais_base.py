@@ -46,8 +46,8 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 # e colunas que são apenas botões ou não armazenáveis diretamente.
                 sql_colunas_list = []
                 for col in colunas:
-                    # Pula a coluna de nome de linha e colunas de botão
-                    if col['nome'] == nome_tabela or col.get('botao'):
+                    # Pula APENAS colunas de botão, que não devem ser armazenadas no BD
+                    if col.get('botao'):
                         continue # Pula para a próxima coluna na lista 'colunas'
 
                     # --- Bloco Corrigido (Unindent) ---
