@@ -71,11 +71,13 @@ FERRAGENS_COLUNAS = [
 # que poderá ser orçado e exibido na Tab_Ferragens_11.
 ###############################################################
 FERRAGENS_LINHAS = [
-    'Fer_Dobradica', 'Fer_Suporte Prateleira', 'Fer_Suporte Varao', 'Fer_Varao_SPP',
+    'Fer_Dobradica_1', 'Fer_Dobradica_2',
+    'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP',
     'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1',
-    'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador', 'Fer_Puxador_SPP_1',
+    'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD', 'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1',
     'Fer_Puxador_SPP_2', 'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1',
-    'Fer_Sistema_Basculante_2', 'Fer_Acessorio_1', 'Fer_Acessorio_2',
+    'Fer_Sistema_Basculante_2', 'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2', 'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Ferragem_Diversas',
+    'Fer_Acessorio_1', 'Fer_Acessorio_2',
     'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5', 'Fer_Acessorio_6',
     'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP'
 ]
@@ -429,8 +431,10 @@ def configurar_tabela_ferragens(parent):
     familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
     tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
     tipo_padrao = {
-        'Fer_Dobradica': 'DOBRADICAS',
-        'Fer_Suporte Prateleira': 'SUPORTE PRATELEIRA',
+        'Fer_Dobradica_1': 'DOBRADICAS',
+        'Fer_Dobradica_2': 'DOBRADICAS',
+        'Fer_Suporte Prateleira_1': 'SUPORTE PRATELEIRA',
+        'Fer_Suporte Prateleira_2': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
         'Fer_Varao_SPP': 'SPP',
         'Fer_Rodape_PVC': 'RODAPE',
@@ -439,7 +443,8 @@ def configurar_tabela_ferragens(parent):
         'Fer_Corredica_1': 'CORREDICAS',
         'Fer_Corredica_2': 'CORREDICAS',
         'Fer_Corredica_3': 'CORREDICAS',
-        'Fer_Puxador': 'PUXADOR',
+        'Fer_Puxador STD': 'PUXADOR',
+        'Fer_Puxador Fresado J': 'PUXADOR',
         'Fer_Puxador_SPP_1': 'SPP',
         'Fer_Puxador_SPP_2': 'SPP',
         'Fer_Puxador_SPP_3': 'SPP'
@@ -747,8 +752,10 @@ def carregar_dados_items(parent):
     tipo_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'tipo'), None)
     familia_idx = next((i for i, c in enumerate(FERRAGENS_COLUNAS) if c['nome'] == 'familia'), None)
     tipo_padrao = {
-        'Fer_Dobradica': 'DOBRADICAS',
-        'Fer_Suporte Prateleira': 'SUPORTE PRATELEIRA',
+        'Fer_Dobradica_1': 'DOBRADICAS',
+        'Fer_Dobradica_2': 'DOBRADICAS',
+        'Fer_Suporte Prateleira_1': 'SUPORTE PRATELEIRA',
+        'Fer_Suporte Prateleira_2': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
         'Fer_Varao_SPP': 'SPP',
         'Fer_Rodape_PVC': 'RODAPE',
@@ -757,7 +764,8 @@ def carregar_dados_items(parent):
         'Fer_Corredica_1': 'CORREDICAS',
         'Fer_Corredica_2': 'CORREDICAS',
         'Fer_Corredica_3': 'CORREDICAS',
-        'Fer_Puxador': 'PUXADOR',
+        'Fer_Puxador STD': 'PUXADOR',
+        'Fer_Puxador Fresado J': 'PUXADOR',
         'Fer_Puxador_SPP_1': 'SPP',
         'Fer_Puxador_SPP_2': 'SPP',
         'Fer_Puxador_SPP_3': 'SPP'
