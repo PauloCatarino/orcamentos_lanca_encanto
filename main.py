@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "128 Commit"
+git commit -m "129 Commit"
 git push origin main
 
 
@@ -98,7 +98,7 @@ from menu_grupos_def_pecas import atualizar_grupos_pecas
 # Configura os QListWidget para permitir a seleção de múltiplos itens e alternar o estado de check ao clicar na linha.
 from tabela_def_pecas_items import configurar_selecao_qt_lists
 # Adiciona linhas na tabela "tab_def_pecas" a partir de peças selecionadas nos 6 GRUPOS QListWidget
-from tabela_def_pecas_items import (conectar_inserir_def_pecas_tab_items, inserir_pecas_selecionadas,setup_context_menu, on_item_changed_def_pecas,definir_larguras_iniciais)
+from tabela_def_pecas_items import (conectar_inserir_def_pecas_tab_items, inserir_pecas_selecionadas, setup_context_menu, on_item_changed_def_pecas, definir_larguras_iniciais, on_mp_button_clicked)
 # Importe a função calcular_orlas do módulo calculo_orlas e atualizar os preços e materias primas tab_def_pecas.
 from modulo_orquestrador import atualizar_tudo
 
@@ -723,9 +723,8 @@ class MainApp(QMainWindow):
                                  peca_data.get("und_peca", ""))
 
                         btn = QPushButton("Escolher")
-                        # Correção na conexão do botão para usar self.on_mp_button_clicked
-                        btn.clicked.connect(
-                            lambda _, r=new_row: self.on_mp_button_clicked(r, "tab_def_pecas"))
+                        # Conecta o botão ao manipulador genérico passando o objeto UI
+                        btn.clicked.connect(lambda _, r=new_row: on_mp_button_clicked(self.ui, r, "tab_def_pecas"))
                         table.setCellWidget(new_row, 33, btn)
 
                         # As colunas COMP_ASS_X (34,35,36) também devem ser preenchidas se existirem nos dados guardados.
