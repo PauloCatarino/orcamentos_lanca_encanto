@@ -38,63 +38,27 @@ from configurar_guardar_dados_gerais_orcamento import formatar_versao
 # Definições específicas para Acabamentos
 ###############################################################
 ACABAMENTOS_COLUNAS = [
-    {'nome': 'material',             'tipo': 'TEXT',    'visivel': True,  'editavel': False},
-    {'nome': 'descricao',               'tipo': 'TEXT',    'visivel': True,  'editavel': True},
-    {'nome': 'id_acb',                  'tipo': 'INTEGER', 'visivel': True,  'editavel': False},
-    {'nome': 'num_orc',                 'tipo': 'INTEGER', 'visivel': True,  'editavel': False},
-    {'nome': 'ver_orc',                 'tipo': 'INTEGER', 'visivel': True,  'editavel': False},
-    {'nome': 'ref_le',                  'tipo': 'TEXT',    'visivel': True,  'editavel': False},
-    {'nome': 'descricao_no_orcamento',  'tipo': 'TEXT',    'visivel': True,  'editavel': True},
-
-    {'nome': 'ptab',                    'tipo': 'REAL',    'visivel': True,  'editavel': True},
-    {'nome': 'pliq',                    'tipo': 'REAL',    'visivel': True,  'editavel': True},
-    {
-        'nome': 'desc1_plus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Margem'
-    },
-    {
-        'nome': 'desc2_minus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Desconto'
-    },
-    {'nome': 'und',                     'tipo': 'TEXT',    'visivel': True,  'editavel': True},
-    {'nome': 'desp',                    'tipo': 'REAL',    'visivel': True,  'editavel': True},
-    {'nome': 'corres_orla_0_4',         'tipo': 'TEXT',    'visivel': True,  'editavel': True},
-    {'nome': 'corres_orla_1_0',         'tipo': 'TEXT',    'visivel': True,  'editavel': True},
-
-    {
-        'nome': 'tipo',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'editavel': True,
-        'combobox': True,
-        'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "ACABAMENTOS")
-    },
-    {
-        'nome': 'familia',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'editavel': True,
-        'combobox': True,
-        'opcoes': lambda: ["ACABAMENTOS"]
-    },
+    {'nome': 'material', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
+    {'nome': 'descricao', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'id_acb', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'num_orc', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'ver_orc', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'ref_le', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
+    {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'ptab', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'pliq', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'desc1_plus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Margem'},
+    {'nome': 'desc2_minus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Desconto'},
+    {'nome': 'und', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'desp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'corres_orla_0_4', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'corres_orla_1_0', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "ACABAMENTOS")},
+    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: ["ACABAMENTOS"]},
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'esp_mp',  'tipo': 'REAL', 'visivel': True, 'editavel': True},
-
-    {
-        'nome': 'MP',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'botao': True,
-        'texto_botao': 'Escolher',
-        'funcao_botao': None  # Será atribuído abaixo
-    }
+    {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}  # Será atribuído abaixo
 ]
 ###############################################################
 # Definição das linhas para a tabela de Acabamentos
@@ -184,7 +148,7 @@ def escolher_acabamentos_item(ui, linha_tab):
                 dminus = converter_texto_para_valor(valor, "percentual")
 
         # Calcula pliq = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
-        novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+        novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
 
         tbl_item.blockSignals(False)
@@ -225,7 +189,7 @@ def on_item_changed_items_acabamentos(item):
             dplus = converter_texto_para_valor(desc1_text, "percentual")
             dminus = converter_texto_para_valor(desc2_text, "percentual")
 
-            novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+            novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         except Exception:
             novo_pliq = 0.0
         # Atualiza a célula pliq

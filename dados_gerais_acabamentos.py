@@ -19,37 +19,21 @@ ACABAMENTOS_COLUNAS = [
     {'nome': 'num_orc', 'tipo': 'INTEGER', 'visivel': False},
     {'nome': 'ver_orc', 'tipo': 'INTEGER', 'visivel': False},
     {'nome': 'ref_le', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
-    {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT',
-        'visivel': True, 'editavel': True},
+    {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'ptab', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'pliq', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {
-        'nome': 'desc1_plus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Margem'
-    },
-    {
-        'nome': 'desc2_minus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Desconto'
-    },
+    {'nome': 'desc1_plus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Margem'},
+    {'nome': 'desc2_minus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Desconto'},
     {'nome': 'und', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'desp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_0_4', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_1_0', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
-     'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "ACABAMENTOS")},
-    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True,
-     'combobox': True, 'opcoes': lambda: ["ACABAMENTOS"]},
+    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "ACABAMENTOS")},
+    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: ["ACABAMENTOS"]},
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True,
-        'texto_botao': 'Escolher', 'funcao_botao': None}  # A função será definida abaixo
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
 ]
 # Larguras padrão de cada coluna da tabela
 ACABAMENTOS_COLUNAS_LARGURAS = [
@@ -153,7 +137,7 @@ def escolher_acabamentos(ui, linha_tab, nome_tabela):
             elif campo == 'desc2_minus':
                 dminus = converter_texto_para_valor(valor, "percentual")
         
-        novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+        novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
         
         tbl_acabamentos.blockSignals(False)
@@ -280,7 +264,7 @@ def on_item_changed_acabamentos(item):
             dminus = converter_texto_para_valor(desc2_text, "percentual")
             # Recalcula PLIQ usando a fórmula:
             # PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
-            novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+            novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         except Exception:
             novo_pliq = 0.0
 

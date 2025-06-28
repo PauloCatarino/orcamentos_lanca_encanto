@@ -44,62 +44,26 @@ from configurar_guardar_dados_gerais_orcamento import formatar_versao
 ###############################################################
 SISTEMAS_CORRER_COLUNAS = [
     {'nome': 'sistemas_correr', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
-    {'nome': 'descricao',       'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-    {'nome': 'id_sc',           'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
-    {'nome': 'num_orc',         'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
-    {'nome': 'ver_orc',         'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
-    {'nome': 'ref_le',          'tipo': 'TEXT', 'visivel': True, 'editavel': False},
+    {'nome': 'descricao', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'id_sc', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'num_orc', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'ver_orc', 'tipo': 'INTEGER', 'visivel': True, 'editavel': False},
+    {'nome': 'ref_le', 'tipo': 'TEXT', 'visivel': True, 'editavel': False},
     {'nome': 'descricao_no_orcamento', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-
-    {'nome': 'ptab',            'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'pliq',            'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {
-        'nome': 'desc1_plus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Margem'
-    },
-    {
-        'nome': 'desc2_minus',
-        'tipo': 'REAL',
-        'visivel': True,
-        'editavel': True,
-        'header': 'Desconto'
-    },
-    {'nome': 'und',             'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-    {'nome': 'desp',            'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'ptab', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'pliq', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'desc1_plus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Margem'},
+    {'nome': 'desc2_minus', 'tipo': 'REAL', 'visivel': True, 'editavel': True, 'header': 'Desconto'},
+    {'nome': 'und', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
+    {'nome': 'desp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_0_4', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
     {'nome': 'corres_orla_1_0', 'tipo': 'TEXT', 'visivel': True, 'editavel': True},
-
-    {
-        'nome': 'tipo',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'editavel': True,
-        'combobox': True,
-        'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "FERRAGENS")
-    },
-    {
-        'nome': 'familia',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'editavel': True,
-        'combobox': True,
-        'opcoes': lambda: ["FERRAGENS"]
-    },
+    {'nome': 'tipo', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: get_distinct_values_with_filter("TIPO", "FAMILIA", "FERRAGENS")},
+    {'nome': 'familia', 'tipo': 'TEXT', 'visivel': True, 'editavel': True, 'combobox': True, 'opcoes': lambda: ["FERRAGENS"]},
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'esp_mp',  'tipo': 'REAL', 'visivel': True, 'editavel': True},
-
-    {
-        'nome': 'MP',
-        'tipo': 'TEXT',
-        'visivel': True,
-        'botao': True,
-        'texto_botao': 'Escolher',
-        'funcao_botao': None  # Será atribuído depois
-    }
+    {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
 ]
 
 # Definição dos nomes das linhas para a tabela de Sistemas Correr
@@ -193,7 +157,7 @@ def escolher_sistemas_correr_item(ui, linha_tab):
                 dminus = converter_texto_para_valor(valor, "percentual")
 
         # Calcula pliq com base no ptab e descontos
-        novo_pliq = round((ptab_valor * (1 + dminus)) * (1 - dplus), 2)
+        novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
 
         tbl_item.blockSignals(False)
@@ -209,7 +173,7 @@ def on_item_changed_items_sistemas_correr(item):
     """
     Callback acionado sempre que uma célula da Tab_Sistemas_Correr_11 é editada.
     Se a coluna for ptab (7), desc1_plus (9) ou desc2_minus (10), recalcula pliq
-    conforme a fórmula: pliq = ptab * (1 + desc1_plus) * (1 - desc2_minus).
+    conforme a fórmula: pliq = ptab * (1 - desc1_plus) * (1 + desc2_minus).
     """
     if not item:
         return
