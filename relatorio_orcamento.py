@@ -195,6 +195,9 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
             _first_text(getattr(ui, "lineEdit_telemovel", None))
         )
 
+     # Copiar a referência do cliente do separador 'Consulta Orcamentos'
+    if hasattr(ui, "lineEdit_ref_cliente_2"):
+        ui.lineEdit_ref_cliente_3.setText(ui.lineEdit_ref_cliente_2.text())
 
 
     # 2. Preencher dados do orçamento
@@ -284,10 +287,12 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     elems = []
     elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
     elems.append(Paragraph(f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]))
-    elems.append(Paragraph(
-        f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
-        styles["Normal"],
-    ))
+    elems.append(
+        Paragraph(
+            f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}    -->Ref: {ui.lineEdit_ref_cliente_3.text()}",
+            styles["Normal"],
+        )
+    )
     elems.append(Spacer(1, 12))
 
     dados_cli = [
@@ -328,7 +333,11 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
                     first, *rest = lines
                     formatted = f"<b>{first}</b>"
                     if rest:
-                        formatted += "<br/><i>" + "<br/>".join(l.strip("\t-") for l in rest) + "</i>"
+                        # Espaço extra para deslocar ligeiramente as descrições adicionais
+                        tab = "&nbsp;&nbsp;&nbsp;"
+                        italic_text = "<br/>".join(tab + l.strip("\t-") for l in rest)
+                        # Para alterar o tamanho do texto itálico ajuste o valor do atributo 'size' abaixo
+                        formatted += f"<br/><i><font size='8'>{italic_text}</font></i>"
                     row.append(Paragraph(formatted, styles["Normal"]))
                 else:
                     row.append("")
@@ -353,7 +362,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     elems.append(table)
     elems.append(Spacer(1, 12))
     right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=2)
-    total_style = ParagraphStyle("total", parent=right_style, fontSize=8, leading=14)
+    total_style = ParagraphStyle("total", parent=right_style, fontSize=10, leading=14)
     elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
     elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
     elems.append(Paragraph(ui.label_iva_2.text(), right_style))
