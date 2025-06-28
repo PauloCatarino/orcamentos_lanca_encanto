@@ -558,7 +558,7 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>2452</width>
+               <width>1200</width>
                <height>2500</height>
               </rect>
              </property>
@@ -2842,7 +2842,7 @@
           <x>10</x>
           <y>10</y>
           <width>2541</width>
-          <height>1001</height>
+          <height>1211</height>
          </rect>
         </property>
         <property name="toolTip">
@@ -2852,7 +2852,7 @@
          <string notr="true"/>
         </property>
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="Material">
          <attribute name="title">
@@ -3073,7 +3073,7 @@
             <x>10</x>
             <y>80</y>
             <width>2441</width>
-            <height>841</height>
+            <height>1091</height>
            </rect>
           </property>
           <property name="font">
@@ -3119,7 +3119,8 @@
           </property>
           <property name="verticalHeaderLabels" stdset="0">
            <stringlist>
-            <string>Fer_Dobradica</string>
+            <string>Fer_Dobradica_1</string>
+            <string>Fer_Dobradica_2</string>
             <string>Fer_Suporte Prateleira</string>
             <string>Fer_Suporte Varao</string>
             <string>Fer_Varao_SPP</string>
@@ -3310,6 +3311,8 @@
             <string>SC_Painel_Porta_Correr_4</string>
             <string>SC_Espelho_Porta_Correr_1</string>
             <string>SC_Espelho_Porta_Correr_2</string>
+            <string>SC_Rodizio_Sup</string>
+            <string>SC_Rodizio_Inf</string>
             <string>SC_Acessorio_1</string>
             <string>SC_Acessorio_2</string>
             <string>SC_Acessorio_3</string>
@@ -3574,7 +3577,7 @@
             <x>0</x>
             <y>10</y>
             <width>2451</width>
-            <height>1200</height>
+            <height>1251</height>
            </rect>
           </property>
           <property name="minimumSize">
@@ -3584,7 +3587,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="dados_item_orcamento">
            <property name="geometry">
@@ -4848,8 +4851,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -4864,7 +4867,7 @@
               <x>0</x>
               <y>34</y>
               <width>2391</width>
-              <height>831</height>
+              <height>851</height>
              </rect>
             </property>
             <property name="font">
@@ -5059,7 +5062,7 @@
              <x>0</x>
              <y>0</y>
              <width>2451</width>
-             <height>1065</height>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5071,7 +5074,7 @@
               <x>0</x>
               <y>34</y>
               <width>2391</width>
-              <height>801</height>
+              <height>1081</height>
              </rect>
             </property>
             <property name="font">
@@ -5117,8 +5120,10 @@
             </property>
             <property name="verticalHeaderLabels" stdset="0">
              <stringlist>
-              <string>Fer_Dobradica</string>
-              <string>Fer_Suporte Prateleira</string>
+              <string>Fer_Dobradica_1</string>
+              <string>Fer_Dobradica_2</string>
+              <string>Fer_Suporte Prateleira_1</string>
+              <string>Fer_Suporte Prateleira_2</string>
               <string>Fer_Suporte Varao</string>
               <string>Fer_Varao_SPP</string>
               <string>Fer_Rodape_PVC</string>
@@ -5128,12 +5133,19 @@
               <string>Fer_Corredica_1</string>
               <string>Fer_Corredica_2</string>
               <string>Fer_Corredica_3</string>
-              <string>Fer_Puxador</string>
+              <string>Fer_Puxador STD</string>
+              <string>Fer_Puxador Fresado J</string>
               <string>Fer_Puxador_SPP_1</string>
               <string>Fer_Puxador_SPP_2</string>
               <string>Fer_Puxador_SPP_3</string>
               <string>Fer_Sistema_Basculante_1</string>
               <string>Fer_Sistema_Basculante_2</string>
+              <string>Fer_Balde Lixo</string>
+              <string>Fer_Canto Cozinha_1</string>
+              <string>Fer_Canto Cozinha_2</string>
+              <string>Fer_Porta Talheres</string>
+              <string>Fer_Porta Calcas</string>
+              <string>Fer_Ferragem_Diversas</string>
               <string>Fer_Acessorio_1</string>
               <string>Fer_Acessorio_2</string>
               <string>Fer_Acessorio_3</string>
@@ -5270,7 +5282,7 @@
              <x>0</x>
              <y>0</y>
              <width>2451</width>
-             <height>1065</height>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5282,7 +5294,7 @@
               <x>0</x>
               <y>34</y>
               <width>2391</width>
-              <height>591</height>
+              <height>691</height>
              </rect>
             </property>
             <property name="font">
@@ -5341,6 +5353,8 @@
               <string>SC_Painel_Porta_Correr_4</string>
               <string>SC_Espelho_Porta_Correr_1</string>
               <string>SC_Espelho_Porta_Correr_2</string>
+              <string>SC_Rodizio_Sup</string>
+              <string>SC_Rodizio_Inf</string>
               <string>SC_Acessorio_1</string>
               <string>SC_Acessorio_2</string>
               <string>SC_Acessorio_3</string>
@@ -5460,8 +5474,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5694,7 +5708,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2422</width>
+             <width>1200</width>
              <height>6000</height>
             </rect>
            </property>
