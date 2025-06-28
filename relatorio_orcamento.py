@@ -80,8 +80,22 @@ def _parse_float(value: str) -> float:
         print(f"DEBUG _parse_float: resultado final={resultado}")
         return resultado
     except ValueError as e:
-        print(f"DEBUG _parse_float: erro ao converter '{txt}': {e}")
+        print(f"Erro ao converter '{value}' para float: {e}")
         return 0.0
+        
+        
+# =============================================================================
+# Função: _format_int
+# =============================================================================
+# Formata um texto numérico para inteiro, removendo casas decimais. Se o valor
+# for vazio ou não numérico, retorna uma string vazia.
+# =============================================================================
+def _format_int(value: str) -> str:
+    """Return integer string without decimals or empty string if not numeric."""
+    if not value or not str(value).strip():
+        return ""
+    num = _parse_float(value)
+    return f"{int(num)}"
 
 # =============================================================================
 # Função: _first_text
@@ -344,7 +358,10 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
             elif c == 9:
                 row.append(Paragraph(f"<b>{txt}</b>", styles["Normal"]))
             else:
-                row.append(txt)
+                if c in (3, 4, 5, 7):
+                    row.append(_format_int(txt))
+                else:
+                    row.append(txt)
         data.append(row)
 
     # Ajuste de larguras para que a coluna 'Descrição' fique mais larga no PDF
