@@ -321,6 +321,29 @@ def obter_todos_modulos():
         QMessageBox.critical(None, "Erro Crítico", f"Erro inesperado ao obter lista de módulos: {e}")
         return []
 
+def obter_modulo_por_id(id_modulo):
+    """
+    Retorna os dados de um módulo específico.
+    """
+    if not id_modulo:
+        return None
+    try:
+        with obter_cursor() as cursor:
+            sql = ("SELECT id_modulo, nome_modulo, descricao_modulo, "
+                   "caminho_imagem_modulo FROM modulos_guardados WHERE id_modulo = %s")
+            cursor.execute(sql, (id_modulo,))
+            res = cursor.fetchone()
+            if res:
+                nomes_colunas = [desc[0] for desc in cursor.description]
+                return dict(zip(nomes_colunas, res))
+            return None
+    except mysql.connector.Error as err:
+        print(f"[ERRO DB Módulos] Erro ao obter módulo ID {id_modulo}: {err}")
+        return None
+    except Exception as e:
+        print(f"[ERRO INESPERADO DB Módulos] Ao obter módulo ID {id_modulo}: {e}")
+        return None
+
 def obter_pecas_de_modulo(id_modulo):
     """
     Obtém todas as peças de um módulo específico da tabela `modulo_pecas_guardadas`.
