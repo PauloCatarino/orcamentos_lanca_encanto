@@ -186,14 +186,18 @@ def atualizar_tudo(ui):
 
             # Carregar o Excel uma vez para este ciclo para passar para as funções que precisam
             df_excel_cp = None
+
+            # Caminho base da pasta dos ficheiros Excel, selecionada pelo utilizador
+            caminho_base = ui.lineEdit_base_dados.text().strip()
+            # Ficheiro Excel TAB_DEF_PECAS.XLSX deve estar dentro desta pasta
+            excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
+            print(f"[DEBUG] Caminho do ficheiro Excel: {excel_file}")  # Mostra no terminal/console
+
             try:
-                 caminho_base = ui.lineEdit_base_dados.text().strip()
-                 folder = os.path.dirname(caminho_base)
-                 excel_file = os.path.join(folder, "TAB_DEF_PECAS.XLSX")
-                 df_excel_cp = pd.read_excel(excel_file, header=4)
+                df_excel_cp = pd.read_excel(excel_file, header=4)
             except Exception as e:
-                 print(f"[ERRO] Ciclo {ciclos_executados}: Não foi possível carregar/ler o ficheiro Excel '{excel_file}': {e}")
-                 df_excel_cp = pd.DataFrame() # Use DataFrame vazio para evitar erros
+                print(f"[ERRO]: Não foi possível carregar/ler o ficheiro Excel '{excel_file}': {e}")
+                df_excel_cp = pd.DataFrame() # Use DataFrame vazio para evitar erros
 
             # --- ETAPA DE REVALIDAÇÃO DE CORES ---
             # Garante que as cores de fundo estão corretas antes de identificar associados.

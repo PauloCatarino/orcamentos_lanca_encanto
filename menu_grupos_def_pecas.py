@@ -29,12 +29,19 @@ def atualizar_grupos_pecas(ui):
       "sistemas_correr"    -> ui.listWidget_sistemas_correr_4
       "acabamentos"    -> ui.listWidget_acabamentos_4
     """
-   # 1) Extrair a pasta do caminho do .db
+     # 1) Extrair a pasta do caminho do .db
     caminho_base = ui.lineEdit_base_dados.text().strip()
-    folder_base = os.path.dirname(caminho_base)
     
     # 2) Montar caminho do Excel
-    excel_file = os.path.join(folder_base, "TAB_DEF_PECAS.XLSX")
+    excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
+    print(f"[DEBUG - calculos_custos] Caminho do ficheiro Excel: {excel_file}")
+    try:
+        df_excel_cp = pd.read_excel(excel_file, header=4)
+    except Exception as e:
+        parent_widget = QApplication.activeWindow()
+        QMessageBox.warning(parent_widget, "Ficheiro Não Encontrado", f"O ficheiro de definições de peças '{excel_file}' não foi encontrado.\nOs custos base (CPxx) não serão atualizados a partir do Excel.")
+        print(f"[ERRO]: Não foi possível carregar/ler o ficheiro Excel '{excel_file}': {e}")
+        df_excel_cp = pd.DataFrame()
 
     # 3) Verificar existência
     if not os.path.exists(excel_file):
