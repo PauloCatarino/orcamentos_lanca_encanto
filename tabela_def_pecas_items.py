@@ -165,6 +165,7 @@ IDX_PLIQ = 21
 IDX_DES1PLUS = 22
 IDX_DES1MINUS = 23
 IDX_DESP = 25
+IDX_DESCRICAO_LIVRE = 200
 IDX_QT_MOD = 4
 IDX_QT_UND = 5
 IDX_COMP = 6
@@ -365,7 +366,6 @@ def inserir_pecas_selecionadas(ui):
     setup_context_menu(ui, None)
     # Aplica o ComboBox Mat_Default (AGORA, depois de inserir Mat_Default/Tab_Default)
     aplicar_combobox_mat_default(ui)
-    atualizar_tooltips_descricao_livre(table)
 
     # Conecta o sinal itemChanged se ainda não estiver conectado
     # Esta conexão deve estar no setup_context_menu ou em setup inicial da UI
@@ -784,7 +784,6 @@ def paste_rows_below(ui):
         table.blockSignals(False)
         table.setProperty("importando_dados", False)
     update_ids(table)
-    atualizar_tooltips_descricao_livre(table)
     atualizar_tudo(ui)
 
 # Parte 3: Validação de Entradas para Peças MODULO (mantida, usa validar_expressao_modulo do utils)
@@ -1397,9 +1396,6 @@ def on_item_changed_def_pecas(item):
         col = item.column()
         texto_atual = item.text()  # Texto como está na célula agora
 
-        if col == 1:
-            item.setToolTip(texto_atual)
-
         colunas_para_formatar = {
             IDX_PTAB: "moeda",
             IDX_PLIQ: "moeda",
@@ -1428,6 +1424,12 @@ def on_item_changed_def_pecas(item):
                     item.setText(texto_formatado)  # Atualiza o texto da célula
             except Exception as e:
                 print(f"[ERRO Format ItemChanged] L{row+1} C{col+1}: {e}")
+        elif col == IDX_DESCRICAO_LIVRE:
+            fm = table.fontMetrics()
+            if fm.boundingRect(texto_atual).width() > table.columnWidth(col) - 4:
+                item.setToolTip(texto_atual)
+            else:
+                item.setToolTip("")
 
     finally:
         _editando_programaticamente_def_pecas = False  # Libera flag para futuras edições
@@ -1621,6 +1623,27 @@ def conectar_inserir_def_pecas_tab_items(ui):
         lambda: inserir_pecas_selecionadas(ui))
     # print("[INFO] Botão 'Inserir Peças Selecionadas' conectado.")
 
+    # Atualiza tooltips de Descricao_Livre ao passar o rato
+    table = ui.tab_def_pecas
+    table.setMouseTracking(True)
+    table.viewport().setMouseTracking(True)
+    try:
+        table.cellEntered.disconnect()
+    except TypeError:
+        pass
+
+    def _atualizar_tooltip(row, col):
+        if col == IDX_DESCRICAO_LIVRE:
+            item = table.item(row, col)
+            if item:
+                fm = table.fontMetrics()
+                if fm.boundingRect(item.text()).width() > table.columnWidth(col) - 4:
+                    item.setToolTip(item.text())
+                else:
+                    item.setToolTip("")
+
+    table.cellEntered.connect(_atualizar_tooltip)
+
 
 # Parte 16: Função Auxiliar para chaves na tab_modulo_medidas (Implementada Aqui)
 def actualizar_ids_num_orc_ver_orc_tab_modulo_medidas(ui, ids_val, num_orc_val, ver_orc_val):
@@ -1735,7 +1758,6 @@ def show_context_menu(ui, pos):
 
             # Após a exclusão, renumera os IDs e chama o orquestrador para reprocessar tudo (cálculos, etc.)
             update_ids(table)
-            atualizar_tooltips_descricao_livre(table)
             print(
                 "[INFO] Menu Contexto: Chamando orquestrador após exclusão de linha(s).")
             atualizar_tudo(ui)  # Passa a referência da UI
@@ -1804,7 +1826,6 @@ def show_context_menu(ui, pos):
 
         # Após a inserção, renumera os IDs e chama o orquestrador
         update_ids(table)
-        atualizar_tooltips_descricao_livre(table)
         print(
             f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia acima na linha {current_row+1}.")
         atualizar_tudo(ui)
@@ -1872,7 +1893,6 @@ def show_context_menu(ui, pos):
 
         # Após a inserção, renumera os IDs e chama o orquestrador␊
         update_ids(table)
-        atualizar_tooltips_descricao_livre(table)
         print(
             f"[INFO] Menu Contexto: Chamando orquestrador após inserção de linha vazia abaixo na linha {current_row+1}.")
         atualizar_tudo(ui)
@@ -1962,19 +1982,10 @@ def definir_larguras_iniciais(ui):
     for i, largura in enumerate(DEFAULT_COLUMN_WIDTHS):
         if i < table.columnCount():
             table.setColumnWidth(i, largura)
-    for col in HIDDEN_COLUMNS_DEFAULT:
+    # Oculta colunas pouco usadas por defeito
+    for col in [IDX_PTAB, IDX_DES1PLUS, IDX_DES1MINUS]:
         if col < table.columnCount():
             table.setColumnHidden(col, True)
-    atualizar_tooltips_descricao_livre(table)
-
-
-def atualizar_tooltips_descricao_livre(table):
-    """Define tooltip com o texto completo da coluna Descricao_Livre."""
-    COL_DESC_LIVRE = 1
-    for row in range(table.rowCount()):
-        item = table.item(row, COL_DESC_LIVRE)
-        if item:
-            item.setToolTip(item.text())
 
 # ---------------------------------------------------------------------------
 # FIM das Funções utilitárias para ajustar a visualização da tab_def_pecas
