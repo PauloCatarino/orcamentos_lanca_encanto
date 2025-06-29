@@ -76,7 +76,9 @@ FERRAGENS_LINHAS = [
     'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1',
     'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD', 'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1',
     'Fer_Puxador_SPP_2', 'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1',
-    'Fer_Sistema_Basculante_2', 'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2', 'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Ferragem_Diversas',
+    'Fer_Sistema_Basculante_2', 'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2', 'Fer_Porta Talheres', 'Fer_Porta Calcas',
+    'Fer_Fundo Aluminio', 'Fer_Calha Led', 'Fer_Fita Led', 'Fer_Transformador Led', 'Fer_Cabos Led_1', 'Fer_Cabos Led_2',
+    'Fer_Sensor Led_1', 'Fer_Sensor Led_2', 'Fer_Iluminacao_1', 'Fer_Iluminacao_2', 'Fer_Iluminacao_3', 'Fer_Ferragem_Diversas',
     'Fer_Acessorio_1', 'Fer_Acessorio_2',
     'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5', 'Fer_Acessorio_6',
     'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP'

@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>7</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -3088,7 +3088,7 @@
            <enum>Qt::ScrollBarAlwaysOn</enum>
           </property>
           <property name="rowCount">
-           <number>44</number>
+           <number>45</number>
           </property>
           <property name="columnCount">
            <number>20</number>
@@ -3146,6 +3146,7 @@
             <string>Fer_Porta Calcas</string>
             <string>Fer_Fundo Aluminio</string>
             <string>Fer_Calha Led</string>
+            <string>Fer_Fita Led</string>
             <string>Fer_Transformador Led</string>
             <string>Fer_Cabos Led_1</string>
             <string>Fer_Cabos Led_2</string>
@@ -3165,6 +3166,7 @@
             <string>Fer_Acessorio_8_SPP</string>
            </stringlist>
           </property>
+          <row/>
           <row/>
           <row/>
           <row/>
@@ -5117,7 +5119,7 @@
              <enum>Qt::ScrollBarAlwaysOn</enum>
             </property>
             <property name="rowCount">
-             <number>44</number>
+             <number>45</number>
             </property>
             <property name="columnCount">
              <number>21</number>
@@ -5175,6 +5177,7 @@
               <string>Fer_Porta Calcas</string>
               <string>Fer_Fundo Aluminio</string>
               <string>Fer_Calha Led</string>
+              <string>Fer_Fita Led</string>
               <string>Fer_Transformador Led</string>
               <string>Fer_Cabos Led_1</string>
               <string>Fer_Cabos Led_2</string>
@@ -5194,6 +5197,7 @@
               <string>Fer_Acessorio_8_SPP</string>
              </stringlist>
             </property>
+            <row/>
             <row/>
             <row/>
             <row/>
