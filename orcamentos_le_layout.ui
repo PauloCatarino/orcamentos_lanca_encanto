@@ -30,7 +30,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>7</number>
       </property>
       <widget class="QWidget" name="tab_configuracoes">
        <property name="title" stdset="0">
@@ -2852,7 +2852,7 @@
          <string notr="true"/>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="Material">
          <attribute name="title">
@@ -3088,7 +3088,7 @@
            <enum>Qt::ScrollBarAlwaysOn</enum>
           </property>
           <property name="rowCount">
-           <number>34</number>
+           <number>44</number>
           </property>
           <property name="columnCount">
            <number>20</number>
@@ -3121,7 +3121,8 @@
            <stringlist>
             <string>Fer_Dobradica_1</string>
             <string>Fer_Dobradica_2</string>
-            <string>Fer_Suporte Prateleira</string>
+            <string>Fer_Suporte Prateleira_1</string>
+            <string>Fer_Suporte Prateleira_2</string>
             <string>Fer_Suporte Varao</string>
             <string>Fer_Varao_SPP</string>
             <string>Fer_Rodape_PVC</string>
@@ -3131,12 +3132,29 @@
             <string>Fer_Corredica_1</string>
             <string>Fer_Corredica_2</string>
             <string>Fer_Corredica_3</string>
-            <string>Fer_Puxador</string>
+            <string>Fer_Puxador STD</string>
+            <string>Fer_Puxador Fresado J</string>
             <string>Fer_Puxador_SPP_1</string>
             <string>Fer_Puxador_SPP_2</string>
             <string>Fer_Puxador_SPP_3</string>
             <string>Fer_Sistema_Basculante_1</string>
             <string>Fer_Sistema_Basculante_2</string>
+            <string>Fer_Balde Lixo</string>
+            <string>Fer_Canto Cozinha_1</string>
+            <string>Fer_Canto Cozinha_2</string>
+            <string>Fer_Porta Talheres</string>
+            <string>Fer_Porta Calcas</string>
+            <string>Fer_Fundo Aluminio</string>
+            <string>Fer_Calha Led</string>
+            <string>Fer_Transformador Led</string>
+            <string>Fer_Cabos Led_1</string>
+            <string>Fer_Cabos Led_2</string>
+            <string>Fer_Sensor Led_1</string>
+            <string>Fer_Sensor Led_2</string>
+            <string>Fer_Iluminacao_1</string>
+            <string>Fer_Iluminacao_2</string>
+            <string>Fer_Iluminacao_3</string>
+            <string>Fer_Ferragens_Diversas</string>
             <string>Fer_Acessorio_1</string>
             <string>Fer_Acessorio_2</string>
             <string>Fer_Acessorio_3</string>
@@ -3147,6 +3165,16 @@
             <string>Fer_Acessorio_8_SPP</string>
            </stringlist>
           </property>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
+          <row/>
           <row/>
           <row/>
           <row/>
@@ -3587,7 +3615,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>1</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="dados_item_orcamento">
            <property name="geometry">
@@ -3595,7 +3623,7 @@
              <x>0</x>
              <y>0</y>
              <width>2451</width>
-             <height>1065</height>
+             <height>1116</height>
             </rect>
            </property>
            <property name="font">
@@ -5089,7 +5117,7 @@
              <enum>Qt::ScrollBarAlwaysOn</enum>
             </property>
             <property name="rowCount">
-             <number>34</number>
+             <number>44</number>
             </property>
             <property name="columnCount">
              <number>21</number>
@@ -5145,6 +5173,16 @@
               <string>Fer_Canto Cozinha_2</string>
               <string>Fer_Porta Talheres</string>
               <string>Fer_Porta Calcas</string>
+              <string>Fer_Fundo Aluminio</string>
+              <string>Fer_Calha Led</string>
+              <string>Fer_Transformador Led</string>
+              <string>Fer_Cabos Led_1</string>
+              <string>Fer_Cabos Led_2</string>
+              <string>Fer_Sensor_Led_1</string>
+              <string>Fer_Sensor_Led_2</string>
+              <string>Fer_Iluminacao_1</string>
+              <string>Fer_Iluminacao_2</string>
+              <string>Fer_Iluminacao_3</string>
               <string>Fer_Ferragem_Diversas</string>
               <string>Fer_Acessorio_1</string>
               <string>Fer_Acessorio_2</string>
@@ -5156,6 +5194,16 @@
               <string>Fer_Acessorio_8_SPP</string>
              </stringlist>
             </property>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
+            <row/>
             <row/>
             <row/>
             <row/>
@@ -5281,8 +5329,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">

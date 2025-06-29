@@ -29,9 +29,10 @@ Para que o delegate do ComboBox em "Def_Peca" funcione, o grupo de origem do ite
 
 from utils import set_item  # (Já incluído na importação de utils no topo)
 from utils import safe_item_text
-from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction
+from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction, QToolTip
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
 from PyQt5.QtGui import QColor, QPen
+from PyQt5 import QtGui
 import openpyxl
 import os
 import decimal
@@ -165,7 +166,7 @@ IDX_PLIQ = 21
 IDX_DES1PLUS = 22
 IDX_DES1MINUS = 23
 IDX_DESP = 25
-IDX_DESCRICAO_LIVRE = 200
+IDX_DESCRICAO_LIVRE = 1
 IDX_QT_MOD = 4
 IDX_QT_UND = 5
 IDX_COMP = 6
@@ -1627,22 +1628,28 @@ def conectar_inserir_def_pecas_tab_items(ui):
     table = ui.tab_def_pecas
     table.setMouseTracking(True)
     table.viewport().setMouseTracking(True)
+    # remove conexões antigas
     try:
         table.cellEntered.disconnect()
     except TypeError:
         pass
 
-    def _atualizar_tooltip(row, col):
+    # liga cellEntered ao handler
+    def _on_cell_hover(row, col):
         if col == IDX_DESCRICAO_LIVRE:
             item = table.item(row, col)
-            if item:
-                fm = table.fontMetrics()
-                if fm.boundingRect(item.text()).width() > table.columnWidth(col) - 4:
-                    item.setToolTip(item.text())
-                else:
-                    item.setToolTip("")
+            if not item:
+                return
+            texto = item.text()
+            fm = table.fontMetrics()
+            # só mostra se estiver truncado
+            if fm.boundingRect(texto).width() > table.columnWidth(col) - 4:
+                # mostra tooltip na posição do cursor
+                QToolTip.showText(QtGui.QCursor.pos(), texto, table)
+            else:
+                QToolTip.hideText()
 
-    table.cellEntered.connect(_atualizar_tooltip)
+    table.cellEntered.connect(_on_cell_hover)
 
 
 # Parte 16: Função Auxiliar para chaves na tab_modulo_medidas (Implementada Aqui)
