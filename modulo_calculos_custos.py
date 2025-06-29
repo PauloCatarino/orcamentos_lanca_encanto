@@ -35,7 +35,7 @@ Dependências:
 
 import os
 import pandas as pd
-from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox, QApplication
 from PyQt5.QtCore import Qt, QCoreApplication # QCoreApplication para processEvents
 # Importar funções utilitárias
 from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item
@@ -753,9 +753,17 @@ def atualizar_calculos_custos(ui):
         return
 
     # --- Carregar o ficheiro Excel uma vez ---
+    # Corrigir o caminho do ficheiro Excel
     caminho_base = ui.lineEdit_base_dados.text().strip()
-    folder = os.path.dirname(caminho_base)
-    excel_file = os.path.join(folder, "TAB_DEF_PECAS.XLSX")
+    excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
+    print(f"[DEBUG - calculos_custos] Caminho do ficheiro Excel: {excel_file}")
+    try:
+        df_excel_cp = pd.read_excel(excel_file, header=4)
+    except Exception as e:
+        parent_widget = QApplication.activeWindow()
+        QMessageBox.warning(parent_widget, "Ficheiro Não Encontrado", f"O ficheiro de definições de peças '{excel_file}' não foi encontrado.\nOs custos base (CPxx) não serão atualizados a partir do Excel.")
+        print(f"[ERRO]: Não foi possível carregar/ler o ficheiro Excel '{excel_file}': {e}")
+        df_excel_cp = pd.DataFrame()
 
     df_excel_cp = None
     try:
