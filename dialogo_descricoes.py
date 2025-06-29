@@ -63,13 +63,18 @@ class DialogoDescricoes(QDialog):
         self.btn_add = QPushButton("Adicionar", self)
         self.btn_edit = QPushButton("Editar", self)
         self.btn_del = QPushButton("Eliminar", self)
+        self.btn_up = QPushButton("\u25B2", self)
+        self.btn_down = QPushButton("\u25BC", self)
         botoes.addWidget(self.btn_add)
         botoes.addWidget(self.btn_edit)
         botoes.addWidget(self.btn_del)
+        botoes.addWidget(self.btn_up)
+        botoes.addWidget(self.btn_down)
         layout.addLayout(botoes)
 
         botoes2 = QHBoxLayout()
         self.btn_ok = QPushButton("Inserir", self)
+        self.btn_ok.setDefault(True)
         self.btn_cancel = QPushButton("Cancelar", self)
         botoes2.addWidget(self.btn_ok)
         botoes2.addWidget(self.btn_cancel)
@@ -80,6 +85,8 @@ class DialogoDescricoes(QDialog):
         self.btn_add.clicked.connect(self.adicionar)
         self.btn_edit.clicked.connect(self.editar)
         self.btn_del.clicked.connect(self.eliminar)
+        self.btn_up.clicked.connect(self.mover_cima)
+        self.btn_down.clicked.connect(self.mover_baixo)
         self.edit_pesquisa.textChanged.connect(self.aplicar_filtro)
 
         self.descricoes = carregar_descricoes()
@@ -138,6 +145,24 @@ class DialogoDescricoes(QDialog):
             self.descricoes.remove(item.text())
         guardar_descricoes(self.descricoes)
         self._carregar_lista()
+
+    def mover_cima(self):
+        row = self.lista.currentRow()
+        if row > 0:
+            item = self.lista.takeItem(row)
+            self.lista.insertItem(row - 1, item)
+            self.lista.setCurrentRow(row - 1)
+            self.descricoes.insert(row - 1, self.descricoes.pop(row))
+            guardar_descricoes(self.descricoes)
+
+    def mover_baixo(self):
+        row = self.lista.currentRow()
+        if row < self.lista.count() - 1 and row >= 0:
+            item = self.lista.takeItem(row)
+            self.lista.insertItem(row + 1, item)
+            self.lista.setCurrentRow(row + 1)
+            self.descricoes.insert(row + 1, self.descricoes.pop(row))
+            guardar_descricoes(self.descricoes)
 
     def descricoes_selecionadas(self):
         selecionadas = []
