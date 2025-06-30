@@ -29,3 +29,10 @@ venv/
 *.xlsx
 *.xls
 *.csv
+
+# Não versionar executáveis e builds
+dist/
+build/
+*.exe
+*.spec
+
