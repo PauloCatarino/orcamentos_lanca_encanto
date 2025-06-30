@@ -31,7 +31,8 @@ from utils import (
     gerar_id_orcamento,                   # Importar diretamente se necessário (embora atualizar_campos... já use)
     sugerir_numero_orcamento,              # Importar diretamente se necessário
     formatar_valor_moeda,               # Formatação de moeda (se necessário)
-    limpar_formatacao_preco             # Limpa formatação de preço (se necessário)
+    limpar_formatacao_preco,       # Limpa a formatação do preço para conversão
+    obter_diretorio_base,    # Função para obter o diretório base a partir do lineEdit_base_dados
 )
 # Importar o gestor de contexto do módulo de conexão
 from db_connection import obter_cursor
@@ -508,7 +509,8 @@ def abrir_criar_pasta_orcamento():
             
             # Caminho absoluto para o template No futuro, pode ser configurável e colocar como variavel nas configurações do separador
             # OBS: Ajuste o caminho do template conforme necessário - Excel modelo Resumos Custos
-            template_path = r"C:\Users\Utilizador\Documents\ORCAMENTOS_LE_V2\Base_Dados_Orcamento\MODELO_Resumo_Custos.xlsx"
+            base_modelos = obter_diretorio_base(ui.lineEdit_base_dados.text())
+            template_path = os.path.join(base_modelos, "MODELO_Resumo_Custos.xlsx")
             
             # Chama a função que vai criar o Excel de resumo na pasta do orçamento
             criar_excel_resumo(caminho_final, num_orcamento, versao, template_path)

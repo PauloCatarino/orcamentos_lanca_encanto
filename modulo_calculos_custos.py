@@ -38,7 +38,7 @@ import pandas as pd
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox, QApplication
 from PyQt5.QtCore import Qt, QCoreApplication # QCoreApplication para processEvents
 # Importar funções utilitárias
-from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item
+from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item , obter_diretorio_base
 
 # Variáveis configuráveis - os valores poderão ser alterados via interface futuramente
 VALOR_SECCIONADORA = 1.0            # €/ML para a máquina Seccionadora
@@ -754,7 +754,7 @@ def atualizar_calculos_custos(ui):
 
     # --- Carregar o ficheiro Excel uma vez ---
     # Corrigir o caminho do ficheiro Excel
-    caminho_base = ui.lineEdit_base_dados.text().strip()
+    caminho_base = obter_diretorio_base(ui.lineEdit_base_dados.text())
     excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
     print(f"[DEBUG - calculos_custos] Caminho do ficheiro Excel: {excel_file}")
     try:

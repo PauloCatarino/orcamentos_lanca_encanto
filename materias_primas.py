@@ -33,6 +33,7 @@ import subprocess
 
 # Importa a função de conexão MySQL (configurada no módulo db_connection.py)
 from db_connection import obter_cursor
+from utils import obter_diretorio_base
 
 # Variável global para copiar/colar linhas
 _copied_row_data = None
@@ -525,7 +526,7 @@ def atualizar_dados_de_excel(ui):
       - DESP: pode ser decimal.
     """
         # Tenta obter o diretório a partir do lineEdit
-    base_dir = ui.lineEdit_base_dados.text().strip()
+    base_dir = obter_diretorio_base(ui.lineEdit_base_dados.text())
     if not base_dir or not os.path.isdir(base_dir):
         base_dir = os.getcwd()
         print(f"[AVISO] Caminho em lineEdit_base_dados não é válido, usando diretório atual: '{base_dir}'")
@@ -941,7 +942,7 @@ def conectar_materias_primas_ui(main_ui):
 
     def abrir_excel():
 
-        base_dir = ui.lineEdit_base_dados.text().strip()
+        base_dir = obter_diretorio_base(ui.lineEdit_base_dados.text())
         if not base_dir or not os.path.isdir(base_dir):
             base_dir = os.getcwd()
         excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")

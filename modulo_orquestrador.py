@@ -56,7 +56,7 @@ from modulo_componentes_associados import processar_qt_und_associado_para_linha 
 
 
 # Funções auxiliares
-from utils import safe_item_text, set_item # Para ler células de forma segura
+from utils import safe_item_text, set_item, obter_diretorio_base # Para ler células de forma segura
 
 # --- Constantes de Índices das Colunas (duplicadas por segurança/clareza) ---
 # Estas constantes definem a estrutura da tabela para este módulo.
@@ -188,7 +188,7 @@ def atualizar_tudo(ui):
             df_excel_cp = None
 
             # Caminho base da pasta dos ficheiros Excel, selecionada pelo utilizador
-            caminho_base = ui.lineEdit_base_dados.text().strip()
+            caminho_base = obter_diretorio_base(ui.lineEdit_base_dados.text())
             # Ficheiro Excel TAB_DEF_PECAS.XLSX deve estar dentro desta pasta
             excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
             print(f"[DEBUG] Caminho do ficheiro Excel: {excel_file}")  # Mostra no terminal/console

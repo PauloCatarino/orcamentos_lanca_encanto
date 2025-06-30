@@ -28,6 +28,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
 import xlsxwriter
 from db_connection import obter_cursor
+from utils import obter_diretorio_base # importa se estiver noutro ficheiro
 
 from orcamentos import _gerar_nome_pasta_orcamento # importa se estiver noutro ficheiro
 from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resumos?    
@@ -551,8 +552,8 @@ def on_gerar_relatorio_consumos_clicked(ui):
     caminho_completo_excel = os.path.join(pasta_orcamento, nome_ficheiro_excel)
 
     # 3. Obter o caminho do modelo Excel a partir do campo de configuração
-    pasta_modelos = ui.lineEdit_base_dados.text().strip()
-    nome_modelo = "Resumo_custos_modelo.xlsx"
+    pasta_modelos = obter_diretorio_base(ui.lineEdit_base_dados.text())
+    nome_modelo = "MODELO_Resumo_Custos.xlsx"
     caminho_modelo = os.path.join(pasta_modelos, nome_modelo)
 
     if not os.path.exists(caminho_modelo):

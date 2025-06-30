@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from PyQt5.QtWidgets import QMessageBox, QListWidgetItem, QAbstractItemView
 from PyQt5.QtCore import Qt, QCoreApplication
+from utils import obter_diretorio_base
 
 #imagem-> menu_grupos_pecas.png
 
@@ -30,7 +31,7 @@ def atualizar_grupos_pecas(ui):
       "acabamentos"    -> ui.listWidget_acabamentos_4
     """
      # 1) Extrair a pasta do caminho do .db
-    caminho_base = ui.lineEdit_base_dados.text().strip()
+    caminho_base = obter_diretorio_base(ui.lineEdit_base_dados.text()) # Obtém o diretório base a partir do lineEdit
     
     # 2) Montar caminho do Excel
     excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
