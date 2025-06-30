@@ -10,7 +10,8 @@ POOL_CONFIG = {
     "pool_name": "orcamentos_pool",
     "pool_size": 10,  # Número de conexões mantidas abertas e prontas
     # 'pool_reset_session': True, # Opcional: Garante estado limpo da sessão
-    "host": "localhost",
+    #"host": "localhost",# # Use 'localhost' ou o IP do servidor MySQL
+    "host": "192.168.5.101",
     "user": "orcamentos_le",
     "password": "admin",
     "database": "orcamentos",

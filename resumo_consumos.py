@@ -334,9 +334,7 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     orcamentos = carregar_tabela("orcamentos")
     orcamento_items = carregar_tabela("orcamento_items")
     print(f"--- Linhas carregadas | Peças: {len(pecas)}, Orçamentos: {len(orcamentos)}, Itens: {len(orcamento_items)}")
-    # Agora sim podes inspecionar as colunas
-    print("Colunas disponíveis em orcamentos:", orcamentos.columns)
-
+    
     num_orc_f = str(num_orc).strip()
     ver_f = str(versao).strip().zfill(2)
 
