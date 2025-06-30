@@ -374,6 +374,22 @@ def inserir_linha_orcamento(ui):
     try:
         # Usa o gestor de contexto
         with obter_cursor() as cursor:
+            # Verifica se já existe um orçamento com o mesmo Ano, Nº e Versão
+            check_query = (
+                "SELECT COUNT(*) FROM orcamentos "
+                "WHERE ano=%s AND num_orcamento=%s AND versao=%s"
+            )
+            cursor.execute(check_query, (ano, num_orcamento, versao))
+            existe = cursor.fetchone()[0]
+            if existe:
+                QMessageBox.warning(
+                    None,
+                    "Erro",
+                    "Não é possível criar novo orçamento porque já existe um "
+                    "orcamento com o mesmo Ano, Nº Orçamento e Versão."
+                )
+                return
+
             insert_query = """
                 INSERT INTO orcamentos (
                     id_cliente, utilizador, ano, num_orcamento, versao, nome_cliente, status,
