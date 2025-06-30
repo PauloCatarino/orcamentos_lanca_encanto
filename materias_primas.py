@@ -524,19 +524,11 @@ def atualizar_dados_de_excel(ui):
       - DESC1_PLUS e DESC2_MINUS: obrigatoriamente inteiros entre 0 e 100.
       - DESP: pode ser decimal.
     """
-    base_dir = ""
-    try:
         # Tenta obter o diretório a partir do lineEdit
-        base_dir_widget = ui.lineEdit_base_dados.text()
-        if base_dir_widget and os.path.isdir(os.path.dirname(base_dir_widget)):
-             base_dir = os.path.dirname(base_dir_widget)
-        else: # Se o lineEdit não tiver um caminho válido, usa o diretório atual como fallback
-             base_dir = os.getcwd()
-             print(f"Aviso: Usando diretório atual '{base_dir}' pois o caminho em lineEdit_base_dados não é válido.")
-    except Exception:
-         base_dir = os.getcwd() # Fallback final
-         print(f"Aviso: Usando diretório atual '{base_dir}' devido a erro ao processar lineEdit_base_dados.")
-
+    base_dir = ui.lineEdit_base_dados.text().strip()
+    if not base_dir or not os.path.isdir(base_dir):
+        base_dir = os.getcwd()
+        print(f"[AVISO] Caminho em lineEdit_base_dados não é válido, usando diretório atual: '{base_dir}'")
 
     excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")
     if not os.path.exists(excel_path):
@@ -946,9 +938,14 @@ def conectar_materias_primas_ui(main_ui):
     # Botão para abrir diretamente o Excel para utilizador modificar no excel, so depois passa para tabela materias primas
     btn_abrir = QPushButton("Abrir Excel", ui.groupBox_materias_config)
     btn_abrir.setGeometry(830, 30, 221, 31)
+
     def abrir_excel():
-        base_dir = os.path.dirname(ui.lineEdit_base_dados.text()) if ui.lineEdit_base_dados.text() else os.getcwd()
+
+        base_dir = ui.lineEdit_base_dados.text().strip()
+        if not base_dir or not os.path.isdir(base_dir):
+            base_dir = os.getcwd()
         excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")
+
         if not os.path.exists(excel_path):
             QMessageBox.warning(None, "Erro", f"Ficheiro Excel não encontrado:\n{excel_path}")
             return
