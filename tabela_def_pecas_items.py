@@ -28,8 +28,8 @@ Para que o delegate do ComboBox em "Def_Peca" funcione, o grupo de origem do ite
 """
 
 from utils import set_item  # (Já incluído na importação de utils no topo)
-from utils import safe_item_text
-from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction, QToolTip
+from utils import safe_item_text, obter_diretorio_base
+from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction, QToolTip, QApplication
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
 from PyQt5.QtGui import QColor, QPen
 from PyQt5 import QtGui
@@ -1189,7 +1189,7 @@ def inserir_componentes_associados_para_linha(ui, linha_principal):
 
     # Caminho do Excel
     # Corrigir o caminho do ficheiro Excel
-    caminho_base = ui.lineEdit_base_dados.text().strip()
+    caminho_base = obter_diretorio_base(ui.lineEdit_base_dados.text())
     excel_file = os.path.join(caminho_base, "TAB_DEF_PECAS.XLSX")
     print(f"[DEBUG - calculos_custos] Caminho do ficheiro Excel: {excel_file}")
     try:

@@ -39,6 +39,21 @@ VARIAVEIS_VALIDAS = [
 ]
 original_pliq_values = {}
 
+def obter_diretorio_base(caminho: str) -> str:
+    """Retorna um diretório válido a partir de um caminho de entrada.
+
+    Caso o caminho aponte para um ficheiro (por exemplo, ``orcamentos.db``),
+    devolve o diretório onde esse ficheiro se encontra. Isto permite que a
+    aplicação funcione quer o utilizador introduza apenas a pasta, quer o
+    caminho completo para o ficheiro de base de dados.
+    """
+    caminho = (caminho or "").strip()
+    if not caminho:
+        return ""
+    if os.path.isdir(caminho):
+        return caminho
+    return os.path.dirname(caminho)
+
 
 def gerar_id_orcamento():
     """
