@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "144 Commit"
+git commit -m "145 Commit"
 git push origin main
 
 
