@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "143 Commit"
+git commit -m "144 Commit"
 git push origin main
 
 
@@ -50,6 +50,9 @@ ______________________________//________________________
 import modulo_dados_definicoes
 # Configuração visual e eventos para a tabela 'tab_modulo_medidas'
 from tab_modulo_medidas_formatacao import setup_tab_modulo_medidas
+import sqlalchemy
+import pymysql
+import pandas
 import sys
 import os
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QHBoxLayout, QPushButton, QComboBox, QDialog, QTableWidgetItem, QVBoxLayout
