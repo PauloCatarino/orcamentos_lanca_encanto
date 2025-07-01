@@ -60,8 +60,9 @@ from db_connection import obter_cursor
 # Importa a função para abrir o diálogo de seleção de material (necessário para o botão "Escolher")
 # Importação feita localmente na função escolher_material_item para evitar dependência circular
 
-# Variável global para armazenar dados de linhas copiadas na tab_def_pecas
-_copied_rows_def_pecas = []
+
+_copied_rows_def_pecas = [] # Variável global para armazenar dados de linhas copiadas na tab_def_pecas
+_last_gravar_modulo_row = None  # Usado para seleção com Shift na coluna Gravar_Modulo
 
 # Larguras padrão para cada coluna da tab_def_pecas
 DEFAULT_COLUMN_WIDTHS = [
@@ -184,6 +185,7 @@ IDX_COMP = 6   # Coluna para COMP (comprimento, etc.) - Fórmula
 IDX_LARG = 7   # Coluna para LARG (largura) - Fórmula
 IDX_ESP = 8   # Coluna para ESP (espesura) - Fórmula
 IDX_BLK = 12  # Checkbox BLK - Bloqueia atualização automática
+IDX_GRAVAR_MODULO = 53  # Checkbox Gravar_Modulo
 
 ##############################################
 # Parte 1: Função para inserir peças na tabela
@@ -1404,6 +1406,27 @@ def on_item_changed_def_pecas(item):
         row = item.row()
         col = item.column()
         texto_atual = item.text()  # Texto como está na célula agora
+
+        global _last_gravar_modulo_row
+        if col == IDX_GRAVAR_MODULO:
+            state = item.checkState()
+            modifiers = QApplication.keyboardModifiers()
+            if modifiers & Qt.ShiftModifier and _last_gravar_modulo_row is not None:
+                start = min(_last_gravar_modulo_row, row)
+                end = max(_last_gravar_modulo_row, row)
+                table.blockSignals(True)
+                try:
+                    for r in range(start, end + 1):
+                        chk_item = table.item(r, IDX_GRAVAR_MODULO)
+                        if chk_item is None:
+                            chk_item = QTableWidgetItem()
+                            chk_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                            table.setItem(r, IDX_GRAVAR_MODULO, chk_item)
+                        chk_item.setCheckState(state)
+                finally:
+                    table.blockSignals(False)
+            _last_gravar_modulo_row = row
+            return
 
         colunas_para_formatar = {
             IDX_PTAB: "moeda",
