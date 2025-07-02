@@ -16,6 +16,7 @@ import mysql.connector # Adicionado para erros específicos
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
 # Importa a função de conexão MySQL do módulo de conexão (certifique-se de que db_connection.py esteja configurado)
 from db_connection import obter_cursor
+from maquinas_orcamento import criar_tabela_maquinas_orcamento
 
 # Variável global para armazenar o caminho da base de dados (este campo pode continuar sendo usado para configuração dos caminhos)
 #db_path = ""
@@ -285,7 +286,8 @@ def configurar_configuracoes_ui(ui):
     # --- Inicialização ---
     # 1. Garante que a tabela existe (e insere defaults se for nova)
     criar_tabela_configuracoes()  # Já usa obter_cursor
-    criar_tabela_maquinas_producao()
+    criar_tabela_maquinas_producao() # Garante que a tabela de máquinas de produção existe
+    criar_tabela_maquinas_orcamento() # Garante que a tabela de máquinas de orçamento existe
     # 2. Carrega os dados da BD para a UI
     carregar_ui()  # Esta função interna foi refatorada para usar obter_cursor
     carregar_dados_maquinas(ui)

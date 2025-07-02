@@ -70,8 +70,9 @@ import tabela_def_pecas_items
 
 # Importar o módulo para as funções de carregamento (embora sejam chamadas indiretamente)
 import modulo_dados_definicoes
-from modulo_dados_definicoes import salvar_dados_def_pecas
-from modulo_calculos_custos import aplicar_valores_maquinas
+from modulo_dados_definicoes import salvar_dados_def_pecas # Importa a função para salvar os dados de definições de peças
+from modulo_calculos_custos import aplicar_valores_maquinas # Importa a função para aplicar os valores das máquinas de produção
+from maquinas_orcamento import registrar_valores_maquinas_orcamento # Garante que os valores das máquinas de produção são registrados no orçamento
 
 
 # Importa a função para configurar os Dados Items (tabela de materiais do item)
@@ -1968,17 +1969,42 @@ def atualizar_custos_e_precos_itens(ui, force_global_margin_update=False):
     # Isso requer uma pequena mudança no `configurar_orcamento_ui`.
 
     
-def on_modo_producao_changed(ui, modo):
-    """Alterna entre produção STD e Série, recalculando custos."""
+def on_modo_producao_changed(main_window, modo):
+    """Alterna entre produção STD e Série aplicando aos todos os itens."""
+    ui = main_window.ui
     if modo == "STD":
         ui.checkBox_producao_serie.setChecked(False)
         ui.checkBox_producao_std.setChecked(True)
     else:
         ui.checkBox_producao_std.setChecked(False)
         ui.checkBox_producao_serie.setChecked(True)
+
     aplicar_valores_maquinas(modo)
-    atualizar_tudo(ui)
-    salvar_dados_def_pecas(ui)
+
+    tree = ui.tab_artigos_11
+    total = tree.topLevelItemCount()
+    for idx in range(total):
+        item = tree.topLevelItem(idx)
+        if not item:
+            continue
+        ui.lineEdit_item_orcamento.setText(item.text(0))
+        ui.lineEdit_codigo_orcamento.setText(item.text(1))
+        ui.plainTextEdit_descricao_orcamento.setPlainText(item.text(2))
+        ui.lineEdit_altura_orcamento.setText(item.text(3))
+        ui.lineEdit_largura_orcamento.setText(item.text(4))
+        ui.lineEdit_profundidade_orcamento.setText(item.text(5))
+        ui.lineEdit_und_orcamento.setText(item.text(6))
+        ui.lineEdit_qt_orcamento.setText(item.text(7))
+        main_window.navegacao_index = idx
+
+        acao_orcamentar_items(main_window)
+        salvar_dados_def_pecas(ui)
+        registrar_valores_maquinas_orcamento(
+            ui.lineEdit_num_orcamento.text().strip(),
+            ui.lineEdit_versao_orcamento.text().strip(),
+            item.text(0)
+        )
+
     atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
     calcular_preco_final_orcamento(ui)
 
