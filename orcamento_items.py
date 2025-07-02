@@ -2000,7 +2000,11 @@ def on_modo_producao_changed(main_window, modo):
         ui.checkBox_producao_std.setChecked(False)
         ui.checkBox_producao_serie.setChecked(True)
 
-    aplicar_valores_maquinas(modo)
+    aplicar_valores_maquinas(
+        modo,
+        ui.lineEdit_num_orcamento.text().strip(),
+        ui.lineEdit_versao_orcamento.text().strip(),
+    )
 
     tree = ui.tab_artigos_11
     snapshot = []
