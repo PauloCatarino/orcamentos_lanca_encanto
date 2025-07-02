@@ -1,6 +1,34 @@
 from PyQt5.QtWidgets import QTableWidgetItem
 from db_connection import obter_cursor
 
+ORDER_DESCRICAO = [
+    "VALOR_SECCIONADORA",
+    "VALOR_ORLADORA",
+    "CNC_PRECO_PECA_BAIXO",
+    "CNC_PRECO_PECA_MEDIO",
+    "CNC_PRECO_PECA_ALTO",
+    "VALOR_ABD",
+    "EUROS_HORA_CNC",
+    "EUROS_HORA_PRENSA",
+    "EUROS_HORA_ESQUAD",
+    "EUROS_EMBALAGEM_M3",
+    "EUROS_HORA_MO",
+]
+
+
+def _ordenar_linhas(linhas):
+    """Ordena as linhas segundo ``ORDER_DESCRICAO``."""
+    mapa = {nome: (nome, std, serie, resumo) for nome, std, serie, resumo in linhas}
+    ordenadas = [
+        mapa[nome]
+        for nome in ORDER_DESCRICAO
+        if nome in mapa
+    ]
+    for item in linhas:
+        if item[0] not in ORDER_DESCRICAO:
+            ordenadas.append(item)
+    return ordenadas
+
 
 def criar_tabela_maquinas_orcamento():
     """Cria a tabela `orcamento_maquinas` se ainda não existir."""
@@ -54,6 +82,8 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
                     for n, vs, vr, desc in cursor.fetchall()
                 ]
 
+            linhas = _ordenar_linhas(linhas)
+
             for nome, val_std, val_ser, resumo in linhas:
                 cursor.execute(
                     """
@@ -99,6 +129,11 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                     (num_orc, ver_orc),
                 )
                 linhas = cursor.fetchall()
+
+            linhas = _ordenar_linhas([
+                (n, float(std), float(serie), res if res else "")
+                for n, std, serie, res in linhas
+            ])
 
             for nome, val_std, val_ser, resumo in linhas:
                 cursor.execute(
