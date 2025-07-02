@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "146 Commit"
+git commit -m "147 Commit"
 git push origin main
 
 
@@ -74,6 +74,7 @@ from orcamentos import configurar_orcamentos_ui
 # Função para navegar com setas up/down entre os itens do orçamento dentro do separador 'Orcamento de Items'
 from orcamento_items import configurar_orcamento_ui, navegar_item_orcamento, atualizar_custos_e_precos_itens, calcular_preco_final_orcamento
 from configuracoes import configurar_configuracoes_ui
+from modulo_calculos_custos import aplicar_valores_maquinas
 from materias_primas import conectar_materias_primas_ui
 
 from dados_gerais_mp import configurar_botoes_dados_gerais
@@ -201,6 +202,7 @@ class MainApp(QMainWindow):
         # Separador Configurações
         try:
             configurar_configuracoes_ui(self.ui)
+            aplicar_valores_maquinas("STD")
             # print("[INFO] Módulo Configurações conectado.")
         except Exception as e:
             print(f"[ERRO] Falha ao conectar módulo Configurações: {e}")

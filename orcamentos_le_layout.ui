@@ -109,6 +109,55 @@
          <string>Atualizar Configurações</string>
         </property>
        </widget>
+       <widget class="QTableWidget" name="tableWidget_maquinas">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>90</y>
+          <width>731</width>
+          <height>411</height>
+         </rect>
+        </property>
+        <property name="rowCount">
+         <number>0</number>
+        </property>
+        <property name="columnCount">
+         <number>4</number>
+        </property>
+        <column>
+         <property name="text">
+          <string>Descrição Equipamento</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Produção STD</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Produção Série</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Resumo da Descrição</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QPushButton" name="pushButton_gravar_producao">
+        <property name="geometry">
+         <rect>
+          <x>850</x>
+          <y>90</y>
+          <width>201</width>
+          <height>41</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Gravar/Atualizar dados Producao</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QWidget" name="tab_relatorios">
        <property name="title" stdset="0">
@@ -2583,7 +2632,7 @@
          <rect>
           <x>1540</x>
           <y>60</y>
-          <width>521</width>
+          <width>621</width>
           <height>141</height>
          </rect>
         </property>
@@ -2669,6 +2718,23 @@
            </property>
            <property name="text">
             <string>Atualiza Preco Items Orcamento</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <widget class="QCheckBox" name="checkBox_producao_std">
+           <property name="text">
+            <string>Producao STD</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <widget class="QCheckBox" name="checkBox_producao_serie">
+           <property name="text">
+            <string>Producao Serie</string>
            </property>
           </widget>
          </item>
@@ -4881,8 +4947,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5091,8 +5157,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -6494,6 +6560,8 @@
   <tabstop>lineEdit_nome_cliente_simplex</tabstop>
   <tabstop>lineEdit_preco</tabstop>
   <tabstop>pushButton_atualiza_configuracoes</tabstop>
+  <tabstop>tableWidget_maquinas</tabstop>
+  <tabstop>pushButton_gravar_producao</tabstop>
   <tabstop>lineEdit_email_cliente</tabstop>
   <tabstop>lineEdit_ref_cliente_2</tabstop>
   <tabstop>lineEdit_obra_2</tabstop>

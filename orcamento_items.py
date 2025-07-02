@@ -70,6 +70,8 @@ import tabela_def_pecas_items
 
 # Importar o módulo para as funções de carregamento (embora sejam chamadas indiretamente)
 import modulo_dados_definicoes
+from modulo_dados_definicoes import salvar_dados_def_pecas
+from modulo_calculos_custos import aplicar_valores_maquinas
 
 
 # Importa a função para configurar os Dados Items (tabela de materiais do item)
@@ -257,6 +259,9 @@ def configurar_orcamento_ui(main_window):
     # Este botão recalcula o preço final do orçamento, e pode ajustar a margem.
     ui.pushButton_atualiza_preco_final.clicked.connect(
         lambda: calcular_preco_final_orcamento(ui))
+
+    ui.checkBox_producao_std.stateChanged.connect(lambda: on_modo_producao_changed(ui, "STD") if ui.checkBox_producao_std.isChecked() else None)
+    ui.checkBox_producao_serie.stateChanged.connect(lambda: on_modo_producao_changed(ui, "SERIE") if ui.checkBox_producao_serie.isChecked() else None)
 
     # Configuração da tabela "tableWidget_artigos": 24 colunas (coluna 0 = id_item, oculto)
     ui.tableWidget_artigos.setColumnCount(24)
@@ -1962,7 +1967,20 @@ def atualizar_custos_e_precos_itens(ui, force_global_margin_update=False):
     # O `pushButton_atualiza_preco_items` chama `atualizar_custos_e_precos_itens(force_global_margin_update=False)` E DEPOIS chama `calcular_preco_final_orcamento(ui)`
     # Isso requer uma pequena mudança no `configurar_orcamento_ui`.
 
-    print("[INFO] Atualização de custos e preços dos itens concluída.")
+    
+def on_modo_producao_changed(ui, modo):
+    """Alterna entre produção STD e Série, recalculando custos."""
+    if modo == "STD":
+        ui.checkBox_producao_serie.setChecked(False)
+        ui.checkBox_producao_std.setChecked(True)
+    else:
+        ui.checkBox_producao_std.setChecked(False)
+        ui.checkBox_producao_serie.setChecked(True)
+    aplicar_valores_maquinas(modo)
+    atualizar_tudo(ui)
+    salvar_dados_def_pecas(ui)
+    atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+    calcular_preco_final_orcamento(ui)
 
 # MODIFICADO: Lógica para "Atingir Objetivo de Preço Final"
 
