@@ -148,7 +148,7 @@
        <widget class="QPushButton" name="pushButton_gravar_producao">
         <property name="geometry">
          <rect>
-          <x>10</x>
+          <x>510</x>
           <y>65</y>
           <width>201</width>
           <height>41</height>

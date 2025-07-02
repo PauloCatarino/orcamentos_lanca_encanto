@@ -57,7 +57,7 @@ class Ui_MainWindow(object):
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget_maquinas.setHorizontalHeaderItem(3, item)
         self.pushButton_gravar_producao = QtWidgets.QPushButton(self.tab_configuracoes)
-        self.pushButton_gravar_producao.setGeometry(QtCore.QRect(10, 65, 201, 41))
+        self.pushButton_gravar_producao.setGeometry(QtCore.QRect(510, 65, 201, 41))
         self.pushButton_gravar_producao.setObjectName("pushButton_gravar_producao")
         self.tableWidget_orcamento_maquinas = QtWidgets.QTableWidget(self.tab_configuracoes)
         self.tableWidget_orcamento_maquinas.setGeometry(QtCore.QRect(510, 110, 661, 411))
