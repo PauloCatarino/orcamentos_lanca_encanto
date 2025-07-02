@@ -16,7 +16,7 @@ import mysql.connector # Adicionado para erros específicos
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
 # Importa a função de conexão MySQL do módulo de conexão (certifique-se de que db_connection.py esteja configurado)
 from db_connection import obter_cursor
-from maquinas_orcamento import criar_tabela_maquinas_orcamento
+from maquinas_orcamento import criar_tabela_maquinas_orcamento, salvar_tabela_orcamento_maquinas
 
 # Variável global para armazenar o caminho da base de dados (este campo pode continuar sendo usado para configuração dos caminhos)
 #db_path = ""
@@ -294,6 +294,6 @@ def configurar_configuracoes_ui(ui):
 
     # 3. Conecta os botões
     ui.pushButton_atualiza_configuracoes.clicked.connect(atualizar_configuracoes)
-    ui.pushButton_gravar_producao.clicked.connect(lambda: salvar_dados_maquinas(ui))
+    ui.pushButton_gravar_producao.clicked.connect(lambda: salvar_tabela_orcamento_maquinas(ui)) # Garante que os valores de produção são salvos no orçamento
 
     #print("[INFO] UI de Configurações configurada.")

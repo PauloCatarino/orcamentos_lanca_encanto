@@ -1,3 +1,4 @@
+from PyQt5.QtWidgets import QTableWidgetItem
 from db_connection import obter_cursor
 
 
@@ -22,14 +23,28 @@ def criar_tabela_maquinas_orcamento():
         print(f"Erro ao criar tabela orcamento_maquinas: {e}")
 
 
-def registrar_valores_maquinas_orcamento(num_orc, ver_orc):
-    """Regista os valores atuais das máquinas para o orçamento."""
+def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
+    """Regista na tabela os valores das máquinas para o orçamento.
+
+    Se ``ui`` for fornecida, lê os dados de ``ui.tableWidget_orcamento_maquinas``;
+    caso contrário, utiliza os valores atuais de ``maquinas_producao``.
+    """
     try:
         with obter_cursor() as cursor:
-            cursor.execute(
-                "SELECT nome_variavel, valor_std, valor_serie FROM maquinas_producao"
-            )
-            linhas = cursor.fetchall()
+            linhas = []
+            if ui and hasattr(ui, "tableWidget_orcamento_maquinas"):
+                tbl = ui.tableWidget_orcamento_maquinas
+                for row in range(tbl.rowCount()):
+                    nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
+                    std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
+                    serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
+                    linhas.append((nome, float(std), float(serie)))
+            else:
+                cursor.execute(
+                    "SELECT nome_variavel, valor_std, valor_serie FROM maquinas_producao"
+                )
+                linhas = [(n, float(vs), float(vr)) for n, vs, vr in cursor.fetchall()]
+
             for nome, val_std, val_ser in linhas:
                 cursor.execute(
                     """
@@ -46,8 +61,12 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc):
         print(f"Erro ao registrar valores de máquinas: {e}")
 
 
-def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc):
-    """Carrega valores já registados ou inicializa com os padrões."""
+def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
+    """Carrega valores do orçamento ou cria registros padrão.
+
+    Se ``ui`` for fornecida e possuir ``tableWidget_orcamento_maquinas``,
+    também preenche essa tabela com os valores carregados ou iniciais.
+    """
     try:
         with obter_cursor() as cursor:
             cursor.execute(
@@ -59,19 +78,70 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc):
                 (num_orc, ver_orc),
             )
             linhas = cursor.fetchall()
-            if linhas:
-                for nome, val_std, val_ser in linhas:
-                    cursor.execute(
-                        """
-                        INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie)
-                        VALUES (%s, %s, %s)
-                        ON DUPLICATE KEY UPDATE
-                            valor_std=VALUES(valor_std),
-                            valor_serie=VALUES(valor_serie)
-                        """,
-                        (nome, val_std, val_ser),
-                    )
-            else:
+            if not linhas:
                 registrar_valores_maquinas_orcamento(num_orc, ver_orc)
+                cursor.execute(
+                    """
+                    SELECT descricao_equipamento, valor_producao_std, valor_producao_serie
+                    FROM orcamento_maquinas
+                    WHERE numero_orcamento=%s AND versao_orcamento=%s
+                    """,
+                    (num_orc, ver_orc),
+                )
+                linhas = cursor.fetchall()
+
+            for nome, val_std, val_ser in linhas:
+                cursor.execute(
+                    """
+                    INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        valor_std=VALUES(valor_std),
+                        valor_serie=VALUES(valor_serie)
+                    """,
+                    (nome, val_std, val_ser),
+                )
+
+        if ui and hasattr(ui, "tableWidget_orcamento_maquinas"):
+            tbl = ui.tableWidget_orcamento_maquinas
+            tbl.setRowCount(len(linhas))
+            for r, (nome, val_std, val_ser) in enumerate(linhas):
+                tbl.setItem(r, 0, QTableWidgetItem(str(nome)))
+                tbl.setItem(r, 1, QTableWidgetItem(str(val_std)))
+                tbl.setItem(r, 2, QTableWidgetItem(str(val_ser)))
+                tbl.setItem(r, 3, QTableWidgetItem(num_orc))
+                tbl.setItem(r, 4, QTableWidgetItem(ver_orc))
     except Exception as e:
         print(f"Erro ao carregar valores de máquinas do orçamento: {e}")
+
+
+def salvar_tabela_orcamento_maquinas(ui):
+    """Guarda no banco de dados os valores editados na tabela do orçamento."""
+    try:
+        tbl = ui.tableWidget_orcamento_maquinas
+    except AttributeError:
+        print("Tabela de máquinas do orçamento não encontrada na UI.")
+        return False
+    try:
+        with obter_cursor() as cursor:
+            for row in range(tbl.rowCount()):
+                nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
+                std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
+                serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
+                num_orc = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                ver_orc = tbl.item(row, 4).text() if tbl.item(row, 4) else ""
+                cursor.execute(
+                    """
+                    INSERT INTO orcamento_maquinas
+                        (numero_orcamento, versao_orcamento, descricao_equipamento, valor_producao_std, valor_producao_serie)
+                    VALUES (%s,%s,%s,%s,%s)
+                    ON DUPLICATE KEY UPDATE
+                        valor_producao_std=VALUES(valor_producao_std),
+                        valor_producao_serie=VALUES(valor_producao_serie)
+                    """,
+                    (num_orc, ver_orc, nome, float(std), float(serie)),
+                )
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar dados de máquinas do orçamento: {e}")
+        return False
