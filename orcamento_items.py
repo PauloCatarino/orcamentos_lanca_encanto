@@ -897,6 +897,10 @@ def abrir_orcamento(main_window):
         # NOVO: Após carregar todos os itens do orçamento, atualiza os custos e preços para todos
         # Não força a margem global ao abrir um orçamento, mantém as margens individuais se existirem.
         atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+        registrar_valores_maquinas_orcamento(
+            ui.lineEdit_num_orcamento.text().strip(),
+            ui.lineEdit_versao_orcamento.text().strip(),
+        )
 
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao abrir orçamento: {err}")
@@ -1993,31 +1997,40 @@ def on_modo_producao_changed(main_window, modo):
     aplicar_valores_maquinas(modo)
 
     tree = ui.tab_artigos_11
-    total = tree.topLevelItemCount()
-    for idx in range(total):
+    snapshot = []
+    for idx in range(tree.topLevelItemCount()):
         item = tree.topLevelItem(idx)
         if not item:
             continue
-        ui.lineEdit_item_orcamento.setText(item.text(0))
-        ui.lineEdit_codigo_orcamento.setText(item.text(1))
-        ui.plainTextEdit_descricao_orcamento.setPlainText(item.text(2))
-        ui.lineEdit_altura_orcamento.setText(item.text(3))
-        ui.lineEdit_largura_orcamento.setText(item.text(4))
-        ui.lineEdit_profundidade_orcamento.setText(item.text(5))
-        ui.lineEdit_und_orcamento.setText(item.text(6))
-        ui.lineEdit_qt_orcamento.setText(item.text(7))
+        snapshot.append([
+            item.text(0), item.text(1), item.text(2), item.text(3),
+            item.text(4), item.text(5), item.text(6), item.text(7)
+        ])
+
+    for idx, data in enumerate(snapshot):
+        (
+            item_num, codigo, descricao, altura,
+            largura, profundidade, und, qt
+        ) = data
+        ui.lineEdit_item_orcamento.setText(item_num)
+        ui.lineEdit_codigo_orcamento.setText(codigo)
+        ui.plainTextEdit_descricao_orcamento.setPlainText(descricao)
+        ui.lineEdit_altura_orcamento.setText(altura)
+        ui.lineEdit_largura_orcamento.setText(largura)
+        ui.lineEdit_profundidade_orcamento.setText(profundidade)
+        ui.lineEdit_und_orcamento.setText(und)
+        ui.lineEdit_qt_orcamento.setText(qt)
         if main_window is not None:
             main_window.navegacao_index = idx
             acao_orcamentar_items(main_window)
         else:
-            # Mantém compatibilidade se não houver referência à janela principal
             acao_orcamentar_items(ui)
         salvar_dados_def_pecas(ui)
-        registrar_valores_maquinas_orcamento(
-            ui.lineEdit_num_orcamento.text().strip(),
-            ui.lineEdit_versao_orcamento.text().strip(),
-            item.text(0)
-        )
+
+    registrar_valores_maquinas_orcamento(
+        ui.lineEdit_num_orcamento.text().strip(),
+        ui.lineEdit_versao_orcamento.text().strip(),
+    )
 
     atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
     calcular_preco_final_orcamento(ui)
