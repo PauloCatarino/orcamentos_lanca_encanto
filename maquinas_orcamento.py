@@ -67,11 +67,18 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
             linhas = []
             if ui and hasattr(ui, "tableWidget_orcamento_maquinas"):
                 tbl = ui.tableWidget_orcamento_maquinas
+                # Usa a descrição da BD caso a célula de resumo esteja vazia
+                cursor.execute(
+                    "SELECT nome_variavel, descricao FROM maquinas_producao"
+                )
+                desc_map = dict(cursor.fetchall())
                 for row in range(tbl.rowCount()):
                     nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
                     std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
                     serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
                     resumo = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                    if not resumo:
+                        resumo = desc_map.get(nome, "")
                     linhas.append((nome, float(std), float(serie), resumo))
             else:
                 cursor.execute(
@@ -130,8 +137,20 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 )
                 linhas = cursor.fetchall()
 
+            desc_map = {}
+            if any(not res for _, _, _, res in linhas):
+                cursor.execute(
+                    "SELECT nome_variavel, descricao FROM maquinas_producao"
+                )
+                desc_map = dict(cursor.fetchall())
+
             linhas = _ordenar_linhas([
-                (n, float(std), float(serie), res if res else "")
+                (
+                    n,
+                    float(std),
+                    float(serie),
+                    res if res else desc_map.get(n, ""),
+                )
                 for n, std, serie, res in linhas
             ])
 
@@ -171,11 +190,18 @@ def salvar_tabela_orcamento_maquinas(ui):
         return False
     try:
         with obter_cursor() as cursor:
+            cursor.execute(
+                "SELECT nome_variavel, descricao FROM maquinas_producao"
+            )
+            desc_map = dict(cursor.fetchall())
+
             for row in range(tbl.rowCount()):
                 nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
                 std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
                 serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
                 resumo = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                if not resumo:
+                    resumo = desc_map.get(nome, "")
                 num_orc = tbl.item(row, 4).text() if tbl.item(row, 4) else ""
                 ver_orc = tbl.item(row, 5).text() if tbl.item(row, 5) else ""
                 cursor.execute(

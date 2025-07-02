@@ -16,7 +16,7 @@ import mysql.connector # Adicionado para erros específicos
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
 # Importa a função de conexão MySQL do módulo de conexão (certifique-se de que db_connection.py esteja configurado)
 from db_connection import obter_cursor
-from maquinas_orcamento import criar_tabela_maquinas_orcamento, salvar_tabela_orcamento_maquinas
+from maquinas_orcamento import criar_tabela_maquinas_orcamento, salvar_tabela_orcamento_maquinas, _ordenar_linhas
 
 # Variável global para armazenar o caminho da base de dados (este campo pode continuar sendo usado para configuração dos caminhos)
 #db_path = ""
@@ -180,7 +180,7 @@ def carregar_dados_maquinas(ui):
             cursor.execute(
                 "SELECT nome_variavel, valor_std, valor_serie, descricao FROM maquinas_producao"
             )
-            linhas = cursor.fetchall()
+            linhas = _ordenar_linhas(cursor.fetchall())
         tbl = ui.tableWidget_maquinas
         tbl.setRowCount(len(linhas))
         for r, (nome, std, serie, desc) in enumerate(linhas):
