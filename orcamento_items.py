@@ -72,7 +72,7 @@ import tabela_def_pecas_items
 import modulo_dados_definicoes
 from modulo_dados_definicoes import salvar_dados_def_pecas # Importa a função para salvar os dados de definições de peças
 from modulo_calculos_custos import aplicar_valores_maquinas # Importa a função para aplicar os valores das máquinas de produção
-from maquinas_orcamento import registrar_valores_maquinas_orcamento # Garante que os valores das máquinas de produção são registrados no orçamento
+from maquinas_orcamento import registrar_valores_maquinas_orcamento, carregar_ou_inicializar_maquinas_orcamento # Garante que os valores das máquinas de produção são registrados no orçamento
 
 
 # Importa a função para configurar os Dados Items (tabela de materiais do item)
@@ -896,6 +896,10 @@ def abrir_orcamento(main_window):
         # print("Orçamento aberto e itens carregados.")
         # NOVO: Após carregar todos os itens do orçamento, atualiza os custos e preços para todos
         # Não força a margem global ao abrir um orçamento, mantém as margens individuais se existirem.
+        carregar_ou_inicializar_maquinas_orcamento(
+            ui.lineEdit_num_orcamento.text().strip(),
+            ui.lineEdit_versao_orcamento.text().strip(),
+        )
         atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
         registrar_valores_maquinas_orcamento(
             ui.lineEdit_num_orcamento.text().strip(),
