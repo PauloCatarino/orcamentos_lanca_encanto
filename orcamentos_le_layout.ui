@@ -114,7 +114,7 @@
          <rect>
           <x>10</x>
           <y>110</y>
-          <width>491</width>
+          <width>591</width>
           <height>411</height>
          </rect>
         </property>
@@ -148,7 +148,7 @@
        <widget class="QPushButton" name="pushButton_gravar_producao">
         <property name="geometry">
          <rect>
-          <x>510</x>
+          <x>610</x>
           <y>65</y>
           <width>201</width>
           <height>41</height>
@@ -161,9 +161,9 @@
        <widget class="QTableWidget" name="tableWidget_orcamento_maquinas">
         <property name="geometry">
          <rect>
-          <x>510</x>
+          <x>610</x>
           <y>110</y>
-          <width>661</width>
+          <width>751</width>
           <height>411</height>
          </rect>
         </property>
