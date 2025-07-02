@@ -1,6 +1,23 @@
 from PyQt5.QtWidgets import QTableWidgetItem
 from db_connection import obter_cursor
 
+# Resumo padrao das descrições por nome de variável. Utilizado para preencher
+# a coluna "Resumo da descrição" sempre que a base de dados não possuir um
+# valor definido (ou estiver em branco).
+RESUMO_DESCRICOES = {
+    "VALOR_SECCIONADORA": "€/ML para a máquina Seccionadora",
+    "VALOR_ORLADORA": "€/ML para a máquina Orladora",
+    "CNC_PRECO_PECA_BAIXO": "€/peça se AREA_M2_und ≤ 0.7",
+    "CNC_PRECO_PECA_MEDIO": "€/peça se 0.7 < AREA_M2_und < 1",
+    "CNC_PRECO_PECA_ALTO": "€/peça se AREA_M2_und ≥ 1",
+    "VALOR_ABD": "€/peça para a máquina ABD",
+    "EUROS_HORA_CNC": "€/hora para a máquina CNC",
+    "EUROS_HORA_PRENSA": "€/hora para a máquina Prensa",
+    "EUROS_HORA_ESQUAD": "€/hora para a máquina Esquadrejadora",
+    "EUROS_EMBALAGEM_M3": "€/M³ para Embalagem",
+    "EUROS_HORA_MO": "€/hora para Mão de Obra",
+}
+
 ORDER_DESCRICAO = [
     "VALOR_SECCIONADORA",
     "VALOR_ORLADORA",
@@ -18,7 +35,15 @@ ORDER_DESCRICAO = [
 
 def _ordenar_linhas(linhas):
     """Ordena as linhas segundo ``ORDER_DESCRICAO``."""
-    mapa = {nome: (nome, std, serie, resumo) for nome, std, serie, resumo in linhas}
+    mapa = {
+        nome: (
+            nome,
+            std,
+            serie,
+            resumo if resumo else RESUMO_DESCRICOES.get(nome, ""),
+        )
+        for nome, std, serie, resumo in linhas
+    }
     ordenadas = [
         mapa[nome]
         for nome in ORDER_DESCRICAO
@@ -71,7 +96,7 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 cursor.execute(
                     "SELECT nome_variavel, descricao FROM maquinas_producao"
                 )
-                desc_map = dict(cursor.fetchall())
+                desc_map = {**RESUMO_DESCRICOES, **dict(cursor.fetchall())}
                 for row in range(tbl.rowCount()):
                     nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
                     std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
@@ -85,7 +110,12 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
                     "SELECT nome_variavel, valor_std, valor_serie, descricao FROM maquinas_producao"
                 )
                 linhas = [
-                    (n, float(vs), float(vr), desc if desc else "")
+                    (
+                        n,
+                        float(vs),
+                        float(vr),
+                        desc if desc else RESUMO_DESCRICOES.get(n, ""),
+                    )
                     for n, vs, vr, desc in cursor.fetchall()
                 ]
 
@@ -137,19 +167,19 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 )
                 linhas = cursor.fetchall()
 
-            desc_map = {}
+            desc_map = {**RESUMO_DESCRICOES}
             if any(not res for _, _, _, res in linhas):
                 cursor.execute(
                     "SELECT nome_variavel, descricao FROM maquinas_producao"
                 )
-                desc_map = dict(cursor.fetchall())
+                desc_map.update(dict(cursor.fetchall()))
 
             linhas = _ordenar_linhas([
                 (
                     n,
                     float(std),
                     float(serie),
-                    res if res else desc_map.get(n, ""),
+                    res if res else desc_map.get(n, RESUMO_DESCRICOES.get(n, "")),
                 )
                 for n, std, serie, res in linhas
             ])
@@ -164,7 +194,7 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                         valor_serie=VALUES(valor_serie),
                         descricao=VALUES(descricao)
                     """,
-                    (nome, val_std, val_ser, resumo),
+                    (nome, val_std, val_ser, resumo if resumo else RESUMO_DESCRICOES.get(nome, "")),
                 )
 
         if ui and hasattr(ui, "tableWidget_orcamento_maquinas"):
@@ -193,7 +223,7 @@ def salvar_tabela_orcamento_maquinas(ui):
             cursor.execute(
                 "SELECT nome_variavel, descricao FROM maquinas_producao"
             )
-            desc_map = dict(cursor.fetchall())
+            desc_map = {**RESUMO_DESCRICOES, **dict(cursor.fetchall())}
 
             for row in range(tbl.rowCount()):
                 nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""

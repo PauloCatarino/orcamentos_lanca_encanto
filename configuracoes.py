@@ -16,7 +16,7 @@ import mysql.connector # Adicionado para erros específicos
 from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
 # Importa a função de conexão MySQL do módulo de conexão (certifique-se de que db_connection.py esteja configurado)
 from db_connection import obter_cursor
-from maquinas_orcamento import criar_tabela_maquinas_orcamento, salvar_tabela_orcamento_maquinas, _ordenar_linhas
+from maquinas_orcamento import criar_tabela_maquinas_orcamento, salvar_tabela_orcamento_maquinas, _ordenar_linhas, RESUMO_DESCRICOES
 
 # Variável global para armazenar o caminho da base de dados (este campo pode continuar sendo usado para configuração dos caminhos)
 #db_path = ""
@@ -153,17 +153,17 @@ def criar_tabela_maquinas_producao():
             cursor.execute("SELECT COUNT(*) FROM maquinas_producao")
             if cursor.fetchone()[0] == 0:
                 dados_padrao = [
-                    ("VALOR_SECCIONADORA", 1.0, 0.5, "€/ML para a máquina Seccionadora"),
-                    ("VALOR_ORLADORA", 0.70, 0.40, "€/ML para a máquina Orladora"),
-                    ("CNC_PRECO_PECA_BAIXO", 2.0, 1.5, "€/peça se AREA_M2_und ≤ 0.7"),
-                    ("CNC_PRECO_PECA_MEDIO", 2.5, 2.0, "€/peça se 0.7 < AREA_M2_und < 1"),
-                    ("CNC_PRECO_PECA_ALTO", 3.0, 2.5, "€/peça se AREA_M2_und ≥ 1"),
-                    ("VALOR_ABD", 0.80, 0.60, "€/peça para a máquina ABD"),
-                    ("EUROS_HORA_CNC", 60.0, 48.0, "€/hora para a máquina CNC"),
-                    ("EUROS_HORA_PRENSA", 22.0, 17.0, "€/hora para a máquina Prensa"),
-                    ("EUROS_HORA_ESQUAD", 20.0, 15.0, "€/hora para a máquina Esquadrejadora"),
-                    ("EUROS_EMBALAGEM_M3", 50.0, 35.0, "€/M³ para Embalagem"),
-                    ("EUROS_HORA_MO", 22.0, 17.0, "€/hora para Mão de Obra"),
+                    ("VALOR_SECCIONADORA", 1.0, 0.5, RESUMO_DESCRICOES["VALOR_SECCIONADORA"]),
+                    ("VALOR_ORLADORA", 0.70, 0.40, RESUMO_DESCRICOES["VALOR_ORLADORA"]),
+                    ("CNC_PRECO_PECA_BAIXO", 2.0, 1.5, RESUMO_DESCRICOES["CNC_PRECO_PECA_BAIXO"]),
+                    ("CNC_PRECO_PECA_MEDIO", 2.5, 2.0, RESUMO_DESCRICOES["CNC_PRECO_PECA_MEDIO"]),
+                    ("CNC_PRECO_PECA_ALTO", 3.0, 2.5, RESUMO_DESCRICOES["CNC_PRECO_PECA_ALTO"]),
+                    ("VALOR_ABD", 0.80, 0.60, RESUMO_DESCRICOES["VALOR_ABD"]),
+                    ("EUROS_HORA_CNC", 60.0, 48.0, RESUMO_DESCRICOES["EUROS_HORA_CNC"]),
+                    ("EUROS_HORA_PRENSA", 22.0, 17.0, RESUMO_DESCRICOES["EUROS_HORA_PRENSA"]),
+                    ("EUROS_HORA_ESQUAD", 20.0, 15.0, RESUMO_DESCRICOES["EUROS_HORA_ESQUAD"]),
+                    ("EUROS_EMBALAGEM_M3", 50.0, 35.0, RESUMO_DESCRICOES["EUROS_EMBALAGEM_M3"]),
+                    ("EUROS_HORA_MO", 22.0, 17.0, RESUMO_DESCRICOES["EUROS_HORA_MO"]),
                 ]
                 cursor.executemany(
                     "INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie, descricao) VALUES (%s,%s,%s,%s)",
@@ -184,10 +184,11 @@ def carregar_dados_maquinas(ui):
         tbl = ui.tableWidget_maquinas
         tbl.setRowCount(len(linhas))
         for r, (nome, std, serie, desc) in enumerate(linhas):
+            resumo = desc if desc else RESUMO_DESCRICOES.get(nome, "")
             tbl.setItem(r, 0, QTableWidgetItem(str(nome)))
             tbl.setItem(r, 1, QTableWidgetItem(str(std)))
             tbl.setItem(r, 2, QTableWidgetItem(str(serie)))
-            tbl.setItem(r, 3, QTableWidgetItem(desc if desc else ""))
+            tbl.setItem(r, 3, QTableWidgetItem(resumo))
     except Exception as e:
         print(f"Erro ao carregar dados de maquinas: {e}")
 
@@ -202,6 +203,8 @@ def salvar_dados_maquinas(ui):
                 std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
                 serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
                 desc = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                if not desc:
+                    desc = RESUMO_DESCRICOES.get(nome, "")
                 cursor.execute(
                     """
                     INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie, descricao)
