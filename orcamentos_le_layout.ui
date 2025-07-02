@@ -69,7 +69,7 @@
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>50</y>
+          <y>40</y>
           <width>62</width>
           <height>16</height>
          </rect>
@@ -81,9 +81,9 @@
        <widget class="QLineEdit" name="lineEdit_orcamentos">
         <property name="geometry">
          <rect>
-          <x>100</x>
-          <y>50</y>
-          <width>491</width>
+          <x>140</x>
+          <y>40</y>
+          <width>551</width>
           <height>20</height>
          </rect>
         </property>
@@ -94,8 +94,8 @@
        <widget class="QPushButton" name="pushButton_atualiza_configuracoes">
         <property name="geometry">
          <rect>
-          <x>1000</x>
-          <y>30</y>
+          <x>700</x>
+          <y>14</y>
           <width>201</width>
           <height>41</height>
          </rect>
@@ -113,8 +113,57 @@
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>90</y>
-          <width>731</width>
+          <y>110</y>
+          <width>491</width>
+          <height>411</height>
+         </rect>
+        </property>
+        <property name="rowCount">
+         <number>0</number>
+        </property>
+        <property name="columnCount">
+         <number>4</number>
+        </property>
+        <column>
+         <property name="text">
+          <string>Descrição Equipamento</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Produção STD</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Produção Série</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Resumo da Descrição</string>
+         </property>
+        </column>
+       </widget>
+       <widget class="QPushButton" name="pushButton_gravar_producao">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>65</y>
+          <width>201</width>
+          <height>41</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>Gravar/Atualizar dados Producao</string>
+        </property>
+       </widget>
+       <widget class="QTableWidget" name="tableWidget_orcamento_maquinas">
+        <property name="geometry">
+         <rect>
+          <x>510</x>
+          <y>110</y>
+          <width>661</width>
           <height>411</height>
          </rect>
         </property>
@@ -154,19 +203,6 @@
           <string>Ver Orcamento</string>
          </property>
         </column>
-       </widget>
-       <widget class="QPushButton" name="pushButton_gravar_producao">
-        <property name="geometry">
-         <rect>
-          <x>850</x>
-          <y>90</y>
-          <width>201</width>
-          <height>41</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Gravar/Atualizar dados Producao</string>
-        </property>
        </widget>
       </widget>
       <widget class="QWidget" name="tab_relatorios">
