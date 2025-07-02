@@ -122,7 +122,7 @@
          <number>0</number>
         </property>
         <property name="columnCount">
-         <number>4</number>
+         <number>6</number>
         </property>
         <column>
          <property name="text">
@@ -142,6 +142,16 @@
         <column>
          <property name="text">
           <string>Resumo da Descrição</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Num Orcamento</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Ver Orcamento</string>
          </property>
         </column>
        </widget>
