@@ -899,11 +899,13 @@ def abrir_orcamento(main_window):
         carregar_ou_inicializar_maquinas_orcamento(
             ui.lineEdit_num_orcamento.text().strip(),
             ui.lineEdit_versao_orcamento.text().strip(),
+            ui,
         )
         atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
         registrar_valores_maquinas_orcamento(
             ui.lineEdit_num_orcamento.text().strip(),
             ui.lineEdit_versao_orcamento.text().strip(),
+            ui,
         )
 
     except mysql.connector.Error as err:
@@ -2034,6 +2036,7 @@ def on_modo_producao_changed(main_window, modo):
     registrar_valores_maquinas_orcamento(
         ui.lineEdit_num_orcamento.text().strip(),
         ui.lineEdit_versao_orcamento.text().strip(),
+        ui,
     )
 
     atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)

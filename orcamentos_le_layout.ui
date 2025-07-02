@@ -3000,7 +3000,7 @@
            <number>26</number>
           </property>
           <property name="columnCount">
-           <number>20</number>
+           <number>21</number>
           </property>
           <property name="horizontalHeaderLabels" stdset="0">
            <stringlist>
@@ -3024,6 +3024,7 @@
             <string>LARG_MP</string>
             <string>ESP_MP</string>
             <string>MP</string>
+            <string>NAO STOCK</string>
            </stringlist>
           </property>
           <property name="verticalHeaderLabels" stdset="0">
@@ -3082,6 +3083,7 @@
           <row/>
           <row/>
           <row/>
+          <column/>
           <column/>
           <column/>
           <column/>
@@ -3729,7 +3731,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="dados_item_orcamento">
            <property name="geometry">
@@ -4993,8 +4995,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5054,6 +5056,7 @@
               <string>LARG_MP</string>
               <string>ESP_MP</string>
               <string>MP</string>
+              <string>NAO STOCK</string>
              </stringlist>
             </property>
             <property name="verticalHeaderLabels" stdset="0">
