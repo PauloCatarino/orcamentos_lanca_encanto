@@ -36,6 +36,7 @@ Dependências:
 import os
 import pandas as pd
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox, QApplication
+from db_connection import obter_cursor
 from PyQt5.QtCore import Qt, QCoreApplication # QCoreApplication para processEvents
 # Importar funções utilitárias
 from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item , obter_diretorio_base
@@ -52,6 +53,30 @@ EUROS_HORA_PRENSA = 22.0          # €/hora para a máquina Prensa
 EUROS_HORA_ESQUAD = 20.0          # €/hora para a máquina Esquadrejadora
 EUROS_EMBALAGEM_M3 = 50.0         # €/M³ para Embalagem
 EUROS_HORA_MO = 22.0              # €/hora para Mão de Obra
+MODO_PRODUCAO = "STD"              # Modo de produção padrão (STD, SERIE, etc.)
+
+def aplicar_valores_maquinas(modo="STD"):
+    """Atualiza as variáveis globais com valores da BD."""
+    global VALOR_SECCIONADORA, VALOR_ORLADORA, CNC_PRECO_PECA_BAIXO, CNC_PRECO_PECA_MEDIO, CNC_PRECO_PECA_ALTO
+    global VALOR_ABD, EUROS_HORA_CNC, EUROS_HORA_PRENSA, EUROS_HORA_ESQUAD, EUROS_EMBALAGEM_M3, EUROS_HORA_MO, MODO_PRODUCAO
+    MODO_PRODUCAO = modo
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute("SELECT nome_variavel, valor_std, valor_serie FROM maquinas_producao")
+            dados = {n: (v_std if modo == "STD" else v_ser) for n, v_std, v_ser in cursor.fetchall()}
+        VALOR_SECCIONADORA = float(dados.get("VALOR_SECCIONADORA", VALOR_SECCIONADORA))
+        VALOR_ORLADORA = float(dados.get("VALOR_ORLADORA", VALOR_ORLADORA))
+        CNC_PRECO_PECA_BAIXO = float(dados.get("CNC_PRECO_PECA_BAIXO", CNC_PRECO_PECA_BAIXO))
+        CNC_PRECO_PECA_MEDIO = float(dados.get("CNC_PRECO_PECA_MEDIO", CNC_PRECO_PECA_MEDIO))
+        CNC_PRECO_PECA_ALTO = float(dados.get("CNC_PRECO_PECA_ALTO", CNC_PRECO_PECA_ALTO))
+        VALOR_ABD = float(dados.get("VALOR_ABD", VALOR_ABD))
+        EUROS_HORA_CNC = float(dados.get("EUROS_HORA_CNC", EUROS_HORA_CNC))
+        EUROS_HORA_PRENSA = float(dados.get("EUROS_HORA_PRENSA", EUROS_HORA_PRENSA))
+        EUROS_HORA_ESQUAD = float(dados.get("EUROS_HORA_ESQUAD", EUROS_HORA_ESQUAD))
+        EUROS_EMBALAGEM_M3 = float(dados.get("EUROS_EMBALAGEM_M3", EUROS_EMBALAGEM_M3))
+        EUROS_HORA_MO = float(dados.get("EUROS_HORA_MO", EUROS_HORA_MO))
+    except Exception as e:
+        print(f"Erro ao aplicar valores de máquinas: {e}")
 
 # --- Constantes de Índices das Colunas ---
 # Índices fixos para as colunas usadas e preenchidas na tabela "tab_def_pecas" (0-based)
@@ -744,6 +769,8 @@ def atualizar_calculos_custos(ui):
 
     Esta função é chamada pelo orquestrador (`modulo_orquestrador.py`).
     """
+    
+    aplicar_valores_maquinas(MODO_PRODUCAO)
     print("[INFO] Iniciando atualização de todos os cálculos de custos...")
     table = ui.tab_def_pecas
     total_linhas = table.rowCount()

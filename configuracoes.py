@@ -13,7 +13,7 @@ Observação:
 
 import os
 import mysql.connector # Adicionado para erros específicos
-from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QLineEdit, QPushButton, QMessageBox, QTableWidgetItem
 # Importa a função de conexão MySQL do módulo de conexão (certifique-se de que db_connection.py esteja configurado)
 from db_connection import obter_cursor
 
@@ -132,6 +132,93 @@ def salvar_configuracoes(caminho_base_dados, caminho_orcamentos):
         print(f"Erro inesperado ao salvar configurações: {e}")
         QMessageBox.critical(None, "Erro Inesperado", f"Erro ao salvar configurações:\n{e}")
         return False
+
+# ---------- Novas Funções para valores de máquinas ----------
+def criar_tabela_maquinas_producao():
+    """Cria tabela com valores de produção se não existir e insere defaults."""
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS maquinas_producao (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    nome_variavel VARCHAR(50) UNIQUE,
+                    valor_std DECIMAL(10,2),
+                    valor_serie DECIMAL(10,2),
+                    descricao TEXT
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            cursor.execute("SELECT COUNT(*) FROM maquinas_producao")
+            if cursor.fetchone()[0] == 0:
+                dados_padrao = [
+                    ("VALOR_SECCIONADORA", 1.0, 0.5, "€/ML para a máquina Seccionadora"),
+                    ("VALOR_ORLADORA", 0.70, 0.40, "€/ML para a máquina Orladora"),
+                    ("CNC_PRECO_PECA_BAIXO", 2.0, 1.5, "€/peça se AREA_M2_und ≤ 0.7"),
+                    ("CNC_PRECO_PECA_MEDIO", 2.5, 2.0, "€/peça se 0.7 < AREA_M2_und < 1"),
+                    ("CNC_PRECO_PECA_ALTO", 3.0, 2.5, "€/peça se AREA_M2_und ≥ 1"),
+                    ("VALOR_ABD", 0.80, 0.60, "€/peça para a máquina ABD"),
+                    ("EUROS_HORA_CNC", 60.0, 48.0, "€/hora para a máquina CNC"),
+                    ("EUROS_HORA_PRENSA", 22.0, 17.0, "€/hora para a máquina Prensa"),
+                    ("EUROS_HORA_ESQUAD", 20.0, 15.0, "€/hora para a máquina Esquadrejadora"),
+                    ("EUROS_EMBALAGEM_M3", 50.0, 35.0, "€/M³ para Embalagem"),
+                    ("EUROS_HORA_MO", 22.0, 17.0, "€/hora para Mão de Obra"),
+                ]
+                cursor.executemany(
+                    "INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie, descricao) VALUES (%s,%s,%s,%s)",
+                    dados_padrao,
+                )
+    except Exception as e:
+        print(f"Erro ao criar tabela maquinas_producao: {e}")
+
+
+def carregar_dados_maquinas(ui):
+    """Carrega dados da tabela para o QTableWidget."""
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                "SELECT nome_variavel, valor_std, valor_serie, descricao FROM maquinas_producao"
+            )
+            linhas = cursor.fetchall()
+        tbl = ui.tableWidget_maquinas
+        tbl.setRowCount(len(linhas))
+        for r, (nome, std, serie, desc) in enumerate(linhas):
+            tbl.setItem(r, 0, QTableWidgetItem(str(nome)))
+            tbl.setItem(r, 1, QTableWidgetItem(str(std)))
+            tbl.setItem(r, 2, QTableWidgetItem(str(serie)))
+            tbl.setItem(r, 3, QTableWidgetItem(desc if desc else ""))
+    except Exception as e:
+        print(f"Erro ao carregar dados de maquinas: {e}")
+
+
+def salvar_dados_maquinas(ui):
+    """Guarda na base de dados os valores editados pelo utilizador."""
+    tbl = ui.tableWidget_maquinas
+    try:
+        with obter_cursor() as cursor:
+            for row in range(tbl.rowCount()):
+                nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
+                std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
+                serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
+                desc = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                cursor.execute(
+                    """
+                    INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie, descricao)
+                    VALUES (%s,%s,%s,%s)
+                    ON DUPLICATE KEY UPDATE
+                        valor_std=VALUES(valor_std),
+                        valor_serie=VALUES(valor_serie),
+                        descricao=VALUES(descricao)
+                    """,
+                    (nome, float(std), float(serie), desc),
+                )
+        print("Valores de produção atualizados.")
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar dados de maquinas: {e}")
+        return False
+    
+
 def configurar_configuracoes_ui(ui):
     """
     Conecta os campos e botões da interface 'tab_configuracoes' às funcionalidades deste módulo.
@@ -197,11 +284,14 @@ def configurar_configuracoes_ui(ui):
 
     # --- Inicialização ---
     # 1. Garante que a tabela existe (e insere defaults se for nova)
-    criar_tabela_configuracoes() # Já usa obter_cursor
+    criar_tabela_configuracoes()  # Já usa obter_cursor
+    criar_tabela_maquinas_producao()
     # 2. Carrega os dados da BD para a UI
-    carregar_ui() # Esta função interna foi refatorada para usar obter_cursor
+    carregar_ui()  # Esta função interna foi refatorada para usar obter_cursor
+    carregar_dados_maquinas(ui)
 
-    # 3. Conecta o botão "Atualizar Configurações"
+    # 3. Conecta os botões
     ui.pushButton_atualiza_configuracoes.clicked.connect(atualizar_configuracoes)
+    ui.pushButton_gravar_producao.clicked.connect(lambda: salvar_dados_maquinas(ui))
 
     #print("[INFO] UI de Configurações configurada.")
