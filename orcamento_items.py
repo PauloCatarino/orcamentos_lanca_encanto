@@ -261,8 +261,8 @@ def configurar_orcamento_ui(main_window):
     ui.pushButton_atualiza_preco_final.clicked.connect(
         lambda: calcular_preco_final_orcamento(ui))
 
-    ui.checkBox_producao_std.stateChanged.connect(lambda: on_modo_producao_changed(ui, "STD") if ui.checkBox_producao_std.isChecked() else None)
-    ui.checkBox_producao_serie.stateChanged.connect(lambda: on_modo_producao_changed(ui, "SERIE") if ui.checkBox_producao_serie.isChecked() else None)
+    ui.checkBox_producao_std.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "STD") if ui.checkBox_producao_std.isChecked() else None)
+    ui.checkBox_producao_serie.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "SERIE") if ui.checkBox_producao_serie.isChecked() else None)
 
     # Configuração da tabela "tableWidget_artigos": 24 colunas (coluna 0 = id_item, oculto)
     ui.tableWidget_artigos.setColumnCount(24)
@@ -1970,8 +1970,19 @@ def atualizar_custos_e_precos_itens(ui, force_global_margin_update=False):
 
     
 def on_modo_producao_changed(main_window, modo):
-    """Alterna entre produção STD e Série aplicando aos todos os itens."""
-    ui = main_window.ui
+    """Alterna entre produção STD e Série aplicando a todos os itens.
+
+    O parâmetro ``main_window`` pode ser tanto a janela principal
+    (que possui o atributo ``ui``) quanto a própria instância ``ui``.
+    Esta flexibilidade evita ``AttributeError`` caso algum chamador
+    passe apenas ``ui`` por engano.
+    """
+    try:
+        ui = main_window.ui
+    except AttributeError:
+        # Suporte para chamadas antigas que passavam apenas ``ui``
+        ui = main_window
+        main_window = getattr(ui, "main_window", None)
     if modo == "STD":
         ui.checkBox_producao_serie.setChecked(False)
         ui.checkBox_producao_std.setChecked(True)
@@ -1995,9 +2006,12 @@ def on_modo_producao_changed(main_window, modo):
         ui.lineEdit_profundidade_orcamento.setText(item.text(5))
         ui.lineEdit_und_orcamento.setText(item.text(6))
         ui.lineEdit_qt_orcamento.setText(item.text(7))
-        main_window.navegacao_index = idx
-
-        acao_orcamentar_items(main_window)
+        if main_window is not None:
+            main_window.navegacao_index = idx
+            acao_orcamentar_items(main_window)
+        else:
+            # Mantém compatibilidade se não houver referência à janela principal
+            acao_orcamentar_items(ui)
         salvar_dados_def_pecas(ui)
         registrar_valores_maquinas_orcamento(
             ui.lineEdit_num_orcamento.text().strip(),
