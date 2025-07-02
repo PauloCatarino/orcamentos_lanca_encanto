@@ -704,6 +704,11 @@ def abrir_janela_apagar_orcamento(ui):
                         )
 
                     cursor.execute(
+                        "DELETE FROM orcamento_maquinas WHERE numero_orcamento=%s AND versao_orcamento=%s",
+                        (num_orcamento, versao_orcamento),
+                    )
+
+                    cursor.execute(
                         "DELETE FROM orcamento_items WHERE id_orcamento=%s",
                         (id_orc,),
                     )
