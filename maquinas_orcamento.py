@@ -1,3 +1,32 @@
+# maquinas_orcamento.py
+# -*- coding: utf-8 -*-
+
+"""
+Módulo: maquinas_orcamento.py
+
+Objetivo:
+---------
+Gerir os valores de produção específicos de cada orçamento.
+Este módulo cria a tabela ``orcamento_maquinas`` no banco de dados e
+fornece funções para registrar, carregar e salvar esses valores,
+permitindo que sejam utilizados nos cálculos de custos.
+
+Funcionalidades:
+----------------
+1. ``criar_tabela_maquinas_orcamento`` garante que a estrutura da tabela exista.
+2. ``registrar_valores_maquinas_orcamento`` grava valores provenientes da UI ou
+   dos valores padrão das máquinas.
+3. ``carregar_ou_inicializar_maquinas_orcamento`` obtém os valores de um
+   orçamento, populando a interface e criando registros padrão caso não
+   existam.
+4. ``salvar_tabela_orcamento_maquinas`` persiste as edições feitas na UI na
+   tabela de banco de dados.
+
+Estas funções mantêm os valores de produção em sincronia com cada orçamento,
+permitindo sua aplicação nos cálculos de custos.
+"""
+
+
 from PyQt5.QtWidgets import QTableWidgetItem
 from db_connection import obter_cursor
 
