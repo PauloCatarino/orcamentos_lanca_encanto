@@ -15,10 +15,15 @@ def criar_tabela_maquinas_orcamento():
                     descricao_equipamento VARCHAR(50) NULL,
                     valor_producao_std DECIMAL(10,2) NULL,
                     valor_producao_serie DECIMAL(10,2) NULL,
+                    resumo_descricao TEXT NULL,
                     UNIQUE KEY idx_orcamento_maq (numero_orcamento, versao_orcamento, descricao_equipamento)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
+            try:
+                cursor.execute("ALTER TABLE orcamento_maquinas ADD COLUMN resumo_descricao TEXT")
+            except Exception:
+                pass
     except Exception as e:
         print(f"Erro ao criar tabela orcamento_maquinas: {e}")
 
@@ -38,24 +43,29 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
                     nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
                     std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
                     serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
-                    linhas.append((nome, float(std), float(serie)))
+                    resumo = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                    linhas.append((nome, float(std), float(serie), resumo))
             else:
                 cursor.execute(
-                    "SELECT nome_variavel, valor_std, valor_serie FROM maquinas_producao"
+                    "SELECT nome_variavel, valor_std, valor_serie, descricao FROM maquinas_producao"
                 )
-                linhas = [(n, float(vs), float(vr)) for n, vs, vr in cursor.fetchall()]
+                linhas = [
+                    (n, float(vs), float(vr), desc if desc else "")
+                    for n, vs, vr, desc in cursor.fetchall()
+                ]
 
-            for nome, val_std, val_ser in linhas:
+            for nome, val_std, val_ser, resumo in linhas:
                 cursor.execute(
                     """
                     INSERT INTO orcamento_maquinas
-                        (numero_orcamento, versao_orcamento, descricao_equipamento, valor_producao_std, valor_producao_serie)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (numero_orcamento, versao_orcamento, descricao_equipamento, valor_producao_std, valor_producao_serie, resumo_descricao)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         valor_producao_std = VALUES(valor_producao_std),
-                        valor_producao_serie = VALUES(valor_producao_serie)
+                        valor_producao_serie = VALUES(valor_producao_serie),
+                        resumo_descricao = VALUES(resumo_descricao)
                     """,
-                    (num_orc, ver_orc, nome, val_std, val_ser),
+                    (num_orc, ver_orc, nome, val_std, val_ser, resumo),
                 )
     except Exception as e:
         print(f"Erro ao registrar valores de máquinas: {e}")
@@ -71,7 +81,7 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
         with obter_cursor() as cursor:
             cursor.execute(
                 """
-                SELECT descricao_equipamento, valor_producao_std, valor_producao_serie
+                SELECT descricao_equipamento, valor_producao_std, valor_producao_serie, resumo_descricao
                 FROM orcamento_maquinas
                 WHERE numero_orcamento=%s AND versao_orcamento=%s
                 """,
@@ -82,7 +92,7 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 registrar_valores_maquinas_orcamento(num_orc, ver_orc)
                 cursor.execute(
                     """
-                    SELECT descricao_equipamento, valor_producao_std, valor_producao_serie
+                    SELECT descricao_equipamento, valor_producao_std, valor_producao_serie, resumo_descricao
                     FROM orcamento_maquinas
                     WHERE numero_orcamento=%s AND versao_orcamento=%s
                     """,
@@ -90,27 +100,29 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 )
                 linhas = cursor.fetchall()
 
-            for nome, val_std, val_ser in linhas:
+            for nome, val_std, val_ser, resumo in linhas:
                 cursor.execute(
                     """
-                    INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO maquinas_producao (nome_variavel, valor_std, valor_serie, descricao)
+                    VALUES (%s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         valor_std=VALUES(valor_std),
-                        valor_serie=VALUES(valor_serie)
+                        valor_serie=VALUES(valor_serie),
+                        descricao=VALUES(descricao)
                     """,
-                    (nome, val_std, val_ser),
+                    (nome, val_std, val_ser, resumo),
                 )
 
         if ui and hasattr(ui, "tableWidget_orcamento_maquinas"):
             tbl = ui.tableWidget_orcamento_maquinas
             tbl.setRowCount(len(linhas))
-            for r, (nome, val_std, val_ser) in enumerate(linhas):
+            for r, (nome, val_std, val_ser, resumo) in enumerate(linhas):
                 tbl.setItem(r, 0, QTableWidgetItem(str(nome)))
                 tbl.setItem(r, 1, QTableWidgetItem(str(val_std)))
                 tbl.setItem(r, 2, QTableWidgetItem(str(val_ser)))
-                tbl.setItem(r, 3, QTableWidgetItem(num_orc))
-                tbl.setItem(r, 4, QTableWidgetItem(ver_orc))
+                tbl.setItem(r, 3, QTableWidgetItem(resumo))
+                tbl.setItem(r, 4, QTableWidgetItem(num_orc))
+                tbl.setItem(r, 5, QTableWidgetItem(ver_orc))
     except Exception as e:
         print(f"Erro ao carregar valores de máquinas do orçamento: {e}")
 
@@ -128,18 +140,20 @@ def salvar_tabela_orcamento_maquinas(ui):
                 nome = tbl.item(row, 0).text() if tbl.item(row, 0) else ""
                 std = tbl.item(row, 1).text() if tbl.item(row, 1) else "0"
                 serie = tbl.item(row, 2).text() if tbl.item(row, 2) else "0"
-                num_orc = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
-                ver_orc = tbl.item(row, 4).text() if tbl.item(row, 4) else ""
+                resumo = tbl.item(row, 3).text() if tbl.item(row, 3) else ""
+                num_orc = tbl.item(row, 4).text() if tbl.item(row, 4) else ""
+                ver_orc = tbl.item(row, 5).text() if tbl.item(row, 5) else ""
                 cursor.execute(
                     """
                     INSERT INTO orcamento_maquinas
-                        (numero_orcamento, versao_orcamento, descricao_equipamento, valor_producao_std, valor_producao_serie)
-                    VALUES (%s,%s,%s,%s,%s)
+                        (numero_orcamento, versao_orcamento, descricao_equipamento, valor_producao_std, valor_producao_serie, resumo_descricao)
+                    VALUES (%s,%s,%s,%s,%s,%s)
                     ON DUPLICATE KEY UPDATE
                         valor_producao_std=VALUES(valor_producao_std),
-                        valor_producao_serie=VALUES(valor_producao_serie)
+                        valor_producao_serie=VALUES(valor_producao_serie),
+                        resumo_descricao=VALUES(resumo_descricao)
                     """,
-                    (num_orc, ver_orc, nome, float(std), float(serie)),
+                    (num_orc, ver_orc, nome, float(std), float(serie), resumo),
                 )
         return True
     except Exception as e:
