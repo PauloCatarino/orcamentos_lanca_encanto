@@ -440,8 +440,9 @@ def limpar_linha_tab_material(obj):
 
     row_index = selection[0].row()
 
-    # Colunas que devem ser limpas (ref_le, descrição_no_orcamento, ptab, pliq, descontos, etc.)
-    COLUNAS_LIMPAR_MATERIAIS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20]
+    # Colunas que devem ser limpas (ref_le, descrição_no_orcamento, ptab, pliq, descontos, und, desp, corres_orla_0_4, corres_orla_1_0, tipo, familia, comp_mp, larg_mp, esp_mp)
+    # A coluna 20 é a coluna de checkbox 'nao_stock', que também será limpa.
+    COLUNAS_LIMPAR_MATERIAIS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
 
     tabela.blockSignals(True)
     # Iterar sobre cada coluna e limpar o conteúdo
@@ -459,14 +460,14 @@ def limpar_linha_tab_material(obj):
             # Se não houver widget, trata o QTableWidgetItem da célula
             item = tabela.item(row_index, col)
             if item:
-                if col == 20:
+                if col == 21: # coluna 'nao_stock' # Se for a coluna de checkbox, desmarca o item                    
                     item.setCheckState(Qt.Unchecked)
                 else:
                     item.setText("")
             else:
                 # Se o item não existir, cria um novo com texto vazio
                 novo = QTableWidgetItem()
-                if col == 20:
+                if col == 21:
                     novo.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                     novo.setCheckState(Qt.Unchecked)
                 tabela.setItem(row_index, col, novo)
@@ -577,7 +578,7 @@ def guardar_dados_item_orcamento_tab_material(parent):
         'comp_mp': 17,
         'larg_mp': 18,
         'esp_mp': 19,
-        'nao_stock': 20
+        'nao_stock': 21
     }
     # Conjuntos para conversão de valores formatados
 
@@ -727,7 +728,7 @@ def carregar_dados_items(parent):
         'ref_le': 8, 'descricao_no_orcamento': 9, 'ptab': 10, 'pliq': 11,
         'desc1_plus': 12, 'desc2_minus': 13, 'und': 14, 'desp': 15,
         'corres_orla_0_4': 16, 'corres_orla_1_0': 17, 'tipo': 18,
-        'familia': 19, 'comp_mp': 20, 'larg_mp': 21, 'esp_mp': 22, 'nao_stock': 25
+        'familia': 19, 'comp_mp': 20, 'larg_mp': 21, 'esp_mp': 22, 'nao_stock': 24
     }
     # Mapeamento para a interface Tab_Material_11: chave = nome do campo, valor = coluna
     tab_mapping = {
@@ -735,7 +736,7 @@ def carregar_dados_items(parent):
         'ref_le': 5, 'descricao_no_orcamento': 6, 'ptab': 7, 'pliq': 8,
         'desc1_plus': 9, 'desc2_minus': 10, 'und': 11, 'desp': 12,
         'corres_orla_0_4': 13, 'corres_orla_1_0': 14, 'tipo': 15,
-        'familia': 16, 'comp_mp': 17, 'larg_mp': 18, 'esp_mp': 19, 'nao_stock': 20
+        'familia': 16, 'comp_mp': 17, 'larg_mp': 18, 'esp_mp': 19, 'nao_stock': 21
     }
 
     registros_items = []
