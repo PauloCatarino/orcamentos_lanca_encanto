@@ -97,6 +97,21 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                         print(
                             f"Erro ao adicionar coluna descricao_modelo: {alter_err}"
                         )
+                cursor.execute(
+                    f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'nao_stock'"
+                )
+                if not cursor.fetchone():
+                    try:
+                        cursor.execute(
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER MP"
+                        )
+                        print(
+                            f"Coluna 'nao_stock' adicionada à '{tabela_bd_segura}'."
+                        )
+                    except mysql.connector.Error as alter_err:
+                        print(
+                            f"Erro ao adicionar coluna nao_stock: {alter_err}"
+                        )
         # Commit automático
 
     except mysql.connector.Error as err:
@@ -185,10 +200,13 @@ def configurar_tabela_dados_gerais_ui(ui, nome_tabela, colunas, linhas):
 
             # Caso contrário, cria um QTableWidgetItem
             else:
-                item = QTableWidgetItem("") # Cria item vazio por padrão
-                # Define se a célula é editável
-                if not col_def.get('editavel', True):
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                item = QTableWidgetItem("")
+                if col_def.get('checkbox'):
+                    item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                    item.setCheckState(Qt.Unchecked)
+                else:
+                    if not col_def.get('editavel', True):
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 table_widget.setItem(row_idx, col_idx, item)
 
     # Preenche a primeira coluna com os nomes das linhas

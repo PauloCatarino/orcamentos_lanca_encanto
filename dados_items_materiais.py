@@ -60,7 +60,8 @@ MATERIAIS_COLUNAS = [
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None},
+    {'nome': 'nao_stock', 'tipo': 'INTEGER', 'visivel': True, 'checkbox': True}
 ]
 
 ###############################################################
@@ -276,7 +277,7 @@ def definir_larguras_tab_material_item(ui):
     header.setStretchLastSection(False)
 
     # Ajustar conforme as necessidades do layout
-    larguras = [200, 200, 50, 110, 50, 100, 400, 60, 60, 60, 60, 50, 50, 180, 110, 120, 120, 90, 90, 90, 100]
+    larguras = [200, 200, 50, 110, 50, 100, 400, 60, 60, 60, 60, 50, 50, 180, 110, 120, 120, 90, 90, 90, 100, 60]
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
@@ -374,16 +375,19 @@ def configurar_tabela_material(parent):
                 tabela.setCellWidget(row_idx, col_idx, botao)
             else:
                 # Coluna normal (texto editável ou não)
-                item = QTableWidgetItem("");
-                if col_def.get('editavel', False):
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                item = QTableWidgetItem("")
+                if col_def.get('checkbox'):
+                    item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                    item.setCheckState(Qt.Unchecked)
                 else:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                # Formatação padrão
-                if col_def.get('formato') == 'moeda':
-                    item.setText(formatar_valor_moeda(0))
-                elif col_def.get('formato') == 'percentual':
-                    item.setText(formatar_valor_percentual(0))
+                    if col_def.get('editavel', False):
+                        item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    else:
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if col_def.get('formato') == 'moeda':
+                        item.setText(formatar_valor_moeda(0))
+                    elif col_def.get('formato') == 'percentual':
+                        item.setText(formatar_valor_percentual(0))
                 tabela.setItem(row_idx, col_idx, item)
 
     # Conecta o callback para recalcular o pliq após edições
@@ -437,7 +441,7 @@ def limpar_linha_tab_material(obj):
     row_index = selection[0].row()
 
     # Colunas que devem ser limpas (ref_le, descrição_no_orcamento, ptab, pliq, descontos, etc.)
-    COLUNAS_LIMPAR_MATERIAIS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+    COLUNAS_LIMPAR_MATERIAIS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20]
 
     tabela.blockSignals(True)
     # Iterar sobre cada coluna e limpar o conteúdo
@@ -455,10 +459,17 @@ def limpar_linha_tab_material(obj):
             # Se não houver widget, trata o QTableWidgetItem da célula
             item = tabela.item(row_index, col)
             if item:
-                item.setText("")
+                if col == 20:
+                    item.setCheckState(Qt.Unchecked)
+                else:
+                    item.setText("")
             else:
                 # Se o item não existir, cria um novo com texto vazio
-                tabela.setItem(row_index, col, QTableWidgetItem(""))
+                novo = QTableWidgetItem()
+                if col == 20:
+                    novo.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                    novo.setCheckState(Qt.Unchecked)
+                tabela.setItem(row_index, col, novo)
     # Reabilitar os sinais da tabela
     tabela.blockSignals(False)
 
@@ -498,6 +509,7 @@ def criar_tabela_dados_items_materiais():
                         comp_mp DOUBLE NULL DEFAULT 0.0,
                         larg_mp DOUBLE NULL DEFAULT 0.0,
                         esp_mp DOUBLE NULL DEFAULT 0.0,
+                        nao_stock TINYINT NULL DEFAULT 0,
                         UNIQUE KEY idx_item_mat_unico (num_orc, ver_orc, id_mat, linha),
                         INDEX idx_item_mat_lookup (num_orc, ver_orc, id_mat)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -505,6 +517,10 @@ def criar_tabela_dados_items_materiais():
                 #print("Tabela 'dados_items_materiais' criada.")
             else:
                  print("Tabela 'dados_items_materiais' já existe.")      # Pretendo eliminar esta linha mas dá erro
+                 cursor.execute("SHOW COLUMNS FROM dados_items_materiais LIKE 'nao_stock'")
+                 if not cursor.fetchone():
+                     cursor.execute("ALTER TABLE dados_items_materiais ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER esp_mp")
+                     print("Coluna 'nao_stock' adicionada à 'dados_items_materiais'.")
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao criar/verificar 'dados_items_materiais': {err}")
     except Exception as e:
@@ -537,7 +553,7 @@ def guardar_dados_item_orcamento_tab_material(parent):
         'num_orc', 'ver_orc', 'id_mat','linha', 'material', 'descricao',
         'ref_le','descricao_no_orcamento', 'ptab', 'pliq', 'desc1_plus',
         'desc2_minus', 'und', 'desp', 'corres_orla_0_4', 'corres_orla_1_0',
-        'tipo', 'familia', 'comp_mp', 'larg_mp', 'esp_mp'
+        'tipo', 'familia', 'comp_mp', 'larg_mp', 'esp_mp', 'nao_stock'
     ]
 
     ui_to_db_mapping = {# Campo BD -> Coluna UI
@@ -560,7 +576,8 @@ def guardar_dados_item_orcamento_tab_material(parent):
         'familia': 16,
         'comp_mp': 17,
         'larg_mp': 18,
-        'esp_mp': 19
+        'esp_mp': 19,
+        'nao_stock': 20
     }
     # Conjuntos para conversão de valores formatados
 
@@ -576,13 +593,16 @@ def guardar_dados_item_orcamento_tab_material(parent):
             if col_ui is None: continue
 
             widget = tabela.cellWidget(r, col_ui)
+            cell = None
             if isinstance(widget, QComboBox):
                 valor_str = widget.currentText().strip()
             else:
                 cell = tabela.item(r, col_ui)
                 valor_str = cell.text().strip() if cell else ""
             valor_final = None
-            if key_db in campos_moeda:
+            if key_db == 'nao_stock':
+                valor_final = 1 if (cell and cell.checkState() == Qt.Checked) else 0
+            elif key_db in campos_moeda:
                 try: valor_final = converter_texto_para_valor(valor_str, "moeda") if valor_str else None
                 except: valor_final = None
             elif key_db in campos_percentual:
@@ -699,7 +719,7 @@ def carregar_dados_items(parent):
         'ref_le': 7, 'descricao_no_orcamento': 8, 'ptab': 9, 'pliq': 10,
         'desc1_plus': 11, 'desc2_minus': 12, 'und': 13, 'desp': 14,
         'corres_orla_0_4': 15, 'corres_orla_1_0': 16, 'tipo': 17,
-        'familia': 18, 'comp_mp': 19, 'larg_mp': 20, 'esp_mp': 21
+        'familia': 18, 'comp_mp': 19, 'larg_mp': 20, 'esp_mp': 21, 'nao_stock': 22
     }
     # Para a tabela dados_gerais_materiais (índices conforme informado)
     db_mapping_gerais = {
@@ -707,7 +727,7 @@ def carregar_dados_items(parent):
         'ref_le': 8, 'descricao_no_orcamento': 9, 'ptab': 10, 'pliq': 11,
         'desc1_plus': 12, 'desc2_minus': 13, 'und': 14, 'desp': 15,
         'corres_orla_0_4': 16, 'corres_orla_1_0': 17, 'tipo': 18,
-        'familia': 19, 'comp_mp': 20, 'larg_mp': 21, 'esp_mp': 22
+        'familia': 19, 'comp_mp': 20, 'larg_mp': 21, 'esp_mp': 22, 'nao_stock': 25
     }
     # Mapeamento para a interface Tab_Material_11: chave = nome do campo, valor = coluna
     tab_mapping = {
@@ -715,7 +735,7 @@ def carregar_dados_items(parent):
         'ref_le': 5, 'descricao_no_orcamento': 6, 'ptab': 7, 'pliq': 8,
         'desc1_plus': 9, 'desc2_minus': 10, 'und': 11, 'desp': 12,
         'corres_orla_0_4': 13, 'corres_orla_1_0': 14, 'tipo': 15,
-        'familia': 16, 'comp_mp': 17, 'larg_mp': 18, 'esp_mp': 19
+        'familia': 16, 'comp_mp': 17, 'larg_mp': 18, 'esp_mp': 19, 'nao_stock': 20
     }
 
     registros_items = []
@@ -749,9 +769,15 @@ def carregar_dados_items(parent):
                         if isinstance(widget, QComboBox):
                             idx_combo = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx_combo if idx_combo >= 0 else -1)
                         else:
-                            item = tabela.item(linha_idx, col_tab_ui);
-                            if not item: item = QTableWidgetItem(); tabela.setItem(linha_idx, col_tab_ui, item)
-                            item.setText(texto_formatado)
+                            item = tabela.item(linha_idx, col_tab_ui)
+                            if not item:
+                                item = QTableWidgetItem()
+                                tabela.setItem(linha_idx, col_tab_ui, item)
+                            if campo == 'nao_stock':
+                                item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                                item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
+                            else:
+                                item.setText(texto_formatado)
                 else: print(f"[AVISO] Índice de linha inválido ({linha_idx}) no registo de item.")
             if MOSTRAR_AVISOS: QMessageBox.information(parent, "Dados Carregados", "Dados do item (Materiais) carregados.")
 
@@ -796,9 +822,15 @@ def carregar_dados_items(parent):
                          if isinstance(widget, QComboBox):
                              idx_combo = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx_combo if idx_combo >= 0 else -1)
                          else:
-                             item = tabela.item(linha_ui_destino, col_tab_ui);
-                             if not item: item = QTableWidgetItem(); tabela.setItem(linha_ui_destino, col_tab_ui, item)
-                             item.setText(texto_formatado)
+                             item = tabela.item(linha_ui_destino, col_tab_ui)
+                             if not item:
+                                 item = QTableWidgetItem()
+                                 tabela.setItem(linha_ui_destino, col_tab_ui, item)
+                             if campo == 'nao_stock':
+                                 item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                                 item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
+                             else:
+                                 item.setText(texto_formatado)
                 if MOSTRAR_AVISOS: QMessageBox.information(parent, "Dados Carregados", "Dados gerais de materiais importados.")
             else:
                  if MOSTRAR_AVISOS: QMessageBox.information(parent, "Dados Vazios", "Nenhum dado específico ou geral encontrado para este item (Materiais).")

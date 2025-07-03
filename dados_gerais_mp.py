@@ -188,7 +188,7 @@ def limpar_linha_por_tab(main_window, nome_tabela):
         QMessageBox.warning(main_window, "Limpar Linha", f"Nenhuma linha selecionada na aba '{nome_tabela}'.")
 
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
-COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
 COLUNAS_LIMPAR_FERRAGENS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_SISTEMAS_CORRER = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_ACABAMENTOS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
@@ -209,7 +209,13 @@ def limpar_linha_dados_gerais(table_widget, row_index, colunas_indices_limpar):
                 widget.clear()
         else:
             item = table_widget.item(row_index, col_idx)
-            if item:
+            if not item:
+                item = QTableWidgetItem()
+                table_widget.setItem(row_index, col_idx, item)
+            if col_idx == 21:
+                item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                item.setCheckState(Qt.Unchecked)
+            else:
                 item.setText("")
     for col in [8, 9, 10]:
         if row_index in original_pliq_values:
@@ -240,6 +246,7 @@ def acao_guardar_dados(main_window, nome_tabela):
             17: {"nome": "comp_mp", "type": "float", "percent": False},
             18: {"nome": "larg_mp", "type": "float", "percent": False},
             19: {"nome": "esp_mp", "type": "float", "percent": False},
+            21: {"nome": "nao_stock", "type": "integer"},
         }
         nome_escolhido, desc = obter_nome_para_salvar(main_window, "materiais")
         if not nome_escolhido:
@@ -353,7 +360,8 @@ def acao_importar_dados(main_window, nome_tabela):
             'familia': 16,
             'comp_mp': 17,
             'larg_mp': 18,
-            'esp_mp': 19
+            'esp_mp': 19,
+            'nao_stock': 21
         }
         importar_dados_gerais_com_opcao(main_window, "materiais", mapeamento)
 

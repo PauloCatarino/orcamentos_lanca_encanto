@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.40, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
 -- Host: localhost    Database: orcamentos
 -- ------------------------------------------------------
--- Server version	8.0.40
+-- Server version	8.0.42
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -36,7 +36,7 @@ CREATE TABLE `configuracoes` (
 
 LOCK TABLES `configuracoes` WRITE;
 /*!40000 ALTER TABLE `configuracoes` DISABLE KEYS */;
-INSERT INTO `configuracoes` VALUES (1,'C:\\Users\\Utilizador\\Documents\\ORCAMENTOS_LE_V2\\Base_Dados_Orcamento\\orcamentos.db','C:\\Users\\Utilizador\\Documents\\ORCAMENTOS_LE_V2\\ORCAMENTOS\\Dep._Orcamentos');
+INSERT INTO `configuracoes` VALUES (1,'\\\\SERVER_LE\\_Lanca_Encanto\\LancaEncanto\\Dep._Orcamentos\\Base_Dados_Orcamento','\\\\SERVER_LE\\_Lanca_Encanto\\LancaEncanto\\Dep._Orcamentos\\MARTELO_ORCAMENTOS_TESTE');
 /*!40000 ALTER TABLE `configuracoes` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -49,4 +49,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-08 23:17:46
+-- Dump completed on 2025-07-03 11:16:09
