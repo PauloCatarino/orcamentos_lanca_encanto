@@ -47,7 +47,8 @@ MATERIAIS_COLUNAS = [
     {'nome': 'comp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'larg_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
-    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
+    {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None},
+    {'nome': 'nao_stock', 'tipo': 'INTEGER', 'visivel': True, 'checkbox': True}
 ]
 
 # Definição das larguras fixas para cada coluna da tabela de Materiais
@@ -73,7 +74,8 @@ MATERIAIS_COLUNAS_LARGURAS = [
     (17, 'comp_mp',                  90),
     (18, 'larg_mp',                  90),
     (19, 'esp_mp',                   90),
-    (20, 'MP',                      100),
+    (20, 'MP',                      100), # Coluna para o botão "Escolher"
+    (21, 'nao_stock',                60), # Coluna para checkbox "Não Stock"
 ]
 
 # Definição dos nomes das linhas (exemplo fixo)

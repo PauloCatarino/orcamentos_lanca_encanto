@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.40, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
 -- Host: localhost    Database: orcamentos
 -- ------------------------------------------------------
--- Server version	8.0.40
+-- Server version	8.0.42
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -35,7 +35,7 @@ CREATE TABLE `clientes` (
   `telefone` text,
   `telemovel` text,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -44,7 +44,7 @@ CREATE TABLE `clientes` (
 
 LOCK TABLES `clientes` WRITE;
 /*!40000 ALTER TABLE `clientes` DISABLE KEYS */;
-INSERT INTO `clientes` VALUES (1,'MOVEIS JF_VIVA','JF_VIVA','Rua do Comercio, 2420-026  - Cardosos - Leiria','geral@gmail.com','www.jfviva.com','','teste de cliente','','244 744 216','937 267 449'),(2,'Cicomol, S.A','Cicomol','','geral@cicomol.pt','','','','','','');
+INSERT INTO `clientes` VALUES (1,'MOVEIS JF_VIVA','JF_VIVA','Rua do Comercio, 2420-026  - Cardosos - Leiria','geral@gmail.com','www.jfviva.com','','teste de cliente','','244 744 216','937 267 449'),(2,'Cicomol, S.A','Cicomol','','geral@cicomol.pt','','','','','',''),(3,'ZE DO MONTIJO','ZE_MONTIJO','','','','','','','',''),(4,'MANUEL','','','','','','','','','');
 /*!40000 ALTER TABLE `clientes` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -57,4 +57,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-08 23:17:44
+-- Dump completed on 2025-07-03 11:16:03

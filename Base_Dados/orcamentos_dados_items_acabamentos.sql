@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.40, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
 -- Host: localhost    Database: orcamentos
 -- ------------------------------------------------------
--- Server version	8.0.40
+-- Server version	8.0.42
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -24,30 +24,31 @@ DROP TABLE IF EXISTS `dados_items_acabamentos`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `dados_items_acabamentos` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `num_orc` varchar(50) DEFAULT NULL,
-  `ver_orc` varchar(10) DEFAULT NULL,
-  `id_acb` varchar(50) DEFAULT NULL,
-  `linha` int DEFAULT NULL,
-  `material` text,
-  `descricao` text,
-  `ref_le` text,
-  `descricao_no_orcamento` text,
-  `ptab` double DEFAULT NULL,
-  `pliq` double DEFAULT NULL,
-  `desc1_plus` double DEFAULT NULL,
-  `desc2_minus` double DEFAULT NULL,
-  `und` text,
-  `desp` double DEFAULT NULL,
-  `corres_orla_0_4` text,
-  `corres_orla_1_0` text,
-  `tipo` text,
-  `familia` text,
-  `comp_mp` double DEFAULT NULL,
-  `larg_mp` double DEFAULT NULL,
-  `esp_mp` double DEFAULT NULL,
+  `num_orc` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `ver_orc` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_acb` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `linha` int NOT NULL,
+  `material` text COLLATE utf8mb4_unicode_ci,
+  `descricao` text COLLATE utf8mb4_unicode_ci,
+  `ref_le` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `descricao_no_orcamento` text COLLATE utf8mb4_unicode_ci,
+  `ptab` double DEFAULT '0',
+  `pliq` double DEFAULT '0',
+  `desc1_plus` double DEFAULT '0',
+  `desc2_minus` double DEFAULT '0',
+  `und` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `desp` double DEFAULT '0',
+  `corres_orla_0_4` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `corres_orla_1_0` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tipo` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `familia` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `comp_mp` double DEFAULT '0',
+  `larg_mp` double DEFAULT '0',
+  `esp_mp` double DEFAULT '0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `num_orc` (`num_orc`,`ver_orc`,`id_acb`,`linha`)
-) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  UNIQUE KEY `idx_item_acb_unico` (`num_orc`,`ver_orc`,`id_acb`,`linha`),
+  KEY `idx_item_acb_lookup` (`num_orc`,`ver_orc`,`id_acb`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -56,7 +57,7 @@ CREATE TABLE `dados_items_acabamentos` (
 
 LOCK TABLES `dados_items_acabamentos` WRITE;
 /*!40000 ALTER TABLE `dados_items_acabamentos` DISABLE KEYS */;
-INSERT INTO `dados_items_acabamentos` VALUES (13,'250001','00','3',0,'Acab_Lacar','','ACB0001','LACAR 1 FACE',25,25.46,0.05,0.03,'M2',0.05,'','','LACAR','ACABAMENTOS',0,0,0),(14,'250001','00','3',1,'Acab_Verniz','','ACB0001','LACAR 1 FACE',15,15,0,0,'M2',0.05,'','','LACAR','ACABAMENTOS',0,0,0),(15,'250001','00','3',2,'Acab_Face_1','','','',0,0,0,0,'',0,'','','LACAR','ACABAMENTOS',0,0,0),(16,'250001','00','3',3,'Acab_Face_2','','','',0,0,0,0,'',0,'','','LACAR','ACABAMENTOS',0,0,0),(17,'250001','00','1',0,'Acab_Lacar_Face_Sup',NULL,'ACB0001','LACAR 1 FACE',25,25.46,0.05,0.03,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0),(18,'250001','00','1',1,'Acab_Lacar_Face_Inf',NULL,'ACB0001','LACAR 1 FACE',15,15,0,0,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0),(19,'250001','00','1',2,'Acab_Verniz_Face_Sup',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(20,'250001','00','1',3,'Acab_Verniz_Face_Inf',NULL,NULL,NULL,0,0,0,0,NULL,0,NULL,NULL,NULL,NULL,0,0,0),(29,'250001','00','6',0,'Acab_Lacar_Face_Sup','laca sp','ACB0001','LACAR 1 FACE',25,25.46,0.05,0.03,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0),(30,'250001','00','6',1,'Acab_Lacar_Face_Inf','laca inf','ACB0001','LACAR 1 FACE',15,15,0,0,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0),(31,'250001','00','6',2,'Acab_Verniz_Face_Sup','verniz sup','ACB0001','LACAR 1 FACE',25,25.46,0.05,0.03,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0),(32,'250001','00','6',3,'Acab_Verniz_Face_Inf','verniz inf','ACB0001','LACAR 1 FACE',25,25.46,0.05,0.03,'M2',0.05,NULL,NULL,NULL,NULL,0,0,0);
+INSERT INTO `dados_items_acabamentos` VALUES (1,'250001','00','1',0,'Acab_Lacar_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(2,'250001','00','1',1,'Acab_Lacar_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(3,'250001','00','1',2,'Acab_Verniz_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(4,'250001','00','1',3,'Acab_Verniz_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(5,'250002','00','1',0,'Acab_Lacar_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(6,'250002','00','1',1,'Acab_Lacar_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(7,'250002','00','1',2,'Acab_Verniz_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(8,'250002','00','1',3,'Acab_Verniz_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(9,'250002','00','2',0,'Acab_Lacar_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(10,'250002','00','2',1,'Acab_Lacar_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(11,'250002','00','2',2,'Acab_Verniz_Face_Sup',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL),(12,'250002','00','2',3,'Acab_Verniz_Face_Inf',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'ACABAMENTOS',NULL,NULL,NULL);
 /*!40000 ALTER TABLE `dados_items_acabamentos` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -69,4 +70,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-08 23:17:44
+-- Dump completed on 2025-07-03 11:16:26

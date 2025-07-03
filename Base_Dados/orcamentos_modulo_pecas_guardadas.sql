@@ -1,8 +1,8 @@
--- MySQL dump 10.13  Distrib 8.0.40, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
 -- Host: localhost    Database: orcamentos
 -- ------------------------------------------------------
--- Server version	8.0.40
+-- Server version	8.0.42
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -42,7 +42,7 @@ CREATE TABLE `modulo_pecas_guardadas` (
   PRIMARY KEY (`id_modulo_peca`),
   KEY `id_modulo_fk` (`id_modulo_fk`),
   CONSTRAINT `modulo_pecas_guardadas_ibfk_1` FOREIGN KEY (`id_modulo_fk`) REFERENCES `modulos_guardados` (`id_modulo`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -51,7 +51,7 @@ CREATE TABLE `modulo_pecas_guardadas` (
 
 LOCK TABLES `modulo_pecas_guardadas` WRITE;
 /*!40000 ALTER TABLE `modulo_pecas_guardadas` DISABLE KEYS */;
-INSERT INTO `modulo_pecas_guardadas` VALUES (1,1,0,'','MODULO','','H/2','L/2','P','','','','','','',''),(2,1,1,'','TETO [2222]','2','LM','PM','30.0','Mat_Tetos','Tab_Material_11','','M2','','',''),(3,1,2,'','LATERAL [2222]','2','HM','PM','19.0','Mat_Laterais','Tab_Material_11','','M2','','',''),(4,1,3,'','COSTA CHAPAR [0000]','1','HM','PM','10.0','Mat_Costas','Tab_Material_11','','M2','','',''),(5,1,4,'','PORTA ABRIR [2222] + DOBRADICA','2','HM','LM/2','19.0','Mat_Portas_Abrir','Tab_Material_11','','M2','DOBRADICA','',''),(6,1,5,'','DOBRADICA','3','','','0.0','Fer_Dobradica','Tab_Ferragens_11','','UND','','',''),(7,1,6,'','','','','','','','','','','','',''),(8,1,7,'','','','','','','','','','','','',''),(9,2,0,'','','','','','','','','','','','',''),(10,2,1,'','PORTA ABRIR [2222] + DOBRADICA','2','H','L/2','19.0','Mat_Portas_Abrir','Tab_Material_11','caixote','M2','DOBRADICA','',''),(11,2,2,'','DOBRADICA','4','','','0.0','Fer_Dobradica','Tab_Ferragens_11','ferragens','UND','','',''),(12,2,3,'','','','','','','','','','','','','');
+INSERT INTO `modulo_pecas_guardadas` VALUES (15,1,0,'','','','','','','','','','','','',''),(16,1,1,'','MODULO','','H','L/2','P','','','','','','',''),(17,1,2,'','COSTA CHAPAR [0000]','1','HM','LM','10.0','Mat_Costas','Tab_Material_11','','M2','','',''),(18,1,3,'','LATERAL [2022]','2','HM','PM','19.0','Mat_Laterais','Tab_Material_11','','M2','','',''),(19,1,4,'','TETO [2000]','1','LM','PM','19.0','Mat_Tetos','Tab_Material_11','','M2','','',''),(20,1,5,'','FUNDO [2000] + PES_1','1','LM','PM','19.0','Mat_Fundos','Tab_Material_11','','M2','PES_1','',''),(21,1,6,'','PES_1','6','','','100.0','Fer_Pes_2','Tab_Ferragens_11','','UND','','',''),(22,1,7,'','','','','','','','','','','','',''),(23,2,0,'','','','','','','','','','','','',''),(24,2,1,'','MODULO','','H','L/2','P','','','','','','',''),(25,2,2,'','COSTA CHAPAR [0000]','1','HM','LM','10.0','Mat_Costas','Tab_Material_11','','M2','','',''),(26,2,3,'','LATERAL [2022]','2','HM','PM','19.0','Mat_Laterais','Tab_Material_11','','M2','','',''),(27,2,4,'','TETO [2000]','1','LM','PM','19.0','Mat_Tetos','Tab_Material_11','','M2','','',''),(28,2,5,'','FUNDO [2000] + PES_1','1','LM','PM','19.0','Mat_Fundos','Tab_Material_11','','M2','PES_1','',''),(29,2,6,'','PES_1','6','','','100.0','Fer_Pes_2','Tab_Ferragens_11','','UND','','',''),(30,2,7,'','','','','','','','','','','','',''),(31,2,8,'','PRATELEIRA AMOVIVEL [2111] + VARAO + SUPORTE VARAO','1','LM','PM','19.0','Mat_Prat_Amoviveis','Tab_Material_11','caixote','M2','VARAO ROUPEIRO','SUPORTE VARAO',''),(32,2,9,'','VARAO ROUPEIRO','1','1250.00','','14.0','Fer_Varao_SPP','Tab_Ferragens_11','ferragens','ML','','',''),(33,2,10,'','SUPORTE VARAO','2','','','0.0','Fer_Suporte Varao','Tab_Ferragens_11','ferragens','UND','','',''),(34,3,0,'mod inf lava louça','MODULO','','H1','L1','P1','','','','','','',''),(35,3,1,'','COSTA CHAPAR [0000]','1','HM','LM','10.0','Mat_Costas','Tab_Material_11','','M2','','',''),(36,3,2,'','LATERAL [2022]','2','HM','PM','19.0','Mat_Laterais','Tab_Material_11','','M2','','',''),(37,3,3,'','TETO [2000]','1','LM','PM','19.0','Mat_Tetos','Tab_Material_11','','M2','','',''),(38,3,4,'','FUNDO [2000] + PES_1','1','LM','PM','19.0','Mat_Fundos','Tab_Material_11','','M2','PES_1','',''),(39,3,5,'','PES_1','6','','','100.0','Fer_Pes_2','Tab_Ferragens_11','','UND','','',''),(40,3,6,'montagem modulo','MAO DE OBRA  -MIN-','20','','','','nan','nan','mao_obra','','','','');
 /*!40000 ALTER TABLE `modulo_pecas_guardadas` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -64,4 +64,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-08 23:17:46
+-- Dump completed on 2025-07-03 11:15:52
