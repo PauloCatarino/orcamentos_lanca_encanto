@@ -274,7 +274,10 @@ def guardar_dados_gerais(parent_app, nome_tabela, col_info, nome_registro=None, 
                 valor = cell_widget.currentText()
             else:
                 item = table.item(row, col)
-                valor = item.text() if item else ""
+                if col_info[col].get("nome") == "nao_stock":
+                    valor = 1 if (item and item.checkState() == Qt.Checked) else 0
+                else:
+                    valor = item.text() if item else ""
             tipo = col_info[col].get("type", "text")
             # Converte o valor para float, se necessário
             if tipo == "float":

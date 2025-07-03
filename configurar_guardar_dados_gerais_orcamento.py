@@ -580,10 +580,13 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                 valor_str = widget.currentText()
             else:
                 item = table_widget.item(row, col_ui)
-                valor_str = item.text() if item else ""
+                if campo_bd == 'nao_stock':
+                    valor_final = 1 if (item and item.checkState() == Qt.Checked) else 0
+                    valor_str = ""
+                else:
+                    valor_str = item.text() if item else ""
 
-            valor_final = None
-            if valor_str:
+            if valor_str != "" and campo_bd != 'nao_stock':
                 if campo_bd in campos_moeda:
                     try:
                         valor_final = converter_texto_para_valor(
@@ -598,6 +601,8 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                         valor_final = None
                 else:
                     valor_final = valor_str.strip() if valor_str else None
+            elif campo_bd != 'nao_stock':
+                valor_final = None
             dados_linha[campo_bd] = valor_final
 
         # Cria tupla na ordem correta das colunas do BD: nome nulo
@@ -694,14 +699,15 @@ def guardar_dados_gerais_orcamento(parent):
         "familia": 16,
         "comp_mp": 17,
         "larg_mp": 18,
-        "esp_mp": 19
+        "esp_mp": 19,
+        "nao_stock": 21
     }
     col_names_materiais = [
         "material", "descricao", "id_mat", "num_orc", "ver_orc",
         "ref_le", "descricao_no_orcamento", "ptab", "pliq",
         "desc1_plus", "desc2_minus", "und", "desp",
         "corres_orla_0_4", "corres_orla_1_0", "tipo", "familia",
-        "comp_mp", "larg_mp", "esp_mp"
+        "comp_mp", "larg_mp", "esp_mp", "nao_stock"
     ]
     if not guardar_por_tabela(parent, "materiais", ui.Tab_Material, mapping_materiais, col_names_materiais):
         sucesso = False
