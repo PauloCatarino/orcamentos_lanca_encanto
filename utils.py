@@ -578,8 +578,24 @@ def copiar_dados_gerais_para_itens(ui):
     ]
     for origem, destino in pares:
         copiar_valores_tabela(origem, destino)
+        if origem is ui.Tab_Material and destino is ui.Tab_Material_11:
+            copiar_nao_stock_checkbox(origem, destino)
 
-
+def copiar_nao_stock_checkbox(origem, destino, col=21):
+    """Copia o estado da coluna 'nao_stock' entre tabelas."""
+    rows = min(origem.rowCount(), destino.rowCount())
+    for r in range(rows):
+        src_item = origem.item(r, col)
+        state = Qt.Unchecked
+        if src_item and src_item.flags() & Qt.ItemIsUserCheckable:
+            state = src_item.checkState()
+        dst_item = destino.item(r, col)
+        if not dst_item:
+            dst_item = QTableWidgetItem()
+            dst_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            destino.setItem(r, col, dst_item)
+        dst_item.setCheckState(state)
+        
 def apply_row_selection_style(table, color=ROW_SELECTION_COLOR):
     """Define que a tabela selecione linhas inteiras e aplica a cor de fundo da seleção."""
     if table is None:
