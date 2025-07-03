@@ -311,6 +311,7 @@ def importar_dados_item_orcamento_tab_material(parent):
         'comp_mp':                17,
         'larg_mp':                18,
         'esp_mp':                 19,
+        'nao_stock':              21,
     }
     # Importa a função de importação já existente para dados gerais   
     from dados_gerais_manager import importar_dados_gerais_com_opcao

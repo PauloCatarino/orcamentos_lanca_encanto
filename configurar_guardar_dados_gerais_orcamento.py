@@ -101,6 +101,7 @@ def mapear_registro_gerais(registro, column_names=None):
       17 ← registro[20] (comp_mp)
       18 ← registro[21] (larg_mp)
       19 ← registro[22] (esp_mp)
+      21 ← registro[24] (nao_stock)
 
         # Índice BD | Campo        | Índice UI | Descrição
     # ---------|--------------|-----------|----------
@@ -151,6 +152,7 @@ def mapear_registro_gerais(registro, column_names=None):
                 17: "comp_mp",
                 18: "larg_mp",
                 19: "esp_mp",
+                21: "nao_stock",
             }
             resultado = {}
             for ui_idx, col_nome in mapeamento.items():
@@ -180,7 +182,8 @@ def mapear_registro_gerais(registro, column_names=None):
             16: registro[19],  # familia -> UI[16]
             17: registro[20],  # comp_mp -> UI[17]
             18: registro[21],  # larg_mp -> UI[18]
-            19: registro[22]  # esp_mp -> UI[19]
+            19: registro[22],  # esp_mp -> UI[19]
+            21: registro[24]   # nao_stock -> UI[21]
         }
     except IndexError:
         print(
