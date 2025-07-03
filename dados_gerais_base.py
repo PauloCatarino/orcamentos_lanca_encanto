@@ -103,7 +103,7 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 if not cursor.fetchone():
                     try:
                         cursor.execute(
-                            f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER MP"
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER `MP`"
                         )
                         print(
                             f"Coluna 'nao_stock' adicionada à '{tabela_bd_segura}'."

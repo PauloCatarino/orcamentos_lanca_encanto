@@ -520,7 +520,7 @@ def criar_tabela_dados_items_materiais():
                  print("Tabela 'dados_items_materiais' já existe.")      # Pretendo eliminar esta linha mas dá erro
                  cursor.execute("SHOW COLUMNS FROM dados_items_materiais LIKE 'nao_stock'")
                  if not cursor.fetchone():
-                     cursor.execute("ALTER TABLE dados_items_materiais ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER esp_mp")
+                     cursor.execute("ALTER TABLE dados_items_materiais ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER `esp_mp`")
                      print("Coluna 'nao_stock' adicionada à 'dados_items_materiais'.")
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao criar/verificar 'dados_items_materiais': {err}")
