@@ -14,6 +14,9 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment
 
 # =============================================================================
 # Bloco: Importação dinâmica da função de carregar tabelas do MySQL
@@ -109,23 +112,34 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
         grouped[col] = grouped[col].round(3)
     for col in ['custo_mp_total', 'custo_placas_utilizadas']:
         grouped[col] = grouped[col].round(2)
-    return grouped[cols_esperadas]
-    # =============================================================================
+
     # Marca materiais de não stock com um visto
     if itens_materiais is not None and not itens_materiais.empty:
-        filtro = (
-            itens_materiais['num_orc'].astype(str) == str(num_orc)
-        ) & (
-            itens_materiais['ver_orc'].astype(str) == str(versao)
-        ) & (
-            itens_materiais.get('nao_stock', 0).astype(int) == 1
-        )
-        descs_nao_stock = itens_materiais.loc[filtro, 'descricao_no_orcamento']
-        descs_nao_stock = descs_nao_stock.dropna().astype(str).str.strip().unique()
-        grouped['nao_stock'] = grouped['descricao_no_orcamento'].astype(str).str.strip().isin(descs_nao_stock)
-        grouped['nao_stock'] = grouped['nao_stock'].map({True: '✓', False: ''})
+        try:
+            filtro = (
+                itens_materiais['num_orc'].astype(str) == str(num_orc)
+            ) & (
+                itens_materiais['ver_orc'].astype(str) == str(versao)
+            ) & (
+                itens_materiais.get('nao_stock', 0).astype(int) == 1
+            )
+            descs_nao_stock = itens_materiais.loc[filtro, 'descricao_no_orcamento']
+            descs_nao_stock = (
+                descs_nao_stock.dropna().astype(str).str.strip().unique()
+            )
+            grouped['nao_stock'] = grouped[
+                'descricao_no_orcamento'
+            ].astype(str).str.strip().isin(descs_nao_stock)
+            grouped['nao_stock'] = grouped['nao_stock'].map({True: '✓', False: ''})
+        except Exception:
+            grouped['nao_stock'] = ''
     else:
         grouped['nao_stock'] = ''
+
+    if 'nao_stock' not in grouped.columns:
+        grouped['nao_stock'] = ''
+
+    return grouped[cols_esperadas]
 
 
 # =============================================================================
@@ -334,6 +348,49 @@ def resumo_margens_excel(excel_path, num_orcamento, versao):
     return pd.DataFrame(data, columns=cols_esperadas)
 
 # =============================================================================
+# Função auxiliar: ajustar_formatacao_resumo_placas
+# =============================================================================
+def ajustar_formatacao_resumo_placas(path_excel):
+    """Reduz larguras e aplica rotação de cabeçalho no Excel."""
+    try:
+        wb = load_workbook(path_excel)
+    except Exception as exc:
+        print(f"[WARN] Não foi possível abrir {path_excel}: {exc}")
+        return
+    if "Resumo Placas" not in wb.sheetnames:
+        wb.close()
+        return
+    ws = wb["Resumo Placas"]
+    header = list(ws.iter_rows(min_row=1, max_row=1))[0]
+    col_map = {c.value: c.column for c in header if c.value}
+    alvo = [
+        "qt_placas_utilizadas",
+        "area_placa",
+        "m2_consumidos",
+        "custo_mp_total",
+        "custo_placas_utilizadas",
+    ]
+    for nome in alvo:
+        idx = col_map.get(nome)
+        if idx is None:
+            continue
+        letra = get_column_letter(idx)
+        ws.column_dimensions[letra].width = 6
+    for cell in header:
+        cell.alignment = Alignment(
+            textRotation=45,
+            wrap_text=True,
+            horizontal="center",
+            vertical="center",
+        )
+    wb.save(path_excel)
+    wb.close()
+# Ajusta a formatação do resumo de placas no Excel
+
+
+
+
+# =============================================================================
 # 7. Função principal: gerar_resumos_excel
 # =============================================================================
 # Descrição:
@@ -398,5 +455,10 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
         print("--- Gravação do resumo de margens concluída.")
     except Exception as exc:
         print(f"ERRO CRÍTICO ao gravar resumo de margens no Excel: {exc}")
+
+    try:
+        ajustar_formatacao_resumo_placas(path_excel)
+    except Exception as e:
+        print(f"[AVISO] Falha ao ajustar formato do Excel: {e}")
 
     print(f"===> RESUMOS GERADOS/ATUALIZADOS COM SUCESSO EM: {path_excel}")
