@@ -1,16 +1,60 @@
 # dashboard_resumos_custos.py
+"""
+Descrição:
+Classe personalizada para desenhar o rodapé em cada página do PDF exportado,
+incluindo data, número do orçamento, versão e numeração das páginas.
+"""
+"""
+Descrição:
+Converte um DataFrame do pandas para um QTableWidget PyQt5,
+mantendo o formato, o alinhamento e ajustando visualmente a tabela.
+"""
+# Função: ajustar_tabela_resumo_placas
+"""
+Descrição:
+Ajusta larguras de colunas e aplica rotação ao cabeçalho da tabela de placas,
+para melhor visualização dos dados no QTableWidget.
+"""
+"""
+Descrição:
+Cria um gráfico de barras agrupadas para comparar custos teóricos
+e reais (com desperdício) das placas usadas no orçamento.
+Legendas longas são ajustadas para não ficarem cortadas.
+"""
+"""
+Descrição:
+Cria um gráfico de barras simples para mostrar o consumo total
+de cada tipo de orla (metros lineares), com legendas otimizadas.
+"""
+"""
+Descrição:
+Gráfico genérico de barras simples para categorias e valores.
+Serve para custos de ferragens, máquinas, etc. Otimiza as labels.
+"""
+"""
+Descrição:
+Widget principal do dashboard PyQt5. Organiza e exibe as tabelas
+e gráficos para cada grupo de custos do orçamento. Permite exportar
+tudo para PDF, com layout visual e rodapé.
+"""
+# Função: mostrar_dashboard_resumos
+"""
+Descrição:
+Função que recebe o widget pai e o caminho do Excel, limpa o conteúdo atual
+do widget e insere o dashboard do orçamento (PyQt5) pronto a ser usado.
+"""
 # Mostra os resumos de custos do Excel de cada orçamento como dashboard visual no PyQt5
 
-# =============================================================================
-# Este módulo permite:
-#   - Ler ficheiros Excel com resumos de custos por orçamento.
-#   - Apresentar dashboards visuais e tabelas com os custos de placas, orlas, ferragens, máquinas e margens.
-#   - Gerar gráficos automáticos para cada grupo de custos (matplotlib).
-#   - Exportar o dashboard inteiro (tabelas + gráficos) para PDF, com rodapé personalizado e paginação.
-#   - Integrar facilmente numa aplicação PyQt5.
-#
-# Dependências: pandas, numpy, matplotlib, reportlab, PyQt5
-# =============================================================================
+#=============================================================================
+#Resumo do Script: dashboard_resumos_custos.py
+#=============================================================================
+#Este módulo implementa um dashboard visual em PyQt5 para exibir resumos de custos de orçamentos a partir de ficheiros Excel. Permite:
+#    - Ler e processar folhas de resumos de custos (placas, orlas, ferragens, máquinas, margens).
+#    - Apresentar tabelas e gráficos interativos para cada grupo de custos.
+#    - Exportar o dashboard completo (tabelas + gráficos) para PDF, com rodapé personalizado e paginação.
+#    - Integrar facilmente numa aplicação PyQt5.
+#Dependências: pandas, numpy, matplotlib, reportlab, PyQt5
+#=============================================================================
 
 import os
 import io
@@ -109,7 +153,27 @@ def dataframe_para_qtablewidget(df: pd.DataFrame) -> QTableWidget:
     table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
     table.setAlternatingRowColors(True)
     table.setFixedHeight(table.horizontalHeader().height() + table.rowHeight(0) * (table.rowCount() + 1) + 2)
-    return table
+    
+ 
+    
+def ajustar_tabela_resumo_placas(table: QTableWidget, df: pd.DataFrame):
+    """Reduz larguras e gira cabeçalho para Resumo de Placas."""
+    col_alvo = [
+        "qt_placas_utilizadas",
+        "area_placa",
+        "m2_consumidos",
+        "custo_mp_total",
+        "custo_placas_utilizadas",
+    ]
+    header = table.horizontalHeader()
+    for nome in col_alvo:
+        if nome in df.columns:
+            idx = df.columns.get_loc(nome)
+            table.setColumnWidth(idx, 55)
+    # Tenta aplicar rotação de 45 graus no cabeçalho (pode não ser suportado em todos os estilos)
+    header.setStyleSheet(
+        "QHeaderView::section { height: 40px; padding: 1px; text-align:center; transform:rotate(-45deg); }"
+    )
 
 # =============================================================================
 # Função: criar_grafico_placas
@@ -278,7 +342,9 @@ class DashboardResumoCustos(QWidget):
         groupBox = QGroupBox(titulo)
         groupBox.setStyleSheet("QGroupBox { font-weight: bold; }")
         layout = QVBoxLayout()
-        tabela = dataframe_para_qtablewidget(df)
+        tabela = dataframe_para_qtablewidget(df)  # Corrige o erro!
+        if titulo.lower().startswith("resumo de placas"):
+            ajustar_tabela_resumo_placas(tabela, df)
         layout.addWidget(tabela)
         if func_grafico:
             figura_grafico = func_grafico(df)
@@ -331,7 +397,22 @@ class DashboardResumoCustos(QWidget):
             df_str = df_pdf.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)))
             
             data = [df_str.columns.tolist()] + df_str.values.tolist()
-            table = Table(data, hAlign='LEFT', repeatRows=1)
+            col_widths = None
+            if key == "Placas":
+                alvo = [
+                    "qt_placas_utilizadas",
+                    "area_placa",
+                    "m2_consumidos",
+                    "custo_mp_total",
+                    "custo_placas_utilizadas",
+                ]
+                col_widths = []
+                for c in df_str.columns:
+                    if c in alvo:
+                        col_widths.append(45)
+                    else:
+                        col_widths.append(None)
+            table = Table(data, colWidths=col_widths, hAlign='LEFT', repeatRows=1)
             style = TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.darkgrey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
