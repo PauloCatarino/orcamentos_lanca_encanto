@@ -70,10 +70,11 @@ def resumo_geral_pecas(df_pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
 # Resume o consumo e custos das placas usadas, calculando área, quantidade,
 # desperdício, custo total teórico e real.
 # =============================================================================
-def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
+def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.DataFrame | None = None) -> pd.DataFrame:
     cols_esperadas = [
         'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp',
-        'qt_placas_utilizadas', 'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas'
+        'qt_placas_utilizadas', 'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas',
+        'nao_stock'
     ]
     if pecas.empty:
         return pd.DataFrame(columns=cols_esperadas)
@@ -109,6 +110,23 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
     for col in ['custo_mp_total', 'custo_placas_utilizadas']:
         grouped[col] = grouped[col].round(2)
     return grouped[cols_esperadas]
+    # =============================================================================
+    # Marca materiais de não stock com um visto
+    if itens_materiais is not None and not itens_materiais.empty:
+        filtro = (
+            itens_materiais['num_orc'].astype(str) == str(num_orc)
+        ) & (
+            itens_materiais['ver_orc'].astype(str) == str(versao)
+        ) & (
+            itens_materiais.get('nao_stock', 0).astype(int) == 1
+        )
+        descs_nao_stock = itens_materiais.loc[filtro, 'descricao_no_orcamento']
+        descs_nao_stock = descs_nao_stock.dropna().astype(str).str.strip().unique()
+        grouped['nao_stock'] = grouped['descricao_no_orcamento'].astype(str).str.strip().isin(descs_nao_stock)
+        grouped['nao_stock'] = grouped['nao_stock'].map({True: '✓', False: ''})
+    else:
+        grouped['nao_stock'] = ''
+
 
 # =============================================================================
 # 3. Função: resumo_orlas
@@ -333,7 +351,8 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     pecas = carregar_tabela("dados_def_pecas")
     orcamentos = carregar_tabela("orcamentos")
     orcamento_items = carregar_tabela("orcamento_items")
-    print(f"--- Linhas carregadas | Peças: {len(pecas)}, Orçamentos: {len(orcamentos)}, Itens: {len(orcamento_items)}")
+    itens_materiais = carregar_tabela("dados_items_materiais")
+    print(f"--- Linhas carregadas | Peças: {len(pecas)}, Orçamentos: {len(orcamentos)}, " f"Itens: {len(orcamento_items)}, Materiais: {len(itens_materiais)}")
     
     num_orc_f = str(num_orc).strip()
     ver_f = str(versao).strip().zfill(2)
@@ -351,7 +370,7 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
 
     # Executa cada resumo
     df_resumogeral = resumo_geral_pecas(pecas, num_orc, versao)
-    df_resumo_placas = resumo_placas(pecas, num_orc, versao)
+    df_resumo_placas = resumo_placas(pecas, num_orc, versao, itens_materiais)
     df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
     df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
     df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
