@@ -65,10 +65,11 @@ import textwrap
 
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QTableWidget, QSizePolicy, QTableWidgetItem, 
-    QGridLayout, QGroupBox, QPushButton, QHeaderView, QFileDialog
+    QWidget, QVBoxLayout, QLabel, QTableWidget, QSizePolicy, QTableWidgetItem,
+    QGridLayout, QGroupBox, QPushButton, QHeaderView, QFileDialog,
+    QStyleOptionHeader, QStyle
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRect
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -77,6 +78,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
+from reportlab.graphics.shapes import Drawing, String, rotate, mmult, translate
 
 # =============================================================================
 # Classe FooterCanvas
@@ -118,7 +120,45 @@ class FooterCanvas(canvas.Canvas):
         self.drawCentredString(landscape(A4)[0] / 2, 20, self.num_orc_ver)
         self.drawRightString(landscape(A4)[0] - 30, 20, f"Página {page_num} / {page_count}")
         
-        self.restoreState()
+        
+        
+class RotatedHeaderView(QHeaderView):
+    """Cabeçalho horizontal com texto rodado a -45 graus."""
+
+    def __init__(self, angle=-45, parent=None):
+        super().__init__(Qt.Horizontal, parent)
+        self.angle = angle
+        self.setDefaultAlignment(Qt.AlignCenter)
+
+    def paintSection(self, painter, rect, logicalIndex):
+        option = QStyleOptionHeader()
+        self.initStyleOption(option)
+        option.rect = rect
+        option.section = logicalIndex
+        option.text = ""
+        self.style().drawControl(QStyle.CE_HeaderSection, option, painter, self)
+
+        text = self.model().headerData(logicalIndex, Qt.Horizontal, Qt.DisplayRole)
+        if text is not None:
+            painter.save()
+            painter.translate(rect.center())
+            painter.rotate(self.angle)
+            painter.drawText(
+                QRect(-rect.width() // 2, -rect.height() // 2, rect.width(), rect.height()),
+                Qt.AlignCenter,
+                str(text),
+            )
+            painter.restore()
+
+
+def rotated_label(text: str, angle: float = -45) -> Drawing:
+    """Cria um Drawing com texto rodado para uso em tabelas PDF."""
+    d = Drawing(40, 40)
+    s = String(0, 0, str(text))
+    s.textAnchor = 'start'
+    s.transform = mmult(translate(20, 5), rotate(angle))
+    d.add(s)
+    return d
 
 # =============================================================================
 # Função: dataframe_para_qtablewidget
@@ -169,15 +209,15 @@ def ajustar_tabela_resumo_placas(table: QTableWidget, df: pd.DataFrame):
         "custo_mp_total",
         "custo_placas_utilizadas",
     ]
-    header = table.horizontalHeader()
+    rotated_header = RotatedHeaderView(parent=table)
+    table.setHorizontalHeader(rotated_header)
+    rotated_header.setSectionResizeMode(QHeaderView.ResizeToContents)
+    rotated_header.setMinimumHeight(60)
     for nome in col_alvo:
         if nome in df.columns:
             idx = df.columns.get_loc(nome)
             table.setColumnWidth(idx, 55)
-    # Tenta aplicar rotação de 45 graus no cabeçalho (pode não ser suportado em todos os estilos)
-    header.setStyleSheet(
-        "QHeaderView::section { height: 40px; padding: 1px; text-align:center; transform:rotate(-45deg); }"
-    )
+    # Rotação do texto é feita pela classe RotatedHeaderView
 
 # =============================================================================
 # Função: criar_grafico_placas
@@ -400,7 +440,10 @@ class DashboardResumoCustos(QWidget):
             df_pdf = df.fillna('')
             df_str = df_pdf.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)))
             
-            data = [df_str.columns.tolist()] + df_str.values.tolist()
+            header_cells = df_str.columns.tolist()
+            if key == "Placas":
+                header_cells = [rotated_label(c) for c in df_str.columns]
+            data = [header_cells] + df_str.values.tolist()
             col_widths = None
             if key == "Placas":
                 alvo = [
