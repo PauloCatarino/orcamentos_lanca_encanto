@@ -153,6 +153,10 @@ def dataframe_para_qtablewidget(df: pd.DataFrame) -> QTableWidget:
     table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
     table.setAlternatingRowColors(True)
     table.setFixedHeight(table.horizontalHeader().height() + table.rowHeight(0) * (table.rowCount() + 1) + 2)
+
+    # Após formatar totalmente a tabela, devolve-a para ser utilizada pelo
+    # restante código do dashboard.
+    return table
     
  
     
