@@ -101,7 +101,6 @@ def mapear_registro_gerais(registro, column_names=None):
       17 ← registro[20] (comp_mp)
       18 ← registro[21] (larg_mp)
       19 ← registro[22] (esp_mp)
-      21 ← registro[24] (nao_stock)
 
         # Índice BD | Campo        | Índice UI | Descrição
     # ---------|--------------|-----------|----------
@@ -279,13 +278,13 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
         num_regs = len(registros)
         for i in range(min(num_regs, row_count_ui)):
             registro_bd = registros[i]
-            dados_mapeados = mapear_registro_gerais(registro_bd, col_names)  # Mapeia dados da BD para índices UI
+            dados_mapeados = mapear_registro_gerais(registro_bd, col_names)  # Mapeia dados da BD para índices UI # Dicionário: {indice_col: valor}
 
             for col_idx_ui, valor_bd in dados_mapeados.items():
                 if not (0 <= col_idx_ui < table.columnCount()):
                     continue  # Segurança
 
-                # Formata o valor para exibição
+                # Formatação do valor conforme o tipo de coluna
                 texto_formatado = ""
                 if valor_bd is not None:
                     # Adapta a formatação baseada no ÍNDICE DA COLUNA UI
@@ -307,7 +306,12 @@ def carregar_configuracao_dados_gerais(parent, nome_tabela):
                     if item is None:
                         item = QTableWidgetItem()
                         table.setItem(i, col_idx_ui, item)
-                    item.setText(texto_formatado)
+                        # ---- TRATAMENTO ESPECIAL PARA 'nao_stock' (checkbox) ----
+                    if col_idx_ui == 21:  # Coluna 'nao_stock'
+                        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                        item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
+                    else:
+                        item.setText(texto_formatado)
 
             # Preenche as colunas fixas num_orc e ver_orc (colunas 3 e 4)
             item_num = table.item(i, 3)
