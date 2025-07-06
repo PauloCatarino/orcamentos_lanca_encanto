@@ -56,6 +56,36 @@ do widget e insere o dashboard do orçamento (PyQt5) pronto a ser usado.
 #Dependências: pandas, numpy, matplotlib, reportlab, PyQt5
 #=============================================================================
 
+# dashboard_resumos_custos.py
+
+# dashboard_resumos_custos.py
+"""
+Dashboard de Resumos de Custos em PyQt5
+- Mostra tabelas e gráficos de custos do orçamento.
+- Exporta para PDF com layout limpo e colunas otimizadas.
+- Tooltips informativos nos cabeçalhos.
+"""
+
+# dashboard_resumos_custos.py
+"""
+Dashboard visual de resumos de custos (PyQt5).
+- Zero espaço desperdiçado.
+- Tabelas e gráficos sempre otimizados e visíveis.
+- Margens/Custos sempre em baixo, compactos.
+- PDF exporta com todas colunas (incluindo N/Stock) visíveis.
+"""
+
+# dashboard_resumos_custos.py
+
+"""
+Dashboard visual e compacto de resumos de custos (PyQt5).
+- Usa todo o espaço disponível.
+- Abrevia os nomes das colunas e mostra tooltips.
+- Margens/Custos sempre em baixo, bloco pequeno.
+- Exporta para PDF com todas as colunas (incluindo N/Stock).
+- Tabelas ajustadas à esquerda para máxima área útil.
+"""
+
 import os
 import io
 import pandas as pd
@@ -63,13 +93,12 @@ import numpy as np
 from datetime import datetime
 import textwrap
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QTableWidget, QSizePolicy, QTableWidgetItem,
-    QGridLayout, QGroupBox, QPushButton, QHeaderView, QFileDialog,
-    QStyleOptionHeader, QStyle
+    QWidget, QVBoxLayout, QTableWidget, QSizePolicy, QTableWidgetItem,
+    QGridLayout, QGroupBox, QPushButton, QHeaderView, QFileDialog
 )
-from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtCore import Qt
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -78,29 +107,87 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
-from reportlab.graphics.shapes import Drawing, String, rotate, mmult, translate
 
-# =============================================================================
-# Classe FooterCanvas
-# =============================================================================
-# Descrição:
-# Classe personalizada para desenhar o rodapé do PDF exportado, mostrando
-# data, nº do orçamento, versão e numeração das páginas.
-# =============================================================================
+# ========= ABREVIAÇÕES E TOOLTIPS =========
+ABREV_COLUNAS = {
+    "ref_le": "Ref.",
+    "descricao_no_orcamento": "Descrição",
+    "pliq": "P.Liq",
+    "und": "Und",
+    "desp": "Desp.",
+    "comp_mp": "Comp.",
+    "larg_mp": "Larg.",
+    "esp_mp": "Esp.",
+    "qt_placas_utilizadas": "Qt.Placa",
+    "area_placa": "Área",
+    "m2_consumidos": "m² Usad.",
+    "custo_mp_total": "C.MP Tot",
+    "custo_placas_utilizadas": "C.Placa Usad.",
+    "nao_stock": "N/Stock",
+    "qt_total": "Qt.",
+    "spp_ml_total": "ML Sup.",
+    "custo_mp_und": "C.MP Und",
+    "ref_orla": "Ref.",
+    "espessura_orla": "Esp.",
+    "largura_orla": "Larg.",
+    "ml_total": "ML Tot.",
+    "custo_total": "Custo Tot",
+    "Operação": "Op.",
+    "Custo Total (€)": "C. Tot.",
+    "ML Corte": "ML Corte",
+    "ML Orlado": "ML Orl.",
+    "Nº Peças": "Nº Peças",
+    "Tipo": "Tipo",
+    "Percentagem (%)": "%",
+    "Valor (€)": "€"
+}
+TOOLTIPS_COLUNAS = {
+    "Ref.": "Referência do material/componente",
+    "Descrição": "Descrição detalhada",
+    "P.Liq": "Peso líquido",
+    "Und": "Unidade",
+    "Desp.": "Desperdício",
+    "Comp.": "Comprimento",
+    "Larg.": "Largura",
+    "Esp.": "Espessura",
+    "Qt.Placa": "Quantidade de placas",
+    "Área": "Área da placa (m²)",
+    "m² Usad.": "Metros quadrados consumidos",
+    "C.MP Tot": "Custo total da matéria-prima",
+    "C.Placa Usad.": "Custo das placas usadas",
+    "N/Stock": "Não existe em stock",
+    "Qt.": "Quantidade",
+    "ML Sup.": "Metros lineares de suporte",
+    "C.MP Und": "Custo MP unidade",
+    "Custo Tot": "Custo total",
+    "Op.": "Operação/máquina",
+    "C. Tot.": "Custo total",
+    "ML Corte": "Metros lineares cortados",
+    "ML Orl.": "Metros lineares orlados",
+    "Nº Peças": "Número de peças",
+    "%": "Percentagem",
+    "€": "Valor em euros"
+}
+
+def abreviar_colunas(df):
+    """Retorna dataframe com colunas abreviadas + lista de nomes."""
+    novas_cols = [ABREV_COLUNAS.get(c, c) for c in df.columns]
+    df_abrev = df.copy()
+    df_abrev.columns = novas_cols
+    return df_abrev, novas_cols
+
+# ========= RODAPÉ PDF =========
 class FooterCanvas(canvas.Canvas):
-    """Classe personalizada para desenhar o rodapé em cada página do PDF."""
     def __init__(self, num_orc_ver, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_orc_ver = num_orc_ver
         self._saved_page_states = []
 
     def showPage(self):
-        # Guarda o estado de cada página antes de passar à seguinte
         self._saved_page_states.append(dict(self.__dict__))
         self._startPage()
 
     def save(self):
-        # Ao terminar, desenha o rodapé em todas as páginas antes de gravar
         page_count = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
@@ -109,198 +196,109 @@ class FooterCanvas(canvas.Canvas):
         super().save()
 
     def draw_footer(self, page_count):
-        # Desenha o rodapé com data, orçamento/versão e nº da página
         self.saveState()
         self.setFont('Helvetica', 9)
         data_hoje = datetime.now().strftime("%d/%m/%Y")
         page_num = self.getPageNumber()
-        
-        # Desenha os elementos do rodapé
-        self.drawString(30, 20, data_hoje)
+        self.drawString(25, 20, data_hoje)
         self.drawCentredString(landscape(A4)[0] / 2, 20, self.num_orc_ver)
-        self.drawRightString(landscape(A4)[0] - 30, 20, f"Página {page_num} / {page_count}")
-        
-        
-        
-class RotatedHeaderView(QHeaderView):
-    """Cabeçalho horizontal com texto rodado a -45 graus."""
+        self.drawRightString(landscape(A4)[0] - 28, 20, f"Página {page_num} / {page_count}")
+        self.restoreState()
 
-    def __init__(self, angle=-45, parent=None):
-        super().__init__(Qt.Horizontal, parent)
-        self.angle = angle
-        self.setDefaultAlignment(Qt.AlignCenter)
+# ========= LARGURAS PDF (colunas e margem reduzida) =========
+def colwidths_pdf(cols_abrev):
+    """Largura apropriada para cada coluna, incluindo N/Stock."""
+    larguras = []
+    for c in cols_abrev:
+        if c in ["Descrição", "Op."]:
+            larguras.append(198)
+        elif c in ["Ref."]:
+            larguras.append(56)
+        elif c in ["N/Stock"]:
+            larguras.append(47)
+        elif "Custo" in c or "Valor" in c or "C. Tot." in c:
+            larguras.append(63)
+        elif c in ["Área", "m² Usad."]:
+            larguras.append(49)
+        else:
+            larguras.append(44)
+    return larguras
 
-    def paintSection(self, painter, rect, logicalIndex):
-        option = QStyleOptionHeader()
-        self.initStyleOption(option)
-        option.rect = rect
-        option.section = logicalIndex
-        option.text = ""
-        self.style().drawControl(QStyle.CE_HeaderSection, option, painter, self)
-
-        text = self.model().headerData(logicalIndex, Qt.Horizontal, Qt.DisplayRole)
-        if text is not None:
-            painter.save()
-            painter.translate(rect.center())
-            painter.rotate(self.angle)
-            painter.drawText(
-                QRect(-rect.width() // 2, -rect.height() // 2, rect.width(), rect.height()),
-                Qt.AlignCenter,
-                str(text),
-            )
-            painter.restore()
-
-
-def rotated_label(text: str, angle: float = -45) -> Drawing:
-    """Cria um Drawing com texto rodado para uso em tabelas PDF."""
-    d = Drawing(40, 40)
-    s = String(0, 0, str(text))
-    s.textAnchor = 'start'
-    s.transform = mmult(translate(20, 5), rotate(angle))
-    d.add(s)
-    return d
-
-# =============================================================================
-# Função: dataframe_para_qtablewidget
-# =============================================================================
-# Descrição:
-# Converte um DataFrame do pandas para um QTableWidget PyQt5,
-# mantendo o formato, o alinhamento e ajustando visualmente a tabela.
-# =============================================================================
-
+# ========= DataFrame → QTableWidget (com tooltips) =========
 def dataframe_para_qtablewidget(df: pd.DataFrame) -> QTableWidget:
-    """Converte um DataFrame do Pandas para um QTableWidget bem formatado."""
     if df is None or df.empty:
-        table = QTableWidget(1, 1); table.setItem(0, 0, QTableWidgetItem("Sem dados para exibir.")); return table
-    table = QTableWidget(len(df), len(df.columns))
-    table.setHorizontalHeaderLabels(df.columns.astype(str))
-    for i in range(len(df)):
-        for j in range(len(df.columns)):
-            valor = df.iat[i, j]
-            if pd.isna(valor):
-                valor_str = ""
-            elif isinstance(valor, (int, float)):
-                valor_str = f"{valor:,.2f}"
-            else:
-                valor_str = str(valor)
+        table = QTableWidget(1, 1)
+        table.setItem(0, 0, QTableWidgetItem("Sem dados para exibir."))
+        return table
+    df_abrev, colunas_abreviadas = abreviar_colunas(df)
+    table = QTableWidget(len(df_abrev), len(colunas_abreviadas))
+    table.setHorizontalHeaderLabels(colunas_abreviadas)
+    header = table.horizontalHeader()
+    for i, col_abrev in enumerate(colunas_abreviadas):
+        item = QTableWidgetItem(col_abrev)
+        tooltip = TOOLTIPS_COLUNAS.get(col_abrev, col_abrev)
+        item.setToolTip(tooltip)
+        table.setHorizontalHeaderItem(i, item)
+        header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+    for i in range(len(df_abrev)):
+        for j in range(len(colunas_abreviadas)):
+            valor = df_abrev.iat[i, j]
+            valor_str = "" if pd.isna(valor) else f"{valor:,.2f}" if isinstance(valor, (int, float)) else str(valor)
             item = QTableWidgetItem(valor_str)
             if isinstance(valor, (int, float)):
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             table.setItem(i, j, item)
     table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
     table.verticalHeader().setVisible(False)
-    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-    table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
     table.setAlternatingRowColors(True)
-    table.setFixedHeight(table.horizontalHeader().height() + table.rowHeight(0) * (table.rowCount() + 1) + 2)
-
-    # Após formatar totalmente a tabela, devolve-a para ser utilizada pelo
-    # restante código do dashboard.
+    table.horizontalHeader().setFixedHeight(30)
+    table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     return table
-    
- 
-    
-def ajustar_tabela_resumo_placas(table: QTableWidget, df: pd.DataFrame):
-    """Reduz larguras e gira cabeçalho para Resumo de Placas."""
-    col_alvo = [
-        "qt_placas_utilizadas",
-        "area_placa",
-        "m2_consumidos",
-        "custo_mp_total",
-        "custo_placas_utilizadas",
-    ]
-    rotated_header = RotatedHeaderView(parent=table)
-    table.setHorizontalHeader(rotated_header)
-    rotated_header.setSectionResizeMode(QHeaderView.ResizeToContents)
-    rotated_header.setMinimumHeight(60)
-    for nome in col_alvo:
-        if nome in df.columns:
-            idx = df.columns.get_loc(nome)
-            table.setColumnWidth(idx, 55)
-    # Rotação do texto é feita pela classe RotatedHeaderView
 
-# =============================================================================
-# Função: criar_grafico_placas
-# =============================================================================
-# Descrição:
-# Cria um gráfico de barras agrupadas para comparar custos teóricos
-# e reais (com desperdício) das placas usadas no orçamento.
-# Legendas longas são ajustadas para não ficarem cortadas.
-# =============================================================================
+# ========= GRÁFICOS (Expanding) =========
 def criar_grafico_placas(df):
-    """Cria um gráfico de barras agrupado para comparar custos de placas."""
     if df is None or df.empty:
         return None
     df_plot = df[['descricao_no_orcamento', 'custo_mp_total', 'custo_placas_utilizadas']].copy()
     for col in ['custo_mp_total', 'custo_placas_utilizadas']:
         df_plot[col] = pd.to_numeric(df_plot[col], errors='coerce').fillna(0)
-    
-    # Define a cor da barra com base na comparação: Vermelho se custo real > teórico, Verde caso contrário.
-    colors = ['#F44336' if real > custo else '#4CAF50' for real, custo in zip(df_plot['custo_placas_utilizadas'], df_plot['custo_mp_total'])]
-    
+    colors_barras = ['#F44336' if real > teor else '#4CAF50'
+                     for real, teor in zip(df_plot['custo_placas_utilizadas'], df_plot['custo_mp_total'])]
     x = np.arange(len(df_plot['descricao_no_orcamento']))
     width = 0.35
-    # Aumentar a altura do gráfico para dar espaço às labels
-    fig, ax = plt.subplots(figsize=(10, 5.5), dpi=100)
-
+    fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
     ax.bar(x - width/2, df_plot['custo_mp_total'], width, label='Custo Teórico', color='skyblue', edgecolor='black', zorder=3)
-    ax.bar(x + width/2, df_plot['custo_placas_utilizadas'], width, label='Custo Real (c/ Desperdício)', color=colors, edgecolor='black', zorder=3)
-
+    ax.bar(x + width/2, df_plot['custo_placas_utilizadas'], width, label='Custo Real', color=colors_barras, edgecolor='black', zorder=3)
     ax.set_ylabel('Custo (€)', fontsize=10)
-    ax.set_title('Comparativo de Custos por Placa', fontweight='bold', fontsize=13)
+    ax.set_title('Comparativo de Custos por Placa', fontweight='bold', fontsize=12)
     ax.set_xticks(x)
-
-    # MAIS ESPAÇO PARA CADA LABEL (quebra em linhas maiores)
-    wrapped_labels = [textwrap.fill(l, 30) for l in df_plot['descricao_no_orcamento'].astype(str)]
-    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=9)
-
-    # MAIS ESPAÇO EM BAIXO PARA NÃO CORTAR AS LEGENDAS
-    fig.subplots_adjust(bottom=0.30)
-
+    wrapped_labels = [textwrap.fill(l, 28) for l in df_plot['descricao_no_orcamento'].astype(str)]
+    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
+    fig.subplots_adjust(bottom=0.33)
     ax.legend()
     ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
     fig.tight_layout()
     return fig
 
-# =============================================================================
-# Função: criar_grafico_orlas
-# =============================================================================
-# Descrição:
-# Cria um gráfico de barras simples para mostrar o consumo total
-# de cada tipo de orla (metros lineares), com legendas otimizadas.
-# =============================================================================
 def criar_grafico_orlas(df):
-    """Cria um gráfico de barras para o consumo de orlas."""
     if df is None or df.empty:
         return None
     df_plot = df.copy()
     df_plot['label'] = df_plot['ref_orla'].astype(str) + ' (' + df_plot['espessura_orla'].astype(str) + ', ' + df_plot['largura_orla'].astype(int).astype(str) + 'mm)'
-    
-    fig, ax = plt.subplots(figsize=(10, 5.5), dpi=100)
+    fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
     bars = ax.bar(df_plot['label'], pd.to_numeric(df_plot['ml_total'], errors='coerce'), color='orange', edgecolor='black', zorder=3)
     ax.set_ylabel('Metros Lineares (ml)', fontsize=10)
-    ax.set_title('Consumo de Orlas (ml)', fontweight='bold', fontsize=13)
-
-    # Rotaciona e quebra label, ajusta fonte e margem inferior
-    wrapped_labels = [textwrap.fill(l, 30) for l in df_plot['label'].astype(str)]
+    ax.set_title('Consumo de Orlas (ml)', fontweight='bold', fontsize=12)
+    wrapped_labels = [textwrap.fill(l, 25) for l in df_plot['label'].astype(str)]
     ax.set_xticks(np.arange(len(wrapped_labels)))
-    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=9)
-    fig.subplots_adjust(bottom=0.30)
-    
+    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
+    fig.subplots_adjust(bottom=0.33)
     ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
-    ax.bar_label(bars, fmt='%.2f', fontsize=8, padding=3)
+    ax.bar_label(bars, fmt='%.2f', fontsize=7, padding=2)
     fig.tight_layout()
     return fig
 
-# =============================================================================
-# Função: criar_grafico_simples
-# =============================================================================
-# Descrição:
-# Gráfico genérico de barras simples para categorias e valores.
-# Serve para custos de ferragens, máquinas, etc. Otimiza as labels.
-# =============================================================================
 def criar_grafico_simples(df, col_cat, col_val, titulo, cor, ylabel='Custo (€)'):
-    """Cria um gráfico de barras simples para uma categoria e um valor."""
     if df is None or df.empty:
         return None
     df_plot = df[[col_cat, col_val]].copy()
@@ -309,32 +307,21 @@ def criar_grafico_simples(df, col_cat, col_val, titulo, cor, ylabel='Custo (€)
     df_plot[col_val] = pd.to_numeric(df_plot[col_val], errors='coerce').fillna(0)
     if df_plot[col_val].sum() == 0:
         return None
-
-    fig, ax = plt.subplots(figsize=(10, 5.5), dpi=100)
+    fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
     ax.bar(df_plot[col_cat].astype(str), df_plot[col_val], color=cor, edgecolor='black', zorder=3)
     ax.set_ylabel(ylabel, fontsize=10)
-    ax.set_title(titulo, fontweight='bold', fontsize=13)
-    # Rotaciona, quebra label, ajusta fonte e margem inferior
-    wrapped_labels = [textwrap.fill(l, 30) for l in df_plot[col_cat].astype(str)]
+    ax.set_title(titulo, fontweight='bold', fontsize=12)
+    wrapped_labels = [textwrap.fill(l, 28) for l in df_plot[col_cat].astype(str)]
     ax.set_xticks(np.arange(len(wrapped_labels)))
-    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=9)
-    fig.subplots_adjust(bottom=0.30)
+    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
+    fig.subplots_adjust(bottom=0.33)
     ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
     fig.tight_layout()
     return fig
 
-
-# =============================================================================
-# Classe Principal: DashboardResumoCustos
-# =============================================================================
-# Descrição:
-# Widget principal do dashboard PyQt5. Organiza e exibe as tabelas
-# e gráficos para cada grupo de custos do orçamento. Permite exportar
-# tudo para PDF, com layout visual e rodapé.
-# =============================================================================
-
+# ========= DASHBOARD PRINCIPAL =========
 class DashboardResumoCustos(QWidget):
-    """Widget que organiza e exibe todos os resumos e gráficos."""
+    """Dashboard compacto, sem espaços desperdiçados, e margens/custos sempre em baixo."""
     def __init__(self, excel_path, parent=None):
         super().__init__(parent)
         self.excel_path = excel_path
@@ -343,62 +330,76 @@ class DashboardResumoCustos(QWidget):
         self.init_ui()
 
     def extrair_orc_ver(self):
-        # Extrai o nº do orçamento e versão a partir do nome do ficheiro Excel
         base_name = os.path.basename(self.excel_path)
         parts = base_name.replace("Resumo_Custos_", "").replace(".xlsx", "").split('_')
         return (parts[0], parts[1]) if len(parts) >= 2 else ("?", "?")
 
     def init_ui(self):
-        # Cria o layout principal do dashboard
+        # Margens mínimas, ocupa o máximo possível da área útil
         main_layout = QVBoxLayout(self)
-        
+        main_layout.setContentsMargins(2, 2, 2, 2)
+
         export_button = QPushButton("Exportar Dashboard para PDF")
         export_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
         export_button.clicked.connect(self.exportar_pdf)
         main_layout.addWidget(export_button, 0, Qt.AlignRight)
 
-        grid_layout = QGridLayout(); grid_layout.setSpacing(15)
+        # Grid compacto
+        grid_layout = QGridLayout()
+        grid_layout.setVerticalSpacing(2)
+        grid_layout.setHorizontalSpacing(4)
 
+        # Carrega todos os DataFrames necessários
         self.dfs['Placas'] = self.ler_df("Resumo Placas")
         self.dfs['Orlas'] = self.ler_df("Resumo Orlas")
         self.dfs['Ferragens'] = self.ler_df("Resumo Ferragens")
         self.dfs['Maquinas_MO'] = self.ler_df("Resumo Maquinas_MO")
         self.dfs['Margens'] = self.ler_df("Resumo Margens")
-         # Adiciona cada bloco (GroupBox) ao layout
 
-        placas_box = self.criar_groupbox("Resumo de Placas", self.dfs['Placas'], criar_grafico_placas)
-        orlas_box = self.criar_groupbox("Resumo de Orlas", self.dfs['Orlas'], criar_grafico_orlas)
-        ferragens_box = self.criar_groupbox("Resumo de Ferragens", self.dfs['Ferragens'], lambda df: criar_grafico_simples(df, 'descricao_no_orcamento', 'custo_mp_total', 'Custos por Ferragem', '#F44336'))
-        maquinas_box = self.criar_groupbox("Resumo de Máquinas e Mão de Obra", self.dfs['Maquinas_MO'], lambda df: criar_grafico_simples(df, 'Operação', 'Custo Total (€)', 'Custos por Operação', '#2196F3'))
-        margens_box = self.criar_groupbox("Resumo de Margens e Custos", self.dfs['Margens'], func_grafico=None)
+        # Blocos principais (Expanding), exceto Margens/Custos (Minimum)
+        placas_box = self.criar_groupbox("Resumo de Placas", self.dfs['Placas'], criar_grafico_placas, expandir=True)
+        orlas_box = self.criar_groupbox("Resumo de Orlas", self.dfs['Orlas'], criar_grafico_orlas, expandir=True)
+        ferragens_box = self.criar_groupbox("Resumo de Ferragens", self.dfs['Ferragens'],
+            lambda df: criar_grafico_simples(df, 'descricao_no_orcamento', 'custo_mp_total', 'Custos por Ferragem', '#F44336'), expandir=True)
+        maquinas_box = self.criar_groupbox("Resumo de Máquinas e Mão de Obra", self.dfs['Maquinas_MO'],
+            lambda df: criar_grafico_simples(df, 'Operação', 'Custo Total (€)', 'Custos por Operação', '#2196F3'), expandir=True)
+        margens_box = self.criar_groupbox("Resumo de Margens e Custos", self.dfs['Margens'], func_grafico=None, expandir=False)
+        margens_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
-        # MELHORIA: Reduzir a altura máxima do GroupBox das margens
-        margens_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        grid_layout.addWidget(placas_box, 0, 0); grid_layout.addWidget(orlas_box, 0, 1)
-        grid_layout.addWidget(ferragens_box, 1, 0); grid_layout.addWidget(maquinas_box, 1, 1)
+        # Layout sem espaços mortos
+        grid_layout.addWidget(placas_box, 0, 0)
+        grid_layout.addWidget(orlas_box, 0, 1)
+        grid_layout.addWidget(ferragens_box, 1, 0)
+        grid_layout.addWidget(maquinas_box, 1, 1)
         grid_layout.addWidget(margens_box, 2, 0, 1, 2)
-
+        grid_layout.setRowStretch(0, 3)
+        grid_layout.setRowStretch(1, 3)
+        grid_layout.setRowStretch(2, 1)
+        grid_layout.setColumnStretch(0, 1)
+        grid_layout.setColumnStretch(1, 1)
         main_layout.addLayout(grid_layout)
         self.setLayout(main_layout)
 
-    def criar_groupbox(self, titulo, df, func_grafico=None):
-        # Cria um bloco visual (GroupBox) com tabela + gráfico
+    def criar_groupbox(self, titulo, df, func_grafico=None, expandir=True):
         groupBox = QGroupBox(titulo)
         groupBox.setStyleSheet("QGroupBox { font-weight: bold; }")
         layout = QVBoxLayout()
-        tabela = dataframe_para_qtablewidget(df)  # Corrige o erro!
-        if titulo.lower().startswith("resumo de placas"):
-            ajustar_tabela_resumo_placas(tabela, df)
-        layout.addWidget(tabela)
+        tabela = dataframe_para_qtablewidget(df)
+        if expandir:
+            tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        else:
+            tabela.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout.addWidget(tabela, stretch=2 if expandir else 1)
         if func_grafico:
             figura_grafico = func_grafico(df)
             if figura_grafico:
-                layout.addWidget(FigureCanvas(figura_grafico))
+                canvas = FigureCanvas(figura_grafico)
+                canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                layout.addWidget(canvas, stretch=3)
         groupBox.setLayout(layout)
         return groupBox
 
     def ler_df(self, sheet):
-        # Lê uma folha do Excel para DataFrame (ou devolve vazio)
         if not os.path.exists(self.excel_path):
             return pd.DataFrame()
         try:
@@ -409,56 +410,41 @@ class DashboardResumoCustos(QWidget):
             return pd.DataFrame()
 
     def exportar_pdf(self):
-        # Exporta todo o dashboard (tabelas + gráficos) para PDF visual
         default_path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
         path, _ = QFileDialog.getSaveFileName(self, "Guardar Dashboard PDF", default_path, "PDF Files (*.pdf)")
         if not path:
             return
 
-        doc = SimpleDocTemplate(path, pagesize=landscape(A4), leftMargin=30, rightMargin=30, topMargin=30, bottomMargin=50)
+        doc = SimpleDocTemplate(path, pagesize=landscape(A4), leftMargin=18, rightMargin=30, topMargin=30, bottomMargin=48)
         story = []
         styles = getSampleStyleSheet()
-        
         story.append(Paragraph(f"Dashboard de Custos - Orçamento {self.num_orc} / Versão {self.versao}", styles['h1']))
 
         graficos_funcs = {
             "Placas": criar_grafico_placas,
             "Orlas": criar_grafico_orlas,
             "Ferragens": lambda df: criar_grafico_simples(df, 'descricao_no_orcamento', 'custo_mp_total', 'Custos por Ferragem', '#F44336'),
-            "Maquinas_MO": lambda df: criar_grafico_simples(df, 'Operação', 'Custo Total (€)', 'Custos por Operação', '#2196F3'),
-            }
+            "Maquinas_MO": lambda df: criar_grafico_simples(df, 'Operação', 'Custo Total (€)', 'Custos por Operação', '#2196F3')
+        }
 
         for key, df in self.dfs.items():
-            if df.empty:
+            if df is None or df.empty:
                 continue
             story.append(PageBreak())
-            story.append(Paragraph(f"Resumo de {key}", styles['h2']))
-            story.append(Spacer(1, 12))
-
-            
-            # CORREÇÃO para remover 'nan' do PDF
-            df_pdf = df.fillna('')
-            df_str = df_pdf.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)))
-            
-            header_cells = df_str.columns.tolist()
-            if key == "Placas":
-                header_cells = [rotated_label(c) for c in df_str.columns]
-            data = [header_cells] + df_str.values.tolist()
-            col_widths = None
-            if key == "Placas":
-                alvo = [
-                    "qt_placas_utilizadas",
-                    "area_placa",
-                    "m2_consumidos",
-                    "custo_mp_total",
-                    "custo_placas_utilizadas",
-                ]
-                col_widths = []
-                for c in df_str.columns:
-                    if c in alvo:
-                        col_widths.append(45)
-                    else:
-                        col_widths.append(None)
+            story.append(Paragraph(f"Resumo de {key.replace('_', ' ')}", styles['h2']))
+            story.append(Spacer(1, 7))
+            df_abrev, col_abrev = abreviar_colunas(df.fillna(''))
+            df_str = df_abrev.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)))
+            # Ajuste visual da coluna 'N/Stock'
+            data = [col_abrev] + df_str.values.tolist()
+            col_widths = colwidths_pdf(col_abrev)
+            # Preencher N/Stock por ✓
+            try:
+                idx_nstock = col_abrev.index("N/Stock")
+                for row in data[1:]:
+                    row[idx_nstock] = "✓" if str(row[idx_nstock]).strip().lower() in ["1", "sim", "x", "✓"] else ""
+            except Exception:
+                pass
             table = Table(data, colWidths=col_widths, hAlign='LEFT', repeatRows=1)
             style = TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.darkgrey),
@@ -466,15 +452,14 @@ class DashboardResumoCustos(QWidget):
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 7),
+                ('FONTSIZE', (0, 0), (-1, -1), 8),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-                ('WORDWRAP', (0, 0), (-1, -1)),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('WORDWRAP', (0, 0), (-1, -1))
             ])
             table.setStyle(style)
             story.append(table)
-            
             if key in graficos_funcs:
                 fig = graficos_funcs.get(key)(df)
                 if fig:
@@ -482,20 +467,14 @@ class DashboardResumoCustos(QWidget):
                     fig.savefig(img_buffer, format='png', dpi=150)
                     plt.close(fig)
                     img_buffer.seek(0)
-                    story.append(Spacer(1, 12))
-                    story.append(Image(img_buffer, width=500, height=250))
-
+                    story.append(Spacer(1, 10))
+                    story.append(Image(img_buffer, width=470, height=235))
         doc.build(story, canvasmaker=lambda *a, **kw: FooterCanvas(f"Orçamento {self.num_orc} / Versão {self.versao}", *a, **kw))
         QtWidgets.QMessageBox.information(self, "Sucesso", f"Dashboard exportado para:\n{path}")
 
-# =============================================================================
-# Função de integração principal
-# =============================================================================
-# Descrição:
-# Função que recebe o widget pai e o caminho do Excel, limpa o conteúdo atual
-# do widget e insere o dashboard do orçamento (PyQt5) pronto a ser usado.
-# =============================================================================
+# ========= INTEGRAÇÃO PRINCIPAL =========
 def mostrar_dashboard_resumos(parent_widget, excel_path):
+    # Remove widgets antigos e mostra novo dashboard
     if parent_widget.layout() is not None:
         while parent_widget.layout().count():
             child = parent_widget.layout().takeAt(0)
