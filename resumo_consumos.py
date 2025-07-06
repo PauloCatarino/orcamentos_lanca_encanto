@@ -441,7 +441,6 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     # O ficheiro Excel já estará 100% ajustado após este ponto,
     # por isso não é preciso continuar a exportar os dataframes abaixo!
     # Se quiseres mostrar alguma mensagem de sucesso, coloca aqui.
-    return
     # ===============================
     df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
     df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)

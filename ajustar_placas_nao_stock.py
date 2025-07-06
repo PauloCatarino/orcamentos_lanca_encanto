@@ -63,9 +63,134 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
 # Função para atualizar custos/preços dos items (exemplo, ajusta import conforme o teu projeto)
 def atualizar_custos_precos_items(num_orc, versao):
     from orcamento_items import atualizar_custos_e_precos_itens_por_num_versao
-    # Esta função é um exemplo, podes adaptar se o teu projeto usar outra assinatura
-    atualizar_custos_e_precos_itens_por_num_versao(num_orc, versao)
-    print("[INFO] Custos e preços dos items recalculados e atualizados.")
+    """Recalcula custos e preços de todos os itens do orçamento diretamente na BD."""
+    try:
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute(
+            "SELECT id FROM orcamentos WHERE num_orcamento=%s AND versao=%s",
+            (str(num_orc), str(versao).zfill(2)),
+        )
+        row = cur.fetchone()
+        if not row:
+            print(f"[ERRO] Orçamento {num_orc} versão {versao} não encontrado.")
+            conn.close()
+            return
+        id_orc = row["id"]
+
+        cur.execute(
+            "SELECT * FROM orcamento_items WHERE id_orcamento=%s",
+            (id_orc,),
+        )
+        items = cur.fetchall()
+        for item in items:
+            item_num = item["item"].strip()
+
+            # Carrega todas as peças deste item para calcular custos
+            cur.execute(
+                """
+                SELECT mps, und, area_m2_und, spp_ml_und, pliq, desp,
+                       cp09_custo_mp, qt_total,
+                       custo_ml_c1, custo_ml_c2, custo_ml_l1, custo_ml_l2,
+                       Soma_Custo_und, Soma_Custo_ACB
+                FROM dados_def_pecas
+                WHERE ids=%s AND num_orc=%s AND ver_orc=%s
+                """,
+                (item_num, str(num_orc), str(versao)),
+            )
+            pecas = cur.fetchall()
+
+            orlas = mao = mp = acab = 0.0
+            for p in pecas:
+                (mps_flag, und, area_m2, spp_ml, pliq, desp_p, cp09, qt_total,
+                 cml1, cml2, cml3, cml4, soma_und, soma_acb) = p
+
+                orlas += float(cml1 or 0) + float(cml2 or 0) + float(cml3 or 0) + float(cml4 or 0)
+                mao += float(soma_und or 0)
+                acab += float(soma_acb or 0)
+
+                if cp09 and not mps_flag:
+                    desp_frac = float(desp_p or 0)
+                    pliq_v = float(pliq or 0)
+                    if str(und).upper() == "M2":
+                        mp_und = float(area_m2 or 0) * (1 + desp_frac) * pliq_v
+                    elif str(und).upper() == "ML":
+                        mp_und = float(spp_ml or 0) * (1 + desp_frac) * pliq_v
+                    elif str(und).upper() == "UND":
+                        mp_und = pliq_v * (1 + desp_frac)
+                    else:
+                        mp_und = 0.0
+                    mp += mp_und * float(qt_total or 0)
+
+            custo_produzido = orlas + mao + mp + acab
+
+            margem_perc = float(item.get("margem_lucro_perc") or 0)
+            custos_admin_perc = float(item.get("custos_admin_perc") or 0)
+            ajustes1_perc = float(item.get("ajustes1_perc") or 0)
+            ajustes2_perc = float(item.get("ajustes2_perc") or 0)
+
+            valor_margem = custo_produzido * margem_perc
+            valor_custos_admin = custo_produzido * custos_admin_perc
+            valor_ajustes1 = custo_produzido * ajustes1_perc
+            valor_ajustes2 = custo_produzido * ajustes2_perc
+
+            preco_unit = (
+                custo_produzido
+                + valor_margem
+                + valor_custos_admin
+                + valor_ajustes1
+                + valor_ajustes2
+            )
+            qt = float(item.get("qt") or 1)
+            preco_total = preco_unit * qt
+
+            cur.execute(
+                """
+                UPDATE orcamento_items SET
+                    preco_unitario=%s,
+                    preco_total=%s,
+                    custo_produzido=%s,
+                    custo_total_orlas=%s,
+                    custo_total_mao_obra=%s,
+                    custo_total_materia_prima=%s,
+                    custo_total_acabamentos=%s,
+                    margem_lucro_perc=%s,
+                    valor_margem=%s,
+                    custos_admin_perc=%s,
+                    valor_custos_admin=%s,
+                    ajustes1_perc=%s,
+                    valor_ajustes1=%s,
+                    ajustes2_perc=%s,
+                    valor_ajustes2=%s
+                WHERE id_item=%s
+                """,
+                (
+                    preco_unit,
+                    preco_total,
+                    custo_produzido,
+                    orlas,
+                    mao,
+                    mp,
+                    acab,
+                    margem_perc,
+                    valor_margem,
+                    custos_admin_perc,
+                    valor_custos_admin,
+                    ajustes1_perc,
+                    valor_ajustes1,
+                    ajustes2_perc,
+                    valor_ajustes2,
+                    item["id_item"],
+                ),
+            )
+
+        conn.commit()
+        conn.close()
+        print("[INFO] Custos e preços dos items recalculados e atualizados.")
+    except Exception as e:
+        print(f"[ERRO] Falha ao recalcular custos dos items: {e}")
+        traceback.print_exc()
 
 # Workflow total
 def workflow_ajustar_placas_nao_stock(dados_pecas, resumo_placas, num_orc, versao, path_excel_dashboard):
@@ -75,75 +200,6 @@ def workflow_ajustar_placas_nao_stock(dados_pecas, resumo_placas, num_orc, versa
         return
     # Atualiza custos/preços dos items (chama função de recalculo para todos os items deste orçamento)
     atualizar_custos_precos_items(num_orc, versao)
-    # Gerar novamente o dashboard dos resumos (para refletir o novo custo!)
-    from resumo_consumos import gerar_resumos_excel
-    gerar_resumos_excel(path_excel_dashboard, num_orc, versao)
-    print("[Martelo] Workflow completo de placas não stock finalizado.")
+    print("[Martelo] Ajuste de placas não stock concluído.")
 
 
-"""
-def ajustar_placas_nao_stock(df_pecas, df_resumo_placas, debug=False):
-    
-    Ajusta o campo 'desp' em df_pecas para materiais da família PLACAS com nao_stock=1,
-    de modo a que o custo reflicta placas inteiras.
-    df_pecas: DataFrame com todas as peças de orçamento (tab_def_pecas)
-    df_resumo_placas: DataFrame do resumo de placas (gerado após consumos)
-    Return: df_pecas atualizado
-    
-    # Campos obrigatórios
-    COL_DESC = "descricao_no_orcamento"
-    COL_FAMILIA = "familia"
-    COL_NAO_STOCK = "nao_stock"
-    COL_COMP = "comp_mp"
-    COL_LARG = "larg_mp"
-    COL_AREA_M2_UND = "area_m2_und"
-    COL_QT_TOTAL = "qt_total"
-    COL_DESP = "desp"
-    # Opcional: marcar linhas alteradas para debug
-    COL_AJUSTADO = "desp_ajustado"
-
-    if debug:
-        print("Início do ajuste para placas não stock.")
-
-    # Garantir que colunas existem (ajustar nomes conforme o teu projeto)
-    for col in [COL_DESC, COL_FAMILIA, COL_COMP, COL_LARG, COL_AREA_M2_UND, COL_QT_TOTAL]:
-        if col not in df_pecas.columns:
-            raise ValueError(f"Coluna obrigatória não encontrada: {col}")
-
-    if COL_NAO_STOCK not in df_resumo_placas.columns:
-        raise ValueError(f"Coluna 'nao_stock' não encontrada no resumo de placas!")
-
-    # Limpar eventual marcação anterior
-    if COL_AJUSTADO in df_pecas.columns:
-        df_pecas[COL_AJUSTADO] = False
-    else:
-        df_pecas[COL_AJUSTADO] = False
-
-    # Ciclo por cada placa do resumo com nao_stock=1
-    for idx, placa in df_resumo_placas.iterrows():
-        nao_stock = str(placa.get(COL_NAO_STOCK, "")).strip()
-        desc = placa[COL_DESC]
-        comp = float(placa[COL_COMP])
-        larg = float(placa[COL_LARG])
-        area_placa = (comp / 1000.0) * (larg / 1000.0)
-        m2_consumidos = float(placa.get("m2_consumidos", 0))
-        if nao_stock in ("1", "True", "Sim", "✓", "X") and area_placa > 0 and m2_consumidos > 0:
-            # Só linhas da família PLACAS e descrição igual
-            mask_pecas = (df_pecas[COL_DESC] == desc) & (df_pecas[COL_FAMILIA].str.upper() == "PLACAS")
-            area_pecas = (df_pecas.loc[mask_pecas, COL_AREA_M2_UND] * df_pecas.loc[mask_pecas, COL_QT_TOTAL]).sum()
-            if area_pecas == 0:
-                continue
-            n_placas = math.ceil(m2_consumidos / area_placa)
-            total_area_placa = n_placas * area_placa
-            novo_desp = (total_area_placa / area_pecas) - 1
-            df_pecas.loc[mask_pecas, COL_DESP] = round(novo_desp, 4)
-            df_pecas.loc[mask_pecas, COL_AJUSTADO] = True
-            if debug:
-                print(f"[{desc}] Não Stock: {n_placas} placas inteiras, Area placas: {total_area_placa:.3f} m2, Consumo peças: {area_pecas:.3f} m2, Novo %desp: {novo_desp:.4%}")
-
-    return df_pecas
-
-# Exemplo de chamada no teu fluxo principal:
-# from ajustar_placas_nao_stock import ajustar_placas_nao_stock
-# df_pecas = ajustar_placas_nao_stock(df_pecas, df_resumo_placas, debug=True)
-"""
