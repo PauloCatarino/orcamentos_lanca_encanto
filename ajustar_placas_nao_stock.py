@@ -50,11 +50,10 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
                 print(f"[{desc}] Não Stock: {n_placas} placas inteiras, Área placas: {area_total_placas:.3f} m2, Consumo peças: {m2_consumidos:.3f} m2, Novo %desp: {novo_desp*100:.2f}%")
             # Atualizar todas as linhas em dados_pecas que correspondam a este material
             desc_filtrada = str(desc).strip().lower()
-            linhas_pecas = dados_pecas[
-                dados_pecas['descricao_no_orcamento'].str.strip().str.lower() == desc_filtrada
-            ]
-            for i, linha in linhas_pecas.iterrows():
-                id_peca = linha['id']
+            mask = dados_pecas['descricao_no_orcamento'].str.strip().str.lower() == desc_filtrada
+            dados_pecas.loc[mask, 'desp'] = round(novo_desp, 4)
+            linhas_ids = dados_pecas.loc[mask, 'id']
+            for id_peca in linhas_ids:
                 atualizar_desp_na_bd(id_peca, novo_desp)
                 linhas_ajustadas.append(id_peca)
     print(f"==> {len(linhas_ajustadas)} linhas ajustadas na base de dados para placas não stock.")
@@ -62,7 +61,6 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
 
 # Função para atualizar custos/preços dos items (exemplo, ajusta import conforme o teu projeto)
 def atualizar_custos_precos_items(num_orc, versao):
-    from orcamento_items import atualizar_custos_e_precos_itens_por_num_versao
     """Recalcula custos e preços de todos os itens do orçamento diretamente na BD."""
     try:
         conn = get_connection()
@@ -193,13 +191,14 @@ def atualizar_custos_precos_items(num_orc, versao):
         traceback.print_exc()
 
 # Workflow total
-def workflow_ajustar_placas_nao_stock(dados_pecas, resumo_placas, num_orc, versao, path_excel_dashboard):
+def workflow_ajustar_placas_nao_stock(dados_pecas, resumo_placas, num_orc, versao):
     linhas_ajustadas = ajustar_placas_nao_stock(dados_pecas, resumo_placas)
     if not linhas_ajustadas:
         print("Nenhuma placa 'não stock' encontrada para ajuste.")
-        return
+        return dados_pecas
     # Atualiza custos/preços dos items (chama função de recalculo para todos os items deste orçamento)
     atualizar_custos_precos_items(num_orc, versao)
     print("[Martelo] Ajuste de placas não stock concluído.")
+    return dados_pecas
 
 
