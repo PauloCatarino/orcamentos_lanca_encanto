@@ -17,6 +17,8 @@ import numpy as np
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
+from ajustar_placas_nao_stock import ajustar_placas_nao_stock # Ajusta desperdício de placas não stock
+from ajustar_placas_nao_stock import workflow_ajustar_placas_nao_stock 
 
 # =============================================================================
 # Bloco: Importação dinâmica da função de carregar tabelas do MySQL
@@ -428,6 +430,19 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     # Executa cada resumo
     df_resumogeral = resumo_geral_pecas(pecas, num_orc, versao)
     df_resumo_placas = resumo_placas(pecas, num_orc, versao, itens_materiais)
+    # === AJUSTE PLACAS NÃO STOCK ===
+    # WORKFLOW AUTOMÁTICO "Martelo"
+    # Esta função vai:
+    # - Atualizar os desp em MySQL,
+    # - Recalcular custos dos items,
+    # - Regenerar os resumos Excel já com valores finais corretos!
+    from ajustar_placas_nao_stock import workflow_ajustar_placas_nao_stock
+    workflow_ajustar_placas_nao_stock(pecas, df_resumo_placas, num_orc, versao, path_excel)
+    # O ficheiro Excel já estará 100% ajustado após este ponto,
+    # por isso não é preciso continuar a exportar os dataframes abaixo!
+    # Se quiseres mostrar alguma mensagem de sucesso, coloca aqui.
+    return
+    # ===============================
     df_resumo_orlas = resumo_orlas(pecas, num_orc, versao)
     df_resumo_ferragens = resumo_ferragens(pecas, num_orc, versao)
     df_resumo_maquinas_mo = resumo_maquinas_mo(pecas, num_orc, versao)
