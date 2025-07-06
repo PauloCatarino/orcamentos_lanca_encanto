@@ -437,7 +437,8 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
     # - Recalcular custos dos items,
     # - Regenerar os resumos Excel já com valores finais corretos!
     from ajustar_placas_nao_stock import workflow_ajustar_placas_nao_stock
-    workflow_ajustar_placas_nao_stock(pecas, df_resumo_placas, num_orc, versao, path_excel)
+    pecas = workflow_ajustar_placas_nao_stock(pecas, df_resumo_placas, num_orc, versao)
+    df_resumo_placas = resumo_placas(pecas, num_orc, versao, itens_materiais)
     # O ficheiro Excel já estará 100% ajustado após este ponto,
     # por isso não é preciso continuar a exportar os dataframes abaixo!
     # Se quiseres mostrar alguma mensagem de sucesso, coloca aqui.
