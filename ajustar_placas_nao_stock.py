@@ -41,15 +41,20 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
             n_placas = int(row['qt_placas_utilizadas'])
             area_placa = float(row['area_placa'])
             area_total_placas = n_placas * area_placa
-            m2_consumidos = float(row['m2_consumidos'])
+            area_pecas = float(row.get('m2_total_pecas', 0))
             desc = row['descricao_no_orcamento']
             # Cálculo do novo %desp (para que a soma dos m2 de peças = area das placas inteiras)
-            if m2_consumidos > 0:
-                novo_desp = (area_total_placas / m2_consumidos) - 1
+            if area_pecas > 0:
+                novo_desp = (area_total_placas / area_pecas) - 1
             else:
                 novo_desp = 0
             if debug:
-                print(f"[{desc}] Não Stock: {n_placas} placas inteiras, Área placas: {area_total_placas:.3f} m2, Consumo peças: {m2_consumidos:.3f} m2, Novo %desp: {novo_desp*100:.2f}%")
+                print(
+                    f"[{desc}] Não Stock: {n_placas} placas inteiras, "
+                    f"Área placas: {area_total_placas:.3f} m2, "
+                    f"Área peças: {area_pecas:.3f} m2, "
+                    f"Novo %desp: {novo_desp*100:.2f}%"
+                )
             # Atualizar todas as linhas em dados_pecas que correspondam a este material
             desc_filtrada = str(desc).strip().lower()
             mask = dados_pecas['descricao_no_orcamento'].str.strip().str.lower() == desc_filtrada

@@ -78,8 +78,8 @@ def resumo_geral_pecas(df_pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
 def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.DataFrame | None = None) -> pd.DataFrame:
     cols_esperadas = [
         'ref_le', 'descricao_no_orcamento', 'pliq', 'und', 'desp', 'comp_mp', 'larg_mp', 'esp_mp',
-        'qt_placas_utilizadas', 'area_placa', 'm2_consumidos', 'custo_mp_total', 'custo_placas_utilizadas',
-        'nao_stock'
+        'qt_placas_utilizadas', 'area_placa', 'm2_consumidos', 'm2_total_pecas',
+        'custo_mp_total', 'custo_placas_utilizadas', 'nao_stock'
     ]
     if pecas.empty:
         return pd.DataFrame(columns=cols_esperadas)
@@ -92,9 +92,10 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
     # Garantir que todas as colunas numéricas estão no formato correto
     for col in ['comp_mp', 'larg_mp', 'area_m2_und', 'qt_total', 'desp', 'pliq', 'custo_mp_total']:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    # Calcula área da placa e área consumida com desperdício
+    # Calcula área da placa e áreas consumidas com e sem desperdício
     df['area_placa'] = (df['comp_mp'] / 1000) * (df['larg_mp'] / 1000)
-    df['m2_consumidos'] = (df['area_m2_und'] * df['qt_total'] * (1 + df['desp']))
+    df['m2_total_pecas'] = df['area_m2_und'] * df['qt_total']
+    df['m2_consumidos'] = df['m2_total_pecas'] * (1 + df['desp'])
     grouped = df.groupby('descricao_no_orcamento').agg(
         ref_le=('ref_le', 'first'),
         pliq=('pliq', 'first'),
@@ -105,12 +106,13 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
         esp_mp=('esp_mp', 'first'),
         area_placa=('area_placa', 'first'),
         m2_consumidos=('m2_consumidos', 'sum'),
+        m2_total_pecas=('m2_total_pecas', 'sum'),
         custo_mp_total=('custo_mp_total', 'sum')
     ).reset_index()
     grouped['qt_placas_utilizadas'] = np.ceil(grouped['m2_consumidos'] / grouped['area_placa'].replace(0, np.nan))
     grouped['custo_placas_utilizadas'] = grouped['qt_placas_utilizadas'] * grouped['area_placa'] * grouped['pliq']
     # Arredonda valores para melhor leitura
-    for col in ['area_placa', 'm2_consumidos']:
+    for col in ['area_placa', 'm2_consumidos', 'm2_total_pecas']:
         grouped[col] = grouped[col].round(3)
     for col in ['custo_mp_total', 'custo_placas_utilizadas']:
         grouped[col] = grouped[col].round(2)
