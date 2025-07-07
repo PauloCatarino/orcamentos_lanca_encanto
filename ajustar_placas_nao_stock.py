@@ -12,14 +12,16 @@ import traceback
 
 
 def atualizar_desp_na_bd(id_peca, novo_desp):
-    """
-    Atualiza o valor de desperdício (%) na base de dados para a peça indicada.
-    """
+    
+   #Atualiza o campo ``desp`` e marca a peça como bloqueada (``blk=1``).
+    
     try:
         conn = get_connection()
         with conn.cursor() as cur:
-            sql = "UPDATE dados_def_pecas SET desp = %s WHERE id = %s"
-            cur.execute(sql, (novo_desp, id_peca))
+            cur.execute(
+                "UPDATE dados_def_pecas SET desp=%s, blk=1 WHERE id=%s",
+                (novo_desp, id_peca),
+            )
             conn.commit()
         conn.close()
         print(f"[BD] Peça id {id_peca} atualizada: desp = {novo_desp:.4f}")
@@ -83,9 +85,8 @@ def atualizar_custos_precos_items(num_orc, versao):
         )
         items = cur.fetchall()
         for item in items:
-            item_num = item["item"].strip()
+            item_num = str(item["item"]).strip()
 
-            # Carrega todas as peças deste item para calcular custos
             cur.execute(
                 """
                 SELECT mps, und, area_m2_und, spp_ml_und, pliq, desp,
@@ -101,8 +102,20 @@ def atualizar_custos_precos_items(num_orc, versao):
 
             orlas = mao = mp = acab = 0.0
             for p in pecas:
-                (mps_flag, und, area_m2, spp_ml, pliq, desp_p, cp09, qt_total,
-                 cml1, cml2, cml3, cml4, soma_und, soma_acb) = p
+                mps_flag = p["mps"]
+                und = p["und"]
+                area_m2 = p["area_m2_und"]
+                spp_ml = p["spp_ml_und"]
+                pliq = p["pliq"]
+                desp_p = p["desp"]
+                cp09 = p["cp09_custo_mp"]
+                qt_total = p["qt_total"]
+                cml1 = p["custo_ml_c1"]
+                cml2 = p["custo_ml_c2"]
+                cml3 = p["custo_ml_l1"]
+                cml4 = p["custo_ml_l2"]
+                soma_und = p["Soma_Custo_und"]
+                soma_acb = p["Soma_Custo_ACB"]
 
                 orlas += float(cml1 or 0) + float(cml2 or 0) + float(cml3 or 0) + float(cml4 or 0)
                 mao += float(soma_und or 0)
