@@ -38,12 +38,19 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
     for idx, row in resumo_placas.iterrows():
         if str(row.get('nao_stock', '')) == '✓':
             # Quantidade de placas inteiras e área total de placas
-            n_placas = int(row['qt_placas_utilizadas'])
-            area_placa = float(row['area_placa'])
-            area_total_placas = n_placas * area_placa
             area_pecas = float(row.get('m2_total_pecas', 0))
+            area_placa = float(row['area_placa'])
             desc = row['descricao_no_orcamento']
-            # Cálculo do novo %desp (para que a soma dos m2 de peças = area das placas inteiras)
+            # Número de placas necessário baseado apenas na soma das peças (sem
+            # desperdício). Isto garante que consideramos placas inteiras sempre
+            # que o material for marcado como "não stock".
+            if area_placa > 0:
+                n_placas = math.ceil(area_pecas / area_placa)
+                area_total_placas = n_placas * area_placa
+            else:
+                n_placas = 0
+                area_total_placas = 0
+
             if area_pecas > 0:
                 novo_desp = (area_total_placas / area_pecas) - 1
             else:
