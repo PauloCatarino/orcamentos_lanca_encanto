@@ -597,7 +597,7 @@ def on_gerar_relatorio_consumos_clicked(ui):
             QMessageBox.warning(None, "Ficheiro não encontrado", f"O ficheiro de resumos não foi encontrado após a tentativa de criação:\n{caminho_completo_excel}")
             return
 
-        mostrar_dashboard_resumos(ui.frame_resumos, caminho_completo_excel)
+        mostrar_dashboard_resumos(ui.frame_resumos, caminho_completo_excel, ui)
         ui.tabWidget_orcamento.setCurrentWidget(ui.tab_relatorios)
         ui.Relatorio_Orcamento_2.setCurrentWidget(ui.Resumo_Consumos_Orcamento_2)
 
