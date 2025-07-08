@@ -32,6 +32,7 @@ from utils import obter_diretorio_base # importa se estiver noutro ficheiro
 
 from orcamentos import _gerar_nome_pasta_orcamento # importa se estiver noutro ficheiro
 from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resumos?    
+from orcamento_items import carregar_itens_orcamento, atualizar_custos_e_precos_itens 
 
 
 
@@ -574,6 +575,13 @@ def on_gerar_relatorio_consumos_clicked(ui):
         from resumo_consumos import gerar_resumos_excel  # Importação localizada para evitar dependências circulares
         print(f"===> A gerar resumos para o ficheiro: {caminho_completo_excel}")
         gerar_resumos_excel(caminho_completo_excel, num_orcamento, versao)
+        try:
+            id_str = ui.lineEdit_id.text().strip()
+            if id_str.isdigit():
+                carregar_itens_orcamento(ui, int(id_str))
+                atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+        except Exception as e_upd:
+            print(f"[ERRO] Falha ao atualizar tabela de artigos: {e_upd}")
     except Exception as e:
         QMessageBox.critical(None, "Erro", f"Erro ao gerar o ficheiro Excel de resumos:\n{e}")
         import traceback

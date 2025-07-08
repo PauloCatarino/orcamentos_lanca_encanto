@@ -45,7 +45,10 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
             # desperdício). Isto garante que consideramos placas inteiras sempre
             # que o material for marcado como "não stock".
             if area_placa > 0:
-                n_placas = math.ceil(area_pecas / area_placa)
+                ratio = area_pecas / area_placa
+                n_placas = math.ceil(ratio - 0.01)
+                if n_placas < 1:
+                    n_placas = 1
                 area_total_placas = n_placas * area_placa
             else:
                 n_placas = 0

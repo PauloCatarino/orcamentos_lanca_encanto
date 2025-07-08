@@ -109,13 +109,7 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
         m2_total_pecas=('m2_total_pecas', 'sum'),
         custo_mp_total=('custo_mp_total', 'sum')
     ).reset_index()
-    grouped['qt_placas_utilizadas'] = np.ceil(grouped['m2_consumidos'] / grouped['area_placa'].replace(0, np.nan))
-    grouped['custo_placas_utilizadas'] = grouped['qt_placas_utilizadas'] * grouped['area_placa'] * grouped['pliq']
-    # Arredonda valores para melhor leitura
-    for col in ['area_placa', 'm2_consumidos', 'm2_total_pecas']:
-        grouped[col] = grouped[col].round(3)
-    for col in ['custo_mp_total', 'custo_placas_utilizadas']:
-        grouped[col] = grouped[col].round(2)
+ 
 
     # Marca materiais de não stock com um visto
     if itens_materiais is not None and not itens_materiais.empty:
@@ -142,6 +136,21 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
 
     if 'nao_stock' not in grouped.columns:
         grouped['nao_stock'] = ''
+    ratio = grouped['m2_consumidos'] / grouped['area_placa'].replace(0, np.nan)
+    qt_padrao = np.ceil(ratio)
+    qt_nao_stock = np.ceil(ratio - 0.01)
+    grouped['qt_placas_utilizadas'] = np.where(
+        grouped['nao_stock'] == '✓',
+        qt_nao_stock,
+        qt_padrao,
+    )
+    grouped['custo_placas_utilizadas'] = (
+        grouped['qt_placas_utilizadas'] * grouped['area_placa'] * grouped['pliq']
+    )
+    for col in ['area_placa', 'm2_consumidos', 'm2_total_pecas']:
+        grouped[col] = grouped[col].round(3)
+    for col in ['custo_mp_total', 'custo_placas_utilizadas']:
+        grouped[col] = grouped[col].round(2)
 
     return grouped[cols_esperadas]
 
