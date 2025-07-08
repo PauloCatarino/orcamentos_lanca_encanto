@@ -11,20 +11,27 @@ import pandas as pd
 import traceback
 
 
-def atualizar_desp_na_bd(id_peca, novo_desp):
-    
-   #Atualiza o campo ``desp`` e marca a peça como bloqueada (``blk=1``).
-    
+def atualizar_desp_na_bd(id_peca, novo_desp, custo_mp_und=None, custo_mp_total=None):
+    """Atualiza ``desp`` e opcionalmente os custos de MP na BD."""
     try:
         conn = get_connection()
         with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE dados_def_pecas SET desp=%s, blk=1 WHERE id=%s",
-                (novo_desp, id_peca),
-            )
+            if custo_mp_und is not None and custo_mp_total is not None:
+                cur.execute(
+                    "UPDATE dados_def_pecas SET desp=%s, blk=1, custo_mp_und=%s, custo_mp_total=%s WHERE id=%s",
+                    (novo_desp, custo_mp_und, custo_mp_total, id_peca),
+                )
+            else:
+                cur.execute(
+                    "UPDATE dados_def_pecas SET desp=%s, blk=1 WHERE id=%s",
+                    (novo_desp, id_peca),
+                )
             conn.commit()
         conn.close()
-        print(f"[BD] Peça id {id_peca} atualizada: desp = {novo_desp:.4f}")
+        print(
+            f"[BD] Peça id {id_peca} atualizada: desp={novo_desp:.4f}, "
+            f"custo_mp_und={custo_mp_und}, custo_mp_total={custo_mp_total}"
+        )
     except Exception as e:
         print(f"[ERRO BD] Falha ao atualizar desp na peça id={id_peca}: {e}")
         traceback.print_exc()
@@ -69,9 +76,36 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
             desc_filtrada = str(desc).strip().lower()
             mask = dados_pecas['descricao_no_orcamento'].str.strip().str.lower() == desc_filtrada
             dados_pecas.loc[mask, 'desp'] = round(novo_desp, 4)
-            linhas_ids = dados_pecas.loc[mask, 'id']
-            for id_peca in linhas_ids:
-                atualizar_desp_na_bd(id_peca, novo_desp)
+            for idx2, peca in dados_pecas.loc[mask].iterrows():
+                id_peca = peca['id']
+                cp09 = float(peca.get('cp09_custo_mp', 0) or 0)
+                mps_flag = bool(peca.get('mps'))
+                und = str(peca.get('und', '')).upper()
+                area_m2 = float(peca.get('area_m2_und', 0) or 0)
+                spp_ml = float(peca.get('spp_ml_und', 0) or 0)
+                pliq = float(peca.get('pliq', 0) or 0)
+                qt_total = float(peca.get('qt_total', 0) or 0)
+
+                custo_mp_und = 0.0
+                if cp09 >= 1 and not mps_flag:
+                    if und == 'M2':
+                        custo_mp_und = area_m2 * (1 + novo_desp) * pliq
+                    elif und == 'ML':
+                        custo_mp_und = spp_ml * (1 + novo_desp) * pliq
+                    elif und == 'UND':
+                        custo_mp_und = pliq * (1 + novo_desp)
+
+                custo_mp_total = custo_mp_und * qt_total
+
+                dados_pecas.at[idx2, 'custo_mp_und'] = round(custo_mp_und, 2)
+                dados_pecas.at[idx2, 'custo_mp_total'] = round(custo_mp_total, 2)
+
+                atualizar_desp_na_bd(
+                    id_peca,
+                    novo_desp,
+                    round(custo_mp_und, 2),
+                    round(custo_mp_total, 2),
+                )
                 linhas_ajustadas.append(id_peca)
     print(f"==> {len(linhas_ajustadas)} linhas ajustadas na base de dados para placas não stock.")
     return linhas_ajustadas  # Só retorna os IDs, não o DataFrame modificado
