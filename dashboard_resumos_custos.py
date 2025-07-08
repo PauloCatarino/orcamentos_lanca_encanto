@@ -96,7 +96,7 @@ import textwrap
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QSizePolicy, QTableWidgetItem,
-    QGridLayout, QGroupBox, QPushButton, QHeaderView, QFileDialog
+    QGridLayout, QGroupBox, QPushButton,QHBoxLayout, QHeaderView, QFileDialog
 )
 from PyQt5.QtCore import Qt
 
@@ -322,10 +322,11 @@ def criar_grafico_simples(df, col_cat, col_val, titulo, cor, ylabel='Custo (€)
 # ========= DASHBOARD PRINCIPAL =========
 class DashboardResumoCustos(QWidget):
     """Dashboard compacto, sem espaços desperdiçados, e margens/custos sempre em baixo."""
-    def __init__(self, excel_path, parent=None):
+    def __init__(self, excel_path, parent=None, ui=None):
         super().__init__(parent)
         self.excel_path = excel_path
         self.num_orc, self.versao = self.extrair_orc_ver()
+        self.ui = ui
         self.dfs = {}
         self.init_ui()
 
@@ -339,10 +340,18 @@ class DashboardResumoCustos(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(2, 2, 2, 2)
 
+        button_layout = QHBoxLayout() # Botão para Atualizar os items no orçaemnto para placas nao_stock com o visto ativo
+        self.btn_atualizar_precos = QPushButton("Atualizar Preços N/Stock")
+        self.btn_atualizar_precos.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_BrowserReload))
+        self.btn_atualizar_precos.clicked.connect(self.atualizar_precos_nao_stock)
+        
         export_button = QPushButton("Exportar Dashboard para PDF")
         export_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
         export_button.clicked.connect(self.exportar_pdf)
-        main_layout.addWidget(export_button, 0, Qt.AlignRight)
+        button_layout.addWidget(self.btn_atualizar_precos)
+        button_layout.addWidget(export_button)
+        button_layout.addStretch()
+        main_layout.addLayout(button_layout)
 
         # Grid compacto
         grid_layout = QGridLayout()
@@ -355,6 +364,9 @@ class DashboardResumoCustos(QWidget):
         self.dfs['Ferragens'] = self.ler_df("Resumo Ferragens")
         self.dfs['Maquinas_MO'] = self.ler_df("Resumo Maquinas_MO")
         self.dfs['Margens'] = self.ler_df("Resumo Margens")
+
+        # Ativar ou desativar botão consoante existam placas não stock
+        self.btn_atualizar_precos.setEnabled(self.tem_nao_stock())
 
         # Blocos principais (Expanding), exceto Margens/Custos (Minimum)
         placas_box = self.criar_groupbox("Resumo de Placas", self.dfs['Placas'], criar_grafico_placas, expandir=True)
@@ -409,6 +421,15 @@ class DashboardResumoCustos(QWidget):
             QtWidgets.QMessageBox.warning(self, "Erro ao ler Excel", f"Não foi possível ler a folha '{sheet}'.\nErro: {e}")
             return pd.DataFrame()
 
+    def tem_nao_stock(self):
+        df = self.dfs.get('Placas')
+        if df is None or df.empty:
+            return False
+        col = 'nao_stock'
+        if col not in df.columns:
+            return False
+        return df[col].astype(str).str.strip().isin(['1', 'sim', 'x', '✓', 'True', 'true']).any()
+    
     def exportar_pdf(self):
         default_path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
         path, _ = QFileDialog.getSaveFileName(self, "Guardar Dashboard PDF", default_path, "PDF Files (*.pdf)")
@@ -472,8 +493,25 @@ class DashboardResumoCustos(QWidget):
         doc.build(story, canvasmaker=lambda *a, **kw: FooterCanvas(f"Orçamento {self.num_orc} / Versão {self.versao}", *a, **kw))
         QtWidgets.QMessageBox.information(self, "Sucesso", f"Dashboard exportado para:\n{path}")
 
+    def atualizar_precos_nao_stock(self):
+        if not self.tem_nao_stock():
+            QtWidgets.QMessageBox.information(self, "Aviso", "Este botão só funciona se no orçamento houver placas de Não stock")
+            return
+        try:
+            from ajustar_placas_nao_stock import atualizar_custos_precos_items
+            atualizar_custos_precos_items(self.num_orc, self.versao)
+            if self.ui is not None:
+                id_str = self.ui.lineEdit_id.text().strip()
+                if id_str.isdigit():
+                    from orcamento_items import carregar_itens_orcamento, atualizar_custos_e_precos_itens
+                    carregar_itens_orcamento(self.ui, int(id_str))
+                    atualizar_custos_e_precos_itens(self.ui, force_global_margin_update=False)
+            QtWidgets.QMessageBox.information(self, "Sucesso", "Preços atualizados com base nas placas Não stock.")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao atualizar preços:\n{e}")
+
 # ========= INTEGRAÇÃO PRINCIPAL =========
-def mostrar_dashboard_resumos(parent_widget, excel_path):
+def mostrar_dashboard_resumos(parent_widget, excel_path, ui=None):
     # Remove widgets antigos e mostra novo dashboard
     if parent_widget.layout() is not None:
         while parent_widget.layout().count():
@@ -482,5 +520,5 @@ def mostrar_dashboard_resumos(parent_widget, excel_path):
                 child.widget().deleteLater()
     else:
         parent_widget.setLayout(QVBoxLayout(parent_widget))
-    dashboard = DashboardResumoCustos(excel_path)
+    dashboard = DashboardResumoCustos(excel_path, ui=ui)
     parent_widget.layout().addWidget(dashboard)
