@@ -512,7 +512,19 @@ class DashboardResumoCustos(QWidget):
                     from orcamento_items import carregar_itens_orcamento, atualizar_custos_e_precos_itens
                     carregar_itens_orcamento(self.ui, int(id_str))
                     atualizar_custos_e_precos_itens(self.ui, force_global_margin_update=False)
-            QtWidgets.QMessageBox.information(self, "Sucesso", "Preços atualizados com base nas placas Não stock.")
+            QtWidgets.QMessageBox.information(
+                self,
+                "Sucesso",
+                f"Preços do orçamento {self.num_orc} versão {self.versao} atualizados com base nas placas Não stock."
+            )
+            if self.ui is not None:
+                for i in range(self.ui.tabWidget_orcamento.count()):
+                    if (
+                        self.ui.tabWidget_orcamento.widget(i).objectName()
+                        == "tab_criar_orcamento"
+                    ):
+                        self.ui.tabWidget_orcamento.setCurrentIndex(i)
+                        break
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao atualizar preços:\n{e}")
 
