@@ -27,7 +27,8 @@ permitindo sua aplicação nos cálculos de custos.
 """
 
 
-from PyQt5.QtWidgets import QTableWidgetItem
+from PyQt5.QtWidgets import QTableWidgetItem, QHeaderView
+from PyQt5.QtCore import QSettings
 from db_connection import obter_cursor
 
 # Resumo padrao das descrições por nome de variável. Utilizado para preencher
@@ -61,6 +62,32 @@ ORDER_DESCRICAO = [
     "EUROS_HORA_MO",
 ]
 
+# ---- Persistência da ordem das colunas da tabela -----
+SETTINGS_KEY_ORDEM_COLUNAS = "orcamento_maquinas/ordem_colunas"
+
+
+def _salvar_ordem_colunas(tabela):
+    """Guarda a ordem atual das colunas usando ``QSettings``."""
+    header = tabela.horizontalHeader()
+    ordem = [header.logicalIndex(i) for i in range(header.count())]
+    QSettings().setValue(SETTINGS_KEY_ORDEM_COLUNAS, ordem)
+
+
+def _restaurar_ordem_colunas(tabela):
+    """Restaura a ordem de colunas anteriormente guardada, se existir."""
+    settings = QSettings()
+    ordem = settings.value(SETTINGS_KEY_ORDEM_COLUNAS)
+    if ordem:
+        try:
+            ordem = [int(i) for i in ordem]
+        except Exception:
+            return
+        header = tabela.horizontalHeader()
+        if header.count() == len(ordem):
+            for visual, logical in enumerate(ordem):
+                atual = header.visualIndex(logical)
+                if atual != visual:
+                    header.moveSection(atual, visual)
 
 def _ordenar_linhas(linhas):
     """Ordena as linhas segundo ``ORDER_DESCRICAO``."""
@@ -236,6 +263,15 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 tbl.setItem(r, 3, QTableWidgetItem(resumo))
                 tbl.setItem(r, 4, QTableWidgetItem(num_orc))
                 tbl.setItem(r, 5, QTableWidgetItem(ver_orc))
+
+            header = tbl.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            tbl.resizeColumnsToContents()
+            header.setSectionsMovable(True)
+            if not hasattr(tbl, "_ordem_conectada"):
+                header.sectionMoved.connect(lambda *_: _salvar_ordem_colunas(tbl))
+                tbl._ordem_conectada = True
+            _restaurar_ordem_colunas(tbl)
     except Exception as e:
         print(f"Erro ao carregar valores de máquinas do orçamento: {e}")
 

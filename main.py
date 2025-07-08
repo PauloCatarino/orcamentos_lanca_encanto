@@ -30,7 +30,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "183 Commit"
+git commit -m "184 Commit"
 git push origin main
 
 
@@ -165,8 +165,9 @@ class MainApp(QMainWindow):
         # Estes valores de percentagem por defeito estão no separador Orcamento de Items e existe uma grupobox com o nome "Margens e Custos"
         self.ui.lineEdit_margem_lucro.setText("15%")
         self.ui.lineEdit_custos_administrativos.setText("5%")
-        self.ui.lineEdit_ajustes_1.setText("3%")
-        self.ui.lineEdit_ajustes_2.setText("2%")
+        self.ui.margem_acabamentos.setText("3%") # Margem sobre o total de custos dos acabamentos
+        self.ui.margem_MP_orlas.setText("2%") # Margem sobre as Materias Primas (Placas & Orlas & Ferragens)
+        self.ui.margem_mao_obra.setText("4%") # Margem sobre a Mão de Obra
 
         # Conectar funcionalidades do separador Clientes
         # # Separador Clientes

@@ -163,7 +163,7 @@
          <rect>
           <x>610</x>
           <y>110</y>
-          <width>751</width>
+          <width>850</width>
           <height>411</height>
          </rect>
         </property>
@@ -653,7 +653,7 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>1200</width>
+               <width>2452</width>
                <height>2500</height>
               </rect>
              </property>
@@ -2126,7 +2126,7 @@
          <number>2</number>
         </property>
         <property name="columnCount">
-         <number>22</number>
+         <number>24</number>
         </property>
         <property name="horizontalHeaderLabels" stdset="0">
          <stringlist>
@@ -2260,22 +2260,32 @@
         </column>
         <column>
          <property name="text">
-          <string>Ajustes_1(%)</string>
+          <string>Mrg_ACB(%)</string>
          </property>
         </column>
         <column>
          <property name="text">
-          <string>Valor Ajustes_1 (€)</string>
+          <string>Valor Mrg_ACB (€)</string>
          </property>
         </column>
         <column>
          <property name="text">
-          <string>Ajustes_2 (%)</string>
+          <string>Mrg_MP_Orlas (%)</string>
          </property>
         </column>
         <column>
          <property name="text">
-          <string>Valor Ajustes_2 (€)</string>
+          <string>Valor Mrg_MP_Orlas (€)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Mrg_MO(%)</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Valor Mrg_MO(€)</string>
          </property>
         </column>
        </widget>
@@ -2415,7 +2425,7 @@
          <rect>
           <x>0</x>
           <y>200</y>
-          <width>1551</width>
+          <width>1521</width>
           <height>121</height>
          </rect>
         </property>
@@ -2678,8 +2688,8 @@
          <rect>
           <x>1540</x>
           <y>60</y>
-          <width>621</width>
-          <height>141</height>
+          <width>607</width>
+          <height>160</height>
          </rect>
         </property>
         <property name="title">
@@ -2696,26 +2706,15 @@
          <item row="0" column="1">
           <widget class="QLineEdit" name="lineEdit_margem_lucro"/>
          </item>
-         <item row="0" column="2">
-          <widget class="QLabel" name="label_ajustes_1">
+         <item row="0" column="2" colspan="2">
+          <widget class="QLabel" name="label_margem_acabamentos">
            <property name="text">
-            <string>Ajustes_1(%)</string>
+            <string>Margem Acabamentos(%)</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="3">
-          <widget class="QLineEdit" name="lineEdit_ajustes_2">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QLabel" name="label_ajustes_2">
-           <property name="text">
-            <string>Ajustes_2(%)</string>
-           </property>
-          </widget>
+         <item row="0" column="4">
+          <widget class="QLineEdit" name="margem_acabamentos"/>
          </item>
          <item row="1" column="0">
           <widget class="QLabel" name="label_custos_administrativos">
@@ -2724,16 +2723,20 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="3">
-          <widget class="QLineEdit" name="lineEdit_ajustes_1"/>
-         </item>
          <item row="1" column="1">
           <widget class="QLineEdit" name="lineEdit_custos_administrativos"/>
          </item>
-         <item row="2" column="2">
-          <widget class="QPushButton" name="pushButton_atualiza_preco_final">
+         <item row="1" column="2" colspan="2">
+          <widget class="QLabel" name="label_margem_MP_orlas">
            <property name="text">
-            <string>Atualiza Preco Final</string>
+            <string>Margem_MP_Orlas(%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="4">
+          <widget class="QLineEdit" name="margem_MP_orlas">
+           <property name="text">
+            <string/>
            </property>
           </widget>
          </item>
@@ -2747,6 +2750,20 @@
          <item row="2" column="1">
           <widget class="QLineEdit" name="lineEdit_atingir_preco_final"/>
          </item>
+         <item row="2" column="2" colspan="2">
+          <widget class="QLabel" name="label_margem_mao_obra">
+           <property name="text">
+            <string>Margem_Mão de Obra(%)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="4">
+          <widget class="QLineEdit" name="margem_mao_obra">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
          <item row="3" column="0">
           <widget class="QLabel" name="label_preco_final_orcamento">
            <property name="text">
@@ -2756,16 +2773,6 @@
          </item>
          <item row="3" column="1">
           <widget class="QLineEdit" name="lineEdit_preco_final_orcamento"/>
-         </item>
-         <item row="2" column="3">
-          <widget class="QPushButton" name="pushButton_atualiza_preco_items">
-           <property name="styleSheet">
-            <string notr="true">background-color: yellow; font-weight: bold;</string>
-           </property>
-           <property name="text">
-            <string>Atualiza Preco Items Orcamento</string>
-           </property>
-          </widget>
          </item>
          <item row="4" column="0">
           <widget class="QCheckBox" name="checkBox_producao_std">
@@ -2781,6 +2788,23 @@
           <widget class="QCheckBox" name="checkBox_producao_serie">
            <property name="text">
             <string>Producao Serie</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="2">
+          <widget class="QPushButton" name="pushButton_atualiza_preco_final">
+           <property name="text">
+            <string>Atualiza Preco Final</string>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="3" colspan="2">
+          <widget class="QPushButton" name="pushButton_atualiza_preco_items">
+           <property name="styleSheet">
+            <string notr="true">background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Atualiza Preco Items Orcamento</string>
            </property>
           </widget>
          </item>
@@ -3738,8 +3762,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <property name="font">
@@ -5206,8 +5230,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5448,8 +5472,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5641,8 +5665,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>98</width>
-             <height>28</height>
+             <width>100</width>
+             <height>30</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5875,7 +5899,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>1200</width>
+             <width>2422</width>
              <height>6000</height>
             </rect>
            </property>
