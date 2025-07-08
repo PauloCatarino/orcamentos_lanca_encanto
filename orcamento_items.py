@@ -198,10 +198,10 @@ def configurar_orcamento_ui(main_window):
         lambda: _validate_percentage_input(ui.lineEdit_margem_lucro, 0, 99))
     ui.lineEdit_custos_administrativos.textChanged.connect(
         lambda: _validate_percentage_input(ui.lineEdit_custos_administrativos, 0, 99))
-    ui.lineEdit_ajustes_1.textChanged.connect(
-        lambda: _validate_percentage_input(ui.lineEdit_ajustes_1, 0, 99))
-    ui.lineEdit_ajustes_2.textChanged.connect(
-        lambda: _validate_percentage_input(ui.lineEdit_ajustes_2, 0, 99))
+    ui.margem_acabamentos.textChanged.connect(
+        lambda: _validate_percentage_input(ui.margem_acabamentos, 0, 99))
+    ui.margem_MP_orlas.textChanged.connect(
+        lambda: _validate_percentage_input(ui.margem_MP_orlas, 0, 99))
 
     # Perguntar se deve aplicar percentagens globais a todas as linhas
     ui.lineEdit_margem_lucro.editingFinished.connect(
@@ -210,12 +210,12 @@ def configurar_orcamento_ui(main_window):
     ui.lineEdit_custos_administrativos.editingFinished.connect(
         lambda: _prompt_apply_global_percentage(
             ui, ui.lineEdit_custos_administrativos, COL_CUSTOS_ADMIN_PERC))
-    ui.lineEdit_ajustes_1.editingFinished.connect(
+    ui.margem_acabamentos.editingFinished.connect(
         lambda: _prompt_apply_global_percentage(
-            ui, ui.lineEdit_ajustes_1, COL_AJUSTES1_PERC))
-    ui.lineEdit_ajustes_2.editingFinished.connect(
+            ui, ui.margem_acabamentos, COL_AJUSTES1_PERC))
+    ui.margem_MP_orlas.editingFinished.connect(
         lambda: _prompt_apply_global_percentage(
-            ui, ui.lineEdit_ajustes_2, COL_AJUSTES2_PERC))
+            ui, ui.margem_MP_orlas, COL_AJUSTES2_PERC))
 
 
     # Botão "Abrir Orçamento"
@@ -271,7 +271,7 @@ def configurar_orcamento_ui(main_window):
         "Altura", "Largura", "Profund", "Und", "QT", "Preco_Unit", "Preco_Total", "Custo Produzido",
         "Custo Total Orlas (€)", "Custo Total Mão de Obra (€)", "Custo Total Matéria Prima (€)", "Custo Total Acabamentos (€)",
         "Margem de Lucro (%)", "Valor da Margem (€)", "Custos Administrativos (%)", "Valor Custos Admin. (€)",
-        "Ajustes_1(%)", "Valor Ajustes_1 (€)", "Ajustes_2 (%)", "Valor Ajustes_2 (€)"
+        "Margem_Acabamentos(%)", "Valor Margem_Acabamentos (€)", "Margem MP_Orlas (%)", "Valor Margem MP_Orlas (€)", "Margem Mao_Obra (%)", "Valor Margem Mao_Obra (€)"
     ]
     ui.tableWidget_artigos.setHorizontalHeaderLabels(header_labels)
     ui.tableWidget_artigos.setColumnHidden(
@@ -1031,10 +1031,10 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                             ui.lineEdit_custos_administrativos.text(), "percentual")
                     elif col_ui_idx == COL_AJUSTES1_PERC:
                         global_perc_val = converter_texto_para_valor(
-                            ui.lineEdit_ajustes_1.text(), "percentual")
+                            ui.margem_acabamentos.text(), "percentual")
                     elif col_ui_idx == COL_AJUSTES2_PERC:
                         global_perc_val = converter_texto_para_valor(
-                            ui.lineEdit_ajustes_2.text(), "percentual")
+                            ui.margem_MP_orlas.text(), "percentual")
 
                     cell_val = converter_texto_para_valor(
                         texto_item, "percentual")
@@ -1101,9 +1101,9 @@ def inserir_item_orcamento(ui):
     custos_admin_perc = converter_texto_para_valor(
         ui.lineEdit_custos_administrativos.text(), "percentual")
     ajustes1_perc = converter_texto_para_valor(
-        ui.lineEdit_ajustes_1.text(), "percentual")
+        ui.margem_acabamentos.text(), "percentual")
     ajustes2_perc = converter_texto_para_valor(
-        ui.lineEdit_ajustes_2.text(), "percentual")
+        ui.margem_MP_orlas.text(), "percentual")
 
     # Os valores em euros são inicializados como 0 e serão calculados na próxima etapa
     valor_margem = 0.0
@@ -1516,10 +1516,10 @@ def handle_item_editado(ui, item):
                     ui.lineEdit_custos_administrativos.text(), "percentual")
             elif col == COL_AJUSTES1_PERC:
                 global_perc_value = converter_texto_para_valor(
-                    ui.lineEdit_ajustes_1.text(), "percentual")
+                    ui.margem_acabamentos.text(), "percentual")
             elif col == COL_AJUSTES2_PERC:
                 global_perc_value = converter_texto_para_valor(
-                    ui.lineEdit_ajustes_2.text(), "percentual")
+                    ui.margem_MP_orlas.text(), "percentual")
 
             # Compara o valor editado com o valor global correspondente
             if abs(valor_novo_para_db - global_perc_value) > 0.001:  # Comparar floats com tolerância
@@ -1677,9 +1677,9 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
     global_custos_admin_perc = converter_texto_para_valor(
         ui.lineEdit_custos_administrativos.text(), "percentual")
     global_ajustes1_perc = converter_texto_para_valor(
-        ui.lineEdit_ajustes_1.text(), "percentual")
+        ui.margem_acabamentos.text(), "percentual")
     global_ajustes2_perc = converter_texto_para_valor(
-        ui.lineEdit_ajustes_2.text(), "percentual")
+        ui.margem_MP_orlas.text(), "percentual")
 
     # Decidir qual percentagem de margem de lucro usar
     # Se 'force_global_margin_update' for True, sobrescreve o valor da célula de margem de lucro
@@ -2106,9 +2106,9 @@ def calcular_preco_final_orcamento(ui):
                 global_custos_admin_perc = converter_texto_para_valor(
                     ui.lineEdit_custos_administrativos.text(), "percentual")
                 global_ajustes1_perc = converter_texto_para_valor(
-                    ui.lineEdit_ajustes_1.text(), "percentual")
+                    ui.margem_acabamentos.text(), "percentual")
                 global_ajustes2_perc = converter_texto_para_valor(
-                    ui.lineEdit_ajustes_2.text(), "percentual")
+                    ui.margem_MP_orlas.text(), "percentual")
 
                 custos_admin_perc_cell = converter_texto_para_valor(
                     _get_cell_text(tbl, row_idx, COL_CUSTOS_ADMIN_PERC), "percentual")
