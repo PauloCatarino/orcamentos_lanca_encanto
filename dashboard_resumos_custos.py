@@ -428,7 +428,13 @@ class DashboardResumoCustos(QWidget):
         col = 'nao_stock'
         if col not in df.columns:
             return False
-        return df[col].astype(str).str.strip().isin(['1', 'sim', 'x', '✓', 'True', 'true']).any()
+        return bool(
+            df[col]
+            .astype(str)
+            .str.strip()
+            .isin(['1', 'sim', 'x', '✓', 'True', 'true'])
+            .any()
+        )
     
     def exportar_pdf(self):
         default_path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
