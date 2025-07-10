@@ -351,8 +351,9 @@ def resumo_margens_excel(excel_path, num_orcamento, versao):
     resumo_dict = {
         "Margem": (safe_mean('margem_lucro_perc') * 100, safe_sum('valor_margem')),
         "Custos Admin": (safe_mean('custos_admin_perc') * 100, safe_sum('valor_custos_admin')),
-        "Ajustes 1": (safe_mean('ajustes1_perc') * 100, safe_sum('valor_ajustes1')),
-        "Ajustes 2": (safe_mean('ajustes2_perc') * 100, safe_sum('valor_ajustes2'))
+        "Margem Acabamentos": (safe_mean('margem_acabamentos_perc') * 100, safe_sum('valor_acabamentos')),
+        "Margem MP/Orlas": (safe_mean('margem_mp_orlas_perc') * 100, safe_sum('valor_mp_orlas')),
+        "Margem Mão de Obra": (safe_mean('margem_mao_obra_perc') * 100, safe_sum('valor_mao_obra'))
     }
     data = [
         {"Tipo": k, "Percentagem (%)": f"{v[0]:.2f}%" if pd.notna(v[0]) else "0.00%", "Valor (€)": v[1] if pd.notna(v[1]) else 0}

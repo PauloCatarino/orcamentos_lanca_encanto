@@ -187,20 +187,23 @@ def atualizar_custos_precos_items(num_orc, versao):
 
             margem_perc = float(item.get("margem_lucro_perc") or 0)
             custos_admin_perc = float(item.get("custos_admin_perc") or 0)
-            ajustes1_perc = float(item.get("ajustes1_perc") or 0)
-            ajustes2_perc = float(item.get("ajustes2_perc") or 0)
+            margem_acabamentos_perc = float(item.get("margem_acabamentos_perc") or 0)
+            margem_mp_orlas_perc = float(item.get("margem_mp_orlas_perc") or 0)
+            margem_mao_obra_perc = float(item.get("margem_mao_obra_perc") or 0)
 
             valor_margem = custo_produzido * margem_perc
             valor_custos_admin = custo_produzido * custos_admin_perc
-            valor_ajustes1 = custo_produzido * ajustes1_perc
-            valor_ajustes2 = custo_produzido * ajustes2_perc
+            valor_acabamentos = acab * margem_acabamentos_perc
+            valor_mp_orlas = (mp + orlas) * margem_mp_orlas_perc
+            valor_mao_obra = mao * margem_mao_obra_perc
 
             preco_unit = (
                 custo_produzido
                 + valor_margem
                 + valor_custos_admin
-                + valor_ajustes1
-                + valor_ajustes2
+                + valor_acabamentos
+                + valor_mp_orlas
+                + valor_mao_obra
             )
             qt = float(item.get("qt") or 1)
             preco_total = preco_unit * qt
@@ -219,10 +222,12 @@ def atualizar_custos_precos_items(num_orc, versao):
                     valor_margem=%s,
                     custos_admin_perc=%s,
                     valor_custos_admin=%s,
-                    ajustes1_perc=%s,
-                    valor_ajustes1=%s,
-                    ajustes2_perc=%s,
-                    valor_ajustes2=%s
+                    margem_acabamentos_perc=%s,
+                    valor_acabamentos=%s,
+                    margem_mp_orlas_perc=%s,
+                    valor_mp_orlas=%s,
+                    margem_mao_obra_perc=%s,
+                    valor_mao_obra=%s
                 WHERE id_item=%s
                 """,
                 (
@@ -237,10 +242,12 @@ def atualizar_custos_precos_items(num_orc, versao):
                     valor_margem,
                     custos_admin_perc,
                     valor_custos_admin,
-                    ajustes1_perc,
-                    valor_ajustes1,
-                    ajustes2_perc,
-                    valor_ajustes2,
+                    margem_acabamentos_perc,
+                    valor_acabamentos,
+                    margem_mp_orlas_perc,
+                    valor_mp_orlas,
+                    margem_mao_obra_perc,
+                    valor_mao_obra,
                     item["id_item"],
                 ),
             )

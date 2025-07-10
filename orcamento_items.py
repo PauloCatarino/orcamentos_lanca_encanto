@@ -93,6 +93,7 @@ from tab_modulo_medidas_formatacao import aplicar_formatacao # Importa a funçã
 _editando_programaticamente = False
 # --- Constantes para índices das colunas na tableWidget_artigos (0-based) ---
 # Estas constantes são usadas para aceder às colunas da tableWidget_artigos de forma legível.
+# Total de 26 colunas de dados (índices 0 a 25)
 COL_ID_ITEM = 0  # Esta coluna é oculta na UI
 COL_ITEM_NUM = 1
 COL_CODIGO = 2
@@ -113,10 +114,12 @@ COL_MARGEM_PERC = 16
 COL_MARGEM_VALOR = 17
 COL_CUSTOS_ADMIN_PERC = 18
 COL_CUSTOS_ADMIN_VALOR = 19
-COL_AJUSTES1_PERC = 20
-COL_AJUSTES1_VALOR = 21
-COL_AJUSTES2_PERC = 22
-COL_AJUSTES2_VALOR = 23  # Última coluna, total de 24 colunas (0-23)
+COL_MARGEM_ACAB_PERC = 20
+COL_VALOR_ACAB = 21
+COL_MARGEM_MP_ORLAS_PERC = 22
+COL_VALOR_MP_ORLAS = 23
+COL_MARGEM_MAO_OBRA_PERC = 24
+COL_VALOR_MAO_OBRA = 25  # Última coluna, total de 26 colunas (0-25)
 
 # --- Constantes para índices das colunas na dados_def_pecas (na DB) ---
 # Estes correspondem às colunas na tabela 'dados_def_pecas'
@@ -187,7 +190,7 @@ def configurar_orcamento_ui(main_window):
     """
     Configura a interface do módulo de itens de orçamento.
     - Cria a tabela "orcamento_items" no banco (se não existir).
-    - Ajusta o QTableWidget (tableWidget_artigos) para ter 24 colunas.
+    - Ajusta o QTableWidget (tableWidget_artigos) para ter 26 colunas.
     - Conecta botões de ação e sinais de eventos (seleção, edição, pesquisa).
     """
     criar_tabela_orcamento_items()
@@ -202,6 +205,8 @@ def configurar_orcamento_ui(main_window):
         lambda: _validate_percentage_input(ui.margem_acabamentos, 0, 99))
     ui.margem_MP_orlas.textChanged.connect(
         lambda: _validate_percentage_input(ui.margem_MP_orlas, 0, 99))
+    ui.margem_mao_obra.textChanged.connect(
+        lambda: _validate_percentage_input(ui.margem_mao_obra, 0, 99))
 
     # Perguntar se deve aplicar percentagens globais a todas as linhas
     ui.lineEdit_margem_lucro.editingFinished.connect(
@@ -212,10 +217,13 @@ def configurar_orcamento_ui(main_window):
             ui, ui.lineEdit_custos_administrativos, COL_CUSTOS_ADMIN_PERC))
     ui.margem_acabamentos.editingFinished.connect(
         lambda: _prompt_apply_global_percentage(
-            ui, ui.margem_acabamentos, COL_AJUSTES1_PERC))
+            ui, ui.margem_acabamentos, COL_MARGEM_ACAB_PERC))
     ui.margem_MP_orlas.editingFinished.connect(
         lambda: _prompt_apply_global_percentage(
-            ui, ui.margem_MP_orlas, COL_AJUSTES2_PERC))
+            ui, ui.margem_MP_orlas, COL_MARGEM_MP_ORLAS_PERC))
+    ui.margem_mao_obra.editingFinished.connect(
+        lambda: _prompt_apply_global_percentage(
+            ui, ui.margem_mao_obra, COL_MARGEM_MAO_OBRA_PERC))
 
 
     # Botão "Abrir Orçamento"
@@ -264,8 +272,8 @@ def configurar_orcamento_ui(main_window):
     ui.checkBox_producao_std.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "STD") if ui.checkBox_producao_std.isChecked() else None)
     ui.checkBox_producao_serie.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "SERIE") if ui.checkBox_producao_serie.isChecked() else None)
 
-    # Configuração da tabela "tableWidget_artigos": 24 colunas (coluna 0 = id_item, oculto)
-    ui.tableWidget_artigos.setColumnCount(24)
+    # Configuração da tabela "tableWidget_artigos": 26 colunas (coluna 0 = id_item, oculto)
+    ui.tableWidget_artigos.setColumnCount(26)
     header_labels = [
         "id_item", "Item", "Codigo", "Descricao",
         "Altura", "Largura", "Profund", "Und", "QT", "Preco_Unit", "Preco_Total", "Custo Produzido",
@@ -712,10 +720,12 @@ def criar_tabela_orcamento_items():
                     valor_margem DOUBLE NULL DEFAULT 0.0,
                     custos_admin_perc DOUBLE NULL DEFAULT 0.0,
                     valor_custos_admin DOUBLE NULL DEFAULT 0.0,
-                    ajustes1_perc DOUBLE NULL DEFAULT 0.0,
-                    valor_ajustes1 DOUBLE NULL DEFAULT 0.0,
-                    ajustes2_perc DOUBLE NULL DEFAULT 0.0,
-                    valor_ajustes2 DOUBLE NULL DEFAULT 0.0,
+                    margem_acabamentos_perc DOUBLE NULL DEFAULT 0.0,
+                    valor_acabamentos DOUBLE NULL DEFAULT 0.0,
+                    margem_mp_orlas_perc DOUBLE NULL DEFAULT 0.0,
+                    valor_mp_orlas DOUBLE NULL DEFAULT 0.0,
+                    margem_mao_obra_perc DOUBLE NULL DEFAULT 0.0,
+                    valor_mao_obra DOUBLE NULL DEFAULT 0.0,
                     FOREIGN KEY (id_orcamento) REFERENCES orcamentos(id) ON DELETE CASCADE ON UPDATE CASCADE -- Importante: ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
@@ -736,10 +746,12 @@ def criar_tabela_orcamento_items():
             "valor_margem": "DOUBLE NULL DEFAULT 0.0",
             "custos_admin_perc": "DOUBLE NULL DEFAULT 0.0",
             "valor_custos_admin": "DOUBLE NULL DEFAULT 0.0",
-            "ajustes1_perc": "DOUBLE NULL DEFAULT 0.0",
-            "valor_ajustes1": "DOUBLE NULL DEFAULT 0.0",
-            "ajustes2_perc": "DOUBLE NULL DEFAULT 0.0",
-            "valor_ajustes2": "DOUBLE NULL DEFAULT 0.0"
+            "margem_acabamentos_perc": "DOUBLE NULL DEFAULT 0.0",
+            "valor_acabamentos": "DOUBLE NULL DEFAULT 0.0",
+            "margem_mp_orlas_perc": "DOUBLE NULL DEFAULT 0.0",
+            "valor_mp_orlas": "DOUBLE NULL DEFAULT 0.0",
+            "margem_mao_obra_perc": "DOUBLE NULL DEFAULT 0.0",
+            "valor_mao_obra": "DOUBLE NULL DEFAULT 0.0"
         }
         for col_name, col_type in columns_to_add.items():
             try:
@@ -936,8 +948,9 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                        und, qt, preco_unitario, preco_total, custo_produzido,
                        custo_total_orlas, custo_total_mao_obra, custo_total_materia_prima,
                        custo_total_acabamentos, margem_lucro_perc, valor_margem,
-                       custos_admin_perc, valor_custos_admin, ajustes1_perc,
-                       valor_ajustes1, ajustes2_perc, valor_ajustes2
+                       custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
+                       valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
+                       margem_mao_obra_perc, valor_mao_obra
                 FROM orcamento_items WHERE id_orcamento=%s ORDER BY id_item
             """, (id_orcamento,))
             registros = cursor.fetchall()
@@ -985,10 +998,12 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
             COL_MARGEM_VALOR: 17,
             COL_CUSTOS_ADMIN_PERC: 18,
             COL_CUSTOS_ADMIN_VALOR: 19,
-            COL_AJUSTES1_PERC: 20,
-            COL_AJUSTES1_VALOR: 21,
-            COL_AJUSTES2_PERC: 22,
-            COL_AJUSTES2_VALOR: 23
+            COL_MARGEM_ACAB_PERC: 20,
+            COL_VALOR_ACAB: 21,
+            COL_MARGEM_MP_ORLAS_PERC: 22,
+            COL_VALOR_MP_ORLAS: 23,
+            COL_MARGEM_MAO_OBRA_PERC: 24,
+            COL_VALOR_MAO_OBRA: 25
         }
 
         for row_data in registros:
@@ -1005,10 +1020,11 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                     # Formata colunas de preço
                     if col_ui_idx in [COL_PRECO_UNIT, COL_PRECO_TOTAL, COL_CUSTO_PRODUZIDO,  # Adicionado Custo Produzido
                                       COL_CUSTO_ORLAS, COL_CUSTO_MO, COL_CUSTO_MP, COL_CUSTO_ACABAMENTOS,
-                                      COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_AJUSTES1_VALOR, COL_AJUSTES2_VALOR]:
+                                      COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_VALOR_ACAB, COL_VALOR_MP_ORLAS,
+                                      COL_VALOR_MAO_OBRA]:
                         texto_item = formatar_valor_moeda(valor)
                     # Formata colunas de percentual
-                    elif col_ui_idx in [COL_MARGEM_PERC, COL_CUSTOS_ADMIN_PERC, COL_AJUSTES1_PERC, COL_AJUSTES2_PERC]:
+                    elif col_ui_idx in [COL_MARGEM_PERC, COL_CUSTOS_ADMIN_PERC, COL_MARGEM_ACAB_PERC, COL_MARGEM_MP_ORLAS_PERC, COL_MARGEM_MAO_OBRA_PERC]:
                         texto_item = formatar_valor_percentual(valor)
                     else:
                         texto_item = str(valor) if valor is not None else ""
@@ -1021,7 +1037,7 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                                     Qt.ItemIsEditable)  # Não editável
 
                 # Aplicar coloração se a percentagem for diferente da global ao carregar
-                if col_ui_idx in [COL_MARGEM_PERC, COL_CUSTOS_ADMIN_PERC, COL_AJUSTES1_PERC, COL_AJUSTES2_PERC]:
+                if col_ui_idx in [COL_MARGEM_PERC, COL_CUSTOS_ADMIN_PERC, COL_MARGEM_ACAB_PERC, COL_MARGEM_MP_ORLAS_PERC, COL_MARGEM_MAO_OBRA_PERC]:
                     global_perc_val = 0.0
                     if col_ui_idx == COL_MARGEM_PERC:
                         global_perc_val = converter_texto_para_valor(
@@ -1029,12 +1045,15 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                     elif col_ui_idx == COL_CUSTOS_ADMIN_PERC:
                         global_perc_val = converter_texto_para_valor(
                             ui.lineEdit_custos_administrativos.text(), "percentual")
-                    elif col_ui_idx == COL_AJUSTES1_PERC:
+                    elif col_ui_idx == COL_MARGEM_ACAB_PERC:
                         global_perc_val = converter_texto_para_valor(
                             ui.margem_acabamentos.text(), "percentual")
-                    elif col_ui_idx == COL_AJUSTES2_PERC:
+                    elif col_ui_idx == COL_MARGEM_MP_ORLAS_PERC:
                         global_perc_val = converter_texto_para_valor(
                             ui.margem_MP_orlas.text(), "percentual")
+                    elif col_ui_idx == COL_MARGEM_MAO_OBRA_PERC:
+                        global_perc_val = converter_texto_para_valor(
+                            ui.margem_mao_obra.text(), "percentual")
 
                     cell_val = converter_texto_para_valor(
                         texto_item, "percentual")
@@ -1100,16 +1119,19 @@ def inserir_item_orcamento(ui):
         ui.lineEdit_margem_lucro.text(), "percentual")
     custos_admin_perc = converter_texto_para_valor(
         ui.lineEdit_custos_administrativos.text(), "percentual")
-    ajustes1_perc = converter_texto_para_valor(
+    margem_acabamentos_perc = converter_texto_para_valor(
         ui.margem_acabamentos.text(), "percentual")
-    ajustes2_perc = converter_texto_para_valor(
+    margem_mp_orlas_perc = converter_texto_para_valor(
         ui.margem_MP_orlas.text(), "percentual")
+    margem_mao_obra_perc = converter_texto_para_valor(
+        ui.margem_mao_obra.text(), "percentual")
 
     # Os valores em euros são inicializados como 0 e serão calculados na próxima etapa
     valor_margem = 0.0
     valor_custos_admin = 0.0
-    valor_ajustes1 = 0.0
-    valor_ajustes2 = 0.0
+    valor_acabamentos = 0.0
+    valor_mp_orlas = 0.0
+    valor_mao_obra = 0.0
 
     preco_unit = 0.0  # Será calculado
     preco_total = 0.0  # Será calculado
@@ -1122,17 +1144,19 @@ def inserir_item_orcamento(ui):
                                              largura, profundidade, und, qt, preco_unitario, preco_total, custo_produzido,
                                              custo_total_orlas, custo_total_mao_obra, custo_total_materia_prima,
                                              custo_total_acabamentos, margem_lucro_perc, valor_margem,
-                                             custos_admin_perc, valor_custos_admin, ajustes1_perc,
-                                             valor_ajustes1, ajustes2_perc, valor_ajustes2)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                             custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
+                                             valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
+                                             margem_mao_obra_perc, valor_mao_obra)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             # Certifique-se que o número de parâmetros corresponde EXATAMENTE ao número de `%s`
             cursor.execute(insert_query, (id_orc, item_str, codigo, descricao, altura, largura,
                                           profund, und, qt, preco_unit, preco_total, custo_produzido,
                                           custo_total_orlas, custo_total_mao_obra, custo_total_materia_prima,
                                           custo_total_acabamentos, margem_lucro_perc, valor_margem,
-                                          custos_admin_perc, valor_custos_admin, ajustes1_perc,
-                                          valor_ajustes1, ajustes2_perc, valor_ajustes2))
+                                          custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
+                                          valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
+                                          margem_mao_obra_perc, valor_mao_obra))
 
         # Recarrega tabela para ver o novo item
         carregar_itens_orcamento(ui, id_orc)
@@ -1288,8 +1312,9 @@ def editar_item_orcamento_groupbox(ui):
                 SELECT preco_unitario, preco_total, custo_produzido,
                        custo_total_orlas, custo_total_mao_obra, custo_total_materia_prima,
                        custo_total_acabamentos, margem_lucro_perc, valor_margem,
-                       custos_admin_perc, valor_custos_admin, ajustes1_perc,
-                       valor_ajustes1, ajustes2_perc, valor_ajustes2
+                       custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
+                       valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
+                       margem_mao_obra_perc, valor_mao_obra
                 FROM orcamento_items WHERE id_item=%s
             """, (id_item,))
             res = cursor.fetchone()
@@ -1298,8 +1323,8 @@ def editar_item_orcamento_groupbox(ui):
                 (current_data['preco_unitario'], current_data['preco_total'], current_data['custo_produzido'],
                  current_data['custo_total_orlas'], current_data['custo_total_mao_obra'], current_data['custo_total_materia_prima'],
                  current_data['custo_total_acabamentos'], current_data['margem_lucro_perc'], current_data['valor_margem'],
-                 current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['ajustes1_perc'],
-                 current_data['valor_ajustes1'], current_data['ajustes2_perc'], current_data['valor_ajustes2']) = res
+                 current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['margem_acabamentos_perc'],
+                 current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas']) = res
             else:
                 QMessageBox.warning(
                     None, "Aviso", "Item não encontrado na base de dados para edição.")
@@ -1317,8 +1342,9 @@ def editar_item_orcamento_groupbox(ui):
                        custo_produzido=%s,
                        custo_total_orlas=%s, custo_total_mao_obra=%s, custo_total_materia_prima=%s,
                        custo_total_acabamentos=%s, margem_lucro_perc=%s, valor_margem=%s,
-                       custos_admin_perc=%s, valor_custos_admin=%s, ajustes1_perc=%s,
-                       valor_ajustes1=%s, ajustes2_perc=%s, valor_ajustes2=%s
+                       current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['margem_acabamentos_perc'],
+                       current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas'],
+                       current_data['margem_mao_obra_perc'], current_data['valor_mao_obra'], id_item))
                  WHERE id_item=%s
             """
             # Certifique-se que o número de parâmetros corresponde EXATAMENTE ao número de `%s`
@@ -1461,10 +1487,12 @@ def handle_item_editado(ui, item):
         COL_MARGEM_VALOR: "valor_margem",
         COL_CUSTOS_ADMIN_PERC: "custos_admin_perc",
         COL_CUSTOS_ADMIN_VALOR: "valor_custos_admin",
-        COL_AJUSTES1_PERC: "ajustes1_perc",
-        COL_AJUSTES1_VALOR: "valor_ajustes1",
-        COL_AJUSTES2_PERC: "ajustes2_perc",
-        COL_AJUSTES2_VALOR: "valor_ajustes2"
+        COL_MARGEM_ACAB_PERC: "margem_acabamentos_perc",
+        COL_VALOR_ACAB: "valor_acabamentos",
+        COL_MARGEM_MP_ORLAS_PERC: "margem_mp_orlas_perc",
+        COL_VALOR_MP_ORLAS: "valor_mp_orlas",
+        COL_MARGEM_MAO_OBRA_PERC: "margem_mao_obra_perc",
+        COL_VALOR_MAO_OBRA: "valor_mao_obra"
     }
     campo_db = colunas_db_map.get(col)
     if not campo_db:
@@ -1476,7 +1504,7 @@ def handle_item_editado(ui, item):
 
     if campo_db in ["altura", "largura", "profundidade", "qt", "preco_unitario", "preco_total", "custo_produzido",
                     "custo_total_orlas", "custo_total_mao_obra", "custo_total_materia_prima", "custo_total_acabamentos",
-                    "valor_margem", "valor_custos_admin", "valor_ajustes1", "valor_ajustes2"]:
+                    "valor_margem", "valor_custos_admin", "valor_acabamentos", "valor_mp_orlas"]:
         try:
             valor_novo_para_db = converter_texto_para_valor(
                 valor_novo_str, "moeda")
@@ -1488,7 +1516,7 @@ def handle_item_editado(ui, item):
                 None, "Erro", f"Valor inválido ({valor_novo_str}) para {campo_db}. Deve ser numérico.")
             _editando_programaticamente = False
             return
-    elif campo_db in ["margem_lucro_perc", "custos_admin_perc", "ajustes1_perc", "ajustes2_perc"]:
+    elif campo_db in ["margem_lucro_perc", "custos_admin_perc", "margem_acabamentos_perc", "margem_mp_orlas_perc", "margem_mao_obra_perc"]:
         try:
             valor_novo_para_db = converter_texto_para_valor(
                 valor_novo_str, "percentual")
@@ -1514,12 +1542,15 @@ def handle_item_editado(ui, item):
             elif col == COL_CUSTOS_ADMIN_PERC:
                 global_perc_value = converter_texto_para_valor(
                     ui.lineEdit_custos_administrativos.text(), "percentual")
-            elif col == COL_AJUSTES1_PERC:
+            elif col == COL_MARGEM_ACAB_PERC:
                 global_perc_value = converter_texto_para_valor(
                     ui.margem_acabamentos.text(), "percentual")
-            elif col == COL_AJUSTES2_PERC:
+            elif col == COL_MARGEM_MP_ORLAS_PERC:
                 global_perc_value = converter_texto_para_valor(
                     ui.margem_MP_orlas.text(), "percentual")
+            elif col == COL_MARGEM_MAO_OBRA_PERC:
+                global_perc_value = converter_texto_para_valor(
+                    ui.margem_mao_obra.text(), "percentual")
 
             # Compara o valor editado com o valor global correspondente
             if abs(valor_novo_para_db - global_perc_value) > 0.001:  # Comparar floats com tolerância
@@ -1603,7 +1634,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
         _editando_programaticamente = True
         try:
             for col_idx in [COL_CUSTO_PRODUZIDO, COL_CUSTO_ORLAS, COL_CUSTO_MO, COL_CUSTO_MP, COL_CUSTO_ACABAMENTOS,
-                            COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_AJUSTES1_VALOR, COL_AJUSTES2_VALOR,
+                            COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_VALOR_ACAB, COL_VALOR_MP_ORLAS, COL_VALOR_MAO_OBRA,
                             COL_PRECO_UNIT, COL_PRECO_TOTAL]:
                 set_item(tbl, row_idx, col_idx, formatar_valor_moeda(0.0))
                 item_q = tbl.item(row_idx, col_idx)
@@ -1676,10 +1707,12 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
         ui.lineEdit_margem_lucro.text(), "percentual")
     global_custos_admin_perc = converter_texto_para_valor(
         ui.lineEdit_custos_administrativos.text(), "percentual")
-    global_ajustes1_perc = converter_texto_para_valor(
+    global_margem_acabamentos_perc = converter_texto_para_valor(
         ui.margem_acabamentos.text(), "percentual")
-    global_ajustes2_perc = converter_texto_para_valor(
+    global_margem_mp_orlas_perc = converter_texto_para_valor(
         ui.margem_MP_orlas.text(), "percentual")
+    global_margem_mao_obra_perc = converter_texto_para_valor(
+        ui.margem_mao_obra.text(), "percentual")
 
     # Decidir qual percentagem de margem de lucro usar
     # Se 'force_global_margin_update' for True, sobrescreve o valor da célula de margem de lucro
@@ -1723,17 +1756,22 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
         custos_admin_perc_cell - global_custos_admin_perc) > 0.001 else global_custos_admin_perc
     # print(f"[DEBUG CalcLinha {row_idx+1}] Custos Admin Perc Efetivo: {custos_admin_perc*100:.2f}%")
 
-    ajustes1_perc_cell = converter_texto_para_valor(
-        _get_cell_text(tbl, row_idx, COL_AJUSTES1_PERC), "percentual")
-    ajustes1_perc = ajustes1_perc_cell if abs(
-        ajustes1_perc_cell - global_ajustes1_perc) > 0.001 else global_ajustes1_perc
-    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 1 Perc Efetivo: {ajustes1_perc*100:.2f}%")
+    margem_acabamentos_perc_cell = converter_texto_para_valor(
+        _get_cell_text(tbl, row_idx, COL_MARGEM_ACAB_PERC), "percentual")
+    margem_acabamentos_perc = margem_acabamentos_perc_cell if abs(
+        margem_acabamentos_perc_cell - global_margem_acabamentos_perc) > 0.001 else global_margem_acabamentos_perc
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 1 Perc Efetivo: {margem_acabamentos_perc*100:.2f}%")
 
-    ajustes2_perc_cell = converter_texto_para_valor(
-        _get_cell_text(tbl, row_idx, COL_AJUSTES2_PERC), "percentual")
-    ajustes2_perc = ajustes2_perc_cell if abs(
-        ajustes2_perc_cell - global_ajustes2_perc) > 0.001 else global_ajustes2_perc
-    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 2 Perc Efetivo: {ajustes2_perc*100:.2f}%")
+    margem_mp_orlas_perc_cell = converter_texto_para_valor(
+        _get_cell_text(tbl, row_idx, COL_MARGEM_MP_ORLAS_PERC), "percentual")
+    margem_mp_orlas_perc = margem_mp_orlas_perc_cell if abs(
+        margem_mp_orlas_perc_cell - global_margem_mp_orlas_perc) > 0.001 else global_margem_mp_orlas_perc
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Ajustes 2 Perc Efetivo: {margem_mp_orlas_perc*100:.2f}%")
+
+    margem_mao_obra_perc_cell = converter_texto_para_valor(
+        _get_cell_text(tbl, row_idx, COL_MARGEM_MAO_OBRA_PERC), "percentual")
+    margem_mao_obra_perc = margem_mao_obra_perc_cell if abs(
+        margem_mao_obra_perc_cell - global_margem_mao_obra_perc) > 0.001 else global_margem_mao_obra_perc
 
     qt_item = converter_texto_para_valor(
         _get_cell_text(tbl, row_idx, COL_QT), "moeda")
@@ -1749,16 +1787,18 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
     # Remover a divisão por 100.0, pois as percentagens já estão em decimal.
     valor_margem = custo_produzido_calculado * margem_lucro_perc
     valor_custos_admin = custo_produzido_calculado * custos_admin_perc
-    valor_ajustes1 = custo_produzido_calculado * ajustes1_perc
-    valor_ajustes2 = custo_produzido_calculado * ajustes2_perc
+    valor_acabamentos = total_acabamentos * margem_acabamentos_perc
+    valor_mp_orlas = (total_materia_prima + total_orlas) * margem_mp_orlas_perc
+    valor_mao_obra = total_mao_obra * margem_mao_obra_perc
 
     # Preço unitário do item (total do item dividido pela quantidade do item)
-    # print(f"[DEBUG CalcLinha {row_idx+1}] Valores calculados: Margem={valor_margem:.2f}€, Admin={valor_custos_admin:.2f}€, Aj1={valor_ajustes1:.2f}€, Aj2={valor_ajustes2:.2f}€")
+    # print(f"[DEBUG CalcLinha {row_idx+1}] Valores calculados: Margem={valor_margem:.2f}€, Admin={valor_custos_admin:.2f}€, Acab={valor_acabamentos:.2f}€, MP/Orlas={valor_mp_orlas:.2f}€, MO={valor_mao_obra:.2f}€")
 
     # Preco_Unit é o preço de 1 unidade do item.
     # Preco_Total é o Preco_Unit * QT.
     preco_base_por_unidade = (custo_produzido_calculado + valor_margem +
-                              valor_custos_admin + valor_ajustes1 + valor_ajustes2)
+                              valor_custos_admin + valor_acabamentos +
+                              valor_mp_orlas + valor_mao_obra)
     preco_unit_calculado = preco_base_por_unidade
     preco_total_calculado = preco_base_por_unidade * qt_item
     # print(f"[DEBUG CalcLinha {row_idx+1}] Preco_Total Calculado para esta linha: {preco_total_calculado:.2f}€")
@@ -1845,36 +1885,50 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
             tbl.item(row_idx, COL_CUSTOS_ADMIN_VALOR).setToolTip(
                 tooltip_valor_admin)
 
-        tooltip_ajustes1_perc = f"Percentagem de Ajustes 1: {ajustes1_perc*100:.2f}%"
-        set_item(tbl, row_idx, COL_AJUSTES1_PERC,
-                 formatar_valor_percentual(ajustes1_perc))
-        if tbl.item(row_idx, COL_AJUSTES1_PERC):
-            tbl.item(row_idx, COL_AJUSTES1_PERC).setToolTip(
-                tooltip_ajustes1_perc)
+        tooltip_margem_acabamentos_perc = f"Percentagem Margem Acabamentos: {margem_acabamentos_perc*100:.2f}%"
+        set_item(tbl, row_idx, COL_MARGEM_ACAB_PERC,
+                 formatar_valor_percentual(margem_acabamentos_perc))
+        if tbl.item(row_idx, COL_MARGEM_ACAB_PERC):
+            tbl.item(row_idx, COL_MARGEM_ACAB_PERC).setToolTip(
+                tooltip_margem_acabamentos_perc)
 
-        tooltip_valor_ajustes1 = f"Valor de Ajustes 1: {custo_produzido_calculado:.2f}€ * ({ajustes1_perc*100:.2f}%) = {valor_ajustes1:.2f}€"
-        set_item(tbl, row_idx, COL_AJUSTES1_VALOR,
-                 formatar_valor_moeda(valor_ajustes1))
-        if tbl.item(row_idx, COL_AJUSTES1_VALOR):
-            tbl.item(row_idx, COL_AJUSTES1_VALOR).setToolTip(
-                tooltip_valor_ajustes1)
+        tooltip_valor_acabamentos = f"Valor Margem Acabamentos: {total_acabamentos:.2f}€ * ({margem_acabamentos_perc*100:.2f}%) = {valor_acabamentos:.2f}€"
+        set_item(tbl, row_idx, COL_VALOR_ACAB,
+                 formatar_valor_moeda(valor_acabamentos))
+        if tbl.item(row_idx, COL_VALOR_ACAB):
+            tbl.item(row_idx, COL_VALOR_ACAB).setToolTip(
+                tooltip_valor_acabamentos)
 
-        tooltip_ajustes2_perc = f"Percentagem de Ajustes 2: {ajustes2_perc*100:.2f}%"
-        set_item(tbl, row_idx, COL_AJUSTES2_PERC,
-                 formatar_valor_percentual(ajustes2_perc))
-        if tbl.item(row_idx, COL_AJUSTES2_PERC):
-            tbl.item(row_idx, COL_AJUSTES2_PERC).setToolTip(
-                tooltip_ajustes2_perc)
+        tooltip_margem_mp_orlas_perc = f"Percentagem Margem MP/Orlas: {margem_mp_orlas_perc*100:.2f}%"
+        set_item(tbl, row_idx, COL_MARGEM_MP_ORLAS_PERC,
+                 formatar_valor_percentual(margem_mp_orlas_perc))
+        if tbl.item(row_idx, COL_MARGEM_MP_ORLAS_PERC):
+            tbl.item(row_idx, COL_MARGEM_MP_ORLAS_PERC).setToolTip(
+                tooltip_margem_mp_orlas_perc)
 
-        tooltip_valor_ajustes2 = f"Valor de Ajustes 2: {custo_produzido_calculado:.2f}€ * ({ajustes2_perc*100:.2f}%) = {valor_ajustes2:.2f}€"
-        set_item(tbl, row_idx, COL_AJUSTES2_VALOR,
-                 formatar_valor_moeda(valor_ajustes2))
-        if tbl.item(row_idx, COL_AJUSTES2_VALOR):
-            tbl.item(row_idx, COL_AJUSTES2_VALOR).setToolTip(
-                tooltip_valor_ajustes2)
+        tooltip_valor_mp_orlas = f"Valor Margem MP/Orlas: {(total_materia_prima + total_orlas):.2f}€ * ({margem_mp_orlas_perc*100:.2f}%) = {valor_mp_orlas:.2f}€"
+        set_item(tbl, row_idx, COL_VALOR_MP_ORLAS,
+                 formatar_valor_moeda(valor_mp_orlas))
+        if tbl.item(row_idx, COL_VALOR_MP_ORLAS):
+            tbl.item(row_idx, COL_VALOR_MP_ORLAS).setToolTip(
+                tooltip_valor_mp_orlas)
+
+        tooltip_margem_mao_obra_perc = f"Percentagem Margem Mão de Obra: {margem_mao_obra_perc*100:.2f}%"
+        set_item(tbl, row_idx, COL_MARGEM_MAO_OBRA_PERC,
+                 formatar_valor_percentual(margem_mao_obra_perc))
+        if tbl.item(row_idx, COL_MARGEM_MAO_OBRA_PERC):
+            tbl.item(row_idx, COL_MARGEM_MAO_OBRA_PERC).setToolTip(
+                tooltip_margem_mao_obra_perc)
+
+        tooltip_valor_mao_obra = f"Valor Margem Mão de Obra: {total_mao_obra:.2f}€ * ({margem_mao_obra_perc*100:.2f}%) = {valor_mao_obra:.2f}€"
+        set_item(tbl, row_idx, COL_VALOR_MAO_OBRA,
+                 formatar_valor_moeda(valor_mao_obra))
+        if tbl.item(row_idx, COL_VALOR_MAO_OBRA):
+            tbl.item(row_idx, COL_VALOR_MAO_OBRA).setToolTip(
+                tooltip_valor_mao_obra)
 
         # Atualizar Preco_Unit e Preco_Total na UI
-        tooltip_preco_unit = f"Preço Unitário: (Custo Produzido ({custo_produzido_calculado:.2f}€) + Margem ({valor_margem:.2f}€) + Admin ({valor_custos_admin:.2f}€) + Aj1 ({valor_ajustes1:.2f}€) + Aj2 ({valor_ajustes2:.2f}€)) = {preco_unit_calculado:.2f}€"
+        tooltip_preco_unit = f"Preço Unitário: (Custo Produzido ({custo_produzido_calculado:.2f}€) + Margem ({valor_margem:.2f}€) + Admin ({valor_custos_admin:.2f}€) + Acab ({valor_acabamentos:.2f}€) + MP/Orlas ({valor_mp_orlas:.2f}€) + MO ({valor_mao_obra:.2f}€)) = {preco_unit_calculado:.2f}€"
         set_item(tbl, row_idx, COL_PRECO_UNIT,
                  formatar_valor_moeda(preco_unit_calculado))
         if tbl.item(row_idx, COL_PRECO_UNIT):
@@ -1907,8 +1961,9 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                     preco_unitario=%s, preco_total=%s,custo_produzido=%s,
                     custo_total_orlas=%s, custo_total_mao_obra=%s, custo_total_materia_prima=%s,
                     custo_total_acabamentos=%s, margem_lucro_perc=%s, valor_margem=%s,
-                    custos_admin_perc=%s, valor_custos_admin=%s, ajustes1_perc=%s,
-                    valor_ajustes1=%s, ajustes2_perc=%s, valor_ajustes2=%s
+                    custos_admin_perc=%s, valor_custos_admin=%s, margem_acabamentos_perc=%s,
+                    valor_acabamentos=%s, margem_mp_orlas_perc=%s, valor_mp_orlas=%s,
+                    margem_mao_obra_perc=%s, valor_mao_obra=%s
                 WHERE id_item=%s
             """
             cursor.execute(update_query, (
@@ -1916,8 +1971,9 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                 total_orlas, total_mao_obra, total_materia_prima, total_acabamentos,
                 # Salva o valor que foi efetivamente usado no cálculo (pode ser o manual ou o global)
                 margem_lucro_perc, valor_margem,
-                custos_admin_perc, valor_custos_admin, ajustes1_perc,
-                valor_ajustes1, ajustes2_perc, valor_ajustes2,
+                custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
+                valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
+                margem_mao_obra_perc, valor_mao_obra,
                 id_item_db_val  # id_item da tabela orcamento_items para o WHERE
             ))
             # print(f"  DB atualizado para item {id_item_orcamento_str}.")
@@ -2105,25 +2161,25 @@ def calcular_preco_final_orcamento(ui):
                 # Lendo percentuais atuais (globais ou da célula se houver override)
                 global_custos_admin_perc = converter_texto_para_valor(
                     ui.lineEdit_custos_administrativos.text(), "percentual")
-                global_ajustes1_perc = converter_texto_para_valor(
+                global_margem_acabamentos_perc = converter_texto_para_valor(
                     ui.margem_acabamentos.text(), "percentual")
-                global_ajustes2_perc = converter_texto_para_valor(
+                global_margem_mp_orlas_perc = converter_texto_para_valor(
                     ui.margem_MP_orlas.text(), "percentual")
 
                 custos_admin_perc_cell = converter_texto_para_valor(
                     _get_cell_text(tbl, row_idx, COL_CUSTOS_ADMIN_PERC), "percentual")
-                ajustes1_perc_cell = converter_texto_para_valor(
-                    _get_cell_text(tbl, row_idx, COL_AJUSTES1_PERC), "percentual")
-                ajustes2_perc_cell = converter_texto_para_valor(
-                    _get_cell_text(tbl, row_idx, COL_AJUSTES2_PERC), "percentual")
+                margem_acabamentos_perc_cell = converter_texto_para_valor(
+                    _get_cell_text(tbl, row_idx, COL_MARGEM_ACAB_PERC), "percentual")
+                margem_mp_orlas_perc_cell = converter_texto_para_valor(
+                    _get_cell_text(tbl, row_idx, COL_MARGEM_MP_ORLAS_PERC), "percentual")
 
                 # Valores de percentagem de Ajustes e Custos Admin REALMENTE aplicados ao item
                 custos_admin_perc_effective = custos_admin_perc_cell if abs(
                     custos_admin_perc_cell - global_custos_admin_perc) > 0.001 else global_custos_admin_perc
-                ajustes1_perc_effective = ajustes1_perc_cell if abs(
-                    ajustes1_perc_cell - global_ajustes1_perc) > 0.001 else global_ajustes1_perc
-                ajustes2_perc_effective = ajustes2_perc_cell if abs(
-                    ajustes2_perc_cell - global_ajustes2_perc) > 0.001 else global_ajustes2_perc
+                margem_acabamentos_perc_effective = margem_acabamentos_perc_cell if abs(
+                    margem_acabamentos_perc_cell - global_margem_acabamentos_perc) > 0.001 else global_margem_acabamentos_perc
+                margem_mp_orlas_perc_effective = margem_mp_orlas_perc_cell if abs(
+                    margem_mp_orlas_perc_cell - global_margem_mp_orlas_perc) > 0.001 else global_margem_mp_orlas_perc
 
                 # Acumular Somas para a nova fórmula da margem global
                 sum_custo_produzido_vezes_qt_total += custo_produzido_item * qt_item
@@ -2131,7 +2187,7 @@ def calcular_preco_final_orcamento(ui):
                 # Base para o cálculo da margem sem a própria margem, mas com outros custos e quantidade
                 custo_base_e_outros_ajustes_unit = custo_produzido_item * \
                     (1 + custos_admin_perc_effective +
-                     ajustes1_perc_effective + ajustes2_perc_effective)
+                     margem_acabamentos_perc_effective + margem_mp_orlas_perc_effective)
                 sum_custo_base_e_outros_ajustes_vezes_qt_total += custo_base_e_outros_ajustes_unit * qt_item
 
             except Exception as e:
@@ -2360,7 +2416,7 @@ def duplicar_item_orcamento(ui):
                 "preco_unitario, preco_total, custo_produzido, custo_total_orlas, "
                 "custo_total_mao_obra, custo_total_materia_prima, custo_total_acabamentos, "
                 "margem_lucro_perc, valor_margem, custos_admin_perc, valor_custos_admin, "
-                "ajustes1_perc, valor_ajustes1, ajustes2_perc, valor_ajustes2 "
+                "margem_acabamentos_perc, valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas "
                 "FROM orcamento_items WHERE id_item=%s",
                 (int(id_item_str),))
             dados = cursor.fetchone()
@@ -2372,9 +2428,9 @@ def duplicar_item_orcamento(ui):
                 "altura, largura, profundidade, und, qt, preco_unitario, preco_total, "
                 "custo_produzido, custo_total_orlas, custo_total_mao_obra, "
                 "custo_total_materia_prima, custo_total_acabamentos, margem_lucro_perc, "
-                "valor_margem, custos_admin_perc, valor_custos_admin, ajustes1_perc, "
-                "valor_ajustes1, ajustes2_perc, valor_ajustes2) VALUES (" + ", ".join([
-                    "%s"]*24) + ")"
+                "valor_margem, custos_admin_perc, valor_custos_admin, margem_acabamentos_perc, "
+                "valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas, margem_mao_obra_perc, valor_mao_obra) VALUES (" + ", ".join([
+                    "%s"]*26) + ")"
             )
             cursor.execute(insert_q, (id_orc, novo_item, *dados))
 

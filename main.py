@@ -26,11 +26,12 @@ git status                # (opcional) ver o que mudou
 git add .                 # adiciona todos os ficheiros alterados
 git commit -m "73º Commit"
 git push                  # envia para o GitHub
+
  ______________________________//________________________
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "184 Commit"
+git commit -m "185 Commit"
 git push origin main
 
 
