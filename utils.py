@@ -20,7 +20,7 @@ import re
 import os
 import mysql.connector
 from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
 
@@ -676,3 +676,31 @@ def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
 # Função para obter o caminho do Excel de resumos do orçamento atual    
 
 
+def _save_column_widths(table, settings_key):
+    """Salva as larguras atuais das colunas usando ``QSettings``."""
+    settings = QSettings()
+    widths = [table.columnWidth(i) for i in range(table.columnCount())]
+    settings.setValue(settings_key, widths)
+
+
+def restore_column_widths(table, settings_key):
+    """Restaura larguras de coluna previamente salvas para ``table``."""
+    settings = QSettings()
+    widths = settings.value(settings_key)
+    if widths:
+        try:
+            widths = [int(w) for w in widths]
+        except Exception:
+            return
+        for i, w in enumerate(widths):
+            if i < table.columnCount():
+                table.setColumnWidth(i, w)
+
+
+def enable_column_width_persistence(table, settings_key=None):
+    """Ativa salvamento automático das larguras das colunas de ``table``."""
+    if settings_key is None:
+        settings_key = f"column_widths/{table.objectName()}"
+    header = table.horizontalHeader()
+    header.sectionResized.connect(lambda *_: _save_column_widths(table, settings_key))
+    restore_column_widths(table, settings_key)
