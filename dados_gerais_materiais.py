@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from dados_gerais_base import criar_tabela_dados_gerais, configurar_tabela_dados_gerais_ui, get_distinct_values
 # Diálogo de seleção de material (já implementado em outro módulo)
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
-from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu)
+from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu, enable_column_width_persistence)
 from dados_gerais_mp import COLUNAS_LIMPAR_MATERIAIS  # Lista de colunas para limpeza, se necessário
 
 # Definição das colunas para a tabela de Materiais
@@ -173,8 +173,9 @@ def definir_larguras_tab_material(ui):
     """
     tabela = ui.Tab_Material
     header = tabela.horizontalHeader()
-    header.setSectionResizeMode(QHeaderView.Fixed)
+    header.setSectionResizeMode(QHeaderView.Interactive)
     header.setStretchLastSection(False)
+    tabela.resizeColumnsToContents()
 
     # Extrai apenas os valores de largura (terceiro elemento de cada tupla)
     larguras = [l[2] if isinstance(l, tuple) else l for l in MATERIAIS_COLUNAS_LARGURAS]
@@ -182,7 +183,8 @@ def definir_larguras_tab_material(ui):
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
     for idx in range(num_cols):
-         tabela.setColumnWidth(idx, larguras[idx])
+        tabela.setColumnWidth(idx, larguras[idx])
+    enable_column_width_persistence(tabela, "Tab_Material")
 
 def on_mp_button_clicked(ui, row, nome_tabela):
     """
