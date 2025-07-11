@@ -1324,7 +1324,8 @@ def editar_item_orcamento_groupbox(ui):
                  current_data['custo_total_orlas'], current_data['custo_total_mao_obra'], current_data['custo_total_materia_prima'],
                  current_data['custo_total_acabamentos'], current_data['margem_lucro_perc'], current_data['valor_margem'],
                  current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['margem_acabamentos_perc'],
-                 current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas']) = res
+                 current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas'],
+                 current_data['margem_mao_obra_perc'], current_data['valor_mao_obra']) = res
             else:
                 QMessageBox.warning(
                     None, "Aviso", "Item não encontrado na base de dados para edição.")
@@ -1342,21 +1343,22 @@ def editar_item_orcamento_groupbox(ui):
                        custo_produzido=%s,
                        custo_total_orlas=%s, custo_total_mao_obra=%s, custo_total_materia_prima=%s,
                        custo_total_acabamentos=%s, margem_lucro_perc=%s, valor_margem=%s,
-                       current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['margem_acabamentos_perc'],
-                       current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas'],
-                       current_data['margem_mao_obra_perc'], current_data['valor_mao_obra'], id_item))
+                       custos_admin_perc=%s, valor_custos_admin=%s, margem_acabamentos_perc=%s,
+                       valor_acabamentos=%s, margem_mp_orlas_perc=%s, valor_mp_orlas=%s,
+                       margem_mao_obra_perc=%s, valor_mao_obra=%s
                  WHERE id_item=%s
             """
-            # Certifique-se que o número de parâmetros corresponde EXATAMENTE ao número de `%s`
-            cursor.execute(update_query, (item_str, codigo, descricao, altura, larg, prof, und, qt,
-                                          current_data['preco_unitario'], current_data['preco_total'],
-                                          current_data['custo_produzido'],
-                                          current_data['custo_total_orlas'], current_data[
-                                              'custo_total_mao_obra'], current_data['custo_total_materia_prima'],
-                                          current_data['custo_total_acabamentos'], current_data[
-                                              'margem_lucro_perc'], current_data['valor_margem'],
-                                          current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['ajustes1_perc'],
-                                          current_data['valor_ajustes1'], current_data['ajustes2_perc'], current_data['valor_ajustes2'], id_item))
+            cursor.execute(update_query, (
+                item_str, codigo, descricao, altura, larg, prof, und, qt,
+                current_data['preco_unitario'], current_data['preco_total'],
+                current_data['custo_produzido'],
+                current_data['custo_total_orlas'], current_data['custo_total_mao_obra'], current_data['custo_total_materia_prima'],
+                current_data['custo_total_acabamentos'], current_data['margem_lucro_perc'], current_data['valor_margem'],
+                current_data['custos_admin_perc'], current_data['valor_custos_admin'], current_data['margem_acabamentos_perc'],
+                current_data['valor_acabamentos'], current_data['margem_mp_orlas_perc'], current_data['valor_mp_orlas'],
+                current_data['margem_mao_obra_perc'], current_data['valor_mao_obra'],
+                id_item
+            ))
 
         # Recarrega tabela para que os dados do groupbox apareçam
         carregar_itens_orcamento(ui, id_orc)
