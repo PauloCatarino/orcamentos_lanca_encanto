@@ -493,8 +493,12 @@ def mapeia_dados_items_orcamento(main_window):
         dest.addTopLevelItem(QTreeWidgetItem(item_data))
 
         
-def acao_orcamentar_items(main_window):
-    """Executa as ações do botão 'orcamentar_items'."""
+def acao_orcamentar_items(main_window, auto_confirm=False):
+    """Executa as ações do botão 'orcamentar_items'.
+
+    Se ``auto_confirm`` for True, quaisquer perguntas interativas serão
+    respondidas automaticamente, permitindo execução em segundo plano.
+    """
     ui = main_window.ui
     mapeia_dados_items_orcamento(main_window)
     configurar_dados_items_orcamento_materiais(main_window)
@@ -523,21 +527,7 @@ def acao_orcamentar_items(main_window):
     item_id = ui.lineEdit_item_orcamento.text().strip()
 
     if not verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
-        msg = (
-            f"<p>Pretende preencher os dados do item <b>{item_id}</b> "
-            f"com os Dados Gerais atuais?</p>"
-            f"<p><small>Orçamento: <b>{num_orc}</b> | "
-            f"Versão: <b>{ver_orc}</b></small></p>"
-        )
-
-        resp = QMessageBox.question(
-            main_window,
-            "Usar Dados Gerais",
-            msg,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
-        )
-        if resp == QMessageBox.Yes:
+        if auto_confirm:
             from utils import copiar_dados_gerais_para_itens
 
             copiar_dados_gerais_para_itens(ui)
@@ -550,6 +540,34 @@ def acao_orcamentar_items(main_window):
             guardar_dados_item_orcamento_tab_ferragens(main_window)
             guardar_dados_item_orcamento_tab_sistemas_correr_3(main_window)
             guardar_dados_item_orcamento_tab_acabamentos(main_window)
+        else:
+            msg = (
+                f"<p>Pretende preencher os dados do item <b>{item_id}</b> "
+                f"com os Dados Gerais atuais?</p>"
+                f"<p><small>Orçamento: <b>{num_orc}</b> | "
+                f"Versão: <b>{ver_orc}</b></small></p>"
+            )
+
+            resp = QMessageBox.question(
+                main_window,
+                "Usar Dados Gerais",
+                msg,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if resp == QMessageBox.Yes:
+                from utils import copiar_dados_gerais_para_itens
+
+                copiar_dados_gerais_para_itens(ui)
+                from dados_items_materiais import guardar_dados_item_orcamento_tab_material
+                from dados_items_ferragens import guardar_dados_item_orcamento_tab_ferragens
+                from dados_items_sistemas_correr import guardar_dados_item_orcamento_tab_sistemas_correr_3
+                from dados_items_acabamentos import guardar_dados_item_orcamento_tab_acabamentos
+
+                guardar_dados_item_orcamento_tab_material(main_window)
+                guardar_dados_item_orcamento_tab_ferragens(main_window)
+                guardar_dados_item_orcamento_tab_sistemas_correr_3(main_window)
+                guardar_dados_item_orcamento_tab_acabamentos(main_window)
 
     atualizar_tudo(ui)
     
@@ -2090,10 +2108,10 @@ def on_modo_producao_changed(main_window, modo):
         ui.lineEdit_qt_orcamento.setText(qt)
         if main_window is not None:
             main_window.navegacao_index = idx
-            acao_orcamentar_items(main_window)
+            acao_orcamentar_items(main_window, auto_confirm=True)
         else:
-            acao_orcamentar_items(ui)
-        salvar_dados_def_pecas(ui)
+            acao_orcamentar_items(ui, auto_confirm=True)
+        salvar_dados_def_pecas(ui, silent=True)
 
     registrar_valores_maquinas_orcamento(
         ui.lineEdit_num_orcamento.text().strip(),
