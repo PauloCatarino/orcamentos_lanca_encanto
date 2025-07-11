@@ -273,7 +273,7 @@ def salvar_dados_modulo_medidas(ui):
         traceback.print_exc()
 
 # 3. Gravar em base dados os dados da tabela 'tab_def_pecas' , que estão no separador orçamento items
-def salvar_dados_def_pecas(ui):
+def salvar_dados_def_pecas(ui, silent=False):
     tbl = ui.tab_def_pecas
     rows = tbl.rowCount()
     if rows == 0:
@@ -336,22 +336,23 @@ def salvar_dados_def_pecas(ui):
         return # Parar se não conseguirmos verificar
 
     if contagem_registos > 0:
-        resposta = QMessageBox.question(
-            None, # Widget pai
-            "Confirmar Substituição",
-            f"Já existem {contagem_registos} registos para:\n"
-            f"  Item: {key_ids}\n"
-            f"  Orçamento: {key_num}\n"
-            f"  Versão: {key_ver_final}\n\n" # Mostrar key_ver_final no diálogo
-            "Deseja substituir os dados existentes pelos dados atuais da tabela?",
-            QMessageBox.Yes | QMessageBox.No, # Botões
-            QMessageBox.Yes # Botão padrão forçado a ficar ativo o botão 'Yes'
-        )
+        if not silent:
+            resposta = QMessageBox.question(
+                None,
+                "Confirmar Substituição",
+                f"Já existem {contagem_registos} registos para:\n"
+                f"  Item: {key_ids}\n"
+                f"  Orçamento: {key_num}\n"
+                f"  Versão: {key_ver_final}\n\n"
+                "Deseja substituir os dados existentes pelos dados atuais da tabela?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
 
-        if resposta == QMessageBox.No:
-            print("Operação de guardar cancelada pelo utilizador.")
-            QMessageBox.information(None, "Guardar Dados", "Operação cancelada.")
-            return # Parar se o utilizador selecionar Não
+            if resposta == QMessageBox.No:
+                print("Operação de guardar cancelada pelo utilizador.")
+                QMessageBox.information(None, "Guardar Dados", "Operação cancelada.")
+                return
 
     # --- Prosseguir com Eliminação e Inserção ---
     print(f"A guardar {rows} linhas para {key_ids}/{key_num}/{key_ver_final}. Registos existentes: {contagem_registos} (serão substituídos se existirem).")
@@ -484,7 +485,8 @@ def salvar_dados_def_pecas(ui):
             if dados_para_inserir:
                 cursor.executemany(insert_sql, dados_para_inserir)
                 print(f"{len(dados_para_inserir)} linha(s) guardada(s) com sucesso.")
-                QMessageBox.information(None, "Guardar Dados", f"{len(dados_para_inserir)} linha(s) guardada(s) com sucesso.")
+                if not silent:
+                    QMessageBox.information(None, "Guardar Dados", f"{len(dados_para_inserir)} linha(s) guardada(s) com sucesso.")
             else:
                 print("Nenhum dado válido para inserir.")
 
