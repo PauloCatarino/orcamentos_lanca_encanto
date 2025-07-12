@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from dados_gerais_base import criar_tabela_dados_gerais, configurar_tabela_dados_gerais_ui, get_distinct_values
 # Diálogo de seleção de material (já implementado em outro módulo)
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
-from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu, enable_column_width_persistence)
+from utils import (formatar_valor_moeda,formatar_valor_percentual,original_pliq_values, converter_texto_para_valor, get_distinct_values_with_filter, install_header_width_menu)
 from dados_gerais_mp import COLUNAS_LIMPAR_MATERIAIS  # Lista de colunas para limpeza, se necessário
 
 # Definição das colunas para a tabela de Materiais
@@ -51,13 +51,16 @@ MATERIAIS_COLUNAS = [
     {'nome': 'nao_stock', 'tipo': 'INTEGER', 'visivel': True, 'checkbox': True}
 ]
 
+#larguras = [200, 300, 50, 70, 50, 100, 500, 60, 60, 60, 60, 50, 50, 90, 90, 110, 120, 70, 70, 60, 100, 60] # Larguras em pixels para cada coluna
+    #material;descricao;id_mat;num_orc;ver_orc;ref_le;descricao_no_orcamento;ptab;pliq;desc1_plus;desc2_minus;und;desp;corres_orla_0_4;corres_orla_1_0;tipo;familia;comp_mp;larg_mp;esp_mp;MP;nao_stock
+
 # Definição das larguras fixas para cada coluna da tabela de Materiais
 # As larguras são definidas em pixels e podem ser ajustadas conforme necessário.
 MATERIAIS_COLUNAS_LARGURAS = [
     (0,  'material',                180),
-    (1,  'descricao',               300),
+    (1,  'descricao',               400),
     (2,  'id_mat',                   50),
-    (3,  'num_orc',                 150),
+    (3,  'num_orc',                 80),
     (4,  'ver_orc',                  50),
     (5,  'ref_le',                  110),
     (6,  'descricao_no_orcamento',  400),
@@ -67,8 +70,8 @@ MATERIAIS_COLUNAS_LARGURAS = [
     (10, 'desc2_minus',              60),
     (11, 'und',                      50),
     (12, 'desp',                     50),
-    (13, 'corres_orla_0_4',         120),
-    (14, 'corres_orla_1_0',         120),
+    (13, 'corres_orla_0_4',         90),
+    (14, 'corres_orla_1_0',         90),
     (15, 'tipo',                    120),
     (16, 'familia',                 120),
     (17, 'comp_mp',                  90),
@@ -168,23 +171,32 @@ def escolher_material(ui, linha_tab, nome_tabela):
 
 def definir_larguras_tab_material(ui):
     """
-    Define larguras fixas para cada coluna da Tab_Material.
-    Ajuste os valores conforme necessário.
+    Define larguras padrão para cada coluna da Tab_Material, mas só aplica as larguras padrão
+    se ainda não existir valor guardado nas preferências do utilizador.
+    Permite ajuste manual e ativa persistência.
     """
     tabela = ui.Tab_Material
     header = tabela.horizontalHeader()
     header.setSectionResizeMode(QHeaderView.Interactive)
     header.setStretchLastSection(False)
-    tabela.resizeColumnsToContents()
+    
+    from utils import enable_column_width_persistence
+    # Chama para restaurar as larguras do utilizador (se existirem) e ligar a persistência
+    enable_column_width_persistence(tabela, "Tab_Material_column_widths")
+    
+    # Só aplica larguras padrão se ainda não houver valores guardados (primeira vez)
+    from PyQt5.QtCore import QSettings
+    settings = QSettings("LANCA ENCANTO", "Orcamentos")
+    key = "Tab_Material_column_widths"
+    stored_widths = settings.value(key)
 
-    # Extrai apenas os valores de largura (terceiro elemento de cada tupla)
-    larguras = [l[2] if isinstance(l, tuple) else l for l in MATERIAIS_COLUNAS_LARGURAS]
-    num_cols = tabela.columnCount()
-    if len(larguras) < num_cols:
-        larguras += [100] * (num_cols - len(larguras))
-    for idx in range(num_cols):
-        tabela.setColumnWidth(idx, larguras[idx])
-    enable_column_width_persistence(tabela, "Tab_Material")
+    if not stored_widths:
+        larguras = [l[2] if isinstance(l, tuple) else l for l in MATERIAIS_COLUNAS_LARGURAS]
+        num_cols = tabela.columnCount()
+        if len(larguras) < num_cols:
+            larguras += [100] * (num_cols - len(larguras))
+        for idx in range(num_cols):
+            tabela.setColumnWidth(idx, larguras[idx])
 
 def on_mp_button_clicked(ui, row, nome_tabela):
     """

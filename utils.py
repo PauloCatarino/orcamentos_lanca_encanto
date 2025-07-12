@@ -676,31 +676,29 @@ def verificar_dados_itens_salvos(num_orc, ver_orc, item_id):
 # Função para obter o caminho do Excel de resumos do orçamento atual    
 
 
-def _save_column_widths(table, settings_key):
-    """Salva as larguras atuais das colunas usando ``QSettings``."""
-    settings = QSettings()
-    widths = [table.columnWidth(i) for i in range(table.columnCount())]
-    settings.setValue(settings_key, widths)
-
-
-def restore_column_widths(table, settings_key):
-    """Restaura larguras de coluna previamente salvas para ``table``."""
-    settings = QSettings()
-    widths = settings.value(settings_key)
-    if widths:
-        try:
-            widths = [int(w) for w in widths]
-        except Exception:
-            return
-        for i, w in enumerate(widths):
-            if i < table.columnCount():
-                table.setColumnWidth(i, w)
-
-
-def enable_column_width_persistence(table, settings_key=None):
-    """Ativa salvamento automático das larguras das colunas de ``table``."""
-    if settings_key is None:
-        settings_key = f"column_widths/{table.objectName()}"
+def enable_column_width_persistence(table, settings_key):
     header = table.horizontalHeader()
-    header.sectionResized.connect(lambda *_: _save_column_widths(table, settings_key))
-    restore_column_widths(table, settings_key)
+    settings = QSettings("LANCA ENCANTO", "Orcamentos")
+    num_cols = table.columnCount()
+
+    # Função para guardar as larguras
+    def save_widths():
+        widths = [header.sectionSize(i) for i in range(num_cols)]
+        settings.setValue(settings_key, widths)
+
+    # Função para restaurar as larguras
+    def restore_widths():
+        widths = settings.value(settings_key)
+        if widths and isinstance(widths, list):
+            for i, w in enumerate(widths):
+                try:
+                    table.setColumnWidth(i, int(w))
+                except Exception:
+                    pass
+
+    # Conecta o sinal de mudança de largura
+    header.sectionResized.connect(lambda idx, old, new: save_widths())
+
+    # Chama na inicialização
+    restore_widths()
+    
