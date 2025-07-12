@@ -173,21 +173,32 @@ def escolher_ferragens(ui, linha_tab, nome_tabela):
 
 def definir_larguras_tab_ferragens(ui):
     """
-    Define larguras fixas para cada coluna da Tab_Ferragens.
-    Ajuste os valores conforme necessário.
+    Define larguras padrão para cada coluna da Tab_Ferragens,
+    mas só aplica se ainda não existirem larguras gravadas pelo utilizador.
+    Permite ajuste manual e ativa persistência.
     """
     tabela = ui.Tab_Ferragens
     header = tabela.horizontalHeader()
-    header.setSectionResizeMode(QHeaderView.Fixed)
+    header.setSectionResizeMode(QHeaderView.Interactive)  # Permite ajuste manual!
     header.setStretchLastSection(False)
 
-    # Extrai apenas os valores de largura das tuplas
-    larguras = [l[2] if isinstance(l, tuple) else l for l in FERRAGENS_COLUNAS_LARGURAS]
-    num_cols = tabela.columnCount()
-    if len(larguras) < num_cols:
-        larguras += [100] * (num_cols - len(larguras))
-    for idx in range(num_cols):
-         tabela.setColumnWidth(idx, larguras[idx])
+    # Ativa persistência de larguras (usa QSettings)
+    from utils import enable_column_width_persistence
+    enable_column_width_persistence(tabela, "Tab_Ferragens_column_widths")
+
+    # Só define larguras por defeito se ainda não existirem larguras gravadas
+    from PyQt5.QtCore import QSettings
+    settings = QSettings("LANCA ENCANTO", "Orcamentos")
+    key = "Tab_Ferragens_column_widths"
+    stored_widths = settings.value(key)
+
+    if not stored_widths:
+        larguras = [l[2] if isinstance(l, tuple) else l for l in FERRAGENS_COLUNAS_LARGURAS]
+        num_cols = tabela.columnCount()
+        if len(larguras) < num_cols:
+            larguras += [100] * (num_cols - len(larguras))
+        for idx in range(num_cols):
+            tabela.setColumnWidth(idx, larguras[idx])
 
 def on_mp_button_clicked(ui, row, nome_tabela):
     """

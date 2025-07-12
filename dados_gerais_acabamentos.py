@@ -147,21 +147,32 @@ def escolher_acabamentos(ui, linha_tab, nome_tabela):
 
 def definir_larguras_tab_acabamentos(ui):
     """
-    Define larguras fixas para cada coluna da Tab_Acabamentos.
-    Ajuste os valores conforme necessário.
+    Define larguras padrão para cada coluna da Tab_Acabamentos, mas só aplica as larguras padrão
+    se ainda não existir valor guardado nas preferências do utilizador.
+    Permite ajuste manual e ativa persistência.
     """
     tabela = ui.Tab_Acabamentos
     header = tabela.horizontalHeader()
-    header.setSectionResizeMode(QHeaderView.Fixed)
+    header.setSectionResizeMode(QHeaderView.Interactive)   # Permite ajuste manual com o rato
     header.setStretchLastSection(False)
 
-    # Extrai somente as larguras definidas nas tuplas
-    larguras = [l[2] if isinstance(l, tuple) else l for l in ACABAMENTOS_COLUNAS_LARGURAS]
-    num_cols = tabela.columnCount()
-    if len(larguras) < num_cols:
-        larguras += [100] * (num_cols - len(larguras))
-    for idx in range(num_cols):
-         tabela.setColumnWidth(idx, larguras[idx])
+    # Ativa a persistência das larguras (guarda/restaura preferências do utilizador)
+    from utils import enable_column_width_persistence
+    enable_column_width_persistence(tabela, "Tab_Acabamentos_column_widths")
+
+    # Só define larguras padrão se não houver valor guardado ainda (primeira execução)
+    from PyQt5.QtCore import QSettings
+    settings = QSettings("LANCA ENCANTO", "Orcamentos")
+    key = "Tab_Acabamentos_column_widths"
+    stored_widths = settings.value(key)
+
+    if not stored_widths:
+        larguras = [l[2] if isinstance(l, tuple) else l for l in ACABAMENTOS_COLUNAS_LARGURAS]
+        num_cols = tabela.columnCount()
+        if len(larguras) < num_cols:
+            larguras += [100] * (num_cols - len(larguras))
+        for idx in range(num_cols):
+            tabela.setColumnWidth(idx, larguras[idx])
 
 # Função "on_mp_button_clicked" genérica (usando nome_tabela)
 

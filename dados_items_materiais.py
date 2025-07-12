@@ -275,9 +275,13 @@ def definir_larguras_tab_material_item(ui):
     header = tabela.horizontalHeader()
     header.setSectionResizeMode(QHeaderView.Fixed)
     header.setStretchLastSection(False)
+    # Aplica persistência
+    from utils import enable_column_width_persistence
+    enable_column_width_persistence(tabela, "Tab_Material_11_column_widths")
 
     # Ajustar conforme as necessidades do layout
-    larguras = [200, 200, 50, 110, 50, 100, 400, 60, 60, 60, 60, 50, 50, 180, 110, 120, 120, 90, 90, 90, 100, 60]
+    larguras = [200, 300, 50, 70, 50, 100, 500, 60, 60, 60, 60, 50, 50, 90, 90, 110, 120, 70, 70, 60, 100, 60] # Larguras em pixels para cada coluna
+    #material;descricao;id_mat;num_orc;ver_orc;ref_le;descricao_no_orcamento;ptab;pliq;desc1_plus;desc2_minus;und;desp;corres_orla_0_4;corres_orla_1_0;tipo;familia;comp_mp;larg_mp;esp_mp;MP;nao_stock
     num_cols = tabela.columnCount()
     if len(larguras) < num_cols:
         larguras += [100] * (num_cols - len(larguras))
