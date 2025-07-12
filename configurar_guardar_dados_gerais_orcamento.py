@@ -944,8 +944,8 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                     item = QTableWidgetItem()
                                     table.setItem(linha_ui, col_ui, item)
                                 item.setText(texto_formatado)
-                        elif campo_bd == "ref_le":  # Mantem ref_le original se dados_mp não encontrado
-                            valor_bd = reg_dict.get(campo_bd)
+                        elif campo_mp == "ref_le":  # Mantem ref_le original se dados_mp não encontrado
+                            valor_bd = reg_dict.get(campo_mp)
                             texto_formatado = str(
                                 valor_bd) if valor_bd is not None else ""
                             item = table.item(linha_ui, col_ui)

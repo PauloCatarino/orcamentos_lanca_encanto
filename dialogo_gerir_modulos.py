@@ -58,7 +58,7 @@ class DialogoGerirModulos(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Gerir Módulos Guardados")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1100, 800) # Tamanho mínimo da janela externa
 
         self.selected_module_id = None
         self.lista_modulos_data = []
@@ -73,11 +73,11 @@ class DialogoGerirModulos(QDialog):
         self.lbl_lista_modulos = QLabel("Módulos Guardados:")
         self.lista_widget_modulos = QListWidget()
         self.lista_widget_modulos.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lista_widget_modulos.setIconSize(QSize(48, 48)) # Ícones um pouco menores aqui
+        self.lista_widget_modulos.setIconSize(QSize(96, 96)) # Ícones um pouco menores aqui
         lista_layout.addWidget(self.lbl_lista_modulos)
         lista_layout.addWidget(self.lista_widget_modulos)
         
-        top_layout.addWidget(lista_group, 1) # Proporção 1
+        top_layout.addWidget(lista_group, 2) # Proporção 1
 
         # --- Lado Direito: Detalhes do Módulo e Peças ---
         detalhes_group = QWidget()
@@ -98,7 +98,8 @@ class DialogoGerirModulos(QDialog):
         
         self.lbl_imagem_modulo_preview = QLabel()
         self.lbl_imagem_modulo_preview.setAlignment(Qt.AlignCenter)
-        self.lbl_imagem_modulo_preview.setFixedSize(120, 120)
+        self.lbl_imagem_modulo_preview.setFixedSize(320, 220) # Ajustar tamanho da imagem
+        self.lbl_imagem_modulo_preview.setText("Sem imagem") # Texto padrão se não houver imagem
         self.lbl_imagem_modulo_preview.setStyleSheet("QLabel { border: 1px solid #ccc; background-color: #f0f0f0; }")
         
         info_modulo_layout.addLayout(info_text_layout, 2)
@@ -121,7 +122,7 @@ class DialogoGerirModulos(QDialog):
         detalhes_layout.addWidget(self.lbl_pecas_modulo)
         detalhes_layout.addWidget(self.tabela_pecas_modulo)
         
-        top_layout.addWidget(detalhes_group, 2) # Proporção 2 para detalhes
+        top_layout.addWidget(detalhes_group, 3) # Proporção 2 para detalhes
 
         main_layout.addLayout(top_layout)
 

@@ -485,14 +485,14 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                  else:
                                      item.setText(texto_formatado)
                         # Se o campo é ref_le, mantém o valor original dos dados gerais importados
-                        elif campo_bd == "ref_le":
-                             valor_bd = reg_dict.get(campo_bd)
+                        elif campo_mp == "ref_le":
+                             valor_bd = reg_dict.get(campo_mp)
                              texto_formatado = str(valor_bd) if valor_bd is not None else ""
                              item = table.item(linha_ui, col_ui)
                              if not item:
                                  item = QTableWidgetItem()
                                  table.setItem(linha_ui, col_ui, item)
-                             if campo_bd == "nao_stock":
+                             if campo_mp == "nao_stock":
                                  item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                                  item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
                              else:

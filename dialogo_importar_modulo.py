@@ -44,7 +44,7 @@ class DialogoImportarModulo(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Importar Módulo Guardado")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1100, 800) # Tamanho mínimo da janela externa
 
         self.selected_module_id = None
         self.lista_modulos_data = [] # Para armazenar os dados completos dos módulos
@@ -61,7 +61,7 @@ class DialogoImportarModulo(QDialog):
         self.lbl_lista_modulos = QLabel("Módulos Guardados:")
         self.lista_widget_modulos = QListWidget()
         self.lista_widget_modulos.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.lista_widget_modulos.setIconSize(QSize(48, 48)) # Tamanho para ícones/thumbnails
+        self.lista_widget_modulos.setIconSize(QSize(96, 96)) # Tamanho para ícones/thumbnails
         lista_layout.addWidget(self.lbl_lista_modulos)
         lista_layout.addWidget(self.lista_widget_modulos)
         splitter.addWidget(lista_group_widget)
@@ -83,7 +83,7 @@ class DialogoImportarModulo(QDialog):
         nome_desc_layout.addWidget(self.lbl_descricao_titulo)
         self.txt_descricao_modulo_detalhe = QTextEdit()
         self.txt_descricao_modulo_detalhe.setReadOnly(True)
-        self.txt_descricao_modulo_detalhe.setMaximumHeight(80) # Limitar altura da descrição
+        self.txt_descricao_modulo_detalhe.setMaximumHeight(90) # Limitar altura da descrição
         nome_desc_layout.addWidget(self.txt_descricao_modulo_detalhe)
         
         nome_img_layout.addLayout(nome_desc_layout, 2) # Dar mais espaço para nome/descrição
@@ -91,7 +91,8 @@ class DialogoImportarModulo(QDialog):
         # Imagem
         self.lbl_imagem_modulo_preview = QLabel()
         self.lbl_imagem_modulo_preview.setAlignment(Qt.AlignCenter)
-        self.lbl_imagem_modulo_preview.setFixedSize(150, 150) # Ajustar tamanho se necessário
+        self.lbl_imagem_modulo_preview.setFixedSize(320, 220) # Ajustar tamanho da imagem
+        self.lbl_imagem_modulo_preview.setText("Sem imagem")
         self.lbl_imagem_modulo_preview.setStyleSheet("QLabel { border: 1px solid #ccc; background-color: #f0f0f0; }")
         nome_img_layout.addWidget(self.lbl_imagem_modulo_preview, 1, Qt.AlignCenter) # Menos espaço para imagem
 
@@ -123,7 +124,7 @@ class DialogoImportarModulo(QDialog):
         # --- FIM DA NOVA TABELA ---
         
         splitter.addWidget(detalhes_widget_container)
-        splitter.setSizes([250, 550]) # Ajustar proporções
+        splitter.setSizes([350, 750]) # Ajustar proporções 
 
         main_layout.addWidget(splitter)
 
