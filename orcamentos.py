@@ -24,6 +24,7 @@ import re
 import mysql.connector # Importar para capturar erros específicos
 from PyQt5.QtWidgets import (QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, QDialog, QComboBox, QPlainTextEdit)
 from PyQt5.QtCore import QProcess, Qt  
+from PyQt5.QtGui import QColor, QBrush, QFont
 from apagar_orcamento_le_layout import Ui_Dialog  # Interface da janela de exclusão
 from utils import (
     limpar_campos_orcamento,
@@ -36,6 +37,50 @@ from utils import (
 )
 # Importar o gestor de contexto do módulo de conexão
 from db_connection import obter_cursor
+
+# --- Constantes de cores para os diferentes status ---
+STATUS_COLORS = {
+    "FALTA ORCAMENTAR": QColor(205, 133, 63),  # castanho
+    "ENVIADO": QColor("yellow"),
+    "NAO ENVIADO": QColor("orange"),
+    "ADJUDICADO": QColor("green"),
+    "NAO ADJUDICADO": QColor("red"),
+    "SEM INTERESSE": QColor("blue"),
+}
+
+
+def aplicar_estilo_status(ui):
+    """
+    Aplica cores de fundo na coluna STATUS conforme o status de cada linha,
+    e aplica estilo itálico + riscado nas colunas especificadas quando o status for 'NAO ADJUDICADO'.
+    """
+    tabela = ui.tableWidget_orcamentos
+    col_status = 6  # Índice da coluna STATUS
+    # Colunas para aplicar itálico + riscado se status == "NAO ADJUDICADO"
+    colunas_italico = [7, 9, 10, 11, 12, 13, 14, 15, 16]
+
+    for row in range(tabela.rowCount()):
+        status_item = tabela.item(row, col_status)
+        if not status_item:
+            continue
+        # .upper() para garantir que bate certo com o dicionário (independente do que vier da BD)
+        status = status_item.text().strip().upper()
+
+        # Busca a cor pelo status
+        cor = STATUS_COLORS.get(status)
+        if cor:
+            # Só aplica a cor de fundo na célula STATUS
+            status_item.setBackground(QBrush(cor))
+
+        # Se status == "NAO ADJUDICADO", aplica itálico + riscado nas colunas indicadas
+        aplicar_italico = (status == "NAO ADJUDICADO")
+        for col in colunas_italico:
+            item = tabela.item(row, col)
+            if item:
+                fonte = item.font()
+                fonte.setItalic(aplicar_italico)
+                fonte.setStrikeOut(aplicar_italico)
+                item.setFont(fonte)
 
 
 # --- Funções de Geração de Nomes de Pasta (Movidas para aqui para clareza) ---
@@ -238,6 +283,9 @@ def preencher_tabela_orcamentos(ui, registros=None):
     ui.tableWidget_orcamentos.setColumnWidth(14, 200)  # Localização
     ui.tableWidget_orcamentos.setColumnWidth(15, 200)  # Info_1
     ui.tableWidget_orcamentos.setColumnWidth(16, 200)  # Info_2
+
+    # Aplicar cores e estilos conforme o status de cada orçamento
+    aplicar_estilo_status(ui)
 
     
 def transportar_dados_cliente_orcamento():
