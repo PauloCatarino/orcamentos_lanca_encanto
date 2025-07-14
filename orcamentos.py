@@ -822,6 +822,107 @@ def abrir_janela_apagar_orcamento(ui):
     dialog_ui.pushButton_cancel.clicked.connect(dialog.reject)
     dialog.exec_()
 
+def _duplicar_registos(cursor, tabela, condicao, params_cond, substituicoes):
+    """Duplica registros de *tabela* aplicando novas colunas definidas em
+    ``substituicoes``.
+
+    ``condicao`` é a cláusula WHERE (sem a palavra WHERE) e ``params_cond`` os
+    respetivos parâmetros.
+    """
+    cursor.execute(f"SHOW COLUMNS FROM {tabela}")
+    cols = [row[0] for row in cursor.fetchall()
+            if row[0] not in ('id', 'id_item')]
+    insert_cols = ", ".join(f"`{c}`" for c in cols)
+    select_cols = []
+    values = []
+    for c in cols:
+        if c in substituicoes:
+            select_cols.append('%s')
+            values.append(substituicoes[c])
+        else:
+            select_cols.append(f"`{c}`")
+    query = (
+        f"INSERT INTO {tabela} ({insert_cols}) "
+        f"SELECT {', '.join(select_cols)} FROM {tabela} "
+        f"WHERE {condicao}")
+    values.extend(params_cond)
+    cursor.execute(query, values)
+
+
+def duplicar_orcamento():
+    """Duplica o orçamento selecionado criando uma nova versão."""
+    row = ui.tableWidget_orcamentos.currentRow()
+    if row < 0:
+        QMessageBox.warning(None, "Erro", "Nenhum orçamento selecionado.")
+        return
+
+    try:
+        id_orc = int(ui.tableWidget_orcamentos.item(row, 0).text())
+        num_orc = ui.tableWidget_orcamentos.item(row, 4).text().strip()
+        ver_atual = ui.tableWidget_orcamentos.item(row, 5).text().strip()
+    except Exception:
+        QMessageBox.warning(None, "Erro", "Dados do orçamento inválidos.")
+        return
+
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                "SELECT MAX(CAST(versao AS UNSIGNED)) FROM orcamentos "
+                "WHERE num_orcamento=%s",
+                (num_orc,),
+            )
+            max_ver = cursor.fetchone()[0]
+            nova_ver = f"{(int(max_ver) if max_ver is not None else 0)+1:02d}"
+
+            cursor.execute(
+                """
+                INSERT INTO orcamentos (
+                    id_cliente, utilizador, ano, num_orcamento, versao, status,
+                    nome_cliente, enc_phc, data, preco, ref_cliente, obra,
+                    caracteristicas, localizacao, info_1, info_2)
+                SELECT id_cliente, utilizador, ano, num_orcamento, %s, status,
+                    nome_cliente, enc_phc, data, preco, ref_cliente, obra,
+                    caracteristicas, localizacao, info_1, info_2
+                FROM orcamentos WHERE id=%s
+                """,
+                (nova_ver, id_orc),
+            )
+            novo_id = cursor.lastrowid
+
+            _duplicar_registos(
+                cursor, 'orcamento_items', 'id_orcamento=%s', [id_orc],
+                {'id_orcamento': novo_id})
+            _duplicar_registos(
+                cursor, 'orcamento_maquinas',
+                'numero_orcamento=%s AND versao_orcamento=%s',
+                [num_orc, ver_atual], {'versao_orcamento': nova_ver})
+
+            tabelas_nv = [
+                'dados_def_pecas',
+                'dados_modulo_medidas',
+                'dados_gerais_materiais',
+                'dados_gerais_ferragens',
+                'dados_gerais_sistemas_correr',
+                'dados_gerais_acabamentos',
+                'dados_items_materiais',
+                'dados_items_ferragens',
+                'dados_items_sistemas_correr',
+                'dados_items_acabamentos',
+            ]
+            for tab in tabelas_nv:
+                _duplicar_registos(
+                    cursor, tab, 'num_orc=%s AND ver_orc=%s',
+                    [num_orc, ver_atual], {'ver_orc': nova_ver})
+
+        preencher_tabela_orcamentos(ui)
+        QMessageBox.information(
+            None, 'Sucesso',
+            f'Orçamento duplicado como versão {nova_ver}.')
+    except mysql.connector.Error as err:
+        QMessageBox.critical(None, 'Erro BD', f'Erro ao duplicar: {err}')
+    except Exception as e:
+        QMessageBox.critical(None, 'Erro', f'Falha ao duplicar: {e}')
+
 def pesquisar():
     """
     Captura o input do usuário e realiza a pesquisa dos orçamentos.
@@ -866,6 +967,8 @@ def configurar_orcamentos_ui(main_ui):
     ui.lineEdit_pesquisar.textChanged.connect(limpar_pesquisa)
     ui.pushButton_inserir_linha_orcamento_2.clicked.connect(lambda: inserir_linha_orcamento(ui))
     ui.pushButton_apagar_orcamento.clicked.connect(lambda: abrir_janela_apagar_orcamento(ui))
+    if hasattr(ui, 'pushButton_duplicar_orcamento'):
+        ui.pushButton_duplicar_orcamento.clicked.connect(duplicar_orcamento)
     ui.pushButton_abrir_criar_pasta_orcamento.clicked.connect(abrir_criar_pasta_orcamento)
     ui.pushButton_editar_linha_orcamento.clicked.connect(editar_linha_orcamento)
     ui.tableWidget_orcamentos.itemSelectionChanged.connect(atualizar_campos_por_selecao)
