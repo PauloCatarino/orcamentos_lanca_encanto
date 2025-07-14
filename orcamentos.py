@@ -897,6 +897,7 @@ def duplicar_orcamento():
                 'numero_orcamento=%s AND versao_orcamento=%s',
                 [num_orc, ver_atual], {'versao_orcamento': nova_ver})
 
+            nome_novo = f"{num_orc}_{nova_ver}"
             tabelas_nv = [
                 'dados_def_pecas',
                 'dados_modulo_medidas',
@@ -912,7 +913,8 @@ def duplicar_orcamento():
             for tab in tabelas_nv:
                 _duplicar_registos(
                     cursor, tab, 'num_orc=%s AND ver_orc=%s',
-                    [num_orc, ver_atual], {'ver_orc': nova_ver})
+                    [num_orc, ver_atual],
+                    {'ver_orc': nova_ver, 'nome': nome_novo})
 
         preencher_tabela_orcamentos(ui)
         QMessageBox.information(
