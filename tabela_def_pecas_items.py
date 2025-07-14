@@ -467,8 +467,8 @@ def inserir_linha_componente(ui, texto_peca):
     # Def_Peca (coluna 2)
     set_item(table, new_row, 2, texto_peca)  # Usa set_item
     item_def = table.item(new_row, 2)  # Get item depois de set_item
-    # Mantém editável para delegate
-    item_def.setFlags(item_def.flags() | Qt.ItemIsEditable)
+    # Componentes associados não devem permitir edição do tipo de peça
+    item_def.setFlags(item_def.flags() & ~Qt.ItemIsEditable)
     item_def.setData(Qt.UserRole, grupo_encontrado)  # Armazena o grupo
     # 🟦 cor azul clara para identificar componentes associados
     item_def.setBackground(QColor(230, 240, 255))
@@ -879,6 +879,17 @@ class DefPecaDelegate(QStyledItemDelegate):
         self.ui = ui  # Guarda o objeto ui para uso interno
 
     def createEditor(self, parent, option, index):
+        # Se a linha é um componente associado (cor azul clara) ou a célula não é editável
+        # não criamos o editor para impedir alterações.
+        item = self.ui.tab_def_pecas.item(index.row(), index.column())
+        if item:
+            cor = item.background().color()
+            if (
+                cor.name() == COLOR_ASSOCIATED_BG.name()
+                or not (item.flags() & Qt.ItemIsEditable)
+            ):
+                return None
+
         editor = QComboBox(parent)
         editor.setEditable(True)  # Permite escrever/procurar (completar)
         editor.setInsertPolicy(QComboBox.NoInsert)
@@ -1011,8 +1022,9 @@ class DefPecaDelegate(QStyledItemDelegate):
         # Desbloqueia sinais temporariamente para permitir que setData funcione sem recursão
         table.blockSignals(True)
         try:
-            self.model().setData(self.model().index(row, 13), novo_mat_default, Qt.EditRole)
-            self.model().setData(self.model().index(row, 14), novo_tab_default, Qt.EditRole)
+            model = index.model()
+            model.setData(model.index(row, 13), novo_mat_default, Qt.EditRole)
+            model.setData(model.index(row, 14), novo_tab_default, Qt.EditRole)
         finally:
             table.blockSignals(False)
 
