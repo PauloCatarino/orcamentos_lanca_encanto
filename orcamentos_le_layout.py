@@ -1988,7 +1988,7 @@ class Ui_MainWindow(object):
         self.comboBox_utilizador.setCurrentIndex(0)
         self.tab_dados_gerais_mp.setCurrentIndex(0)
         self.orcamento_items_configurar_pecas.setCurrentIndex(0)
-        self.Items_Orcamento.setCurrentIndex(1)
+        self.Items_Orcamento.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         MainWindow.setTabOrder(self.lineEdit_nome_cliente_2, self.pushButton_inserir_cliente)
         MainWindow.setTabOrder(self.pushButton_inserir_cliente, self.pushButton_tranpordados_cliente_orcamento)

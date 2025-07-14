@@ -1,7 +1,56 @@
 # -*- coding: utf-8 -*-
 
-# consulta_ref_fornecedores.py
-# Este módulo implementa uma interface gráfica para pesquisa de referências
+"""
+==============================================================================
+consulta_ref_fornecedores.py
+==============================================================================
+
+Módulo: Consulta Multitexto de Referências de Materiais (Excel)
+Autor: Paulo Catarino / Lança Encanto, Lda.
+Data: Julho 2025
+
+------------------------------------------------------------------------------
+
+OBJETIVO:
+---------
+Este módulo implementa uma janela/interface gráfica (PyQt5/QDialog) para pesquisa rápida e avançada de referências de materiais 
+(placas/materiais de marcas como EGGER, Innovus, etc.), a partir de um ficheiro Excel centralizado na rede da empresa.
+
+PRINCIPAIS FUNCIONALIDADES:
+---------------------------
+- Pesquisa multitexto: Permite pesquisar por vários termos (ex: "EGGER%BRANCO%ST19") em todos os separadores de um ficheiro Excel.
+- Pesquisa insensível a maiúsculas/minúsculas, tolera palavras parciais, e aceita wildcard '%'.
+- Pesquisa simultânea em todas as tabelas/fornecedores/marcas presentes no ficheiro Excel.
+- Resultados apresentados numa tabela interativa, mostrando o separador (fornecedor/marca) e todas as colunas relevantes.
+- Valores de preço são automaticamente formatados (ex: '13.63€'). Células sem valor aparecem vazias.
+- Janela aberta como modal (QDialog): bloqueia interação até o utilizador fechar.
+- **Não grava nada** no Excel ou base de dados. Apenas consulta e exibe os resultados (consulta rápida).
+- O caminho do ficheiro Excel é obtido dinamicamente das configurações MySQL da aplicação (campo 'caminho_base_dados'), 
+  sendo depois acrescida a subpasta 'TABELAS_MAT_EGGER_SONAE'.
+
+UTILIZAÇÃO E INTEGRAÇÃO:
+------------------------
+- Este módulo é chamado a partir do botão de pesquisa no menu de matérias primas.
+- O ficheiro Excel tem de estar na subpasta 'TABELAS_MAT_EGGER_SONAE' da pasta configurada nas opções.
+- Futuramente pode ser expandido para importar dados ou fazer preenchimento automático.
+
+REQUESITOS:
+-----------
+- Python 3.x
+- PyQt5
+- pandas
+- openpyxl (para leitura de Excel .xlsx)
+- MySQL Connector (para buscar configurações)
+
+------------------------------------------------------------------------------
+MANTER/EVOLUIR:
+---------------
+- Para adaptar a outros ficheiros Excel, altere os valores das variáveis NOME_EXCEL e SUBPASTA_EXCEL na função obter_caminho_excel().
+- Para mostrar mais/menos colunas, ajuste a função mostrar_resultados.
+- Para tornar a subpasta configurável, adicione campo nas configurações.
+
+------------------------------------------------------------------------------
+"""
 
 import sys
 import os
