@@ -711,9 +711,9 @@
        <widget class="QGroupBox" name="groupBox_dados_clientes">
         <property name="geometry">
          <rect>
-          <x>20</x>
+          <x>0</x>
           <y>20</y>
-          <width>731</width>
+          <width>761</width>
           <height>351</height>
          </rect>
         </property>
@@ -987,9 +987,9 @@
         <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
-           <x>11</x>
+           <x>3</x>
            <y>24</y>
-           <width>113</width>
+           <width>121</width>
            <height>311</height>
           </rect>
          </property>
@@ -1125,32 +1125,16 @@
          </layout>
         </widget>
        </widget>
-       <widget class="QLabel" name="label_logo_cliente">
-        <property name="geometry">
-         <rect>
-          <x>1350</x>
-          <y>10</y>
-          <width>105</width>
-          <height>165</height>
-         </rect>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::Box</enum>
-        </property>
-        <property name="text">
-         <string>Logotipo do Cliente</string>
-        </property>
-       </widget>
        <widget class="QTableWidget" name="tableWidget_tabela_clientes">
         <property name="enabled">
          <bool>true</bool>
         </property>
         <property name="geometry">
          <rect>
-          <x>10</x>
+          <x>0</x>
           <y>380</y>
-          <width>2501</width>
-          <height>931</height>
+          <width>2531</width>
+          <height>971</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -1269,7 +1253,7 @@
        <widget class="QLabel" name="label_pesquisar_cliente">
         <property name="geometry">
          <rect>
-          <x>744</x>
+          <x>770</x>
           <y>30</y>
           <width>50</width>
           <height>20</height>
@@ -1282,8 +1266,8 @@
        <widget class="QLineEdit" name="lineEdit_pesquisar_cliente">
         <property name="geometry">
          <rect>
-          <x>800</x>
-          <y>30</y>
+          <x>820</x>
+          <y>25</y>
           <width>281</width>
           <height>31</height>
          </rect>
@@ -1310,8 +1294,8 @@
          <rect>
           <x>0</x>
           <y>210</y>
-          <width>2461</width>
-          <height>901</height>
+          <width>2531</width>
+          <height>1141</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -1507,7 +1491,7 @@
          <rect>
           <x>0</x>
           <y>70</y>
-          <width>2511</width>
+          <width>2531</width>
           <height>141</height>
          </rect>
         </property>
@@ -1669,7 +1653,7 @@
           <rect>
            <x>1300</x>
            <y>18</y>
-           <width>1171</width>
+           <width>1221</width>
            <height>25</height>
           </rect>
          </property>
@@ -1827,7 +1811,7 @@
           <rect>
            <x>2000</x>
            <y>50</y>
-           <width>471</width>
+           <width>521</width>
            <height>81</height>
           </rect>
          </property>
@@ -1903,17 +1887,34 @@
        <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
-          <x>607</x>
+          <x>439</x>
           <y>10</y>
-          <width>828</width>
-          <height>26</height>
+          <width>1881</width>
+          <height>39</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <property name="spacing">
+          <number>30</number>
+         </property>
+         <property name="leftMargin">
+          <number>10</number>
+         </property>
+         <property name="topMargin">
+          <number>5</number>
+         </property>
+         <property name="rightMargin">
+          <number>20</number>
+         </property>
+         <property name="bottomMargin">
+          <number>5</number>
+         </property>
          <item>
           <widget class="QPushButton" name="pushButton_abrir_orcamento">
            <property name="font">
             <font>
+             <family>MS Gothic</family>
+             <pointsize>15</pointsize>
              <weight>75</weight>
              <bold>true</bold>
             </font>
@@ -1930,6 +1931,8 @@
           <widget class="QPushButton" name="pushButton_inserir_linha_orcamento_2">
            <property name="font">
             <font>
+             <family>MS Gothic</family>
+             <pointsize>16</pointsize>
              <weight>75</weight>
              <bold>true</bold>
             </font>
@@ -1938,7 +1941,61 @@
             <string>background-color: yellow; font-weight: bold;</string>
            </property>
            <property name="text">
-            <string>Inserir Nova Linha Orçamento</string>
+            <string>Inserir Novo Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_abrir_criar_pasta_orcamento">
+           <property name="font">
+            <font>
+             <family>MS Gothic</family>
+             <pointsize>16</pointsize>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Abrir | Criar Pasta Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_editar_linha_orcamento">
+           <property name="font">
+            <font>
+             <family>MS Gothic</family>
+             <pointsize>16</pointsize>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Editar | Gravar Orçamento</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pushButton_duplicar_orcamento">
+           <property name="font">
+            <font>
+             <family>MS Gothic</family>
+             <pointsize>16</pointsize>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: yellow; font-weight: bold;</string>
+           </property>
+           <property name="text">
+            <string>Duplicar Orçamento</string>
            </property>
           </widget>
          </item>
@@ -1946,6 +2003,8 @@
           <widget class="QPushButton" name="pushButton_apagar_orcamento">
            <property name="font">
             <font>
+             <family>MS Gothic</family>
+             <pointsize>16</pointsize>
              <weight>75</weight>
              <bold>true</bold>
             </font>
@@ -1958,45 +2017,13 @@
            </property>
           </widget>
          </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_abrir_criar_pasta_orcamento">
-           <property name="font">
-            <font>
-             <weight>75</weight>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string>background-color: yellow; font-weight: bold;</string>
-           </property>
-           <property name="text">
-            <string>Abrir/Criar Pasta Orçamento</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_editar_linha_orcamento">
-           <property name="font">
-            <font>
-             <weight>75</weight>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string>background-color: yellow; font-weight: bold;</string>
-           </property>
-           <property name="text">
-            <string>Editar Linha Orçamento</string>
-           </property>
-          </widget>
-         </item>
         </layout>
        </widget>
        <widget class="QLabel" name="label_pesquisar">
         <property name="geometry">
          <rect>
           <x>10</x>
-          <y>10</y>
+          <y>20</y>
           <width>50</width>
           <height>16</height>
          </rect>
@@ -2010,8 +2037,8 @@
          <rect>
           <x>66</x>
           <y>10</y>
-          <width>241</width>
-          <height>31</height>
+          <width>350</width>
+          <height>40</height>
          </rect>
         </property>
         <property name="font">
@@ -2670,19 +2697,6 @@
          <string>Orcamentar Itens</string>
         </property>
        </widget>
-       <widget class="QPushButton" name="pushButton_exportar_excel">
-        <property name="geometry">
-         <rect>
-          <x>590</x>
-          <y>180</y>
-          <width>151</width>
-          <height>23</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>pushButton_exportar_excel</string>
-        </property>
-       </widget>
        <widget class="QGroupBox" name="groupBox_margens_ajustes">
         <property name="geometry">
          <rect>
@@ -2818,10 +2832,10 @@
        <widget class="QGroupBox" name="groupBox_materias_config">
         <property name="geometry">
          <rect>
-          <x>10</x>
+          <x>0</x>
           <y>10</y>
           <width>1311</width>
-          <height>80</height>
+          <height>51</height>
          </rect>
         </property>
         <property name="title">
@@ -2830,24 +2844,49 @@
         <widget class="QPushButton" name="pushButton_atualizar_excel">
          <property name="geometry">
           <rect>
-           <x>1070</x>
-           <y>30</y>
+           <x>140</x>
+           <y>13</y>
            <width>221</width>
            <height>31</height>
           </rect>
          </property>
+         <property name="font">
+          <font>
+           <family>MS Gothic</family>
+           <pointsize>16</pointsize>
+          </font>
+         </property>
          <property name="text">
           <string>Atualizar do Excel</string>
+         </property>
+        </widget>
+        <widget class="QPushButton" name="pushButton_pesquisa_ref">
+         <property name="geometry">
+          <rect>
+           <x>390</x>
+           <y>13</y>
+           <width>321</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <family>MS Gothic</family>
+           <pointsize>16</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Pesquisa por REFERENCIA</string>
          </property>
         </widget>
        </widget>
        <widget class="QTableWidget" name="tableWidget_materias_primas">
         <property name="geometry">
          <rect>
-          <x>10</x>
-          <y>140</y>
-          <width>2511</width>
-          <height>1181</height>
+          <x>0</x>
+          <y>100</y>
+          <width>2521</width>
+          <height>1241</height>
          </rect>
         </property>
         <property name="font">
@@ -2936,10 +2975,10 @@
        <widget class="QLineEdit" name="lineEdit_pesquisar_mp">
         <property name="geometry">
          <rect>
-          <x>90</x>
-          <y>90</y>
-          <width>281</width>
-          <height>31</height>
+          <x>140</x>
+          <y>60</y>
+          <width>340</width>
+          <height>40</height>
          </rect>
         </property>
         <property name="font">
@@ -2954,8 +2993,8 @@
        <widget class="QLabel" name="label_pesquisar_mp">
         <property name="geometry">
          <rect>
-          <x>34</x>
-          <y>90</y>
+          <x>80</x>
+          <y>70</y>
           <width>50</width>
           <height>20</height>
          </rect>
@@ -2978,7 +3017,7 @@
           <x>10</x>
           <y>10</y>
           <width>2541</width>
-          <height>1211</height>
+          <height>1341</height>
          </rect>
         </property>
         <property name="toolTip">
@@ -3000,10 +3039,10 @@
           </property>
           <property name="geometry">
            <rect>
-            <x>10</x>
-            <y>100</y>
-            <width>2461</width>
-            <height>861</height>
+            <x>0</x>
+            <y>50</y>
+            <width>2511</width>
+            <height>1251</height>
            </rect>
           </property>
           <property name="font">
@@ -3133,10 +3172,15 @@
           <property name="geometry">
            <rect>
             <x>20</x>
-            <y>20</y>
-            <width>191</width>
-            <height>23</height>
+            <y>12</y>
+            <width>231</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Guardar Dados Gerais</string>
@@ -3145,11 +3189,16 @@
          <widget class="QPushButton" name="importar_dados_gerais_material">
           <property name="geometry">
            <rect>
-            <x>220</x>
-            <y>20</y>
-            <width>151</width>
-            <height>23</height>
+            <x>260</x>
+            <y>12</y>
+            <width>231</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Importar Dados Gerais</string>
@@ -3158,11 +3207,16 @@
          <widget class="QPushButton" name="limpar_linha_material">
           <property name="geometry">
            <rect>
-            <x>380</x>
-            <y>20</y>
-            <width>151</width>
-            <height>23</height>
+            <x>500</x>
+            <y>12</y>
+            <width>261</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Limpar Linha Selecionada </string>
@@ -3171,11 +3225,16 @@
          <widget class="QPushButton" name="importar_dados_gerais_4_separadores">
           <property name="geometry">
            <rect>
-            <x>540</x>
-            <y>20</y>
-            <width>211</width>
-            <height>23</height>
+            <x>770</x>
+            <y>12</y>
+            <width>381</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="toolTip">
            <string>Este botão pode importar os dados para o preenchimento das 4 tabelas em simultaneo</string>
@@ -3187,11 +3246,16 @@
          <widget class="QPushButton" name="guardar_dados_gerais_orcamento">
           <property name="geometry">
            <rect>
-            <x>760</x>
-            <y>20</y>
-            <width>241</width>
-            <height>23</height>
+            <x>1160</x>
+            <y>12</y>
+            <width>451</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="toolTip">
            <string>Este botão guarda na base dados e associado ao num_orc &amp; ver_orc todas as 4 tabelas com dados preenchidos de linhas e colunas</string>
@@ -3208,10 +3272,10 @@
          <widget class="QTableWidget" name="Tab_Ferragens">
           <property name="geometry">
            <rect>
-            <x>10</x>
-            <y>80</y>
-            <width>2441</width>
-            <height>1091</height>
+            <x>0</x>
+            <y>50</y>
+            <width>2511</width>
+            <height>1251</height>
            </rect>
           </property>
           <property name="font">
@@ -3374,10 +3438,15 @@
           <property name="geometry">
            <rect>
             <x>30</x>
-            <y>20</y>
+            <y>12</y>
             <width>371</width>
-            <height>23</height>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Guardar Dados Gerais</string>
@@ -3387,10 +3456,15 @@
           <property name="geometry">
            <rect>
             <x>410</x>
-            <y>20</y>
+            <y>12</y>
             <width>251</width>
-            <height>23</height>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Importar Dados Gerais</string>
@@ -3400,10 +3474,15 @@
           <property name="geometry">
            <rect>
             <x>670</x>
-            <y>20</y>
+            <y>12</y>
             <width>671</width>
-            <height>23</height>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Limpar Linha Selecionada </string>
@@ -3417,10 +3496,10 @@
          <widget class="QTableWidget" name="Tab_Sistemas_Correr">
           <property name="geometry">
            <rect>
-            <x>10</x>
-            <y>100</y>
-            <width>2441</width>
-            <height>791</height>
+            <x>0</x>
+            <y>50</y>
+            <width>2511</width>
+            <height>1251</height>
            </rect>
           </property>
           <property name="font">
@@ -3534,10 +3613,15 @@
           <property name="geometry">
            <rect>
             <x>30</x>
-            <y>20</y>
-            <width>191</width>
-            <height>23</height>
+            <y>12</y>
+            <width>241</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Guardar Dados Gerais</string>
@@ -3546,11 +3630,16 @@
          <widget class="QPushButton" name="importar_dados_gerais_sistemas_correr">
           <property name="geometry">
            <rect>
-            <x>230</x>
-            <y>20</y>
+            <x>280</x>
+            <y>12</y>
             <width>271</width>
-            <height>23</height>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Importar Dados Gerais</string>
@@ -3559,11 +3648,16 @@
          <widget class="QPushButton" name="limpar_linha_sistemas_correr">
           <property name="geometry">
            <rect>
-            <x>510</x>
-            <y>20</y>
-            <width>561</width>
-            <height>23</height>
+            <x>560</x>
+            <y>12</y>
+            <width>281</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Limpar Linha Selecionada </string>
@@ -3577,10 +3671,10 @@
          <widget class="QTableWidget" name="Tab_Acabamentos">
           <property name="geometry">
            <rect>
-            <x>10</x>
-            <y>90</y>
-            <width>2501</width>
-            <height>841</height>
+            <x>0</x>
+            <y>50</y>
+            <width>2511</width>
+            <height>1251</height>
            </rect>
           </property>
           <property name="font">
@@ -3669,10 +3763,15 @@
           <property name="geometry">
            <rect>
             <x>40</x>
-            <y>20</y>
-            <width>301</width>
-            <height>23</height>
+            <y>12</y>
+            <width>251</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Guardar Dados Gerais</string>
@@ -3681,11 +3780,16 @@
          <widget class="QPushButton" name="importar_dados_gerais_acabamentos">
           <property name="geometry">
            <rect>
-            <x>540</x>
-            <y>20</y>
-            <width>281</width>
-            <height>23</height>
+            <x>300</x>
+            <y>12</y>
+            <width>261</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Importar Dados Gerais</string>
@@ -3694,11 +3798,16 @@
          <widget class="QPushButton" name="limpar_linha_acabamentos">
           <property name="geometry">
            <rect>
-            <x>870</x>
-            <y>20</y>
-            <width>351</width>
-            <height>23</height>
+            <x>570</x>
+            <y>12</y>
+            <width>291</width>
+            <height>31</height>
            </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>16</pointsize>
+           </font>
           </property>
           <property name="text">
            <string>Limpar Linha Selecionada </string>
@@ -3755,15 +3864,15 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>1</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="dados_item_orcamento">
            <property name="geometry">
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <property name="font">
@@ -5034,8 +5143,8 @@
              <rect>
               <x>0</x>
               <y>34</y>
-              <width>2391</width>
-              <height>851</height>
+              <width>2451</width>
+              <height>1080</height>
              </rect>
             </property>
             <property name="font">
@@ -5230,8 +5339,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5242,7 +5351,7 @@
              <rect>
               <x>0</x>
               <y>34</y>
-              <width>2391</width>
+              <width>2451</width>
               <height>1081</height>
              </rect>
             </property>
@@ -5472,8 +5581,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5484,8 +5593,8 @@
              <rect>
               <x>0</x>
               <y>34</y>
-              <width>2391</width>
-              <height>691</height>
+              <width>2451</width>
+              <height>1080</height>
              </rect>
             </property>
             <property name="font">
@@ -5665,8 +5774,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>100</width>
-             <height>30</height>
+             <width>2451</width>
+             <height>1116</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5695,8 +5804,8 @@
              <rect>
               <x>0</x>
               <y>30</y>
-              <width>2391</width>
-              <height>301</height>
+              <width>2451</width>
+              <height>1080</height>
              </rect>
             </property>
             <property name="font">
@@ -6643,7 +6752,6 @@
   <tabstop>lineEdit_idCliente_noOrc</tabstop>
   <tabstop>pushButton_abrir_orcamento</tabstop>
   <tabstop>pushButton_inserir_linha_orcamento_2</tabstop>
-  <tabstop>pushButton_apagar_orcamento</tabstop>
   <tabstop>pushButton_abrir_criar_pasta_orcamento</tabstop>
   <tabstop>pushButton_editar_linha_orcamento</tabstop>
   <tabstop>lineEdit_pesquisar</tabstop>
