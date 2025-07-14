@@ -26,7 +26,7 @@ import pandas as pd
 import mysql.connector  # Para tratamento de erros (por exemplo, IntegrityError)
 import re # Importado para uso em parse_texto_digitado (embora não usado lá atualmente, pode ser útil)
 
-from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QAbstractItemView, QMenu, QPushButton)
+from PyQt5.QtWidgets import (QTableWidgetItem, QMessageBox, QAbstractItemView, QMenu, QPushButton, QDialog)
 from PyQt5.QtCore import Qt
 import sys
 import subprocess
@@ -35,8 +35,23 @@ import subprocess
 from db_connection import obter_cursor
 from utils import obter_diretorio_base
 
+# Importa a janela de pesquisa (coloca este import a apontar para o teu ficheiro real)
+from consulta_ref_fornecedores import JanelaPesquisa      # <--- nome do ficheiro do protótipo acima
+
+
 # Variável global para copiar/colar linhas
 _copied_row_data = None
+
+
+def abrir_janela_pesquisa_multitexto():
+    """
+    Abre a janela de pesquisa multitexto (referências de placas Excel).
+    É aberta como modal, o utilizador só consulta (não importa resultados automaticamente).
+    """
+    dlg = JanelaPesquisa()
+    dlg.setWindowModality(Qt.ApplicationModal)
+    dlg.exec_()  # Se JanelaPesquisa for QDialog; se for QWidget, usa dlg.show()
+
 
 
 def criar_tabela_materias_primas():
@@ -940,6 +955,15 @@ def conectar_materias_primas_ui(main_ui):
     btn_abrir = QPushButton("Abrir Excel", ui.groupBox_materias_config)
     btn_abrir.setGeometry(830, 30, 221, 31)
 
+    # Liga o botão de pesquisa de referência ao slot
+    if hasattr(ui, 'pushButton_pesquisa_ref'):
+        ui.pushButton_pesquisa_ref.clicked.connect(abrir_janela_pesquisa_multitexto)
+        print("DEBUG: Ligado pushButton_pesquisa_ref ao slot de pesquisa de referência!")
+    else:
+        print("ERRO: O botão pushButton_pesquisa_ref não existe no ui.")
+
+
+    # Função para abrir o Excel
     def abrir_excel():
 
         base_dir = obter_diretorio_base(ui.lineEdit_base_dados.text())

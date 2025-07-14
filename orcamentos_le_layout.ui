@@ -1134,7 +1134,7 @@
           <x>0</x>
           <y>380</y>
           <width>2531</width>
-          <height>971</height>
+          <height>940</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -1295,7 +1295,7 @@
           <x>0</x>
           <y>210</y>
           <width>2531</width>
-          <height>1141</height>
+          <height>1100</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -2132,8 +2132,8 @@
          <rect>
           <x>0</x>
           <y>320</y>
-          <width>2521</width>
-          <height>791</height>
+          <width>2525</width>
+          <height>1000</height>
          </rect>
         </property>
         <property name="font">
@@ -2886,7 +2886,7 @@
           <x>0</x>
           <y>100</y>
           <width>2521</width>
-          <height>1241</height>
+          <height>1200</height>
          </rect>
         </property>
         <property name="font">
@@ -3042,7 +3042,7 @@
             <x>0</x>
             <y>50</y>
             <width>2511</width>
-            <height>1251</height>
+            <height>1240</height>
            </rect>
           </property>
           <property name="font">
@@ -3275,7 +3275,7 @@
             <x>0</x>
             <y>50</y>
             <width>2511</width>
-            <height>1251</height>
+            <height>1240</height>
            </rect>
           </property>
           <property name="font">
@@ -3499,7 +3499,7 @@
             <x>0</x>
             <y>50</y>
             <width>2511</width>
-            <height>1251</height>
+            <height>1240</height>
            </rect>
           </property>
           <property name="font">
@@ -3674,7 +3674,7 @@
             <x>0</x>
             <y>50</y>
             <width>2511</width>
-            <height>1251</height>
+            <height>1240</height>
            </rect>
           </property>
           <property name="font">
@@ -3864,7 +3864,7 @@
            </size>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="dados_item_orcamento">
            <property name="geometry">
