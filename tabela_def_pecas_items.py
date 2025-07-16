@@ -983,10 +983,16 @@ class DefPecaDelegate(QStyledItemDelegate):
             QMessageBox.warning(
                 editor.parent().window(),  # Usa a janela pai do editor (a janela principal) como parent
                 "Linha Bloqueada",
-                "Não é possível alterar a peça porque está marcada como BLK (editada manualmente)."
+                "Não é possível alterar a peça porque está marcada como BLK (editada manualmente).",
             )
-            # Forçar o fecho do editor sem commit das mudanças feitas no editor
-            self.closeEditor.emit(editor, QStyledItemDelegate.RevertModelCache)
+            # Reverte para o texto original e tenta fechar o editor sem salvar
+            editor.blockSignals(True)
+            editor.setCurrentText(index.data(Qt.DisplayRole))
+            editor.blockSignals(False)
+            try:
+                self.closeEditor.emit(editor, QStyledItemDelegate.RevertModelCache)
+            except RuntimeError:
+                pass  # Editor pode ter sido destruído automaticamente
             # Reconectar o sinal? Não é necessário, o editor será recriado/configurado na próxima edição.
             return  # Sai sem atualizar
 
