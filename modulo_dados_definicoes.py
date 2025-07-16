@@ -774,6 +774,22 @@ def carregar_dados_def_pecas(ui):
         'soma_custo_total',        # 80 → Soma_Custo_Total
         'soma_custo_acb'           # 81 → Soma_Custo_ACB
     ]
+    # --- Mapeamento Def_Peca -> Grupo (a partir dos QListWidget) ---
+    lista_widgets = {
+        'caixote': ui.listWidget_caixote_4,
+        'ferragens': ui.listWidget_ferragens_4,
+        'mao_obra': ui.listWidget_mao_obra_4,
+        'paineis': ui.listWidget_paineis_4,
+        'remates_guarnicoes': ui.listWidget_remates_guarnicoes_4,
+        'sistemas_correr': ui.listWidget_sistemas_correr_4,
+        'acabamentos': ui.listWidget_acabamentos_4
+    }
+    def_peca_para_grupo = {}
+    for grupo, widget in lista_widgets.items():
+        for i in range(widget.count()):
+            item = widget.item(i)
+            def_peca_para_grupo[item.text().strip().upper()] = grupo
+
     num_cols_esperadas = len(colunas_ui_ordenadas)# Número total de colunas esperadas na tabela UI
     print(f" [DEBUG] Número de colunas esperadas na UI para carregar: {len(colunas_ui_ordenadas)}") # Debug
     # 2) Monta e executa o SELECT com colunas na ordem da UI para leitura da BD
@@ -921,6 +937,10 @@ def carregar_dados_def_pecas(ui):
                         item_ui.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable) # Não editável
                     else:
                         item_ui.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable) # Editável
+
+                    if col_index_ui == 2:
+                        grupo = def_peca_para_grupo.get(texto_final_ui.strip().upper(), "")
+                        item_ui.setData(Qt.UserRole, grupo) # Armazena o grupo no UserRole para uso posterior
 
                 # 4. Define o item na tabela
                 tbl.setItem(r, col_index_ui, item_ui)
