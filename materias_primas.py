@@ -953,7 +953,7 @@ def conectar_materias_primas_ui(main_ui):
 
     # Botão para abrir diretamente o Excel para utilizador modificar no excel, so depois passa para tabela materias primas
     btn_abrir = QPushButton("Abrir Excel", ui.groupBox_materias_config)
-    btn_abrir.setGeometry(830, 30, 180, 13)
+    btn_abrir.setGeometry(750, 15, 180, 30)
 
     # Liga o botão de pesquisa de referência ao slot
     if hasattr(ui, 'pushButton_pesquisa_ref'):

@@ -73,6 +73,7 @@ import modulo_dados_definicoes
 from modulo_dados_definicoes import salvar_dados_def_pecas # Importa a função para salvar os dados de definições de peças
 from modulo_calculos_custos import aplicar_valores_maquinas # Importa a função para aplicar os valores das máquinas de produção
 from maquinas_orcamento import registrar_valores_maquinas_orcamento, carregar_ou_inicializar_maquinas_orcamento # Garante que os valores das máquinas de produção são registrados no orçamento
+from margens_ajustes_percentagens import (criar_tabela_margens_ajustes, carregar_ou_inicializar_margens, salvar_margens) # Importa as funções para criar a tabela de margens e carregar/inicializar margens
 
 
 # Importa a função para configurar os Dados Items (tabela de materiais do item)
@@ -194,6 +195,7 @@ def configurar_orcamento_ui(main_window):
     - Conecta botões de ação e sinais de eventos (seleção, edição, pesquisa).
     """
     criar_tabela_orcamento_items()
+    criar_tabela_margens_ajustes()
     ui = main_window.ui  # Obtém ui a partir de main_window
 
     # Conecta os validadores para os lineEdits de percentagem
@@ -927,6 +929,11 @@ def abrir_orcamento(main_window):
         # NOVO: Após carregar todos os itens do orçamento, atualiza os custos e preços para todos
         # Não força a margem global ao abrir um orçamento, mantém as margens individuais se existirem.
         carregar_ou_inicializar_maquinas_orcamento(
+            ui.lineEdit_num_orcamento.text().strip(),
+            ui.lineEdit_versao_orcamento.text().strip(),
+            ui,
+        )
+        carregar_ou_inicializar_margens(
             ui.lineEdit_num_orcamento.text().strip(),
             ui.lineEdit_versao_orcamento.text().strip(),
             ui,
@@ -2049,10 +2056,7 @@ def atualizar_custos_e_precos_itens(ui, force_global_margin_update=False):
     # Então, este `calcular_preco_final_orcamento` aqui é redundante se chamado da lógica de "atingir objetivo".
     # Mas é necessário se chamado diretamente de `pushButton_atualiza_preco_items`.
 
-    # Para evitar recursão/redundância, podemos fazer o seguinte:
-    # Apenas o `pushButton_atualiza_preco_final` chama `calcular_preco_final_orcamento` (que por sua vez chama `atualizar_custos_e_precos_itens(force_global_margin_update=True)`).
-    # O `pushButton_atualiza_preco_items` chama `atualizar_custos_e_precos_itens(force_global_margin_update=False)` E DEPOIS chama `calcular_preco_final_orcamento(ui)`
-    # Isso requer uma pequena mudança no `configurar_orcamento_ui`.
+    salvar_margens(ui)
 
     
 def on_modo_producao_changed(main_window, modo):
