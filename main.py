@@ -31,7 +31,7 @@ git push                  # envia para o GitHub
 git pull origin main
 # (resolver conflitos, se houver)
 git add .
-git commit -m "192 Commit"
+git commit -m "193 Commit"
 git push origin main
 
 
@@ -41,7 +41,7 @@ ______________________________//________________________
 crtl + swift + p    escolher  o interpretador -> Python 3.12.8(venv)
 ______________________________//________________________
 
-Criar o ficheiro executavel para o PyInstaller -> pyinstaller --onefile --windowed --add-data "martelo.png;." main.py
+Criar o ficheiro executavel para o PyInstaller ->          pyinstaller --onefile --windowed --add-data "martelo.png;." main.py
 
 ______________________________//________________________
 
