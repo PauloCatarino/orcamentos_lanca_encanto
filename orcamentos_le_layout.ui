@@ -29,6 +29,11 @@
         <height>5500</height>
        </size>
       </property>
+      <property name="font">
+       <font>
+        <pointsize>10</pointsize>
+       </font>
+      </property>
       <property name="currentIndex">
        <number>3</number>
       </property>
@@ -653,7 +658,7 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>2452</width>
+               <width>1200</width>
                <height>2500</height>
               </rect>
              </property>
@@ -713,7 +718,7 @@
          <rect>
           <x>0</x>
           <y>20</y>
-          <width>761</width>
+          <width>791</width>
           <height>351</height>
          </rect>
         </property>
@@ -840,9 +845,9 @@
         <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
-           <x>129</x>
+           <x>159</x>
            <y>25</y>
-           <width>391</width>
+           <width>381</width>
            <height>304</height>
           </rect>
          </property>
@@ -989,7 +994,7 @@
           <rect>
            <x>3</x>
            <y>24</y>
-           <width>121</width>
+           <width>151</width>
            <height>311</height>
           </rect>
          </property>
@@ -1076,10 +1081,10 @@
         <widget class="QWidget" name="layoutWidget">
          <property name="geometry">
           <rect>
-           <x>530</x>
+           <x>550</x>
            <y>90</y>
-           <width>194</width>
-           <height>143</height>
+           <width>229</width>
+           <height>148</height>
           </rect>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -1253,7 +1258,7 @@
        <widget class="QLabel" name="label_pesquisar_cliente">
         <property name="geometry">
          <rect>
-          <x>770</x>
+          <x>790</x>
           <y>30</y>
           <width>50</width>
           <height>20</height>
@@ -1266,7 +1271,7 @@
        <widget class="QLineEdit" name="lineEdit_pesquisar_cliente">
         <property name="geometry">
          <rect>
-          <x>820</x>
+          <x>840</x>
           <y>25</y>
           <width>281</width>
           <height>31</height>
@@ -2319,14 +2324,14 @@
        <widget class="QPushButton" name="pushButton_configurar_dados_gerais">
         <property name="geometry">
          <rect>
-          <x>900</x>
+          <x>840</x>
           <y>180</y>
           <width>161</width>
           <height>23</height>
          </rect>
         </property>
         <property name="text">
-         <string>Configurar Dados Geris</string>
+         <string>Configurar Dados Gerais</string>
         </property>
        </widget>
        <widget class="QGroupBox" name="groupBox_dados_orcamento">
@@ -2424,9 +2429,9 @@
        <widget class="QPushButton" name="pushButton_eliminar_linha_orcamento">
         <property name="geometry">
          <rect>
-          <x>1220</x>
+          <x>1160</x>
           <y>180</y>
-          <width>151</width>
+          <width>181</width>
           <height>23</height>
          </rect>
         </property>
@@ -2437,7 +2442,7 @@
        <widget class="QPushButton" name="pushButton_inserir_linha_orcamento">
         <property name="geometry">
          <rect>
-          <x>750</x>
+          <x>690</x>
           <y>180</y>
           <width>151</width>
           <height>23</height>
@@ -2644,7 +2649,7 @@
         <property name="geometry">
          <rect>
           <x>66</x>
-          <y>10</y>
+          <y>6</y>
           <width>281</width>
           <height>31</height>
          </rect>
@@ -2674,9 +2679,9 @@
        <widget class="QPushButton" name="pushButton_editar_linha_orcamento_2">
         <property name="geometry">
          <rect>
-          <x>1370</x>
+          <x>1340</x>
           <y>180</y>
-          <width>151</width>
+          <width>181</width>
           <height>23</height>
          </rect>
         </property>
@@ -2687,7 +2692,7 @@
        <widget class="QPushButton" name="orcamentar_items">
         <property name="geometry">
          <rect>
-          <x>1060</x>
+          <x>1000</x>
           <y>180</y>
           <width>161</width>
           <height>23</height>
@@ -2805,15 +2810,30 @@
            </property>
           </widget>
          </item>
-         <item row="4" column="2">
+         <item row="3" column="2">
           <widget class="QPushButton" name="pushButton_atualiza_preco_final">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
            <property name="text">
             <string>Atualiza Preco Final</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="3" colspan="2">
+         <item row="4" column="2" colspan="3">
           <widget class="QPushButton" name="pushButton_atualiza_preco_items">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
            <property name="styleSheet">
             <string notr="true">background-color: yellow; font-weight: bold;</string>
            </property>
@@ -3872,7 +3892,7 @@
              <x>0</x>
              <y>0</y>
              <width>2451</width>
-             <height>1116</height>
+             <height>1101</height>
             </rect>
            </property>
            <property name="font">
@@ -5128,8 +5148,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5339,8 +5359,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5581,8 +5601,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -5774,8 +5794,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2451</width>
-             <height>1116</height>
+             <width>98</width>
+             <height>28</height>
             </rect>
            </property>
            <attribute name="label">
@@ -6008,7 +6028,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>2422</width>
+             <width>1200</width>
              <height>6000</height>
             </rect>
            </property>
