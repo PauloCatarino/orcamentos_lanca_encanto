@@ -21,6 +21,7 @@ import os
 import shutil
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout
+from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import ( SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,)
@@ -163,8 +164,12 @@ class FooterCanvas(canvas.Canvas):
         width, _ = A4
         self.setFont("Helvetica", 9)
         page_num = self.getPageNumber()
-        footer = f"{self.data_str}   {self.num_ver}   {page_num}/{page_count}"
-        self.drawCentredString(width / 2, 20, footer)
+        # Data (esquerda)
+        self.drawString(20, 20, self.data_str)
+        # Nº orçamento e versão (centro)
+        self.drawCentredString(width / 2, 20, self.num_ver)
+        # Paginação (direita)
+        self.drawRightString(width - 20, 20, f"{page_num}/{page_count}")
 
 # =============================================================================
 # Função: preencher_campos_relatorio
@@ -290,19 +295,35 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
 # - Cabeçalho, dados do cliente, tabela de itens, totais e rodapé paginado.
 # =============================================================================
 def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
-    """Gera um PDF com os dados do relatório."""
+    """
+    Gera um PDF com os dados do relatório de orçamento.
+    Inclui:
+        - Cabeçalho (título, data, referência, dados cliente)
+        - Tabela dos itens orçamentados
+        - Quadro dos totais com destaque no 'Total Geral'
+        - Rodapé com data (esquerda), nº orçamento/versão (centro) e paginação (direita)
+    """
+    from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, SimpleDocTemplate
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+
+    # Preparar documento PDF e estilos
     doc = SimpleDocTemplate(
         caminho,
         pagesize=A4,
         leftMargin=10,
         rightMargin=10,
         topMargin=10,
-        bottomMargin=50,
-    )   # Margens folha a4
+        bottomMargin=50,   # Espaço para o rodapé
+    )
     styles = getSampleStyleSheet()
 
     elems = []
+    # Título
     elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
+
+    # Data e referência do orçamento
     elems.append(Paragraph(f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]))
     elems.append(
         Paragraph(
@@ -312,6 +333,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     )
     elems.append(Spacer(1, 12))
 
+    # Dados do cliente
     dados_cli = [
         f"Nome: {ui.lineEdit_nome_cliente_3.text()}",
         f"Morada: {ui.lineEdit_morada_cliente_3.text()}",
@@ -323,21 +345,14 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         elems.append(Paragraph(d, styles["Normal"]))
 
     elems.append(Spacer(1, 12))
-    # Nomes para colunas apresentar no Relatorio PDF
-    headers = [
-        "Item",
-        "Codigo",
-        "Descrição",
-        "Alt",
-        "Larg",
-        "Prof",
-        "Und",
-        "Qt",
-        "Preco Unit",
-        "Preco Total",
-    ]
 
+    # Cabeçalho da tabela de itens
+    headers = [
+        "Item", "Codigo", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preco Unit", "Preco Total"
+    ]
     data = [headers]
+
+    # Copiar os dados dos itens do orçamento para a tabela do PDF
     tw = ui.tableWidget_Items_Linha_Relatorio
     for r in range(tw.rowCount()):
         row = []
@@ -345,6 +360,7 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
             itm = tw.item(r, c)
             txt = itm.text() if itm else ""
             if c == 2:
+                # Descrição formatada: primeira linha a bold, resto itálico
                 lines = txt.splitlines()
                 if lines:
                     first, *rest = lines
@@ -352,23 +368,38 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
                     if rest:
                         # Espaço extra para deslocar ligeiramente as descrições adicionais
                         tab = "&nbsp;&nbsp;&nbsp;"
-                        italic_text = "<br/>".join(tab + l.strip("\t-") for l in rest)
+                        parts = []
+                        for l in rest:
+                            line = l.lstrip("\t")
+                            highlight = False
+                            if line.startswith("-"): # Destaque para texto de lista se o texto começar com '-' no relatorio de PDF aplica um TAB e fica italico
+                                line = line[1:]
+                            elif line.startswith("*"): # Destaque para texto importante se o texto começar com '*' no relatorio de PDF aplica um TAB e fica com cor de fundo verde
+                                line = line[1:]
+                                highlight = True
+                            line = line.lstrip()
+                            if highlight:
+                                parts.append(f"{tab}<font backColor='#ccffcc'>{line}</font>") # Destaque para texto importante com fundo verde claro
+                            else:
+                                parts.append(tab + line)
+                        italic_text = "<br/>".join(parts)
                         # Para alterar o tamanho do texto itálico ajuste o valor do atributo 'size' abaixo
                         formatted += f"<br/><i><font size='8'>{italic_text}</font></i>"
                     row.append(Paragraph(formatted, styles["Normal"]))
                 else:
                     row.append("")
             elif c == 9:
+                # Preço total a bold
                 row.append(Paragraph(f"<b>{txt}</b>", styles["Normal"]))
             else:
+                # Colunas numéricas arredondadas (Alt, Larg, Prof, Qt)
                 if c in (3, 4, 5, 7):
                     row.append(_format_int(txt))
                 else:
                     row.append(txt)
         data.append(row)
 
-    # Ajuste de larguras para que a coluna 'Descrição' fique mais larga no PDF
-    # As medidas estão em pontos (1/72 inch) e devem totalizar a largura útil da página
+    # Largura das colunas no PDF (ajusta se necessário)
     col_widths = [25, 60, 245, 25, 25, 25, 25, 25, 60, 60]
     table = Table(data, repeatRows=1, colWidths=col_widths)
     table.setStyle(
@@ -384,12 +415,59 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     )
     elems.append(table)
     elems.append(Spacer(1, 12))
-    right_style = ParagraphStyle("right", parent=styles["Normal"], alignment=2)
-    total_style = ParagraphStyle("total", parent=right_style, fontSize=10, leading=14)
-    elems.append(Paragraph(ui.label_total_qt_2.text(), right_style))
-    elems.append(Paragraph(ui.label_subtotal_2.text(), right_style))
-    elems.append(Paragraph(ui.label_iva_2.text(), right_style))
-    elems.append(Paragraph(ui.label_total_geral_2.text(), total_style))
+
+    # =========================
+    # QUADRO DE TOTAIS ESTILIZADO
+    # =========================
+
+    # Função auxiliar para garantir símbolo do euro
+    def add_euro(valor):
+        valor = valor.strip()
+        return valor if "€" in valor else valor + "€"
+
+    # Obter valores dos campos da UI
+    subtotal_val = add_euro(ui.label_subtotal_2.text().split(":")[-1].strip())
+    iva_val = ui.label_iva_2.text().split(":")[-1].strip()
+    total_geral_val = add_euro(ui.label_total_geral_2.text().split(":")[-1].strip())
+    total_qt_val = ui.label_total_qt_2.text().split(":")[-1].strip()
+
+    # Estilo personalizado para o Total Geral (negrito, maior, azul escuro)
+    bold_total_style = ParagraphStyle(
+        "BoldTotal",
+        parent=styles["Normal"],
+        alignment=2,  # Direita
+        fontSize=11,
+        textColor=colors.darkblue,
+        fontName="Helvetica-Bold"
+    )
+
+    # Criar lista de totais (última linha como Paragraph com estilo próprio)
+    totais_data = [
+        ["", ""],  # Linha vazia para espaçamento
+        ["Total QT:", total_qt_val],
+        ["Subtotal:", subtotal_val],
+        ["IVA (23%):", iva_val],
+        [Paragraph("Total Geral:", bold_total_style), Paragraph(total_geral_val, bold_total_style)]
+    ]
+
+    # Table dos totais, alinhada à direita
+    totais_table = Table(totais_data, colWidths=[90, 80], hAlign="RIGHT")
+    totais_table.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, -1), (-1, -1), 11),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.darkblue),
+        ("TOPPADDING", (0, -1), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.lightgrey),
+        # Borda mais grossa só na linha final (opcional)
+        ("BOX", (0, -1), (-1, -1), 1.0, colors.HexColor("#002060")),
+    ]))
+    elems.append(totais_table)
+
+    # =========================
+    # Construção do PDF final
+    # =========================
 
     doc.build(
         elems,
