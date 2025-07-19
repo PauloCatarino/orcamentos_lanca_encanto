@@ -296,63 +296,168 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
 # =============================================================================
 def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     """
-    Gera um PDF com os dados do relatório de orçamento.
-    Inclui:
-        - Cabeçalho (título, data, referência, dados cliente)
-        - Tabela dos itens orçamentados
-        - Quadro dos totais com destaque no 'Total Geral'
-        - Rodapé com data (esquerda), nº orçamento/versão (centro) e paginação (direita)
+    Gera o PDF do relatório de orçamento com layout ajustado:
+    - Nome cliente (esq.) e Nº Orçamento (dir.) na mesma linha
+    - Data por baixo do Nº Orçamento, alinhada à direita
+    - Morada, email, telefones, PHC logo abaixo do nome cliente (à esquerda)
+    - Restante layout igual ao exemplo anterior
     """
-    from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, SimpleDocTemplate
+    from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, SimpleDocTemplate, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
+    import os
 
-    # Preparar documento PDF e estilos
+    # 1. Definir estilos
+    styles = getSampleStyleSheet()
+    style_titulo = ParagraphStyle(
+        "Titulo", fontSize=16, fontName="Helvetica-Bold", alignment=2,
+        spaceAfter=0, textColor=colors.HexColor("#1A2A50")
+    )
+    style_numorc = ParagraphStyle(
+        "NumOrc", fontSize=12, fontName="Helvetica-Bold", alignment=2,
+        spaceAfter=0, textColor=colors.HexColor("#1A2A50")
+    )
+    style_data = ParagraphStyle(
+        "Data", fontSize=9, fontName="Helvetica", alignment=2,
+        spaceAfter=0, textColor=colors.grey
+    )
+    style_nome_cliente = ParagraphStyle(
+        "NomeCliente", parent=styles["Normal"], fontSize=11, fontName="Helvetica-Bold",
+        alignment=0, spaceAfter=1
+    )
+    style_small_italic = ParagraphStyle(
+        "SmallItalic", parent=styles["Normal"], fontSize=9, fontName="Helvetica-Oblique",
+        textColor=colors.black, alignment=0, spaceAfter=1
+    )
+    style_ref = ParagraphStyle(
+        "Ref", fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#184ca7"),
+        alignment=0, spaceAfter=0
+    )
+    style_obra = ParagraphStyle(
+        "Obra", fontSize=10, fontName="Helvetica-Bold", textColor=colors.red,
+        alignment=0, spaceAfter=0
+    )
+
+    # 2. Preparar dados da UI
+    from utils import obter_diretorio_base
+    caminho_base_dados = obter_diretorio_base(ui.lineEdit_base_dados.text())
+    caminho_logotipo = os.path.join(caminho_base_dados, "LE_Logotipo.png")
+
+    data_orc = ui.label_data_orcamento_2.text().strip()
+    num_orc = ui.label_num_orcamento_2.text().strip()
+    ver_orc = ui.label_ver_orcamento_2.text().strip()
+    ref_cliente = ui.lineEdit_ref_cliente_3.text().strip()
+    obra_val = getattr(ui, "lineEdit_obra_2", None)
+    obra_val = obra_val.text().strip() if obra_val else ""
+    nome_cliente = ui.lineEdit_nome_cliente_3.text().strip().upper()
+    morada = ui.lineEdit_morada_cliente_3.text().strip()
+    email = ui.lineEdit_email_cliente_3.text().strip()
+    telefone = ui.lineEdit_telefone_3.text().strip()
+    telemovel = ui.lineEdit_telemovel_3.text().strip()
+    num_phc = ui.lineEdit_num_cliente_phc_3.text().strip()
+
+    # Certifica-te que isto vem primeiro!
+    logo_img = ""
+    if os.path.exists(caminho_logotipo):
+        try:
+            logo_img = Image(caminho_logotipo, width=85, height=35)
+        except Exception as e:
+            print(f"Erro ao carregar logotipo: {e}")
+
+    # 3. Preparar documento e elementos PDF
     doc = SimpleDocTemplate(
         caminho,
         pagesize=A4,
         leftMargin=10,
         rightMargin=10,
         topMargin=10,
-        bottomMargin=50,   # Espaço para o rodapé
+        bottomMargin=50,
     )
-    styles = getSampleStyleSheet()
-
     elems = []
-    # Título
-    elems.append(Paragraph("Relatório de Orçamento", styles["Heading1"]))
 
-    # Data e referência do orçamento
-    elems.append(Paragraph(f"Data: {ui.label_data_orcamento_2.text()}", styles["Normal"]))
-    elems.append(
-        Paragraph(
-            f"Orcamento: {ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}    -->Ref: {ui.lineEdit_ref_cliente_3.text()}",
-            styles["Normal"],
-        )
-    )
-    elems.append(Spacer(1, 12))
-
-    # Dados do cliente
-    dados_cli = [
-        f"Nome: {ui.lineEdit_nome_cliente_3.text()}",
-        f"Morada: {ui.lineEdit_morada_cliente_3.text()}",
-        f"Email: {ui.lineEdit_email_cliente_3.text()}",
-        f"Nº Cliente PHC: {ui.lineEdit_num_cliente_phc_3.text()}",
-        f"Telefone: {ui.lineEdit_telefone_3.text()}  Telemóvel: {ui.lineEdit_telemovel_3.text()}",
+    # 4. Linha topo: logotipo à esquerda, título à direita
+    linha_topo = [
+        [logo_img, Paragraph("Relatório de Orçamento", style_titulo)]
     ]
-    for d in dados_cli:
-        elems.append(Paragraph(d, styles["Normal"]))
+    table_topo = Table(linha_topo, colWidths=[120, 410])
+    table_topo.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (0, 0), "TOP"),
+        ("VALIGN", (1, 0), (1, 0), "TOP"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (0, 0), 2),
+        ("BOTTOMPADDING", (0, 0), (1, 0), 0),
+    ]))
+    elems.append(table_topo)
+    elems.append(Spacer(0, 8))
 
-    elems.append(Spacer(1, 12))
+    # --5.- Bloco: Nome Cliente / Nº Orçamento na mesma linha, Data mesmo por baixo à direita ---
+    linha_cabecalho = [
+        [
+            Paragraph(nome_cliente, style_nome_cliente),
+            Paragraph(f"Nº Orçamento: {num_orc}_{ver_orc}", style_numorc)
+        ],
+        [
+            "",  # Nada debaixo do nome cliente
+            Paragraph(f"Data: {data_orc}", style_data)
+        ]
+    ]
+    table_cabecalho = Table(linha_cabecalho, colWidths=[340, 220])
+    table_cabecalho.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),    # Nome cliente à esquerda
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),   # Nº orçamento à direita
+        ("ALIGN", (1, 1), (1, 1), "RIGHT"),   # Data alinhada à direita, por baixo do orçamento
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (1, 1), (1, 1), 0),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (1, 0), (1, -1), 0),
+    ]))
+    elems.append(table_cabecalho)
+    elems.append(Spacer(0, 4))
 
-    # Cabeçalho da tabela de itens
+    # 6. Dados do cliente (morada, email, telefones, PHC): todos à esquerda, logo abaixo
+    if morada:
+        elems.append(Paragraph(morada, style_small_italic))
+    if email:
+        elems.append(Paragraph(email, style_small_italic))
+    linha_final = []
+    if telefone:
+        linha_final.append(f"Telefone: <i>{telefone}</i>")
+    if telemovel:
+        linha_final.append(f"Telemóvel: <i>{telemovel}</i>")
+    if num_phc:
+        linha_final.append(f"N.º cliente PHC: <i>{num_phc}</i>")
+    if linha_final:
+        texto_linha = "  |  ".join(linha_final)
+        elems.append(Paragraph(texto_linha, style_small_italic))
+    elems.append(Spacer(0, 6))
+
+    # 7. Ref. e Obra (mantém)
+    linha_ref_obra = [
+        [
+            Paragraph(f"Ref.: {ref_cliente}", style_ref) if ref_cliente else "",
+            Paragraph(f"Obra: {obra_val}", style_obra) if obra_val else ""
+        ]
+    ]
+    table_ref_obra = Table(linha_ref_obra, colWidths=[290, 280])
+    table_ref_obra.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "LEFT"),
+        ("VALIGN", (0, 0), (1, 0), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 40),
+        ("TOPPADDING", (0, 0), (1, 0), 2),
+        ("BOTTOMPADDING", (0, 0), (1, 0), 6),
+    ]))
+    elems.append(table_ref_obra)
+    elems.append(Spacer(0, 2))
+
+    # 8. Tabela de artigos
     headers = [
         "Item", "Codigo", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preco Unit", "Preco Total"
     ]
     data = [headers]
-
-    # Copiar os dados dos itens do orçamento para a tabela do PDF
     tw = ui.tableWidget_Items_Linha_Relatorio
     for r in range(tw.rowCount()):
         row = []
@@ -360,47 +465,41 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
             itm = tw.item(r, c)
             txt = itm.text() if itm else ""
             if c == 2:
-                # Descrição formatada: primeira linha a bold, resto itálico
                 lines = txt.splitlines()
                 if lines:
                     first, *rest = lines
                     formatted = f"<b>{first}</b>"
                     if rest:
-                        # Espaço extra para deslocar ligeiramente as descrições adicionais
                         tab = "&nbsp;&nbsp;&nbsp;"
                         parts = []
                         for l in rest:
                             line = l.lstrip("\t")
                             highlight = False
-                            if line.startswith("-"): # Destaque para texto de lista se o texto começar com '-' no relatorio de PDF aplica um TAB e fica italico
+                            if line.startswith("-"):
                                 line = line[1:]
-                            elif line.startswith("*"): # Destaque para texto importante se o texto começar com '*' no relatorio de PDF aplica um TAB e fica com cor de fundo verde
+                            elif line.startswith("*"):
                                 line = line[1:]
                                 highlight = True
                             line = line.lstrip()
                             if highlight:
-                                parts.append(f"{tab}<font backColor='#ccffcc'>{line}</font>") # Destaque para texto importante com fundo verde claro
+                                parts.append(f"{tab}<font backColor='#ccffcc'>{line}</font>")
                             else:
                                 parts.append(tab + line)
                         italic_text = "<br/>".join(parts)
-                        # Para alterar o tamanho do texto itálico ajuste o valor do atributo 'size' abaixo
                         formatted += f"<br/><i><font size='8'>{italic_text}</font></i>"
                     row.append(Paragraph(formatted, styles["Normal"]))
                 else:
                     row.append("")
             elif c == 9:
-                # Preço total a bold
                 row.append(Paragraph(f"<b>{txt}</b>", styles["Normal"]))
             else:
-                # Colunas numéricas arredondadas (Alt, Larg, Prof, Qt)
                 if c in (3, 4, 5, 7):
                     row.append(_format_int(txt))
                 else:
                     row.append(txt)
         data.append(row)
 
-    # Largura das colunas no PDF (ajusta se necessário)
-    col_widths = [25, 60, 245, 25, 25, 25, 25, 25, 60, 60]
+    col_widths = [25, 60, 260, 25, 25, 25, 25, 25, 50, 55]
     table = Table(data, repeatRows=1, colWidths=col_widths)
     table.setStyle(
         TableStyle(
@@ -414,24 +513,18 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         )
     )
     elems.append(table)
-    elems.append(Spacer(1, 12))
+    elems.append(Spacer(1, 2))
 
-    # =========================
-    # QUADRO DE TOTAIS ESTILIZADO
-    # =========================
-
-    # Função auxiliar para garantir símbolo do euro
+    # 9. Quadro dos totais (igual)
     def add_euro(valor):
         valor = valor.strip()
         return valor if "€" in valor else valor + "€"
 
-    # Obter valores dos campos da UI
     subtotal_val = add_euro(ui.label_subtotal_2.text().split(":")[-1].strip())
     iva_val = ui.label_iva_2.text().split(":")[-1].strip()
     total_geral_val = add_euro(ui.label_total_geral_2.text().split(":")[-1].strip())
     total_qt_val = ui.label_total_qt_2.text().split(":")[-1].strip()
 
-    # Estilo personalizado para o Total Geral (negrito, maior, azul escuro)
     bold_total_style = ParagraphStyle(
         "BoldTotal",
         parent=styles["Normal"],
@@ -440,17 +533,13 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         textColor=colors.darkblue,
         fontName="Helvetica-Bold"
     )
-
-    # Criar lista de totais (última linha como Paragraph com estilo próprio)
     totais_data = [
-        ["", ""],  # Linha vazia para espaçamento
+        ["", ""],
         ["Total QT:", total_qt_val],
         ["Subtotal:", subtotal_val],
         ["IVA (23%):", iva_val],
         [Paragraph("Total Geral:", bold_total_style), Paragraph(total_geral_val, bold_total_style)]
     ]
-
-    # Table dos totais, alinhada à direita
     totais_table = Table(totais_data, colWidths=[90, 80], hAlign="RIGHT")
     totais_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
@@ -460,23 +549,20 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
         ("TOPPADDING", (0, -1), (-1, -1), 6),
         ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
         ("BACKGROUND", (0, -1), (-1, -1), colors.lightgrey),
-        # Borda mais grossa só na linha final (opcional)
         ("BOX", (0, -1), (-1, -1), 1.0, colors.HexColor("#002060")),
     ]))
     elems.append(totais_table)
 
-    # =========================
-    # Construção do PDF final
-    # =========================
-
+    # 10. Gerar o PDF (mantém rodapé já implementado)
     doc.build(
         elems,
         canvasmaker=lambda *a, **kw: FooterCanvas(
-            ui.label_data_orcamento_2.text(),
-            f"{ui.label_num_orcamento_2.text()}_{ui.label_ver_orcamento_2.text()}",
+            data_orc,
+            f"{num_orc}_{ver_orc}",
             *a, **kw,
         ),
     )
+
 
 # =============================================================================
 # Função: gera_excel
@@ -484,40 +570,298 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
 # Gera um ficheiro Excel com a tabela de itens e totais do orçamento.
 # =============================================================================
 def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
-    """Gera um ficheiro Excel com a tabela de itens."""
+    """
+    Gera um ficheiro Excel formatado com logotipo, cabeçalho, morada, itens, totais (estilo PDF).
+    Esta versão corrige os alinhamentos do cabeçalho e melhora o ajuste automático da altura das linhas.
+    """
+
+    # --- 1. Obter dados do cliente e do orçamento diretamente da interface ---
+    nome_cliente = ui.lineEdit_nome_cliente_3.text().strip().upper()
+    morada = ui.lineEdit_morada_cliente_3.text().strip()
+    email = ui.lineEdit_email_cliente_3.text().strip()
+    num_orc = ui.label_num_orcamento_2.text().strip()
+    ver_orc = ui.label_ver_orcamento_2.text().strip()
+    data_orc = ui.label_data_orcamento_2.text().strip()
+    ref_cliente = ui.lineEdit_ref_cliente_3.text().strip()
+    # Para obter a obra, verifica se o widget existe
+    obra_val_widget = getattr(ui, "lineEdit_obra_2", None)
+    obra_val = obra_val_widget.text().strip() if obra_val_widget else ""
+    telefone = ui.lineEdit_telefone_3.text().strip()
+    telemovel = ui.lineEdit_telemovel_3.text().strip()
+    num_phc = ui.lineEdit_num_cliente_phc_3.text().strip()
+
+    # --- 2. Linha de contactos, tudo na mesma linha ---
+    linha_final = []
+    if telefone: linha_final.append(f"Telefone: {telefone}")
+    if telemovel: linha_final.append(f"Telemóvel: {telemovel}")
+    if num_phc: linha_final.append(f"N.º cliente PHC: {num_phc}")
+    txt_contactos = "  |  ".join(linha_final)
+
+    # --- 3. Caminho para o logotipo ---
+    caminho_base_dados = obter_diretorio_base(ui.lineEdit_base_dados.text())
+    caminho_logotipo = os.path.join(caminho_base_dados, "LE_Logotipo.png")
+
+    # --- 4. Criar workbook e worksheet ---
     wb = xlsxwriter.Workbook(caminho)
     ws = wb.add_worksheet("Relatório")
 
-    headers = [
-        "Item",
-        "Codigo",
-        "Descricao",
-        "Altura",
-        "Largura",
-        "Profundidade",
-        "Und",
-        "QT",
-        "Preco_Unit",
-        "Preco_Total",
-    ]
-    for col, h in enumerate(headers):
-        ws.write(0, col, h)
+    # --- 5. Definir formatações personalizadas ---
+    azul_escuro = '#184ca7'
 
+    # Título principal (Relatório de Orçamento)
+    cell_title = wb.add_format({'bold': True, 'font_size': 15, 'align': 'center', 'valign': 'vcenter'})
+    # Nome cliente à esquerda
+    cell_cab_left = wb.add_format({'bold': True, 'font_size': 12, 'align': 'left', 'valign': 'vcenter'})
+    # Nº orçamento e Data (usado para ambos)
+    cell_cab_info = wb.add_format({'bold': True, 'font_size': 12, 'align': 'left', 'valign': 'vcenter'})
+    # Morada, email, contactos
+    cell_morada = wb.add_format({'font_size': 10, 'align': 'left', 'valign': 'vcenter'})
+    cell_mail = wb.add_format({'font_size': 10, 'align': 'left', 'valign': 'vcenter'})
+    cell_contactos = wb.add_format({'font_size': 10, 'align': 'left', 'valign': 'vcenter'})
+    # Cabeçalho da tabela
+    cell_header = wb.add_format({'bold': True, 'bg_color': '#D9D9D9', 'align': 'center', 'border': 1, 'valign': 'vcenter'})
+    # Células normais da tabela de itens
+    cell_item = wb.add_format({'align': 'center', 'font_size': 10, 'border': 1, 'valign': 'vcenter'})
+    # Totais (labels e valores)
+    cell_total_label = wb.add_format({'align': 'right', 'bold': True, 'font_size': 10, 'valign': 'vcenter'})
+    cell_total_val = wb.add_format({'align': 'center', 'bold': True, 'font_size': 11, 'color': '#002060', 'valign': 'vcenter'})
+    # Ref. e Obra (com cores e tamanhos específicos)
+    cell_ref = wb.add_format({'align': 'left', 'font_size': 16, 'bold': True, 'color': azul_escuro, 'valign': 'vcenter'})
+    cell_obra = wb.add_format({'align': 'left', 'font_size': 16, 'bold': True, 'color': 'red', 'valign': 'vcenter'})
+    # Descrição: título do artigo
+    cell_descr_titulo = wb.add_format({'bold': True, 'font_size': 11, 'align': 'left'})
+    # Descrição: sublinhas em itálico
+    cell_descr_sub = wb.add_format({'italic': True, 'font_size': 10, 'align': 'left'})
+    # Descrição: para a célula, wrap e borda
+    cell_descr_container = wb.add_format({'border': 1, 'text_wrap': True, 'valign': 'top'})
+
+    # --- 6. Margens e ajuste para imprimir tudo numa só página ---
+    ws.set_margins(left=0.2, right=0.2, top=0.2, bottom=0.2)
+    ws.fit_to_pages(1, 1)
+
+    # --- 7. Largura das colunas ---
+    ws.set_column('A:A', 7)
+    ws.set_column('B:B', 18)
+    ws.set_column('C:C', 44)
+    ws.set_column('D:F', 8)
+    ws.set_column('G:H', 8)
+    ws.set_column('I:J', 16)
+
+    row = 0
+
+    # --- 8. Cabeçalho: logotipo, título e info do cliente/orçamento ---
+    # Linha do logotipo
+    if os.path.exists(caminho_logotipo):
+        ws.set_row(row, 70)  # altura extra para logo
+        ws.merge_range(row, 0, row, 1, '')
+        ws.insert_image(row, 0, caminho_logotipo, {'x_scale': 0.15, 'y_scale': 0.15, 'x_offset': 15, 'y_offset': 10, 'positioning': 1})
+    # Título principal à direita
+    ws.merge_range(row, 3, row, 9, "Relatório de Orçamento", cell_title)
+    row += 1
+
+    # Linha do nome do cliente (A-C), nº orçamento (I-J)
+    ws.merge_range(row, 0, row, 2, nome_cliente, cell_cab_left)
+    ws.merge_range(row, 8, row, 9, f"Nº Orçamento: {num_orc}_{ver_orc}", cell_cab_info)
+    row += 1
+
+    # Linha da morada (A-C), data (I-J)
+    ws.merge_range(row, 0, row, 2, morada, cell_morada)
+    ws.merge_range(row, 8, row, 9, f"Data: {data_orc}", cell_cab_info)
+    row += 1
+
+    # Linha do email (A-C)
+    ws.merge_range(row, 0, row, 2, email, cell_mail)
+    row += 1
+
+    # Linha dos contactos (A-C)
+    ws.merge_range(row, 0, row, 2, txt_contactos, cell_contactos)
+    row += 1
+
+    # Linha da referência (A-C) e da obra (D-J)
+    ws.merge_range(row, 0, row, 2, f"Ref.: {ref_cliente}", cell_ref)
+    ws.merge_range(row, 3, row, 9, f"Obra: {obra_val}", cell_obra)
+    row += 1
+
+    row += 1  # Linha em branco
+
+    # --- 9. Cabeçalho da tabela de itens ---
+    headers = ["Item", "Codigo", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preco Unit", "Preco Total"]
+    for c, h in enumerate(headers):
+        ws.write(row, c, h, cell_header)
+    row += 1
+
+    # --- 10. Tabela de artigos (itens) ---
     tw = ui.tableWidget_Items_Linha_Relatorio
     for r in range(tw.rowCount()):
-        for c in range(tw.columnCount()):
-            item = tw.item(r, c)
-            txt = item.text() if item else ""
-            ws.write(r + 1, c, txt)
+        # Obter descrição (coluna 2) para contar o número de linhas de texto
+        desc_item = tw.item(r, 2)
+        desc_text = desc_item.text() if desc_item else ""
+        num_linhas = len(desc_text.split('\n')) if desc_text else 1
 
-    row_total = tw.rowCount()
-    qt_text = ui.label_total_qt_2.text().split(":", 1)[-1]
-    subtotal_text = ui.label_subtotal_2.text().split(":", 1)[-1]
-    total_geral_text = ui.label_total_geral_2.text().split(":", 1)[-1]
-    ws.write(row_total + 1, 7, _parse_float(qt_text))
-    ws.write(row_total + 2, 9, _parse_float(subtotal_text.replace(",", "")))
-    ws.write(row_total + 3, 9, _parse_float(total_geral_text.replace(",", "")))
+        # Ajusta a altura da linha conforme quantidade de linhas na descrição
+        ws.set_row(row, max(20, 15 * num_linhas))
+
+        for c in range(tw.columnCount()):
+            itm = tw.item(r, c)
+            txt = itm.text() if itm else ""
+
+            if c == 2:  # Coluna "Descrição"
+                linhas = txt.split('\n')
+                rich_parts = []
+                if linhas:
+                    # Cabeçalho em negrito (primeira linha)
+                    rich_parts.append(cell_descr_titulo)
+                    rich_parts.append(linhas[0].strip())
+                # Cada sublinha (começando da segunda) vai para nova linha e em itálico
+                for linha_subitem in linhas[1:]:
+                    if linha_subitem.strip():
+                        rich_parts.append('\n')  # quebra de linha
+                        rich_parts.append(cell_descr_sub)
+                        rich_parts.append(linha_subitem.strip())
+                # Escreve a célula Descrição como rich text (negrito + italico), tudo dentro da célula, com wrap e borda
+                ws.write_rich_string(row, c, *rich_parts, cell_descr_container)
+            else:
+                # Outras colunas: valor normal com formato centralizado e borda
+                ws.write(row, c, txt, cell_item)
+        row += 1
+
+    # --- 11. Totais (QT, Subtotal, IVA, Total Geral) ---
+    def euro(val):
+        v = str(val).strip()
+        return v if '€' in v else f"{v} €"
+
+    subtotal_val = euro(ui.label_subtotal_2.text().split(":")[-1].strip())
+    iva_val = ui.label_iva_2.text().split(":")[-1].strip()
+    total_geral_val = euro(ui.label_total_geral_2.text().split(":")[-1].strip())
+    total_qt_val = ui.label_total_qt_2.text().split(":")[-1].strip()
+
+    ws.write(row, 8, "Total QT:", cell_total_label)
+    ws.write(row, 9, total_qt_val, cell_total_val)
+    row += 1
+    ws.write(row, 8, "Subtotal:", cell_total_label)
+    ws.write(row, 9, subtotal_val, cell_total_val)
+    row += 1
+    ws.write(row, 8, "IVA (23%):", cell_total_label)
+    ws.write(row, 9, iva_val, cell_total_val)
+    row += 1
+    ws.write(row, 8, "Total Geral:", cell_total_label)
+    ws.write(row, 9, total_geral_val, cell_total_val)
+
+    # --- 12. Rodapé da folha física (data | orçamento | paginação) ---
+    footer_text = f"{data_orc}       {num_orc}_{ver_orc}       Página &P de &N"
+    ws.set_footer(footer_text, {'margin': 0.5, 'align_with_margins': True})
+
+    # --- 13. Fechar o workbook (guardar ficheiro Excel) ---
     wb.close()
+
+
+
+def gera_excel_importacao_phc(ui: QtWidgets.QWidget, caminho: str) -> None:
+    """
+    Gera um ficheiro Excel compatível com importação PHC.
+    - Cabeçalho na linha 1: RefCliente | Referencia | Designacao | XAltura | YLargura | ZEspessura | Qtd | Venda
+    - Linha 2 em branco.
+    - Dados começam na linha 3.
+    - Na coluna 'Designacao' nunca há mais de 57 caracteres por linha/célula.
+    - Se necessário, continua o texto da descrição na linha seguinte, sem cortar palavras.
+    - Coluna 'Venda' SEM símbolo €, apenas valor numérico.
+    """
+
+    import xlsxwriter
+
+    # 1. Cria workbook e worksheet
+    wb = xlsxwriter.Workbook(caminho)
+    ws = wb.add_worksheet("Importacao")
+
+    # 2. Ajusta as larguras das colunas para ficar igual ao modelo PHC
+    ws.set_column('A:A', 12)  # RefCliente
+    ws.set_column('B:B', 10)  # Referencia
+    ws.set_column('C:C', 60)  # Designacao
+    ws.set_column('D:D', 10)  # XAltura
+    ws.set_column('E:E', 10)  # YLargura
+    ws.set_column('F:F', 12)  # ZEspessura
+    ws.set_column('G:G', 6)   # Qtd
+    ws.set_column('H:H', 12)  # Venda
+
+    # 3. Escreve o cabeçalho na linha 1 (índice 0)
+    cabecalho = [
+        "RefCliente", "Referencia", "Designacao",
+        "XAltura", "YLargura", "ZEspessura", "Qtd", "Venda"
+    ]
+    ws.write_row(0, 0, cabecalho)
+
+    # 4. Linha 2 fica em branco (index=1)
+    # Não é preciso escrever nada, Excel já deixa em branco por padrão
+
+    # 5. Começa a preencher dados na linha 3 (index=2)
+    row = 2
+    tw = ui.tableWidget_Items_Linha_Relatorio
+
+    # 6. Função auxiliar para limpar/preparar o preço, SEM símbolo €,
+    # aceita "," e "." como separador decimal, devolve float
+    def limpar_preco(v):
+        v = v.replace('€', '').replace(' ', '').replace(',', '.')
+        try:
+            return float(v)
+        except Exception:
+            return v
+
+    # 7. Função para dividir o texto da descrição em linhas de no máximo 57 caracteres,
+    # sem cortar palavras ao meio
+    def dividir_em_linhas(texto, max_len=57):
+        palavras = texto.split()
+        linhas = []
+        atual = ""
+        for p in palavras:
+            if len(atual) + len(p) + (1 if atual else 0) <= max_len:
+                atual = atual + (" " if atual else "") + p
+            else:
+                linhas.append(atual)
+                atual = p
+        if atual:
+            linhas.append(atual)
+        return linhas
+
+    # 8. Percorre todas as linhas da tabela de artigos do orçamento
+    for r in range(tw.rowCount()):
+        # Vai buscar cada campo da linha
+        codigo = tw.item(r, 1).text() if tw.item(r, 1) else ""
+        designacao_raw = tw.item(r, 2).text() if tw.item(r, 2) else ""
+        xaltura = tw.item(r, 3).text() if tw.item(r, 3) else ""
+        ylargo = tw.item(r, 4).text() if tw.item(r, 4) else ""
+        zesp = tw.item(r, 5).text() if tw.item(r, 5) else ""
+        qtd = tw.item(r, 7).text() if tw.item(r, 7) else ""
+        venda = tw.item(r, 8).text() if tw.item(r, 8) else ""
+
+        venda = limpar_preco(venda)  # <--- Limpa o símbolo €, devolve valor numérico
+
+        # Separa a descrição completa em linhas (máx 57 caracteres, nunca corta palavras)
+        partes = []
+        for linha in designacao_raw.split('\n'):
+            partes.extend(dividir_em_linhas(linha.strip()))
+
+        # 9. Escreve cada linha da descrição:
+        #    - Primeira linha do artigo: preenche todos os campos
+        #    - Linhas seguintes: só coluna "Designacao", resto fica vazio
+        for idx, linha_desc in enumerate(partes):
+            if idx == 0:
+                ws.write(row, 0, codigo)     # RefCliente
+                ws.write(row, 1, 'MOB')     # Referencia (fixo)
+                ws.write(row, 2, linha_desc) # Designacao (até 57 chars)
+                ws.write(row, 3, xaltura)   # XAltura
+                ws.write(row, 4, ylargo)    # YLargura
+                ws.write(row, 5, zesp)      # ZEspessura
+                ws.write(row, 6, qtd)       # Qtd
+                ws.write(row, 7, venda)     # Venda (só número!)
+            else:
+                ws.write(row, 2, linha_desc) # Só coluna Designacao
+            row += 1
+
+    # 10. Guarda e fecha o ficheiro Excel
+    wb.close()
+
+
+
 
 # =============================================================================
 # Função: _obter_caminho_pasta_orcamento
@@ -557,22 +901,24 @@ def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
 # Mostra mensagem ao utilizador no final.
 # =============================================================================
 def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
-    """Gera os ficheiros PDF e Excel na pasta do orçamento."""
+    """Gera os ficheiros PDF, Excel normal e Excel PHC na pasta do orçamento."""
     pasta = _obter_caminho_pasta_orcamento(ui)
     num = ui.label_num_orcamento_2.text()
     ver = ui.label_ver_orcamento_2.text()
 
     pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
     xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
+    xls_phc_path = os.path.join(pasta, f"{num}_{ver}_PHC.xlsx")
 
     gera_pdf(ui, pdf_path)
     gera_excel(ui, xls_path)
+    gera_excel_importacao_phc(ui, xls_phc_path)  # <--- NOVO: Gera Excel PHC
 
-    print(f"Relatórios guardados em:\nPDF: {pdf_path}\nXLSX: {xls_path}")
+    print(f"Relatórios guardados em:\nPDF: {pdf_path}\nXLSX: {xls_path}\nXLSX PHC: {xls_phc_path}")
     QtWidgets.QMessageBox.information(
         getattr(ui, "tabWidget_orcamento", None),
         "Gerado",
-        f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}",
+        f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}\n• {xls_phc_path}",
     )
 
 # =============================================================================
@@ -586,7 +932,7 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     resp = QtWidgets.QMessageBox.question(
         getattr(ui, "tabWidget_orcamento", None),
         "Confirmar geração",
-        "Campos preenchidos.\nDeseja gerar o PDF e o Excel agora?",
+        "Campos preenchidos.\nDeseja gerar o Relatorio do Orçamento em PDF e em  Excel inclui tambem o Excel de Importação para PHC agora?",
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         QtWidgets.QMessageBox.Yes,
     )
