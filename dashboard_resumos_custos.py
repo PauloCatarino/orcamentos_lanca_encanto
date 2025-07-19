@@ -139,7 +139,7 @@ ABREV_COLUNAS = {
     "Nº Peças": "Nº Peças",
     "Tipo": "Tipo",
     "Percentagem (%)": "%",
-    "Valor (€)": "€"
+    "Valor (€)": "€",
 }
 TOOLTIPS_COLUNAS = {
     "Ref.": "Referência do material/componente",
@@ -166,7 +166,7 @@ TOOLTIPS_COLUNAS = {
     "ML Orl.": "Metros lineares orlados",
     "Nº Peças": "Número de peças",
     "%": "Percentagem",
-    "€": "Valor em euros"
+    "€": "Valor em euros",
 }
 
 def abreviar_colunas(df):
@@ -197,7 +197,7 @@ class FooterCanvas(canvas.Canvas):
 
     def draw_footer(self, page_count):
         self.saveState()
-        self.setFont('Helvetica', 9)
+        self.setFont("Helvetica", 9)
         data_hoje = datetime.now().strftime("%d/%m/%Y")
         page_num = self.getPageNumber()
         self.drawString(25, 20, data_hoje)
@@ -206,12 +206,17 @@ class FooterCanvas(canvas.Canvas):
         self.restoreState()
 
 # ========= LARGURAS PDF (colunas e margem reduzida) =========
-def colwidths_pdf(cols_abrev):
-    """Largura apropriada para cada coluna, incluindo N/Stock."""
+def colwidths_pdf(cols_abrev, tabela=None):
+    """Largura apropriada para cada coluna, com ajustes específicos."""
     larguras = []
     for c in cols_abrev:
         if c in ["Descrição", "Op."]:
-            larguras.append(198)
+            largura = 198
+            if c == "Descrição" and tabela == "Ferragens":
+                largura = 230  # descrição maior em ferragens
+            larguras.append(largura)
+        elif c == "Tipo" and tabela == "Margens":
+            larguras.append(70)  # mais largo na tabela de margens
         elif c in ["Ref."]:
             larguras.append(56)
         elif c in ["N/Stock"]:
@@ -259,24 +264,46 @@ def dataframe_para_qtablewidget(df: pd.DataFrame) -> QTableWidget:
 def criar_grafico_placas(df):
     if df is None or df.empty:
         return None
-    df_plot = df[['descricao_no_orcamento', 'custo_mp_total', 'custo_placas_utilizadas']].copy()
-    for col in ['custo_mp_total', 'custo_placas_utilizadas']:
-        df_plot[col] = pd.to_numeric(df_plot[col], errors='coerce').fillna(0)
-    colors_barras = ['#F44336' if real > teor else '#4CAF50'
-                     for real, teor in zip(df_plot['custo_placas_utilizadas'], df_plot['custo_mp_total'])]
-    x = np.arange(len(df_plot['descricao_no_orcamento']))
+    df_plot = df[
+        ["descricao_no_orcamento", "custo_mp_total", "custo_placas_utilizadas"]
+    ].copy()
+    for col in ["custo_mp_total", "custo_placas_utilizadas"]:
+        df_plot[col] = pd.to_numeric(df_plot[col], errors="coerce").fillna(0)
+    colors_barras = [
+        "#F44336" if real > teor else "#4CAF50"
+        for real, teor in zip(
+            df_plot["custo_placas_utilizadas"], df_plot["custo_mp_total"]
+        )
+    ]
+    x = np.arange(len(df_plot["descricao_no_orcamento"]))
     width = 0.35
     fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
-    ax.bar(x - width/2, df_plot['custo_mp_total'], width, label='Custo Teórico', color='skyblue', edgecolor='black', zorder=3)
-    ax.bar(x + width/2, df_plot['custo_placas_utilizadas'], width, label='Custo Real', color=colors_barras, edgecolor='black', zorder=3)
-    ax.set_ylabel('Custo (€)', fontsize=10)
-    ax.set_title('Comparativo de Custos por Placa', fontweight='bold', fontsize=12)
+    ax.bar(
+        x - width / 2,
+        df_plot["custo_mp_total"],
+        width,
+        label="Custo Teórico",
+        color="skyblue",
+        edgecolor="black",
+        zorder=3,
+    )
+    ax.bar(
+        x + width / 2,
+        df_plot["custo_placas_utilizadas"],
+        width,
+        label="Custo Real",
+        color=colors_barras,
+        edgecolor="black",
+        zorder=3,
+    )
+    ax.set_ylabel("Custo (€)", fontsize=10)
+    ax.set_title("Comparativo de Custos por Placa", fontweight="bold", fontsize=12)
     ax.set_xticks(x)
     wrapped_labels = [textwrap.fill(l, 28) for l in df_plot['descricao_no_orcamento'].astype(str)]
     ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
     fig.subplots_adjust(bottom=0.33)
     ax.legend()
-    ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
+    ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
     fig.tight_layout()
     return fig
 
@@ -286,15 +313,21 @@ def criar_grafico_orlas(df):
     df_plot = df.copy()
     df_plot['label'] = df_plot['ref_orla'].astype(str) + ' (' + df_plot['espessura_orla'].astype(str) + ', ' + df_plot['largura_orla'].astype(int).astype(str) + 'mm)'
     fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
-    bars = ax.bar(df_plot['label'], pd.to_numeric(df_plot['ml_total'], errors='coerce'), color='orange', edgecolor='black', zorder=3)
-    ax.set_ylabel('Metros Lineares (ml)', fontsize=10)
-    ax.set_title('Consumo de Orlas (ml)', fontweight='bold', fontsize=12)
-    wrapped_labels = [textwrap.fill(l, 25) for l in df_plot['label'].astype(str)]
+    bars = ax.bar(
+        df_plot["label"],
+        pd.to_numeric(df_plot["ml_total"], errors="coerce"),
+        color="orange",
+        edgecolor="black",
+        zorder=3,
+    )
+    ax.set_ylabel("Metros Lineares (ml)", fontsize=10)
+    ax.set_title("Consumo de Orlas (ml)", fontweight="bold", fontsize=12)
+    wrapped_labels = [textwrap.fill(l, 25) for l in df_plot["label"].astype(str)]
     ax.set_xticks(np.arange(len(wrapped_labels)))
     ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
     fig.subplots_adjust(bottom=0.33)
-    ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
-    ax.bar_label(bars, fmt='%.2f', fontsize=7, padding=2)
+    ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
+    ax.bar_label(bars, fmt="%.2f", fontsize=7, padding=2)
     fig.tight_layout()
     return fig
 
@@ -302,20 +335,25 @@ def criar_grafico_simples(df, col_cat, col_val, titulo, cor, ylabel='Custo (€)
     if df is None or df.empty:
         return None
     df_plot = df[[col_cat, col_val]].copy()
-    if df_plot[col_val].dtype == 'object':
-        df_plot[col_val] = df_plot[col_val].astype(str).str.replace('%', '', regex=False).str.replace(',', '.', regex=False)
-    df_plot[col_val] = pd.to_numeric(df_plot[col_val], errors='coerce').fillna(0)
+    if df_plot[col_val].dtype == "object":
+        df_plot[col_val] = (
+            df_plot[col_val]
+            .astype(str)
+            .str.replace("%", "", regex=False)
+            .str.replace(",", ".", regex=False)
+        )
+    df_plot[col_val] = pd.to_numeric(df_plot[col_val], errors="coerce").fillna(0)
     if df_plot[col_val].sum() == 0:
         return None
     fig, ax = plt.subplots(figsize=(9.2, 5.7), dpi=100)
     ax.bar(df_plot[col_cat].astype(str), df_plot[col_val], color=cor, edgecolor='black', zorder=3)
     ax.set_ylabel(ylabel, fontsize=10)
-    ax.set_title(titulo, fontweight='bold', fontsize=12)
+    ax.set_title(titulo, fontweight="bold", fontsize=12)
     wrapped_labels = [textwrap.fill(l, 28) for l in df_plot[col_cat].astype(str)]
     ax.set_xticks(np.arange(len(wrapped_labels)))
-    ax.set_xticklabels(wrapped_labels, rotation=30, ha='right', fontsize=8)
+    ax.set_xticklabels(wrapped_labels, rotation=30, ha="right", fontsize=8)
     fig.subplots_adjust(bottom=0.33)
-    ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
+    ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
     fig.tight_layout()
     return fig
 
@@ -332,7 +370,7 @@ class DashboardResumoCustos(QWidget):
 
     def extrair_orc_ver(self):
         base_name = os.path.basename(self.excel_path)
-        parts = base_name.replace("Resumo_Custos_", "").replace(".xlsx", "").split('_')
+        parts = base_name.replace("Resumo_Custos_", "").replace(".xlsx", "").split("_")
         return (parts[0], parts[1]) if len(parts) >= 2 else ("?", "?")
 
     def init_ui(self):
@@ -359,11 +397,11 @@ class DashboardResumoCustos(QWidget):
         grid_layout.setHorizontalSpacing(4)
 
         # Carrega todos os DataFrames necessários
-        self.dfs['Placas'] = self.ler_df("Resumo Placas")
-        self.dfs['Orlas'] = self.ler_df("Resumo Orlas")
-        self.dfs['Ferragens'] = self.ler_df("Resumo Ferragens")
-        self.dfs['Maquinas_MO'] = self.ler_df("Resumo Maquinas_MO")
-        self.dfs['Margens'] = self.ler_df("Resumo Margens")
+        self.dfs["Placas"] = self.ler_df("Resumo Placas")
+        self.dfs["Orlas"] = self.ler_df("Resumo Orlas")
+        self.dfs["Ferragens"] = self.ler_df("Resumo Ferragens")
+        self.dfs["Maquinas_MO"] = self.ler_df("Resumo Maquinas_MO")
+        self.dfs["Margens"] = self.ler_df("Resumo Margens")
 
         # Ativar ou desativar botão consoante existam placas não stock
         self.btn_atualizar_precos.setEnabled(self.tem_nao_stock())
@@ -371,12 +409,38 @@ class DashboardResumoCustos(QWidget):
         # Blocos principais (Expanding), exceto Margens/Custos (Minimum)
         placas_box = self.criar_groupbox("Resumo de Placas", self.dfs['Placas'], criar_grafico_placas, expandir=True)
         orlas_box = self.criar_groupbox("Resumo de Orlas", self.dfs['Orlas'], criar_grafico_orlas, expandir=True)
-        ferragens_box = self.criar_groupbox("Resumo de Ferragens", self.dfs['Ferragens'],
-            lambda df: criar_grafico_simples(df, 'descricao_no_orcamento', 'custo_mp_total', 'Custos por Ferragem', '#F44336'), expandir=True)
-        maquinas_box = self.criar_groupbox("Resumo de Máquinas e Mão de Obra", self.dfs['Maquinas_MO'],
-            lambda df: criar_grafico_simples(df, 'Operação', 'Custo Total (€)', 'Custos por Operação', '#2196F3'), expandir=True)
-        margens_box = self.criar_groupbox("Resumo de Margens e Custos", self.dfs['Margens'], func_grafico=None, expandir=False)
-        margens_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        placas_box = self.criar_groupbox(
+            "Resumo de Placas", self.dfs["Placas"], criar_grafico_placas, expandir=True
+        )
+        orlas_box = self.criar_groupbox(
+            "Resumo de Orlas", self.dfs["Orlas"], criar_grafico_orlas, expandir=True
+        )
+        ferragens_box = self.criar_groupbox(
+            "Resumo de Ferragens",
+            self.dfs["Ferragens"],
+            lambda df: criar_grafico_simples(
+                df,
+                "descricao_no_orcamento",
+                "custo_mp_total",
+                "Custos por Ferragem",
+                "#F44336",
+            ),
+            expandir=True,
+        )
+        maquinas_box = self.criar_groupbox(
+            "Resumo de Máquinas e Mão de Obra",
+            self.dfs["Maquinas_MO"],
+            lambda df: criar_grafico_simples(
+                df, "Operação", "Custo Total (€)", "Custos por Operação", "#2196F3"
+            ),
+            expandir=True,
+        )
+        margens_box = self.criar_groupbox(
+            "Resumo de Margens e Custos",
+            self.dfs["Margens"],
+            func_grafico=None,
+            expandir=False,
+        )
 
         # Layout sem espaços mortos
         grid_layout.addWidget(placas_box, 0, 0)
@@ -422,19 +486,20 @@ class DashboardResumoCustos(QWidget):
             return pd.DataFrame()
 
     def tem_nao_stock(self):
-        df = self.dfs.get('Placas')
+        df = self.dfs.get("Placas")
         if df is None or df.empty:
             return False
-        col = 'nao_stock'
+        col = "nao_stock"
         if col not in df.columns:
             return False
         return bool(
             df[col]
             .astype(str)
             .str.strip()
-            .isin(['1', 'sim', 'x', '✓', 'True', 'true'])
+            .isin(["1", "sim", "x", "✓", "True", "true"])
             .any()
         )
+           
     
     def exportar_pdf(self):
         default_path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
@@ -458,13 +523,27 @@ class DashboardResumoCustos(QWidget):
             if df is None or df.empty:
                 continue
             story.append(PageBreak())
-            story.append(Paragraph(f"Resumo de {key.replace('_', ' ')}", styles['h2']))
+            story.append(Paragraph(f"Resumo de {key.replace('_', ' ')}", styles["h2"]))
             story.append(Spacer(1, 7))
-            df_abrev, col_abrev = abreviar_colunas(df.fillna(''))
-            df_str = df_abrev.apply(lambda col: col.map(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)))
+            df_abrev, col_abrev = abreviar_colunas(df.fillna(""))
+            df_str = df_abrev.apply(
+                lambda col: col.map(
+                    lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else str(x)
+                )
+            )
+
+            # Quebras de linha em Descrição/Tipo para melhor leitura
+            if "Descrição" in df_str.columns:
+                df_str["Descrição"] = df_str["Descrição"].apply(
+                    lambda t: Paragraph(str(t), styles["Normal"])
+                )
+            if key == "Margens" and "Tipo" in df_str.columns:
+                df_str["Tipo"] = df_str["Tipo"].apply(
+                    lambda t: Paragraph(str(t), styles["Normal"])
+                )
             # Ajuste visual da coluna 'N/Stock'
             data = [col_abrev] + df_str.values.tolist()
-            col_widths = colwidths_pdf(col_abrev)
+            col_widths = colwidths_pdf(col_abrev, key)
             # Preencher N/Stock por ✓
             try:
                 idx_nstock = col_abrev.index("N/Stock")
@@ -474,16 +553,16 @@ class DashboardResumoCustos(QWidget):
                 pass
             table = Table(data, colWidths=col_widths, hAlign='LEFT', repeatRows=1)
             style = TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.darkgrey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-                ('WORDWRAP', (0, 0), (-1, -1))
+                ("BACKGROUND", (0, 0), (-1, 0), colors.darkgrey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.lightgrey),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("WORDWRAP", (0, 0), (-1, -1)),
             ])
             table.setStyle(style)
             story.append(table)
@@ -491,7 +570,7 @@ class DashboardResumoCustos(QWidget):
                 fig = graficos_funcs.get(key)(df)
                 if fig:
                     img_buffer = io.BytesIO()
-                    fig.savefig(img_buffer, format='png', dpi=150)
+                    fig.savefig(img_buffer, format="png", dpi=150)
                     plt.close(fig)
                     img_buffer.seek(0)
                     story.append(Spacer(1, 10))
@@ -515,7 +594,7 @@ class DashboardResumoCustos(QWidget):
             QtWidgets.QMessageBox.information(
                 self,
                 "Sucesso",
-                f"Preços do orçamento {self.num_orc} versão {self.versao} atualizados com base nas placas Não stock."
+                f"Preços do orçamento {self.num_orc} versão {self.versao} atualizados com base nas placas Não stock.",
             )
             if self.ui is not None:
                 for i in range(self.ui.tabWidget_orcamento.count()):
