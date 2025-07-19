@@ -21,6 +21,8 @@ import os
 import shutil
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout
+import smtplib
+from email.message import EmailMessage
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -115,6 +117,23 @@ def _first_text(*widgets) -> str:
             if txt:
                 return txt
     return ""
+
+def _enviar_email(destino: str, assunto: str, corpo: str, anexo: str) -> None:
+    """Envia um email simples com anexo PDF."""
+    msg = EmailMessage()
+    msg["Subject"] = assunto
+    msg["From"] = "orcamentos@lancaencanto.pt"
+    msg["To"] = destino
+    msg.set_content(corpo)
+
+    if anexo and os.path.exists(anexo):
+        with open(anexo, "rb") as f:
+            msg.add_attachment(
+                f.read(), maintype="application", subtype="pdf", filename=os.path.basename(anexo)
+            )
+
+    with smtplib.SMTP("localhost") as smtp:
+        smtp.send_message(msg)
 
 # =============================================================================
 # Função: _obter_dados_cliente
@@ -938,6 +957,74 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     )
     if resp == QtWidgets.QMessageBox.Yes:
         exportar_relatorio(ui)
+
+def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
+    """Gera o PDF (se necessário) e envia por email ao cliente."""
+    preencher_campos_relatorio(ui)
+
+    pasta = _obter_caminho_pasta_orcamento(ui)
+    num = ui.label_num_orcamento_2.text()
+    ver = ui.label_ver_orcamento_2.text()
+    pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
+
+    if not os.path.exists(pdf_path):
+        try:
+            gera_pdf(ui, pdf_path)
+        except Exception as e:
+            QMessageBox.critical(None, "Erro", f"Não foi possível gerar o PDF:\n{e}")
+            return
+
+    destino = ui.lineEdit_email_cliente_3.text().strip()
+    if not destino:
+        destino, ok = QtWidgets.QInputDialog.getText(
+            getattr(ui, "tabWidget_orcamento", None),
+            "Email do Cliente",
+            "O cliente não tem email registado. Introduza um email para envio:",
+        )
+        if not ok or not destino.strip():
+            QMessageBox.warning(None, "Email inválido", "Operação cancelada por falta de email.")
+            return
+        destino = destino.strip()
+
+    num_orc = ui.lineEdit_num_orcamento_2.text().strip()
+    versao = ui.lineEdit_versao.text().strip()
+    ref_cliente = ui.lineEdit_ref_cliente_2.text().strip()
+    obra = ui.lineEdit_obra_2.text().strip() if hasattr(ui, "lineEdit_obra_2") else ""
+
+    assunto_partes = []
+    if num_orc:
+        assunto_partes.append(f"{num_orc}_{versao}" if versao else num_orc)
+    if ref_cliente:
+        assunto_partes.append(ref_cliente)
+    if obra:
+        assunto_partes.append(obra)
+    assunto = " | ".join(assunto_partes) or "Orçamento"
+
+    subtotal = ui.label_subtotal_2.text().split(":")[-1].strip()
+    utilizador = ui.comboBox_utilizador.currentText().strip()
+    corpo = (
+        "Agradecemos o seu contacto para o orçamento e estamos a devolver o seu pedido de orçamento.\n"
+        f"Valor global sem IVA: {subtotal} €.\n\n"
+        f"Com os melhores cumprimentos,\n{utilizador}"
+    )
+
+    try:
+        _enviar_email(destino, assunto, corpo, pdf_path)
+    except Exception as e:
+        QMessageBox.critical(None, "Erro no envio", f"Não foi possível enviar o email:\n{e}")
+        return
+
+    try:
+        id_orc = ui.lineEdit_id.text().strip()
+        if id_orc:
+            with obter_cursor() as cur:
+                cur.execute("UPDATE orcamentos SET status=%s WHERE id=%s", ("Enviado", id_orc))
+    except Exception as e:
+        print(f"Erro ao atualizar status para 'Enviado': {e}")
+
+    QMessageBox.information(None, "Sucesso", f"Email enviado para {destino}.")
+
+    
 # =============================================================================
 # Função: on_gerar_relatorio_consumos_clicked
 # =============================================================================
