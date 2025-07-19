@@ -217,10 +217,19 @@ def colwidths_pdf(cols_abrev, tabela=None):
             larguras.append(largura)
         elif c == "Tipo" and tabela == "Margens":
             larguras.append(70)  # mais largo na tabela de margens
+        elif tabela == "Placas" and c in [
+            "P.Liq",
+            "Und",
+            "Desp.",
+            "Esp.",
+            "Qt.Placa",
+            "Área",
+        ]:
+            larguras.append(36)  # colunas estreitas para mais espaço na descrição
         elif c in ["Ref."]:
             larguras.append(56)
         elif c in ["N/Stock"]:
-            larguras.append(47)
+            larguras.append(43)
         elif "Custo" in c or "Valor" in c or "C. Tot." in c:
             larguras.append(63)
         elif c in ["Área", "m² Usad."]:
@@ -502,11 +511,8 @@ class DashboardResumoCustos(QWidget):
            
     
     def exportar_pdf(self):
-        default_path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
-        path, _ = QFileDialog.getSaveFileName(self, "Guardar Dashboard PDF", default_path, "PDF Files (*.pdf)")
-        if not path:
-            return
-
+        path = os.path.join(os.path.dirname(self.excel_path), f"Dashboard_Custos_{self.num_orc}_{self.versao}.pdf")
+       
         doc = SimpleDocTemplate(path, pagesize=landscape(A4), leftMargin=18, rightMargin=30, topMargin=30, bottomMargin=48)
         story = []
         styles = getSampleStyleSheet()
