@@ -36,3 +36,7 @@ build/
 *.exe
 *.spec
 
+# Não versionar ficheiros de configuração específicos assinaturas de mails
+*.ini
+assinaturas/
+

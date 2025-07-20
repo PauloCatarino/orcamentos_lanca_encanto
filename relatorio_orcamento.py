@@ -120,9 +120,23 @@ def _first_text(*widgets) -> str:
 
 def _enviar_email(destino: str, assunto: str, corpo: str, anexo: str) -> None:
     """Envia um email simples com anexo PDF."""
+    """Envia um email simples com anexo PDF.
+
+    A configuração do servidor pode ser feita através das variáveis de
+    ambiente ``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USER``, ``SMTP_PASSWORD``,
+    ``SMTP_TLS`` ou ``SMTP_SSL`` e ``EMAIL_FROM``. Caso não sejam
+    fornecidas, tenta usar ``localhost`` sem autenticação.
+    """
+
+    host = "mail.lancaencanto.pt"
+    port = 465
+    user = "projetos@lancaencanto.pt"        #projetos@lancaencanto.pt
+    password = "lancaproj2017"  # Substituir aqui pela tua password real!
+    use_ssl = True
+
     msg = EmailMessage()
-    msg["Subject"] = assunto
-    msg["From"] = "orcamentos@lancaencanto.pt"
+    msg["Subject"] = assunto or "Orçamento"
+    msg["From"] = user
     msg["To"] = destino
     msg.set_content(corpo)
 
@@ -132,7 +146,9 @@ def _enviar_email(destino: str, assunto: str, corpo: str, anexo: str) -> None:
                 f.read(), maintype="application", subtype="pdf", filename=os.path.basename(anexo)
             )
 
-    with smtplib.SMTP("localhost") as smtp:
+    # Conexão SSL na porta 465
+    with smtplib.SMTP_SSL(host, port) as smtp:
+        smtp.login(user, password)
         smtp.send_message(msg)
 
 # =============================================================================
@@ -1024,7 +1040,7 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
 
     QMessageBox.information(None, "Sucesso", f"Email enviado para {destino}.")
 
-    
+
 # =============================================================================
 # Função: on_gerar_relatorio_consumos_clicked
 # =============================================================================
