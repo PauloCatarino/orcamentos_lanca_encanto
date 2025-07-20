@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Orçamento Lança Encanto</title>
+</head>
+<body style="font-family: Arial, Helvetica, sans-serif; color: #463426; margin: 0; padding: 0; background: #fff;">
+    <div style="max-width: 680px; margin: 0 auto; border: 1px solid #EEE; border-radius: 8px; box-shadow: 0 2px 10px #eee; background: #fff;">
+        <div style="padding: 30px 32px 8px 32px;">
+            <h2 style="color:#8D6C42; font-size: 22px; font-family:'Arial Black', Arial, sans-serif; margin-bottom: 0;">
+                Orçamento Lança Encanto
+            </h2>
+            <p style="font-size: 15px; margin: 12px 0 20px 0;">
+                Exmo(a). Sr(a).<br>
+                Agradecemos o seu contacto.<br>
+                Em anexo segue o orçamento solicitado.<br>
+                <b>Valor sem IVA:</b> {{valor}} €<br>
+            </p>
+            <p style="font-size: 15px;">
+                Se tiver alguma dúvida ou necessitar de mais informação, não hesite em contactar-nos.<br>
+                <br>
+                Com os melhores cumprimentos,
+            </p>
+        </div>
+        <div style="padding: 0 32px 20px 32px;">
+            <!-- Aqui entra a assinatura HTML -->
+            {{assinatura}}
+        </div>
+        <div style="padding: 0 0 0 32px;">
+            <!-- Rodapé opcional com logo -->
+            <img src="https://www.lancaencanto.pt/logo.png" alt="Lança Encanto" width="110" style="margin-top:8px;">
+        </div>
+    </div>
+</body>
+</html>
+
+<!--
+    Este é um modelo de email para envio de orçamentos.
+    As variáveis {{valor}} e {{assinatura}} serão substituídas pelo valor do orçamento e pela assinatura HTML do utilizador.
+    Certifique-se de que o servidor SMTP está configurado corretamente para enviar emails.

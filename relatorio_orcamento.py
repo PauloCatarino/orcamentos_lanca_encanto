@@ -20,9 +20,9 @@
 import os
 import shutil
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout
-import smtplib
-from email.message import EmailMessage
+from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout, QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QListWidget, QDialogButtonBox, QFileDialog, QLabel, QWidget, QHBoxLayout
+from PyQt5.QtWidgets import QApplication
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -38,10 +38,117 @@ from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resu
 from orcamento_items import carregar_itens_orcamento, atualizar_custos_e_precos_itens 
 
 
+# =============================================================================
+# Diálogo para edição do corpo do email e anexos Menu onde utilizador pode editar o corpo do email e adicionar/remover anexos.
+# =============================================================================
+class EmailDialog(QDialog):
+    def __init__(self, html_default, anexos_iniciais=None, pasta_default=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Editar corpo do email e anexos")
+        self.setMinimumSize(850, 600)
+        self.pasta_default = pasta_default or os.getcwd()
+
+        layout = QVBoxLayout(self)
+
+        # Corpo do email (HTML)
+        corpo_lbl = QLabel("<b>Corpo do Email:</b>")
+        layout.addWidget(corpo_lbl)
+        self.text_edit = QTextEdit(self)
+        self.text_edit.setHtml(html_default)
+        self.text_edit.setMinimumHeight(350)  # Maior altura
+        layout.addWidget(self.text_edit, stretch=3)  # Mais espaço para o texto
+
+        # Lista de anexos (pequena)
+        anexos_lbl = QLabel("<b>Anexos:</b>")
+        layout.addWidget(anexos_lbl)
+        self.anexos_list = QListWidget(self)
+        self.anexos_list.setMaximumHeight(100)  # Pequena altura para anexos
+        if anexos_iniciais:
+            for anexo in anexos_iniciais:
+                self.anexos_list.addItem(anexo)
+        layout.addWidget(self.anexos_list, stretch=1)
+
+        # Botões anexos
+        botoes_h = QHBoxLayout()
+        self.btn_add_anexo = QPushButton("Adicionar anexo(s)")
+        self.btn_remover = QPushButton("Remover selecionado")
+        botoes_h.addWidget(self.btn_add_anexo)
+        botoes_h.addWidget(self.btn_remover)
+        layout.addLayout(botoes_h)
+
+        self.btn_add_anexo.clicked.connect(self.adicionar_anexos)
+        self.btn_remover.clicked.connect(self.remover_anexo)
+
+        # OK / Cancel
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+    def adicionar_anexos(self):
+        ficheiros, _ = QFileDialog.getOpenFileNames(
+            self, 
+            "Escolher ficheiros para anexar", 
+            directory=self.pasta_default
+        )
+        for f in ficheiros:
+            if f and not self.anexo_ja_adicionado(f):
+                self.anexos_list.addItem(f)
+
+    def remover_anexo(self):
+        for item in self.anexos_list.selectedItems():
+            self.anexos_list.takeItem(self.anexos_list.row(item))
+
+    def anexo_ja_adicionado(self, path):
+        for i in range(self.anexos_list.count()):
+            if self.anexos_list.item(i).text() == path:
+                return True
+        return False
+
+    def get_corpo_e_anexos(self):
+        corpo_html = self.text_edit.toHtml()
+        anexos = [self.anexos_list.item(i).text() for i in range(self.anexos_list.count())]
+        return corpo_html, anexos
 
 
+# =============================================================================
+# Função: permite pedir ao utilizador o corpo do email modificar o modelo 
+# =============================================================================
+def pedir_corpo_email(parent, html_default):
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Editar corpo do email")
+    layout = QVBoxLayout(dlg)
+    text_edit = QTextEdit(dlg)
+    text_edit.setHtml(html_default)  # Usa HTML!
+    text_edit.setMinimumSize(850, 500)  # Torna a janela maior e confortável
+    layout.addWidget(text_edit)
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dlg)
+    layout.addWidget(buttons)
+    buttons.accepted.connect(dlg.accept)
+    buttons.rejected.connect(dlg.reject)
+    dlg.setLayout(layout)
+    if dlg.exec_() == QDialog.Accepted:
+        return text_edit.toHtml()   # Mantém HTML!
+    return None
 
+# =============================================================================
+# Função: gerar_corpo_email_html
+# =============================================================================     
 
+def gerar_corpo_email_html(valor_orcamento):
+    # Lê o template HTML principal
+    with open("templates/email_template.html", "r", encoding="utf-8") as f:
+        corpo_html = f.read()
+    # Lê a assinatura HTML
+    assinatura_html = ""
+    assinatura_path = os.getenv("ASSINATURA_HTML")
+    if assinatura_path and os.path.exists(assinatura_path):
+        with open(assinatura_path, "r", encoding="utf-8") as f:
+            assinatura_html = f.read()
+    # Substitui as variáveis no HTML
+    corpo_html = corpo_html.replace("{{valor}}", f"{valor_orcamento:.2f}")
+    corpo_html = corpo_html.replace("{{assinatura}}", assinatura_html)
+    return corpo_html
 
 # =============================================================================
 # Função: _parse_float
@@ -118,38 +225,21 @@ def _first_text(*widgets) -> str:
                 return txt
     return ""
 
-def _enviar_email(destino: str, assunto: str, corpo: str, anexo: str) -> None:
-    """Envia um email simples com anexo PDF."""
-    """Envia um email simples com anexo PDF.
+# =============================================================================
+# Função: _enviar_email
+# =============================================================================
+# Envia um email com anexo utilizando as configurações do ficheiro ``.env``.
+# =============================================================================
+from utils_email import send_email
+import sys
+print("Python exe:", sys.executable)
 
-    A configuração do servidor pode ser feita através das variáveis de
-    ambiente ``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USER``, ``SMTP_PASSWORD``,
-    ``SMTP_TLS`` ou ``SMTP_SSL`` e ``EMAIL_FROM``. Caso não sejam
-    fornecidas, tenta usar ``localhost`` sem autenticação.
-    """
+def _enviar_email(destino: str, assunto: str, corpo: str, anexos=None) -> None:
+    """Envia um email com anexo utilizando as configurações do ficheiro ``.env``. Permite adicionar varios anexos ao mail."""
+    if anexos is None:
+        anexos = []
+    send_email(destino, assunto, corpo, anexos)
 
-    host = "mail.lancaencanto.pt"
-    port = 465
-    user = "projetos@lancaencanto.pt"        #projetos@lancaencanto.pt
-    password = "lancaproj2017"  # Substituir aqui pela tua password real!
-    use_ssl = True
-
-    msg = EmailMessage()
-    msg["Subject"] = assunto or "Orçamento"
-    msg["From"] = user
-    msg["To"] = destino
-    msg.set_content(corpo)
-
-    if anexo and os.path.exists(anexo):
-        with open(anexo, "rb") as f:
-            msg.add_attachment(
-                f.read(), maintype="application", subtype="pdf", filename=os.path.basename(anexo)
-            )
-
-    # Conexão SSL na porta 465
-    with smtplib.SMTP_SSL(host, port) as smtp:
-        smtp.login(user, password)
-        smtp.send_message(msg)
 
 # =============================================================================
 # Função: _obter_dados_cliente
@@ -974,6 +1064,10 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
     if resp == QtWidgets.QMessageBox.Yes:
         exportar_relatorio(ui)
 
+# =============================================================================
+# Função: enviar_orcamento_por_email    
+# =============================================================================
+# Gera o PDF (se necessário) e envia por email ao cliente.
 def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
     """Gera o PDF (se necessário) e envia por email ao cliente."""
     preencher_campos_relatorio(ui)
@@ -1007,25 +1101,32 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
     ref_cliente = ui.lineEdit_ref_cliente_2.text().strip()
     obra = ui.lineEdit_obra_2.text().strip() if hasattr(ui, "lineEdit_obra_2") else ""
 
-    assunto_partes = []
-    if num_orc:
-        assunto_partes.append(f"{num_orc}_{versao}" if versao else num_orc)
+    assunto = f"Orcamento LE-> {num_orc}_{versao}"
     if ref_cliente:
-        assunto_partes.append(ref_cliente)
+        assunto += f" | Ref. cliente: {ref_cliente}"
     if obra:
-        assunto_partes.append(obra)
-    assunto = " | ".join(assunto_partes) or "Orçamento"
+        assunto += f" | Ref. Obra {obra}"
 
     subtotal = ui.label_subtotal_2.text().split(":")[-1].strip()
-    utilizador = ui.comboBox_utilizador.currentText().strip()
-    corpo = (
-        "Agradecemos o seu contacto para o orçamento e estamos a devolver o seu pedido de orçamento.\n"
-        f"Valor global sem IVA: {subtotal} €.\n\n"
-        f"Com os melhores cumprimentos,\n{utilizador}"
-    )
-
     try:
-        _enviar_email(destino, assunto, corpo, pdf_path)
+        valor_orcamento = float(subtotal.replace("€", "").replace(",", ".").strip())
+    except Exception:
+        valor_orcamento = 0.0
+
+     # -- GERA O CORPO HTML JÁ FORMATADO --
+    corpo_default = gerar_corpo_email_html(valor_orcamento)
+
+    # -- GERA O CORPO HTML JÁ FORMATADO   E ABRE PARA ADICIONAR ANEXOS NA PASTA DO ORÇAMENTO--
+    dlg = EmailDialog(corpo_default, anexos_iniciais=[pdf_path], pasta_default=pasta)
+    if dlg.exec_() == QDialog.Accepted:
+        corpo_final, anexos = dlg.get_corpo_e_anexos()
+    else:
+        QMessageBox.information(None, "Cancelado", "Envio cancelado pelo utilizador.")
+        return
+
+    # -- ENVIA O EMAIL (mantém HTML) --
+    try:
+        _enviar_email(destino, assunto, corpo_final, anexos)
     except Exception as e:
         QMessageBox.critical(None, "Erro no envio", f"Não foi possível enviar o email:\n{e}")
         return

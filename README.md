@@ -34,3 +34,12 @@ source venv/bin/activate
 pip install sqlalchemy pymysql pandas openpyxl xlsxwriter matplotlib PySide6
 ```
 Configure as variáveis de ambiente SMTP_HOST, SMTP_PORT, SMTP_USER e SMTP_PASSWORD para enviar relatórios por email.
+### Configuração de Email
+
+Copie o ficheiro `.env.example` para `.env` e preencha os seus dados SMTP. O programa lê estas variáveis ao iniciar para enviar emails profissionais e registrar os envios em `envio_emails.log`.
+
+Instale a dependência `python-dotenv` para carregar automaticamente o ficheiro `.env`:
+
+```bash
+pip install python-dotenv
+```
