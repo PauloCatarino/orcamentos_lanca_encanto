@@ -15,10 +15,34 @@
 #
 # A função :func:`gerar_relatorio_orcamento` coordena o processo de preenchimento
 # e geração dos ficheiros.
+
+
+# Preenchimento automático dos dados do orçamento (cliente, totais, artigos) a partir da interface gráfica.
+
+# Geração de relatórios em PDF (com ReportLab) e Excel (com xlsxwriter), prontos para partilhar com o cliente.
+
+# Exportação de ficheiro Excel em formato especial para importação no PHC.
+
+# Gestão automática das pastas de cada orçamento/versão (incluindo criação se necessário).
+
+# Envio de orçamento por email (com corpo HTML editável e vários anexos).
+
+# Funcionalidade de envio rápido pelo WhatsApp Web (abre o browser com número e mensagem, pronto a anexar).
+
+# Integração com dashboard de resumos de consumos para controlo de custos e análises.
+
+# Totalmente integrado com a interface PyQt (QtDesigner), facilitando uso mesmo para quem não é programador.
+
+
+
 # =============================================================================
 
 import os
 import shutil
+import webbrowser
+import urllib.parse
+import subprocess
+import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout, QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QListWidget, QDialogButtonBox, QFileDialog, QLabel, QWidget, QHBoxLayout
@@ -38,15 +62,53 @@ from resumo_consumos import gerar_resumos_excel # o que faz este gerador de resu
 from orcamento_items import carregar_itens_orcamento, atualizar_custos_e_precos_itens 
 
 
+def abrir_pasta_com_ficheiro(path: str) -> None:
+    """Abre o explorador de ficheiros na pasta do ficheiro indicado."""
+    # Faz com que, ao enviar por WhatsApp, a pasta do PDF fique logo aberta,
+    # tornando fácil o 'drag & drop' para o browser ou o upload manual.
+    if not path or not os.path.exists(path):
+        return
+    pasta = os.path.dirname(os.path.abspath(path))
+    try:
+        if sys.platform.startswith("win"):
+            subprocess.Popen(["explorer", os.path.normpath(pasta)])
+        elif sys.platform.startswith("darwin"):
+            subprocess.Popen(["open", pasta])
+        else:
+            subprocess.Popen(["xdg-open", pasta])
+    except Exception as e:
+        print(f"Erro ao abrir pasta: {e}")
+
+
 # =============================================================================
 # Diálogo para edição do corpo do email e anexos Menu onde utilizador pode editar o corpo do email e adicionar/remover anexos.
 # =============================================================================
 class EmailDialog(QDialog):
-    def __init__(self, html_default, anexos_iniciais=None, pasta_default=None, parent=None):
+    """
+    Diálogo PyQt para editar o corpo do email (com HTML), gerir anexos (adicionar/remover)
+    e aceder à função de envio rápido por WhatsApp Web (abre o browser com o número do cliente).
+    """
+    def __init__(self, html_default, anexos_iniciais=None, pasta_default=None, telemovel=None, pdf_path=None, parent=None):
+        # Construtor do diálogo. Recebe:
+        # - html_default: corpo do email já formatado (HTML)
+        # - anexos_iniciais: lista de anexos já incluídos (ex: PDF gerado)
+        # - pasta_default: diretório onde vai buscar anexos (normalmente a pasta do orçamento)
+        # - telemovel: número de telefone do cliente (usado no WhatsApp)
+        # - pdf_path: caminho do PDF gerado para facilitar anexar no WhatsApp
+        # - parent: widget pai (normalmente None)
+
+        # Layout superior (vertical) do diálogo
+        # 1. Campo de edição do corpo do email (com HTML, área grande)
+        # 2. Lista de anexos (área mais pequena, raramente muitos anexos)
+        # 3. Botões para adicionar/remover anexos
+        # 4. Botão "Enviar por WhatsApp" (abre browser)
+        # 5. Botões OK / Cancel (aceitar ou cancelar envio)
         super().__init__(parent)
         self.setWindowTitle("Editar corpo do email e anexos")
         self.setMinimumSize(850, 600)
         self.pasta_default = pasta_default or os.getcwd()
+        self.telemovel = telemovel or ""
+        self.pdf_path = pdf_path
 
         layout = QVBoxLayout(self)
 
@@ -76,6 +138,12 @@ class EmailDialog(QDialog):
         botoes_h.addWidget(self.btn_remover)
         layout.addLayout(botoes_h)
 
+        # Botão para enviar o PDF via WhatsApp
+        self.btn_whatsapp = QPushButton("Enviar por WhatsApp")
+        layout.addWidget(self.btn_whatsapp)
+
+        self.btn_whatsapp.clicked.connect(self.enviar_whatsapp)
+
         self.btn_add_anexo.clicked.connect(self.adicionar_anexos)
         self.btn_remover.clicked.connect(self.remover_anexo)
 
@@ -86,6 +154,8 @@ class EmailDialog(QDialog):
         layout.addWidget(self.button_box)
 
     def adicionar_anexos(self):
+        # Permite escolher ficheiros para anexar ao email.
+        # Abre já na pasta do orçamento, facilita adicionar ficheiros adicionais.
         ficheiros, _ = QFileDialog.getOpenFileNames(
             self, 
             "Escolher ficheiros para anexar", 
@@ -96,25 +166,47 @@ class EmailDialog(QDialog):
                 self.anexos_list.addItem(f)
 
     def remover_anexo(self):
+        # Remove anexos selecionados da lista de anexos.
         for item in self.anexos_list.selectedItems():
             self.anexos_list.takeItem(self.anexos_list.row(item))
 
     def anexo_ja_adicionado(self, path):
+        # Verifica se um ficheiro já está na lista de anexos para evitar duplicados.
         for i in range(self.anexos_list.count()):
             if self.anexos_list.item(i).text() == path:
                 return True
         return False
 
     def get_corpo_e_anexos(self):
+        # Devolve o corpo do email (HTML) e a lista de caminhos dos anexos selecionados.
         corpo_html = self.text_edit.toHtml()
         anexos = [self.anexos_list.item(i).text() for i in range(self.anexos_list.count())]
         return corpo_html, anexos
+    
+    def enviar_whatsapp(self):
+        # Abre o browser na conversa WhatsApp Web do cliente, com mensagem pré-preenchida.
+        # Depois abre a pasta do PDF, para anexar facilmente o orçamento.
+        # Mostra mensagem a avisar que a janela foi aberta.
+        numero = ''.join(filter(str.isdigit, str(self.telemovel)))
+        if not numero:
+            QMessageBox.warning(self, "Sem número", "Cliente sem número de telemóvel.")
+            return
+        mensagem = "Olá! Segue em anexo o orçamento em PDF."
+        url = f"https://wa.me/{numero}?text={urllib.parse.quote(mensagem)}"
+        webbrowser.open(url)
+        if self.pdf_path and os.path.exists(self.pdf_path):
+            abrir_pasta_com_ficheiro(self.pdf_path)
+        QMessageBox.information(self, "WhatsApp Web", "Janela do WhatsApp aberta! Anexe o PDF manualmente.")
 
 
 # =============================================================================
 # Função: permite pedir ao utilizador o corpo do email modificar o modelo 
 # =============================================================================
 def pedir_corpo_email(parent, html_default):
+    """
+    Abre um diálogo PyQt simples apenas para editar o corpo do email (HTML).
+    Pode ser usada se não quiseres gerir anexos (versão mais minimalista).
+    """
     dlg = QDialog(parent)
     dlg.setWindowTitle("Editar corpo do email")
     layout = QVBoxLayout(dlg)
@@ -136,7 +228,11 @@ def pedir_corpo_email(parent, html_default):
 # =============================================================================     
 
 def gerar_corpo_email_html(valor_orcamento):
-    # Lê o template HTML principal
+    """
+    Lê um template HTML e, opcionalmente, uma assinatura personalizada.
+    Substitui as variáveis {{valor}} e {{assinatura}} no template HTML pelo valor real e assinatura.
+    Devolve o HTML pronto a usar como corpo do email.
+    """
     with open("templates/email_template.html", "r", encoding="utf-8") as f:
         corpo_html = f.read()
     # Lê a assinatura HTML
@@ -235,7 +331,9 @@ import sys
 print("Python exe:", sys.executable)
 
 def _enviar_email(destino: str, assunto: str, corpo: str, anexos=None) -> None:
-    """Envia um email com anexo utilizando as configurações do ficheiro ``.env``. Permite adicionar varios anexos ao mail."""
+    """
+    Envia email com múltiplos anexos, usando configurações e autenticação definidas em utils_email.
+    """
     if anexos is None:
         anexos = []
     send_email(destino, assunto, corpo, anexos)
@@ -247,7 +345,9 @@ def _enviar_email(destino: str, assunto: str, corpo: str, anexos=None) -> None:
 # Consulta a base de dados pelo ID do cliente e devolve os dados para o relatório.
 # =============================================================================
 def _obter_dados_cliente(cliente_id: str):
-    """Retorna dados do cliente a partir do id."""
+    """
+    Consulta a base de dados e devolve os dados do cliente para preencher os relatórios e emails.
+    """
     if not cliente_id:
         return None
     try:
@@ -267,6 +367,9 @@ def _obter_dados_cliente(cliente_id: str):
 # Canvas customizado para desenhar o rodapé do PDF (data, nº orçamento/versão, página).
 # =============================================================================
 class FooterCanvas(canvas.Canvas):
+    """
+    Classe que customiza o rodapé de cada página no PDF (data, nº orçamento, paginação).
+    """
     def __init__(self, data_str: str, num_ver: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.data_str = data_str
@@ -426,6 +529,8 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     - Data por baixo do Nº Orçamento, alinhada à direita
     - Morada, email, telefones, PHC logo abaixo do nome cliente (à esquerda)
     - Restante layout igual ao exemplo anterior
+    Gera o PDF do orçamento. O layout é todo programático: cabeçalho, cliente, artigos, totais, rodapé.
+    Usa estilos personalizados para formatação profissional.
     """
     from reportlab.platypus import Paragraph, Table, TableStyle, Spacer, SimpleDocTemplate, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -1026,7 +1131,9 @@ def _obter_caminho_pasta_orcamento(ui: QtWidgets.QWidget) -> str:
 # Mostra mensagem ao utilizador no final.
 # =============================================================================
 def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
-    """Gera os ficheiros PDF, Excel normal e Excel PHC na pasta do orçamento."""
+    """Gera os ficheiros PDF, Excel normal e Excel PHC na pasta do orçamento.
+    Gera os três ficheiros do orçamento (PDF, Excel normal, Excel PHC) na pasta correta.
+    Informa o utilizador do sucesso."""
     pasta = _obter_caminho_pasta_orcamento(ui)
     num = ui.label_num_orcamento_2.text()
     ver = ui.label_ver_orcamento_2.text()
@@ -1069,7 +1176,11 @@ def gerar_relatorio_orcamento(ui: QtWidgets.QWidget) -> None:
 # =============================================================================
 # Gera o PDF (se necessário) e envia por email ao cliente.
 def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
-    """Gera o PDF (se necessário) e envia por email ao cliente."""
+    """
+    Gera o PDF se não existir, pede ao utilizador para editar o corpo do email e anexar ficheiros,
+    e envia o email ao cliente.
+    Atualiza o estado do orçamento para "Enviado" na base de dados.
+    """
     preencher_campos_relatorio(ui)
 
     pasta = _obter_caminho_pasta_orcamento(ui)
@@ -1117,7 +1228,8 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
     corpo_default = gerar_corpo_email_html(valor_orcamento)
 
     # -- GERA O CORPO HTML JÁ FORMATADO   E ABRE PARA ADICIONAR ANEXOS NA PASTA DO ORÇAMENTO--
-    dlg = EmailDialog(corpo_default, anexos_iniciais=[pdf_path], pasta_default=pasta)
+    telemovel = ui.lineEdit_telemovel_3.text().strip()
+    dlg = EmailDialog(corpo_default, anexos_iniciais=[pdf_path], pasta_default=pasta, telemovel=telemovel, pdf_path=pdf_path)
     if dlg.exec_() == QDialog.Accepted:
         corpo_final, anexos = dlg.get_corpo_e_anexos()
     else:
