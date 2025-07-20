@@ -21,21 +21,23 @@ Utiliza MySQL como banco de dados, por meio do módulo "db_connection.py", para 
 
 pyuic5 -x orcamentos_le_layout.ui -o orcamentos_le_layout.py
 
- Para enviar atualizações para o github
-git status                # (opcional) ver o que mudou
-git add .                 # adiciona todos os ficheiros alterados
-git commit -m "73º Commit"
-git push                  # envia para o GitHub
+
+Anaconda Prompt
+
+(base) C:\Users\Utilizador>conda activate ORCAMENTOS_LE
+
+(ORCAMENTOS_LE) C:\Users\Utilizador>CODE .
+
+(ORCAMENTOS_LE) C:\Users\Utilizador>cd C:\Users\Utilizador\Documents\ORCAMENTOS_LE\ORCAMENTOS_LE\orcamentos_lanca_encanto
+
+(ORCAMENTOS_LE) C:\Users\Utilizador\Documents\ORCAMENTOS_LE\ORCAMENTOS_LE\orcamentos_lanca_encanto>code .
 
  ______________________________//________________________
-git pull origin main
-# (resolver conflitos, se houver)
+
 git add .
-git commit -m "204 Commit"
+git commit -m "205 Commit"
 git push origin main
 
-
-git push 
 ______________________________//________________________
 
 crtl + swift + p    escolher  o interpretador -> Python 3.12.8(venv)
