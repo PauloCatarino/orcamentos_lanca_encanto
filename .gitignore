@@ -40,3 +40,7 @@ build/
 *.ini
 assinaturas/
 
+# Ficheiros de configuração do ambiente
+.env 
+*.env
+
