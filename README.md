@@ -33,3 +33,4 @@ python3 -m venv venv
 source venv/bin/activate
 pip install sqlalchemy pymysql pandas openpyxl xlsxwriter matplotlib PySide6
 ```
+Configure as variáveis de ambiente SMTP_HOST, SMTP_PORT, SMTP_USER e SMTP_PASSWORD para enviar relatórios por email.
