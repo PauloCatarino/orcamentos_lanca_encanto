@@ -242,6 +242,16 @@ def inserir_pecas_selecionadas(ui):
         "acabamentos": ui.listWidget_acabamentos_4
     }
 
+    # Verifica se mais de um item com '+' está selecionado no QListWidget de caixotes
+    lw_caixote = ui.listWidget_caixote_4
+    selecionados_plus = [lw_caixote.item(i).text() for i in range(lw_caixote.count())
+                         if lw_caixote.item(i).checkState() == Qt.Checked and '+' in lw_caixote.item(i).text()]
+    if len(selecionados_plus) > 1:
+        QMessageBox.warning(lw_caixote.window(),
+                            "Seleção inválida",
+                            "Só pode selecionar um componente com associados de cada vez.")
+        return
+
     table = ui.tab_def_pecas
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
 
@@ -1343,20 +1353,28 @@ def configurar_selecao_qt_lists(ui):
         list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         list_widget.setSelectionBehavior(QAbstractItemView.SelectItems)
 
-        def ao_clicar_item(item):
-            # Verifica se o item é "checkable" antes de tentar mudar o estado
-            if item.flags() & Qt.ItemIsUserCheckable:
-                estado = Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
-                item.setCheckState(estado)
-            else:
-                # Debug/Info se um item não é checkable
-                print(f"[INFO] Item '{item.text()}' não é chekable.")
+        # Armazena o estado do item antes do clique para detectar cliques no checkbox
+        def ao_press_item(item):
+            list_widget._estado_antes_click = item.checkState()
 
-        # Desconecta para evitar múltiplas conexões se for chamado mais de uma vez
-        try:
-            list_widget.itemClicked.disconnect()
-        except TypeError:
-            pass
+        def ao_clicar_item(item):
+            if not (item.flags() & Qt.ItemIsUserCheckable):
+                print(f"[INFO] Item '{item.text()}' não é chekable.")
+                return
+
+            # Se o estado não mudou após o clique, o usuário clicou fora da caixa de check
+            if getattr(list_widget, "_estado_antes_click", None) == item.checkState():
+                novo = Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
+                item.setCheckState(novo)
+
+        # Desconecta sinais antigos para evitar múltiplas conexões
+        for sig in (list_widget.itemPressed, list_widget.itemClicked):
+            try:
+                sig.disconnect()
+            except TypeError:
+                pass
+
+        list_widget.itemPressed.connect(ao_press_item)
         list_widget.itemClicked.connect(ao_clicar_item)
 
     # Lista de todos os QListWidget a configurar
@@ -1376,6 +1394,25 @@ def configurar_selecao_qt_lists(ui):
         else:
             print(
                 "[AVISO] Objeto QListWidget não encontrado na UI durante a configuração.")
+
+    # Restringe múltipla seleção de peças com componentes associados no QListWidget de caixotes
+    def limitar_selecao_caixote(item):
+        if item.checkState() == Qt.Checked and '+' in item.text():
+            lw = ui.listWidget_caixote_4
+            for i in range(lw.count()):
+                outro = lw.item(i)
+                if outro is not item and outro.checkState() == Qt.Checked and '+' in outro.text():
+                    outro.setCheckState(Qt.Unchecked)
+                    QMessageBox.warning(lw.window(),
+                                        "Seleção inválida",
+                                        "Só pode selecionar um componente com associados de cada vez.")
+                    break
+
+    try:
+        ui.listWidget_caixote_4.itemChanged.disconnect()
+    except Exception:
+        pass
+    ui.listWidget_caixote_4.itemChanged.connect(limitar_selecao_caixote)
 
 
 # Parte 12: Callback: on_item_changed_def_pecas (mantida com chamada ao orquestrador)
