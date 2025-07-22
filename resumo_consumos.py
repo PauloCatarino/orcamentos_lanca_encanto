@@ -189,7 +189,7 @@ def clean_ref(ref):
 def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
     df = pecas[(pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))].copy()
     if df.empty:
-        return pd.DataFrame(columns=['ref_orla', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
+        return pd.DataFrame(columns=['ref_orla', 'descricao_material', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
     df['orla_codes'] = df['def_peca'].apply(get_orla_codes)
     df['largura_orla'], df['fator_conv'] = zip(*df['esp_mp'].apply(get_largura_fator))
     resumo = []
@@ -203,21 +203,38 @@ def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
             code = orla_codes[i]
             ml = float(ml_lados[i]) if not pd.isnull(ml_lados[i]) else 0.0
             custo = float(custo_lados[i]) if not pd.isnull(custo_lados[i]) else 0.0
-            if code == 0 or ml == 0: continue
-            if code == 1: espessura, ref = '0.4mm', clean_ref(row['corres_orla_0_4'])
-            elif code == 2: espessura, ref = '1.0mm', clean_ref(row['corres_orla_1_0'])
+            if code == 0 or ml == 0:
+                continue
+            if code == 1:
+                espessura, ref = '0.4mm', clean_ref(row['corres_orla_0_4'])
+            elif code == 2:
+                espessura, ref = '1.0mm', clean_ref(row['corres_orla_1_0'])
             else: continue
-            if not ref: continue
-            resumo.append({'ref_orla': ref, 'espessura_orla': espessura, 'largura_orla': largura, 'ml': ml, 'custo': custo})
+            if not ref:
+                continue
+            resumo.append({
+                'ref_orla': ref,
+                'descricao_material': row.get('descricao_no_orcamento', ''),
+                'espessura_orla': espessura,
+                'largura_orla': largura,
+                'ml': ml,
+                'custo': custo
+            })
     df_resumo = pd.DataFrame(resumo)
     if df_resumo.empty:
-        return pd.DataFrame(columns=['ref_orla', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
-    grupo = df_resumo.groupby(['ref_orla', 'espessura_orla', 'largura_orla'], as_index=False).agg(
+        return pd.DataFrame(columns=['ref_orla', 'descricao_material', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
+    grupo = df_resumo.groupby(
+        ['ref_orla', 'descricao_material', 'espessura_orla', 'largura_orla'],
+        as_index=False
+    ).agg(
         ml_total=('ml', 'sum'),
         custo_total=('custo', 'sum')
     )
-    grupo['ml_total'], grupo['custo_total'] = grupo['ml_total'].round(2), grupo['custo_total'].round(2)
-    return grupo
+    grupo['ml_total'] = grupo['ml_total'].round(2)
+    grupo['custo_total'] = grupo['custo_total'].round(2)
+    return grupo[
+        ['ref_orla', 'descricao_material', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total']
+    ]
 
 # =============================================================================
 # 4. Função: resumo_ferragens
