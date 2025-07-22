@@ -128,6 +128,7 @@ ABREV_COLUNAS = {
     "spp_ml_total": "ML Sup.",
     "custo_mp_und": "C.MP Und",
     "ref_orla": "Ref.",
+    "descricao_material": "Desc. Mat.",
     "espessura_orla": "Esp.",
     "largura_orla": "Larg.",
     "ml_total": "ML Tot.",
@@ -144,6 +145,7 @@ ABREV_COLUNAS = {
 TOOLTIPS_COLUNAS = {
     "Ref.": "Referência do material/componente",
     "Descrição": "Descrição detalhada",
+    "Desc. Mat.": "Descrição do material associada à orla",
     "P.Liq": "Peso líquido",
     "Und": "Unidade",
     "Desp.": "Desperdício",
