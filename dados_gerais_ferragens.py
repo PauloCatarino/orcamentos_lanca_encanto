@@ -81,7 +81,7 @@ FERRAGENS_COLUNAS_LARGURAS = [
 # Definição dos nomes das linhas para a tabela de Ferragens
 FERRAGENS_LINHAS = [
     'Fer_Dobradica_1', 'Fer_Dobradica_2',
-    'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP',
+    'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP','Fer_Perfil_SPP', 'Fer_Terminais',
     'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1',
     'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD', 'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1',
     'Fer_Puxador_SPP_2', 'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1',
@@ -236,6 +236,11 @@ def configurar_ferragens_ui(ui):
         'Fer_Suporte Prateleira_2': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
         'Fer_Varao_SPP': 'SPP',
+        'Fer_Rodape_PVC': 'RODAPE',
+        'Fer_Suporte Varao': 'SUPORTE VARAO',
+        'Fer_Varao_SPP': 'SPP',
+        'Fer_Perfil_SPP': 'SUPORTE VARAO',
+        'Fer_Terminais': 'SPP',
         'Fer_Rodape_PVC': 'RODAPE',
         'Fer_Pes_1': 'PES',
         'Fer_Pes_2': 'PES',
