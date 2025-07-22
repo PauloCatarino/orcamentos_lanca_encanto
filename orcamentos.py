@@ -744,6 +744,7 @@ def abrir_janela_apagar_orcamento(ui):
                         "dados_items_ferragens",
                         "dados_items_sistemas_correr",
                         "dados_items_acabamentos",
+                        "margens_ajustes_percentagens",
                     ]
                     for tab in tabelas:
                         cursor.execute(
