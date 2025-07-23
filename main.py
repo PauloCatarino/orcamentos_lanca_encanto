@@ -35,7 +35,7 @@ Anaconda Prompt
  ______________________________//________________________
 
 git add .
-git commit -m "209 Commit"
+git commit -m "210 Commit"
 git push origin main
 
 ______________________________//________________________
@@ -618,7 +618,11 @@ class MainApp(QMainWindow):
         # Importar e mostrar o diálogo (será criado no próximo passo)
         try:
             from dialogo_gravar_modulo import DialogoGravarModulo
-            dialog = DialogoGravarModulo(pecas_para_gravar, parent=self)
+            dialog = DialogoGravarModulo(
+                pecas_para_gravar,
+                utilizador_atual=self.ui.comboBox_utilizador.currentText(),
+                parent=self,
+            )
             if dialog.exec_() == QDialog.Accepted:
                 print(
                     "[INFO Main] Módulo gravado com sucesso (ou operação concluída no diálogo).")
@@ -668,7 +672,10 @@ class MainApp(QMainWindow):
             from modulo_orquestrador import atualizar_tudo
             from modulo_componentes_associados import COLOR_ASSOCIATED_BG, COLOR_PRIMARY_WITH_ASS_BG, COLOR_MODULO_BG
 
-            dialog = DialogoImportarModulo(parent=self)
+            dialog = DialogoImportarModulo(
+                utilizador_atual=self.ui.comboBox_utilizador.currentText(),
+                parent=self,
+            )
             if dialog.exec_() == QDialog.Accepted:
                 id_modulo_a_importar = dialog.get_selected_module_id()
                 if id_modulo_a_importar is None:
@@ -848,7 +855,10 @@ class MainApp(QMainWindow):
         print("[INFO Main] Botão 'Gerir Módulos Guardados' clicado.")
         try:
             from dialogo_gerir_modulos import DialogoGerirModulos
-            dialog = DialogoGerirModulos(parent=self)
+            dialog = DialogoGerirModulos(
+                utilizador_atual=self.ui.comboBox_utilizador.currentText(),
+                parent=self,
+            )
             dialog.exec_()  # Abre o diálogo modalmente
             # A lógica de recarregar/atualizar após edições/eliminações está dentro do próprio diálogo.
         except ImportError:

@@ -36,10 +36,24 @@ Interação com Outros Módulos Chave:
 -   Pode ser reutilizado pelo `DialogoGerirModulos` para a funcionalidade de edição.
 """
 
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-                             QTextEdit, QPushButton, QFileDialog, QMessageBox,
-                             QTableWidget, QTableWidgetItem, QAbstractItemView,
-                             QSizePolicy, QHeaderView)
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QPushButton,
+    QFileDialog,
+    QMessageBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QAbstractItemView,
+    QSizePolicy,
+    QHeaderView,
+    QTabWidget,
+    QWidget,
+)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 import os
@@ -48,7 +62,7 @@ import modulo_gestao_modulos_db
 from dialogo_importar_modulo import DialogoImportarModulo
 
 class DialogoGravarModulo(QDialog):
-    def __init__(self, pecas_selecionadas, modulo_existente_id=None, nome_mod_existente="", desc_mod_existente="", img_path_existente="", parent=None):
+    def __init__(self, pecas_selecionadas, modulo_existente_id=None, nome_mod_existente="", desc_mod_existente="", img_path_existente="", utilizador_atual="Paulo", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Gravar Módulo de Peças")
         self.setMinimumSize(700, 550) # Tamanho mínimo inicial
@@ -59,6 +73,17 @@ class DialogoGravarModulo(QDialog):
 
         # --- Layout Principal ---
         main_layout = QVBoxLayout(self)
+
+        # Abas de utilizadores
+        self.utilizadores = ["Paulo", "Catia", "Andreia"]
+        self.tab_utilizador = QTabWidget()
+        for u in self.utilizadores:
+            self.tab_utilizador.addTab(QWidget(), u)
+        if utilizador_atual in self.utilizadores:
+            self.tab_utilizador.setCurrentIndex(self.utilizadores.index(utilizador_atual))
+        self.utilizador_selecionado = utilizador_atual
+        self.tab_utilizador.currentChanged.connect(self.on_tab_changed)
+        main_layout.addWidget(self.tab_utilizador)
 
         # --- Seção de Informações do Módulo ---
         info_layout = QHBoxLayout()
@@ -143,6 +168,10 @@ class DialogoGravarModulo(QDialog):
         else:
             self.caminho_imagem_selecionada = "" # Garantir que está vazio se o caminho for inválido
 
+    def on_tab_changed(self, index):
+        if 0 <= index < len(self.utilizadores):
+            self.utilizador_selecionado = self.utilizadores[index]
+
     def preencher_tabela_resumo(self):
         self.tabela_resumo_pecas.setRowCount(len(self.pecas_para_gravar))
         for i, peca in enumerate(self.pecas_para_gravar):
@@ -183,7 +212,10 @@ class DialogoGravarModulo(QDialog):
         self.caminho_imagem_selecionada = ""
 
     def selecionar_modulo_existente(self):
-        dialog = DialogoImportarModulo(self)
+        dialog = DialogoImportarModulo(
+            utilizador_atual=self.utilizador_selecionado,
+            parent=self,
+        )
         dialog.setWindowTitle("Selecionar Módulo Existente")
         dialog.btn_importar.setText("Selecionar")
         if dialog.exec_() == QDialog.Accepted:
@@ -209,7 +241,7 @@ class DialogoGravarModulo(QDialog):
             return
 
         # Verificar se o nome já existe (esta função será implementada em modulo_gestao_modulos_db.py)
-        id_modulo_existente = modulo_gestao_modulos_db.verificar_nome_modulo_existe(nome_modulo)
+        id_modulo_existente = modulo_gestao_modulos_db.verificar_nome_modulo_existe(nome_modulo, self.utilizador_selecionado)
 
         if id_modulo_existente is not None and (self.modulo_id_para_atualizar is None or self.modulo_id_para_atualizar != id_modulo_existente):
             resposta = QMessageBox.question(self, "Nome Existente",
@@ -227,11 +259,24 @@ class DialogoGravarModulo(QDialog):
         if self.modulo_id_para_atualizar is not None:
             # Atualizar módulo existente
             print(f"Atualizando módulo ID: {self.modulo_id_para_atualizar}")
-            sucesso = modulo_gestao_modulos_db.atualizar_modulo_existente_com_pecas(self.modulo_id_para_atualizar, nome_modulo, descricao_modulo, caminho_imagem, self.pecas_para_gravar)
+            sucesso = modulo_gestao_modulos_db.atualizar_modulo_existente_com_pecas(
+                self.modulo_id_para_atualizar,
+                nome_modulo,
+                descricao_modulo,
+                caminho_imagem,
+                self.pecas_para_gravar,
+                self.utilizador_selecionado,
+            )
         else:
             # Salvar novo módulo
             print("Salvando novo módulo...")
-            id_novo_modulo = modulo_gestao_modulos_db.salvar_novo_modulo_com_pecas(nome_modulo, descricao_modulo, caminho_imagem, self.pecas_para_gravar)
+            id_novo_modulo = modulo_gestao_modulos_db.salvar_novo_modulo_com_pecas(
+                nome_modulo,
+                descricao_modulo,
+                caminho_imagem,
+                self.pecas_para_gravar,
+                self.utilizador_selecionado,
+            )
             if id_novo_modulo is not None and id_novo_modulo > 0 : # Verifica se retornou um ID válido
                 sucesso = True
             else:

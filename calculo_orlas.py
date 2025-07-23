@@ -320,8 +320,16 @@ def calcular_orlas_para_linha(ui, row):
 
             # Colunas de Metros Lineares (ML_Cx/Lx)
             idx_ml = globals()[f'IDX_ML_{lado}']
-            # Formata com 1 decimais, mesmo se for 0
-            set_item(table, row, idx_ml, f"{ml_lado:.1f}") # Usa set_item
+            # Formata com 1 decimal, mesmo se for 0
+            set_item(table, row, idx_ml, f"{ml_lado:.1f}")  # Usa set_item
+            # Tooltip com fórmula e valores do cálculo de ML
+            item_ml = table.item(row, idx_ml)
+            if item_ml:
+                item_ml.setToolTip(
+                    f"Fórmula ML {lado}: (Dimensão / 1000) * Qt_Total\n"
+                    f"= ({dados_lado['dim']} mm / 1000) * {qt_total_val}"
+                    f" = {ml_lado:.1f} m"
+                )
 
             # Colunas de Custo (CUSTO_ML_Cx/Lx)
             idx_custo_ml = globals()[f'IDX_CUSTO_ML_{lado}']

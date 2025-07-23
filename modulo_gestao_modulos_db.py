@@ -13,14 +13,15 @@ Principais Funcionalidades:
 ---------------------------
 1.  `criar_tabelas_modulos()`: Cria as tabelas `modulos_guardados` (para metadados do módulo)
     e `modulo_pecas_guardadas` (para os detalhes das peças de cada módulo) se não existirem.
-2.  `verificar_nome_modulo_existe(nome_modulo)`: Verifica se um módulo com um dado nome já
-    existe na base de dados.
+2.  `verificar_nome_modulo_existe(nome_modulo, utilizador)`: Verifica se um módulo com um dado nome já
+    existe para esse utilizador na base de dados.
 3.  `salvar_novo_modulo_com_pecas(...)`: Insere um novo módulo e as suas peças constituintes
     na base de dados de forma transacional.
 4.  `atualizar_modulo_existente_com_pecas(...)`: Atualiza os metadados de um módulo existente
-    e substitui as suas peças pelas novas fornecidas, de forma transacional.
-5.  `obter_todos_modulos()`: Recupera uma lista de todos os módulos guardados para apresentação
-    ao utilizador (ex: nos diálogos de importação ou gestão).
+    (incluindo o utilizador) e substitui as suas peças pelas novas fornecidas, de forma transacional.
+5.  `obter_todos_modulos(utilizador=None)`: Recupera uma lista de módulos guardados,
+    opcionalmente filtrados por utilizador, para apresentação ao utilizador
+    (ex: nos diálogos de importação ou gestão).
 6.  `obter_pecas_de_modulo(id_modulo)`: Recupera todas as peças associadas a um
     determinado ID de módulo.
 7.  `eliminar_modulo_por_id(id_modulo)`: Remove um módulo e, através de `ON DELETE CASCADE`,
@@ -48,11 +49,13 @@ def criar_tabelas_modulos():
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS modulos_guardados (
                 id_modulo INT AUTO_INCREMENT PRIMARY KEY,
-                nome_modulo VARCHAR(255) NOT NULL UNIQUE,
+                nome_modulo VARCHAR(255) NOT NULL,
+                utilizador VARCHAR(255) NOT NULL,
                 descricao_modulo TEXT NULL,
                 caminho_imagem_modulo VARCHAR(500) NULL,
                 data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                data_modificacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                data_modificacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY nome_utilizador_unique (nome_modulo, utilizador)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """)
             print("[INFO DB Módulos] Tabela 'modulos_guardados' verificada/criada.")
@@ -92,17 +95,18 @@ def criar_tabelas_modulos():
 
 # --- Funções de gestão de módulos (placeholder por agora, serão implementadas depois) ---
 
-def verificar_nome_modulo_existe(nome_modulo):
+def verificar_nome_modulo_existe(nome_modulo, utilizador):
     """
-    Verifica se um módulo com o nome especificado já existe na tabela `modulos_guardados`.
+    Verifica se um módulo com o nome especificado já existe para o utilizador
+    indicado na tabela `modulos_guardados`.
     Retorna o id_modulo se existir, caso contrário, retorna None.
     """
     if not nome_modulo:
         return None
     try:
         with obter_cursor() as cursor:  # commit_on_exit=True (padrão) é OK para SELECTs
-            sql = "SELECT id_modulo FROM modulos_guardados WHERE nome_modulo = %s"
-            cursor.execute(sql, (nome_modulo,))
+            sql = "SELECT id_modulo FROM modulos_guardados WHERE nome_modulo = %s AND utilizador = %s"
+            cursor.execute(sql, (nome_modulo, utilizador))
             resultado = cursor.fetchone()
             if resultado:
                 return resultado[0] # Retorna o id_modulo
@@ -112,10 +116,11 @@ def verificar_nome_modulo_existe(nome_modulo):
         return None # Considerar levantar a exceção ou tratar de forma diferente
     
 
-def salvar_novo_modulo_com_pecas(nome_modulo, descricao, caminho_imagem, pecas_do_modulo):
+def salvar_novo_modulo_com_pecas(nome_modulo, descricao, caminho_imagem, pecas_do_modulo, utilizador):
     """
-    Salva um novo módulo e as suas peças associadas nas tabelas da base de dados.
-    Inclui agora as colunas comp_ass_X_peca.
+    Salva um novo módulo associado ao utilizador indicado e as suas peças
+    correspondentes nas tabelas da base de dados. Inclui agora as colunas
+    comp_ass_X_peca.
     Retorna o ID do novo módulo se sucesso, None caso contrário.
     """
     if not nome_modulo or not pecas_do_modulo:
@@ -138,10 +143,10 @@ def salvar_novo_modulo_com_pecas(nome_modulo, descricao, caminho_imagem, pecas_d
         with obter_cursor(commit_on_exit=False) as cursor:
             # 1. Inserir o módulo
             sql_modulo = """
-            INSERT INTO modulos_guardados (nome_modulo, descricao_modulo, caminho_imagem_modulo)
-            VALUES (%s, %s, %s)
+            INSERT INTO modulos_guardados (nome_modulo, utilizador, descricao_modulo, caminho_imagem_modulo)
+            VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(sql_modulo, (nome_modulo, descricao, caminho_imagem if caminho_imagem else None))
+            cursor.execute(sql_modulo, (nome_modulo, utilizador, descricao, caminho_imagem if caminho_imagem else None))
             id_novo_modulo = cursor.lastrowid
             if id_novo_modulo is None: # Verificar se lastrowid retornou algo
                 raise mysql.connector.Error("Não foi possível obter o ID do novo módulo.")
@@ -218,9 +223,9 @@ def salvar_novo_modulo_com_pecas(nome_modulo, descricao, caminho_imagem, pecas_d
         return None
     
 
-def atualizar_modulo_existente_com_pecas(id_modulo, nome_modulo, descricao, caminho_imagem, pecas_do_modulo):
+def atualizar_modulo_existente_com_pecas(id_modulo, nome_modulo, descricao, caminho_imagem, pecas_do_modulo, utilizador):
     """
-    Atualiza um módulo existente e as suas peças.
+    Atualiza um módulo existente (incluindo o utilizador associado) e as suas peças.
     Primeiro, apaga as peças antigas do módulo e depois insere as novas.
     Retorna True se sucesso, False caso contrário.
     """
@@ -233,10 +238,10 @@ def atualizar_modulo_existente_com_pecas(id_modulo, nome_modulo, descricao, cami
             # 1. Atualizar dados na tabela `modulos_guardados`
             sql_update_modulo = """
             UPDATE modulos_guardados
-            SET nome_modulo = %s, descricao_modulo = %s, caminho_imagem_modulo = %s
+            SET nome_modulo = %s, utilizador = %s, descricao_modulo = %s, caminho_imagem_modulo = %s
             WHERE id_modulo = %s
             """
-            cursor.execute(sql_update_modulo, (nome_modulo, descricao, caminho_imagem if caminho_imagem else None, id_modulo))
+            cursor.execute(sql_update_modulo, (nome_modulo, utilizador, descricao, caminho_imagem if caminho_imagem else None, id_modulo))
             print(f"[INFO DB Módulos] Módulo ID {id_modulo} atualizado para nome '{nome_modulo}'.")
 
             # 2. Apagar peças antigas associadas a este módulo
@@ -288,7 +293,7 @@ def atualizar_modulo_existente_com_pecas(id_modulo, nome_modulo, descricao, cami
         return False
     
 
-def obter_todos_modulos():
+def obter_todos_modulos(utilizador=None):
     """
     Obtém todos os módulos guardados da tabela `modulos_guardados`.
     Retorna uma lista de dicionários, onde cada dicionário representa um módulo.
@@ -298,8 +303,18 @@ def obter_todos_modulos():
     try:
         with obter_cursor() as cursor:
             # Selecionar as colunas necessárias para o diálogo de importação
-            sql = "SELECT id_modulo, nome_modulo, descricao_modulo, caminho_imagem_modulo FROM modulos_guardados ORDER BY nome_modulo ASC"
-            cursor.execute(sql)
+            if utilizador:
+                sql = (
+                    "SELECT id_modulo, nome_modulo, descricao_modulo, caminho_imagem_modulo, utilizador "
+                    "FROM modulos_guardados WHERE utilizador = %s ORDER BY nome_modulo ASC"
+                )
+                cursor.execute(sql, (utilizador,))
+            else:
+                sql = (
+                    "SELECT id_modulo, nome_modulo, descricao_modulo, caminho_imagem_modulo, utilizador "
+                    "FROM modulos_guardados ORDER BY nome_modulo ASC"
+                )
+                cursor.execute(sql)
             resultados = cursor.fetchall()
             
             # Obter nomes das colunas para criar dicionários
@@ -323,14 +338,16 @@ def obter_todos_modulos():
 
 def obter_modulo_por_id(id_modulo):
     """
-    Retorna os dados de um módulo específico.
+    Retorna os dados de um módulo específico, incluindo o utilizador associado.
     """
     if not id_modulo:
         return None
     try:
         with obter_cursor() as cursor:
-            sql = ("SELECT id_modulo, nome_modulo, descricao_modulo, "
-                   "caminho_imagem_modulo FROM modulos_guardados WHERE id_modulo = %s")
+            sql = (
+                "SELECT id_modulo, nome_modulo, descricao_modulo, caminho_imagem_modulo, utilizador "
+                "FROM modulos_guardados WHERE id_modulo = %s"
+            )
             cursor.execute(sql, (id_modulo,))
             res = cursor.fetchone()
             if res:
