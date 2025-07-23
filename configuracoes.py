@@ -134,6 +134,20 @@ def salvar_configuracoes(caminho_base_dados, caminho_orcamentos):
         QMessageBox.critical(None, "Erro Inesperado", f"Erro ao salvar configurações:\n{e}")
         return False
 
+def obter_caminho_base_dados():
+    """Obtém o caminho_base_dados guardado nas configurações."""
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute("SELECT caminho_base_dados FROM configuracoes LIMIT 1")
+            res = cursor.fetchone()
+            if res and res[0]:
+                return res[0].strip()
+    except mysql.connector.Error as err:
+        print(f"Erro MySQL ao obter caminho_base_dados: {err}")
+    except Exception as e:
+        print(f"Erro inesperado ao obter caminho_base_dados: {e}")
+    return ""
+
 # ---------- Novas Funções para valores de máquinas ----------
 def criar_tabela_maquinas_producao():
     """Cria tabela com valores de produção se não existir e insere defaults."""
