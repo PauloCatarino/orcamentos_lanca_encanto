@@ -58,6 +58,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 import os
 from configuracoes import obter_caminho_base_dados # Para obter o caminho_base_dados
+from utils import obter_diretorio_base  # Ajuda a extrair apenas o diretório
 import modulo_gestao_modulos_db # Importar as funções de BD do módulo de gestão de módulos
 from dialogo_importar_modulo import DialogoImportarModulo
 
@@ -223,8 +224,20 @@ class DialogoGravarModulo(QDialog):
             self.tabela_resumo_pecas.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
 
     def escolher_imagem(self):
-        ficheiro, _ = QFileDialog.getOpenFileName(self, "Escolher Imagem para o Módulo", "",
-                                                  "Imagens (*.png *.jpg *.jpeg *.bmp)")
+        """Abre diálogo para escolher imagem usando o caminho das configurações."""
+        # Caminho base onde está a base de dados (pode incluir nome do ficheiro)
+        caminho_base = obter_caminho_base_dados().strip()
+        # Garante que usamos apenas o diretório base
+        base_dir = obter_diretorio_base(caminho_base)
+        # Subpasta padrão onde se encontram as imagens dos módulos
+        pasta_imagens = os.path.join(base_dir, "Imagens_Modulos")
+
+        ficheiro, _ = QFileDialog.getOpenFileName(
+            self,
+            "Escolher Imagem para o Módulo",
+            pasta_imagens,
+            "Imagens (*.png *.jpg *.jpeg *.bmp)"
+        )
         if ficheiro:
             self.carregar_preview_imagem(ficheiro)
 
