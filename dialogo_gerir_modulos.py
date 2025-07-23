@@ -44,10 +44,25 @@ Interação com Outros Módulos Chave:
     passando-lhe os dados do módulo a ser editado.
 """
 
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QTextEdit, QPushButton, QSplitter,
-                             QMessageBox, QAbstractItemView, QWidget, QHeaderView,
-                             QTableWidget, QTableWidgetItem) # Adicionar QHeaderView
+from operator import index
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QTextEdit,
+    QPushButton,
+    QSplitter,
+    QMessageBox,
+    QAbstractItemView,
+    QWidget,
+    QHeaderView,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+)
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 import os
@@ -55,17 +70,27 @@ import modulo_gestao_modulos_db # Para buscar, editar e eliminar os módulos
 from dialogo_gravar_modulo import DialogoGravarModulo # Para reutilizar para edição
 
 class DialogoGerirModulos(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, utilizador_atual="Paulo", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Gerir Módulos Guardados")
         self.setMinimumSize(1100, 800) # Tamanho mínimo da janela externa
 
         self.selected_module_id = None
         self.lista_modulos_data = []
+        self.utilizadores = ["Paulo", "Catia", "Andreia"]
+        self.utilizador_selecionado = utilizador_atual if utilizador_atual in self.utilizadores else self.utilizadores[0]
 
         # --- Layout Principal ---
         main_layout = QVBoxLayout(self)
-        top_layout = QHBoxLayout() # Para lista de módulos e detalhes
+
+        self.tabs_utilizador = QTabWidget()
+        for u in self.utilizadores:
+            self.tabs_utilizador.addTab(QWidget(), u)
+        self.tabs_utilizador.setCurrentIndex(self.utilizadores.index(self.utilizador_selecionado))
+        self.tabs_utilizador.currentChanged.connect(self.on_tab_changed)
+        main_layout.addWidget(self.tabs_utilizador)
+
+        top_layout = QHBoxLayout()  # Para lista de módulos e detalhes
 
         # --- Lado Esquerdo: Lista de Módulos ---
         lista_group = QWidget()
@@ -152,7 +177,7 @@ class DialogoGerirModulos(QDialog):
 
     def carregar_lista_modulos(self):
         self.lista_widget_modulos.clear()
-        self.lista_modulos_data = modulo_gestao_modulos_db.obter_todos_modulos()
+        self.lista_modulos_data = modulo_gestao_modulos_db.obter_todos_modulos(self.utilizador_selecionado)
 
         if not self.lista_modulos_data:
             self.lista_widget_modulos.addItem("Nenhum módulo guardado encontrado.")
@@ -170,8 +195,11 @@ class DialogoGerirModulos(QDialog):
                 item.setIcon(icon)
             self.lista_widget_modulos.addItem(item)
         
-        if self.lista_widget_modulos.count() > 0:
-            self.lista_widget_modulos.setCurrentRow(0)
+    def on_tab_changed(self, index):
+        if 0 <= index < len(self.utilizadores):
+            self.utilizador_selecionado = self.utilizadores[index]
+            self.carregar_lista_modulos()
+
 
     def on_modulo_selecionado_changed(self, current_item, previous_item):
         self.tabela_pecas_modulo.setRowCount(0) # Limpar tabela de peças
@@ -243,6 +271,7 @@ class DialogoGerirModulos(QDialog):
             nome_mod_existente=modulo_data_sel.get('nome_modulo', ''),
             desc_mod_existente=modulo_data_sel.get('descricao_modulo', ''),
             img_path_existente=modulo_data_sel.get('caminho_imagem_modulo', ''),
+            utilizador_atual=modulo_data_sel.get('utilizador', self.utilizador_selecionado),
             parent=self
         )
         dialog_editar.setWindowTitle(f"Editar Módulo: {modulo_data_sel.get('nome_modulo', '')}")

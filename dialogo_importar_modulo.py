@@ -31,26 +31,49 @@ Interação com Outros Módulos Chave:
     - `obter_pecas_de_modulo()`: Para buscar e exibir as peças do módulo selecionado na tabela de resumo.
 """
 
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QTextEdit, QPushButton, QSplitter,
-                             QMessageBox, QAbstractItemView, QWidget, QHeaderView, # Adicionado QHeaderView
-                             QTableWidget, QTableWidgetItem) # Adicionado QTableWidget, QTableWidgetItem
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QTextEdit,
+    QPushButton,
+    QSplitter,
+    QMessageBox,
+    QAbstractItemView,
+    QWidget,
+    QHeaderView,  # Adicionado QHeaderView
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+)
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon
 import os
 import modulo_gestao_modulos_db # Para buscar os módulos
 
 class DialogoImportarModulo(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, utilizador_atual="Paulo", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Importar Módulo Guardado")
         self.setMinimumSize(1100, 800) # Tamanho mínimo da janela externa
 
         self.selected_module_id = None
-        self.lista_modulos_data = [] # Para armazenar os dados completos dos módulos
+        self.lista_modulos_data = []  # Para armazenar os dados completos dos módulos
+        self.utilizadores = ["Paulo", "Catia", "Andreia"]
+        self.utilizador_selecionado = utilizador_atual if utilizador_atual in self.utilizadores else self.utilizadores[0]
 
         # --- Layout Principal (Vertical) ---
         main_layout = QVBoxLayout(self)
+
+        self.tabs_utilizador = QTabWidget()
+        for u in self.utilizadores:
+            self.tabs_utilizador.addTab(QWidget(), u)
+        self.tabs_utilizador.setCurrentIndex(self.utilizadores.index(self.utilizador_selecionado))
+        self.tabs_utilizador.currentChanged.connect(self.on_tab_changed)
+        main_layout.addWidget(self.tabs_utilizador)
 
         # --- Splitter para dividir a lista e os detalhes ---
         splitter = QSplitter(Qt.Horizontal)
@@ -148,7 +171,7 @@ class DialogoImportarModulo(QDialog):
 
     def carregar_lista_modulos(self):
         self.lista_widget_modulos.clear()
-        self.lista_modulos_data = modulo_gestao_modulos_db.obter_todos_modulos()
+        self.lista_modulos_data = modulo_gestao_modulos_db.obter_todos_modulos(self.utilizador_selecionado)
 
         if not self.lista_modulos_data:
             self.lista_widget_modulos.addItem("Nenhum módulo guardado encontrado.")
@@ -175,6 +198,11 @@ class DialogoImportarModulo(QDialog):
         
         if self.lista_widget_modulos.count() > 0:
             self.lista_widget_modulos.setCurrentRow(0) # Selecionar o primeiro item por padrão
+
+    def on_tab_changed(self, index):
+        if 0 <= index < len(self.utilizadores):
+            self.utilizador_selecionado = self.utilizadores[index]
+            self.carregar_lista_modulos()
 
     def on_modulo_selecionado_changed(self, current_item, previous_item):
         if not current_item:
