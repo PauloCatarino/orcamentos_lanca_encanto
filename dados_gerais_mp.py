@@ -18,7 +18,7 @@ from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
 #from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
-from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item
+from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item, formatar_valor_moeda, converter_texto_para_valor
 from modulo_orquestrador import atualizar_tudo
 
 # Índice da coluna BLK na tabela tab_def_pecas
@@ -98,7 +98,9 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar_alterar(
             main_window.ui.Tab_Material,
             lambda: limpar_linha_por_tab(main_window, "materiais"),
-            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "materiais")
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "materiais"),
+            lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Material),
+            lambda: colar_linha_dados_gerais(main_window.ui.Tab_Material),
         )
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
@@ -117,7 +119,9 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar_alterar(
             main_window.ui.Tab_Ferragens,
             lambda: limpar_linha_por_tab(main_window, "ferragens"),
-            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "ferragens")
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "ferragens"),
+            lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Ferragens),
+            lambda: colar_linha_dados_gerais(main_window.ui.Tab_Ferragens),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Ferragens", f"Erro: {e}")
@@ -134,7 +138,9 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar_alterar(
             main_window.ui.Tab_Sistemas_Correr,
             lambda: limpar_linha_por_tab(main_window, "sistemas_correr"),
-            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "sistemas_correr")
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "sistemas_correr"),
+            lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Sistemas_Correr),
+            lambda: colar_linha_dados_gerais(main_window.ui.Tab_Sistemas_Correr),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Sistemas Correr", f"Erro: {e}")
@@ -151,7 +157,9 @@ def configurar_botoes_dados_gerais(main_window):
         adicionar_menu_limpar_alterar(
             main_window.ui.Tab_Acabamentos,
             lambda: limpar_linha_por_tab(main_window, "acabamentos"),
-            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "acabamentos")
+            lambda: aplicar_linha_todos_itens_e_pecas(main_window, "acabamentos"),
+            lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Acabamentos),
+            lambda: colar_linha_dados_gerais(main_window.ui.Tab_Acabamentos),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Acabamentos", f"Erro: {e}")
@@ -177,21 +185,37 @@ def limpar_linha_por_tab(main_window, nome_tabela):
         QMessageBox.warning(main_window, "Limpar Linha", "Tabela não identificada.")
         return
 
-    row = table.currentRow()
-    if row >= 0:
-        limpar_linha_dados_gerais(table, row, cols)
-        # Mantém a linha ativa selecionada após a limpeza
+    selected = sorted({idx.row() for idx in table.selectionModel().selectedRows()})
+    if selected:
+        for r in selected:
+            limpar_linha_dados_gerais(table, r, cols)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        table.selectRow(row)
-        QMessageBox.information(main_window, "Limpar Linha", f"Linha {row+1} da aba '{nome_tabela}' limpa com sucesso.")
+        table.clearSelection()
+        for r in selected:
+            table.selectRow(r)
+        QMessageBox.information(
+            main_window,
+            "Limpar Linha",
+            f"{len(selected)} linha(s) da aba '{nome_tabela}' limpa(s) com sucesso.",
+        )
     else:
-        QMessageBox.warning(main_window, "Limpar Linha", f"Nenhuma linha selecionada na aba '{nome_tabela}'.")
+        QMessageBox.warning(
+            main_window,
+            "Limpar Linha",
+            f"Nenhuma linha selecionada na aba '{nome_tabela}'.",
+        )
 
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
 COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
 COLUNAS_LIMPAR_FERRAGENS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_SISTEMAS_CORRER = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
 COLUNAS_LIMPAR_ACABAMENTOS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+
+# Colunas utilizadas nas funções de copiar/colar linha
+COLS_COPIAR_COLAR = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+
+# Armazena dados copiados de uma linha de Dados Gerais
+_copied_row_dados_gerais = []
 
 def limpar_linha_dados_gerais(table_widget, row_index, colunas_indices_limpar):
     """
@@ -221,6 +245,41 @@ def limpar_linha_dados_gerais(table_widget, row_index, colunas_indices_limpar):
         if row_index in original_pliq_values:
             del original_pliq_values[row_index]
     table_widget.blockSignals(False)
+
+def copiar_linha_dados_gerais(table_widget):
+    """Copia valores de uma linha selecionada."""
+    global _copied_row_dados_gerais
+    row = table_widget.currentRow()
+    if row < 0:
+        QMessageBox.warning(table_widget.window(), "Copiar", "Nenhuma linha selecionada para copiar.")
+        return
+    dados = []
+    for col in COLS_COPIAR_COLAR:
+        item = table_widget.item(row, col)
+        dados.append(item.text() if item else "")
+    _copied_row_dados_gerais = dados
+    QMessageBox.information(table_widget.window(), "Copiar", "Linha copiada.")
+
+
+def colar_linha_dados_gerais(table_widget):
+    """Cola valores copiados nas linhas selecionadas."""
+    if not _copied_row_dados_gerais:
+        QMessageBox.warning(table_widget.window(), "Colar", "Nenhuma linha copiada.")
+        return
+    selected = {idx.row() for idx in table_widget.selectionModel().selectedRows()}
+    if not selected:
+        QMessageBox.warning(table_widget.window(), "Colar", "Nenhuma linha selecionada para colar.")
+        return
+    for r in selected:
+        for i, col in enumerate(COLS_COPIAR_COLAR):
+            set_item(table_widget, r, col, _copied_row_dados_gerais[i])
+        # Recalcula PLIQ baseado nos valores copiados
+        ptab = converter_texto_para_valor(_copied_row_dados_gerais[2], "moeda")
+        marg = converter_texto_para_valor(_copied_row_dados_gerais[4], "percentual")
+        desc = converter_texto_para_valor(_copied_row_dados_gerais[5], "percentual")
+        novo_pliq = round((ptab * (1 - desc)) * (1 + marg), 2)
+        set_item(table_widget, r, 8, formatar_valor_moeda(novo_pliq))
+    QMessageBox.information(table_widget.window(), "Colar", f"Dados colados em {len(selected)} linha(s).")
 
 def acao_guardar_dados(main_window, nome_tabela):
     """
