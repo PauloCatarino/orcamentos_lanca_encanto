@@ -57,8 +57,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 import os
-# Importar as funções de BD do módulo de gestão de módulos
-import modulo_gestao_modulos_db 
+from configuracoes import obter_caminho_base_dados # Para obter o caminho_base_dados
+import modulo_gestao_modulos_db # Importar as funções de BD do módulo de gestão de módulos
 from dialogo_importar_modulo import DialogoImportarModulo
 
 class DialogoGravarModulo(QDialog):
