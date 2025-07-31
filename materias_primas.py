@@ -546,7 +546,7 @@ def atualizar_dados_de_excel(ui):
         base_dir = os.getcwd()
         print(f"[AVISO] Caminho em lineEdit_base_dados não é válido, usando diretório atual: '{base_dir}'")
 
-    excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")
+    excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsm")
     if not os.path.exists(excel_path):
         QMessageBox.warning(None, "Erro", f"Ficheiro Excel não encontrado:\n{excel_path}")
         return
@@ -930,7 +930,7 @@ def conectar_materias_primas_ui(main_ui):
     tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
     def informar_edicao():
         QMessageBox.information(None, "Editar Matérias-Primas",
-                                "Edite o ficheiro Excel 'TAB_MATERIAS_PRIMAS.xlsx' para alterar dados.")
+                                "Edite o ficheiro Excel 'TAB_MATERIAS_PRIMAS.xlsm' para alterar dados.")
     tbl.cellDoubleClicked.connect(lambda r, c: informar_edicao())
 
     # Carrega os dados do banco na tabela
@@ -969,7 +969,7 @@ def conectar_materias_primas_ui(main_ui):
         base_dir = obter_diretorio_base(ui.lineEdit_base_dados.text())
         if not base_dir or not os.path.isdir(base_dir):
             base_dir = os.getcwd()
-        excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsx")
+        excel_path = os.path.join(base_dir, "TAB_MATERIAS_PRIMAS.xlsm")
 
         if not os.path.exists(excel_path):
             QMessageBox.warning(None, "Erro", f"Ficheiro Excel não encontrado:\n{excel_path}")
