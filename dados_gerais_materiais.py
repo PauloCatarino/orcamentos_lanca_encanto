@@ -163,7 +163,21 @@ def escolher_material(ui, linha_tab, nome_tabela):
         
         novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
-        
+
+        # Atualiza a coluna 'nao_stock' com base na coluna STOCK da tabela de
+        # matérias-primas (1 = marcar, caso contrário desmarcar)
+        nao_stock_idx = next((i for i, col in enumerate(MATERIAIS_COLUNAS)
+                              if col['nome'] == 'nao_stock'), None)
+        if nao_stock_idx is not None:
+            stock_cell = dialog.table.item(row_idx, 25)
+            stock_val = stock_cell.text().strip() if stock_cell else ""
+            chk_item = tbl_materiais.item(linha_tab, nao_stock_idx)
+            if not chk_item:
+                chk_item = QTableWidgetItem()
+                chk_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                tbl_materiais.setItem(linha_tab, nao_stock_idx, chk_item)
+            chk_item.setCheckState(Qt.Checked if stock_val == "1" else Qt.Unchecked)
+
         tbl_materiais.blockSignals(False)
         return True
     tbl_materiais.blockSignals(False)
