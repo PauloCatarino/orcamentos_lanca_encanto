@@ -1,7 +1,7 @@
 # materias_primas.py
 # ---------------------------------------------------------
 # Ajustes principais nesta versão:
-#  - DESC1_PLUS e DESC2_MINUS só aceitam valores inteiros de 0% a 100%.
+#  - MARGEM e DESCONTO só aceitam valores inteiros de 0% a 100%.
 #  - PRECO_TABELA e PLIQ são sempre arredondados a 2 casas decimais.
 #  - DESP continua podendo ser decimal (ex.: 2.5%).
 #  - Ref_LE é UNIQUE e não editável.
@@ -71,8 +71,8 @@ def criar_tabela_materias_primas():
               DESCRICAO_do_PHC TEXT NULL,
               DESCRICAO_no_ORCAMENTO TEXT NULL,
               PRECO_TABELA DOUBLE NULL DEFAULT 0.0,
-              DESC1_PLUS DOUBLE NULL DEFAULT 0.0,   -- Armazena como fração (0 a 1)
-              DESC2_MINUS DOUBLE NULL DEFAULT 0.0,  -- Armazena como fração (0 a 1)
+              MARGEM DOUBLE NULL DEFAULT 0.0,   -- Armazena como fração (0 a 1)
+              DESCONTO DOUBLE NULL DEFAULT 0.0,  -- Armazena como fração (0 a 1)
               PLIQ DOUBLE NULL DEFAULT 0.0,
               UND VARCHAR(10) NULL,                 -- Aumentado ligeiramente o tamanho
               DESP DOUBLE NULL DEFAULT 0.0,         -- Armazena como fração (ex: 0.025 para 2.5%)
@@ -89,7 +89,7 @@ def criar_tabela_materias_primas():
               NOME_FABRICANTE VARCHAR(255) NULL,
               DATA_ULTIMO_PRECO VARCHAR(10) NULL,   -- Manter como VARCHAR ou usar DATE?
               APLICACAO TEXT NULL,
-              NOTAS_1 TEXT NULL,
+              STOCK TINYINT(1) NULL DEFAULT 0,
               NOTAS_2 TEXT NULL,
               NOTAS_3 TEXT NULL,
               NOTAS_4 TEXT NULL,
@@ -155,7 +155,7 @@ def formatar_exibicao(col, val):
     """
     Formata o valor do banco para exibição:
       - Colunas 6 e 9 (PRECO_TABELA e PLIQ): exibe com 2 casas decimais e "€".
-      - Colunas 7, 8 e 11 (DESC1_PLUS, DESC2_MINUS e DESP): exibe como percentual inteiro com "%".
+      - Colunas 7, 8 e 11 (MARGEM, DESCONTO e DESP): exibe como percentual inteiro com "%".
     """
     if val is None:
         return ""
@@ -214,8 +214,8 @@ def on_item_changed(ui, item):
         "DESCRICAO_do_PHC",       # 4
         "DESCRICAO_no_ORCAMENTO", # 5
         "PRECO_TABELA",  # 6
-        "DESC1_PLUS",    # 7
-        "DESC2_MINUS",   # 8
+        "MARGEM",        # 7
+        "DESCONTO",     # 8
         "PLIQ",          # 9
         "UND",           # 10
         "DESP",          # 11
@@ -232,7 +232,7 @@ def on_item_changed(ui, item):
         "NOME_FABRICANTE",    # 22
         "DATA_ULTIMO_PRECO",  # 23
         "APLICACAO",     # 24
-        "NOTAS_1",       # 25
+        "STOCK",         # 25
         "NOTAS_2",       # 26
         "NOTAS_3",       # 27
         "NOTAS_4"        # 28
@@ -265,11 +265,11 @@ def on_item_changed(ui, item):
         tbl.blockSignals(False)
 
         # Recalcula e atualiza PLIQ se necessário
-        if col in [6, 7, 8]: # PRECO_TABELA, DESC1_PLUS, DESC2_MINUS
-            preco = parse_texto_digitado(6, safe_text(tbl, row, 6)) or 0.0 # PRECO_TABELA            
-            dplus = parse_texto_digitado(7, safe_text(tbl, row, 7)) or 0.0 # DESC1_PLUS  -> MARGEM
-            dmins = parse_texto_digitado(8, safe_text(tbl, row, 8)) or 0.0 # DESC2_MINUS -> DESCONTO
-            pliq = round((preco * (1 - dmins)) * (1 + dplus), 2) # Recalcula PLIQ = (PRECO_TABELA*(1-DESC2_MINUS))*(1+DESC1_PLUS)
+        if col in [6, 7, 8]: # PRECO_TABELA, MARGEM e DESCONTO
+            preco = parse_texto_digitado(6, safe_text(tbl, row, 6)) or 0.0 # PRECO_TABELA
+            dplus = parse_texto_digitado(7, safe_text(tbl, row, 7)) or 0.0 # MARGEM
+            dmins = parse_texto_digitado(8, safe_text(tbl, row, 8)) or 0.0 # DESCONTO
+            pliq = round((preco * (1 - dmins)) * (1 + dplus), 2) # Recalcula PLIQ = (PRECO_TABELA*(1-DESCONTO))*(1+MARGEM)
 
             with obter_cursor() as cursor_pliq:
                 cursor_pliq.execute("UPDATE materias_primas SET PLIQ=%s WHERE ID_MP=%s", (pliq, id_mp))
@@ -329,7 +329,7 @@ def parse_texto_digitado(col, txt):
     """
     Converte a string digitada para o tipo adequado:
       - Colunas 6 e 9 (PRECO_TABELA, PLIQ): converte para float (arredondado para 2 decimais).
-      - Colunas 7,8 (DESC1_PLUS, DESC2_MINUS): converte para percentual inteiro (0 a 100) e retorna como fração.
+      - Colunas 7,8 (MARGEM, DESCONTO): converte para percentual inteiro (0 a 100) e retorna como fração.
       - Coluna 11 (DESP): converte para percentual (pode ter decimais).
       - Colunas 12,19,20: converte para float genérico.
       - Caso contrário, retorna o texto.
@@ -435,13 +435,13 @@ def colar_linha(ui):
     db_cols = [
         "REF_PHC", "REF_FORNECEDOR", "Ref_LE",
         "DESCRICAO_do_PHC", "DESCRICAO_no_ORCAMENTO",
-        "PRECO_TABELA", "DESC1_PLUS", "DESC2_MINUS", "PLIQ",
+        "PRECO_TABELA", "MARGEM", "DESCONTO", "PLIQ",
         "UND", "DESP", "ESP_MP",
         "TIPO", "FAMILIA", "COR",
         "CORESP_ORLA_0_4", "CORESP_ORLA_1_0", "COR_REF_MATERIAL",
         "COMP_MP", "LARG_MP",
         "NOME_FORNECEDOR", "NOME_FABRICANTE", "DATA_ULTIMO_PRECO",
-        "APLICACAO", "NOTAS_1", "NOTAS_2", "NOTAS_3", "NOTAS_4"
+        "APLICACAO", "STOCK", "NOTAS_2", "NOTAS_3", "NOTAS_4"
     ]
     # Valida e converte os dados copiados
     parsed_vals = []
@@ -537,7 +537,7 @@ def atualizar_dados_de_excel(ui):
     e faz INSERT ou UPDATE com base no campo Ref_LE (único).
     Converte datas para o formato dd/mm/yyyy e ajusta os valores:
       - PRECO_TABELA e PLIQ: arredondados a 2 casas.
-      - DESC1_PLUS e DESC2_MINUS: obrigatoriamente inteiros entre 0 e 100.
+      - MARGEM e DESCONTO: obrigatoriamente inteiros entre 0 e 100.
       - DESP: pode ser decimal.
     """
         # Tenta obter o diretório a partir do lineEdit
@@ -586,7 +586,7 @@ def atualizar_dados_de_excel(ui):
                 nfab      = str(row.get("NOME_FABRICANTE", "")).strip()[:255]
                 dult      = tratar_data_str(row.get("DATA_ULTIMO_PRECO", ""))[:10] # Formata e limita
                 aplc      = str(row.get("APLICACAO", "")).strip()
-                n1        = str(row.get("NOTAS_1", "")).strip()
+                stock     = str(row.get("STOCK", "0")).strip()
                 n2        = str(row.get("NOTAS_2", "")).strip()
                 n3        = str(row.get("NOTAS_3", "")).strip()
                 n4        = str(row.get("NOTAS_4", "")).strip()
@@ -618,16 +618,16 @@ def atualizar_dados_de_excel(ui):
                     update_query = '''
                     UPDATE materias_primas SET
                        REF_PHC=%s, REF_FORNECEDOR=%s, DESCRICAO_do_PHC=%s, DESCRICAO_no_ORCAMENTO=%s,
-                       PRECO_TABELA=%s, DESC1_PLUS=%s, DESC2_MINUS=%s, PLIQ=%s, UND=%s, DESP=%s, ESP_MP=%s,
+                       PRECO_TABELA=%s, MARGEM=%s, DESCONTO=%s, PLIQ=%s, UND=%s, DESP=%s, ESP_MP=%s,
                        TIPO=%s, FAMILIA=%s, COR=%s, CORESP_ORLA_0_4=%s, CORESP_ORLA_1_0=%s, COR_REF_MATERIAL=%s,
                        COMP_MP=%s, LARG_MP=%s, NOME_FORNECEDOR=%s, NOME_FABRICANTE=%s, DATA_ULTIMO_PRECO=%s,
-                       APLICACAO=%s, NOTAS_1=%s, NOTAS_2=%s, NOTAS_3=%s, NOTAS_4=%s
+                       APLICACAO=%s, STOCK=%s, NOTAS_2=%s, NOTAS_3=%s, NOTAS_4=%s
                     WHERE ID_MP=%s
                     '''
                     update_params = (
                         ref_phc, ref_forn, desc_phc, desc_orc, preco, plus, minus, pliq_calculado,
                         und, dsp, esp, t_, fam, c_, co04, co10, corm, comp, larg, nfor, nfab, dult,
-                        aplc, n1, n2, n3, n4, id_mp_existente
+                        aplc, stock, n2, n3, n4, id_mp_existente
                     )
                     cursor.execute(update_query, update_params)
                     count_upd += 1
@@ -635,16 +635,16 @@ def atualizar_dados_de_excel(ui):
                     insert_query = '''
                     INSERT INTO materias_primas (
                         REF_PHC, REF_FORNECEDOR, Ref_LE, DESCRICAO_do_PHC, DESCRICAO_no_ORCAMENTO,
-                        PRECO_TABELA, DESC1_PLUS, DESC2_MINUS, PLIQ, UND, DESP, ESP_MP, TIPO, FAMILIA,
+                        PRECO_TABELA, MARGEM, DESCONTO, PLIQ, UND, DESP, ESP_MP, TIPO, FAMILIA,
                         COR, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COR_REF_MATERIAL, COMP_MP, LARG_MP,
                         NOME_FORNECEDOR, NOME_FABRICANTE, DATA_ULTIMO_PRECO, APLICACAO,
-                        NOTAS_1, NOTAS_2, NOTAS_3, NOTAS_4
+                        STOCK, NOTAS_2, NOTAS_3, NOTAS_4
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     '''
                     insert_params = (
                         ref_phc, ref_forn, ref_le, desc_phc, desc_orc, preco, plus, minus, pliq_calculado,
                         und, dsp, esp, t_, fam, c_, co04, co10, corm, comp, larg, nfor, nfab, dult,
-                        aplc, n1, n2, n3, n4
+                        aplc, stock, n2, n3, n4
                     )
                     try:
                         cursor.execute(insert_query, insert_params)
@@ -838,7 +838,7 @@ def buscar_materias_por_termos(termos):
                 "REF_PHC", "REF_FORNECEDOR", "Ref_LE", "DESCRICAO_do_PHC",
                 "DESCRICAO_no_ORCAMENTO", "TIPO", "FAMILIA", "COR",
                 "CORESP_ORLA_0_4", "CORESP_ORLA_1_0", "COR_REF_MATERIAL", "NOME_FORNECEDOR",
-                "NOME_FABRICANTE", "DATA_ULTIMO_PRECO", "APLICACAO", "NOTAS_1",
+                "NOME_FABRICANTE", "DATA_ULTIMO_PRECO", "APLICACAO", "STOCK",
                 "NOTAS_2", "NOTAS_3", "NOTAS_4"
             ]
             where_clauses = []
@@ -889,8 +889,8 @@ def conectar_materias_primas_ui(main_ui):
         "DESCRICAO_do_PHC",
         "DESCRICAO_no_ORCAMENTO",
         "PRECO_TABELA",
-        "DESC1_(+)",
-        "DESC2_(-)",
+        "MARGEM",
+        "DESCONTO",
         "PLIQ",
         "UND",
         "DESP",
@@ -907,7 +907,7 @@ def conectar_materias_primas_ui(main_ui):
         "NOME_FABRICANTE",
         "DATA_ULTIMO_PRECO",
         "APLICACAO",
-        "NOTAS_1",
+        "STOCK",
         "NOTAS_2",
         "NOTAS_3",
         "NOTAS_4"

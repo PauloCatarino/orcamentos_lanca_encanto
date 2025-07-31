@@ -2936,8 +2936,8 @@
           <string>DESCRICAO_PHC</string>
           <string>DESCRICAO_ORC</string>
           <string>PRECO_TABELA</string>
-          <string>DESC1_(+)</string>
-          <string>DESC2_(-)</string>
+          <string>MARGEM</string>
+          <string>DESCONTO</string>
           <string>PLIQ</string>
           <string>UND</string>
           <string>DESP</string>
@@ -2956,7 +2956,7 @@
           <string>FABRICANTE</string>
           <string>DATA_ATUALIZACAO</string>
           <string>APLICACAO</string>
-          <string>NOTAS_1</string>
+          <string>STOCK</string>
           <string>NOTAS_2</string>
           <string>NOTAS_3</string>
           <string>NOTAS_4</string>
@@ -3095,8 +3095,8 @@
             <string>REF_LE</string>
             <string>DESCRICAO_no_ORCAMENTO</string>
             <string>PLIQ</string>
-            <string>DESC1_(+)</string>
-            <string>DESC2_(-)</string>
+            <string>MARGEM</string>
+            <string>DESCONTO</string>
             <string>UND</string>
             <string>DESP</string>
             <string>CORRESP_ORLA_0_4</string>
@@ -3325,8 +3325,8 @@
             <string>REF_LE</string>
             <string>DESCRICAO_no_ORCAMENTO</string>
             <string>PLIQ</string>
-            <string>DESC1_(+)</string>
-            <string>DESC2_(-)</string>
+            <string>MARGEM</string>
+            <string>DESCONTO</string>
             <string>UND</string>
             <string>DESP</string>
             <string>CORRESP_ORLA_0_4</string>
@@ -3549,8 +3549,8 @@
             <string>REF_LE</string>
             <string>DESCRICAO_no_ORCAMENTO</string>
             <string>PLIQ</string>
-            <string>DESC1_(+)</string>
-            <string>DESC2_(-)</string>
+            <string>MARGEM</string>
+            <string>DESCONTO</string>
             <string>UND</string>
             <string>DESP</string>
             <string>CORRESP_ORLA_0_4</string>
@@ -3724,8 +3724,8 @@
             <string>REF_LE</string>
             <string>DESCRICAO_no_ORCAMENTO</string>
             <string>PLIQ</string>
-            <string>DESC1_(+)</string>
-            <string>DESC2_(-)</string>
+            <string>MARGEM</string>
+            <string>DESCONTO</string>
             <string>UND</string>
             <string>DESP</string>
             <string>CORRESP_ORLA_0_4</string>
@@ -5197,8 +5197,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
@@ -5402,8 +5402,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
@@ -5644,8 +5644,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
@@ -5855,8 +5855,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
@@ -6074,8 +6074,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
@@ -6185,8 +6185,8 @@
               <string>REF_LE</string>
               <string>DESCRICAO_no_ORCAMENTO</string>
               <string>PLIQ</string>
-              <string>DESC1_(+)</string>
-              <string>DESC2_(-)</string>
+              <string>MARGEM</string>
+              <string>DESCONTO</string>
               <string>UND</string>
               <string>DESP</string>
               <string>CORRESP_ORLA_0_4</string>
