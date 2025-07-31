@@ -566,6 +566,7 @@ def atualizar_dados_de_excel(ui):
     try:
         # Usar obter_cursor para toda a operação de atualização/inserção
         with obter_cursor() as cursor:
+            cursor.execute("DELETE FROM materias_primas") # Limpa a tabela antes de inserir novos dados
             for _, row in df.iterrows():
                 ref_le = str(row.get("Ref_LE", "")).strip()
                 if not ref_le: continue # Ignora linhas sem Ref_LE
