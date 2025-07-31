@@ -158,7 +158,20 @@ def escolher_material_item(ui, linha_tab):
         # Calcula o preço líquido (pliq)
         novo_pliq = round((ptab_valor * (1 - dminus)) * (1 + dplus), 2)
         set_item(linha_tab, 8, formatar_valor_moeda(novo_pliq))
-        
+
+        # Preenche a coluna 'nao_stock' conforme o valor STOCK da matéria-prima
+        nao_stock_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS)
+                              if c['nome'] == 'nao_stock'), None)
+        if nao_stock_idx is not None:
+            stock_cell = dialog.table.item(row_idx, 25)
+            stock_val = stock_cell.text().strip() if stock_cell else ""
+            chk_item = tbl_item.item(linha_tab, nao_stock_idx)
+            if not chk_item:
+                chk_item = QTableWidgetItem()
+                chk_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                tbl_item.setItem(linha_tab, nao_stock_idx, chk_item)
+            chk_item.setCheckState(Qt.Checked if stock_val == "1" else Qt.Unchecked)
+
         tbl_item.blockSignals(False)
         return True
 
