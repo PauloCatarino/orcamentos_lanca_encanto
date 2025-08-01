@@ -523,6 +523,7 @@ def adicionar_menu_limpar_alterar(
     callback_alterar,
     callback_copiar=None,
     callback_colar=None,
+    callback_limpar_tabela=None,
 ):
     """Menu de contexto com opções adicionais."""
     from PyQt5.QtWidgets import QMenu
@@ -530,6 +531,9 @@ def adicionar_menu_limpar_alterar(
     def abrir_menu2(pos):
         menu = QMenu(tabela)
         acao_limpar = menu.addAction("Limpar linha(s) selecionada(s)")
+        acao_limpar_tabela = None
+        if callback_limpar_tabela:
+            acao_limpar_tabela = menu.addAction("Limpar Dados Tabela")
         acao_copiar = menu.addAction("Copiar Linha selecionada")
         acao_colar = menu.addAction("Colar Linha selecionada")
         acao_aplicar = menu.addAction(
@@ -539,6 +543,8 @@ def adicionar_menu_limpar_alterar(
         acao_ret = menu.exec_(tabela.mapToGlobal(pos))
         if acao_ret == acao_limpar:
             callback_limpar()
+        elif acao_ret == acao_limpar_tabela and callback_limpar_tabela:
+            callback_limpar_tabela()
         elif acao_ret == acao_copiar and callback_copiar:
             callback_copiar()
         elif acao_ret == acao_colar and callback_colar:
