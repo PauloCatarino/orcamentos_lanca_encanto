@@ -101,6 +101,7 @@ def configurar_botoes_dados_gerais(main_window):
             lambda: aplicar_linha_todos_itens_e_pecas(main_window, "materiais"),
             lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Material),
             lambda: colar_linha_dados_gerais(main_window.ui.Tab_Material),
+            lambda: limpar_tabela_por_tab(main_window, "materiais"),
         )
         # Corrigindo a ligação: passando main_window.ui para a função e utilizando o botão definido
         btn_guardar_orcamento.clicked.connect(lambda: executar_guardar_dados_orcamento(main_window))
@@ -122,6 +123,7 @@ def configurar_botoes_dados_gerais(main_window):
             lambda: aplicar_linha_todos_itens_e_pecas(main_window, "ferragens"),
             lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Ferragens),
             lambda: colar_linha_dados_gerais(main_window.ui.Tab_Ferragens),
+            lambda: limpar_tabela_por_tab(main_window, "ferragens"),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Ferragens", f"Erro: {e}")
@@ -141,6 +143,7 @@ def configurar_botoes_dados_gerais(main_window):
             lambda: aplicar_linha_todos_itens_e_pecas(main_window, "sistemas_correr"),
             lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Sistemas_Correr),
             lambda: colar_linha_dados_gerais(main_window.ui.Tab_Sistemas_Correr),
+            lambda: limpar_tabela_por_tab(main_window, "sistemas_correr"),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Sistemas Correr", f"Erro: {e}")
@@ -160,6 +163,7 @@ def configurar_botoes_dados_gerais(main_window):
             lambda: aplicar_linha_todos_itens_e_pecas(main_window, "acabamentos"),
             lambda: copiar_linha_dados_gerais(main_window.ui.Tab_Acabamentos),
             lambda: colar_linha_dados_gerais(main_window.ui.Tab_Acabamentos),
+            lambda: limpar_tabela_por_tab(main_window, "acabamentos"),
         )
     except Exception as e:
         QMessageBox.warning(main_window, "Configuração Acabamentos", f"Erro: {e}")
@@ -204,6 +208,34 @@ def limpar_linha_por_tab(main_window, nome_tabela):
             "Limpar Linha",
             f"Nenhuma linha selecionada na aba '{nome_tabela}'.",
         )
+
+def limpar_tabela_por_tab(main_window, nome_tabela):
+    """Limpa todos os dados da tabela da aba especificada.-> Material, Ferragens, Sistemas Correr ou Acabamentos."""
+    if nome_tabela == "materiais":
+        table = main_window.ui.Tab_Material
+        from dados_gerais_mp import COLUNAS_LIMPAR_MATERIAIS as cols
+    elif nome_tabela == "ferragens":
+        table = main_window.ui.Tab_Ferragens
+        from dados_gerais_mp import COLUNAS_LIMPAR_FERRAGENS as cols
+    elif nome_tabela == "sistemas_correr":
+        table = main_window.ui.Tab_Sistemas_Correr
+        from dados_gerais_mp import COLUNAS_LIMPAR_SISTEMAS_CORRER as cols
+    elif nome_tabela == "acabamentos":
+        table = main_window.ui.Tab_Acabamentos
+        from dados_gerais_mp import COLUNAS_LIMPAR_ACABAMENTOS as cols
+    else:
+        QMessageBox.warning(main_window, "Limpar Dados Tabela", "Tabela não identificada.")
+        return
+
+    total_rows = table.rowCount()
+    for r in range(total_rows):
+        limpar_linha_dados_gerais(table, r, cols)
+    table.clearSelection()
+    QMessageBox.information(
+        main_window,
+        "Limpar Dados Tabela",
+        f"Todos os dados da aba '{nome_tabela}' foram limpos.",
+    )
 
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
 COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
