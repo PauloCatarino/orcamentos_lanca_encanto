@@ -339,10 +339,11 @@ def acao_guardar_dados(main_window, nome_tabela):
             19: {"nome": "esp_mp", "type": "float", "percent": False},
             21: {"nome": "nao_stock", "type": "integer"},
         }
-        nome_escolhido, desc = obter_nome_para_salvar(main_window, "materiais")
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "materiais", utilizador)
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "materiais", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
+        guardar_dados_gerais(main_window, "materiais", col_info, nome_registro=nome_escolhido, descricao_registro=desc, utilizador=utilizador)
 
     elif nome_tabela == "ferragens":
         # Novo mapeamento para a Tab_Ferragens
@@ -367,10 +368,11 @@ def acao_guardar_dados(main_window, nome_tabela):
             19: {"nome": "esp_mp", "type": "float", "percent": False},
         }
         # Solicita ao usuário um nome para salvar os dados de ferragens
-        nome_escolhido, desc = obter_nome_para_salvar(main_window, "ferragens")
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "ferragens", utilizador)
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "ferragens", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
+        guardar_dados_gerais(main_window, "ferragens", col_info, nome_registro=nome_escolhido, descricao_registro=desc, utilizador=utilizador)
 
     elif nome_tabela == "sistemas_correr":
         # Para a aba Sistemas Correr, a estrutura é similar,
@@ -393,10 +395,11 @@ def acao_guardar_dados(main_window, nome_tabela):
             18: {"nome": "larg_mp", "type": "float", "percent": False},
             19: {"nome": "esp_mp", "type": "float", "percent": False},
         }
-        nome_escolhido, desc = obter_nome_para_salvar(main_window, "sistemas_correr")
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        nome_escolhido, desc = obter_nome_para_salvar(main_window, "sistemas_correr", utilizador)
         if not nome_escolhido:
             return
-        guardar_dados_gerais(main_window, "sistemas_correr", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
+        guardar_dados_gerais(main_window, "sistemas_correr", col_info, nome_registro=nome_escolhido, descricao_registro=desc, utilizador=utilizador)
 
     elif nome_tabela == "acabamentos":
             # Para a aba Acabaemntos, a estrutura é similar,
@@ -419,10 +422,11 @@ def acao_guardar_dados(main_window, nome_tabela):
                 18: {"nome": "larg_mp", "type": "float", "percent": False},
                 19: {"nome": "esp_mp", "type": "float", "percent": False},
             }
-            nome_escolhido, desc = obter_nome_para_salvar(main_window, "acabamentos")
+            utilizador = main_window.ui.comboBox_utilizador.currentText()
+            nome_escolhido, desc = obter_nome_para_salvar(main_window, "acabamentos", utilizador)
             if not nome_escolhido:
                 return
-            guardar_dados_gerais(main_window, "acabamentos", col_info, nome_registro=nome_escolhido, descricao_registro=desc)
+            guardar_dados_gerais(main_window, "acabamentos", col_info, nome_registro=nome_escolhido, descricao_registro=desc, utilizador=utilizador)
 
 
     else:
@@ -454,7 +458,8 @@ def acao_importar_dados(main_window, nome_tabela):
             'esp_mp': 19,
             'nao_stock': 21
         }
-        importar_dados_gerais_com_opcao(main_window, "materiais", mapeamento)
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(main_window, "materiais", mapeamento, utilizador=utilizador)
 
     elif nome_tabela == "ferragens":
         mapeamento = {
@@ -475,7 +480,8 @@ def acao_importar_dados(main_window, nome_tabela):
             'larg_mp': 18,
             'esp_mp': 19
         }
-        importar_dados_gerais_com_opcao(main_window, "ferragens", mapeamento)
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(main_window, "ferragens", mapeamento, utilizador=utilizador)
 
     elif nome_tabela == "sistemas_correr":
         # Mapeamento específico para Sistemas de Correr.
@@ -498,7 +504,8 @@ def acao_importar_dados(main_window, nome_tabela):
             'larg_mp': 18,
             'esp_mp': 19
         }
-        importar_dados_gerais_com_opcao(main_window, "sistemas_correr", mapeamento)
+        utilizador = main_window.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(main_window, "acabamentos", mapeamento, utilizador=utilizador)
 
     elif nome_tabela == "acabamentos":
         mapeamento = {

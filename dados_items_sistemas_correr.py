@@ -314,8 +314,9 @@ def importar_dados_item_tab_sistemas_correr_3(parent):
     ui.Tab_Sistemas_Correr = ui.Tab_Sistemas_Correr_11
 
     try:
-            # Importa usando a função genérica, passando "sistemas_correr" como tipo e nosso mapeamento
-        importar_dados_gerais_com_opcao(parent, "sistemas_correr", mapeamento)
+        # Importa usando a função genérica, passando "sistemas_correr" como tipo e nosso mapeamento
+        utilizador = parent.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(parent, "sistemas_correr", mapeamento, utilizador=utilizador)
     finally:
         # Restaura para não atrapalhar outras partes do código
         ui.Tab_Sistemas_Correr = original_tab

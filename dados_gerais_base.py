@@ -69,18 +69,70 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 CREATE TABLE IF NOT EXISTS `{tabela_bd_segura}` (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     nome VARCHAR(255) NOT NULL, -- Nome do modelo salvo
+                    utilizador VARCHAR(255) NOT NULL DEFAULT '', -- Utilizador dono do modelo
                     descricao_modelo TEXT NULL,
                     linha INT NOT NULL,         -- Índice da linha original (0 a N-1)
                     {sql_colunas},
-                    UNIQUE KEY idx_nome_linha (nome, linha), -- Garante unicidade por modelo/linha
-                    INDEX idx_nome (nome) -- Índice para buscar por nome
+                    -- A combinação (nome, utilizador, linha) deve ser única para permitir
+                    -- que diferentes utilizadores tenham modelos com o mesmo nome sem conflito
+                    UNIQUE KEY idx_nome_utilizador_linha (nome, utilizador, linha),
+                    INDEX idx_nome (nome),      -- Índice para procurar por nome
+                    INDEX idx_utilizador (utilizador)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
                 # print(f"[DEBUG CREATE QUERY]:\n{sql_create}") # Descomentar para depurar a query
                 cursor.execute(sql_create)
                 print(f"Tabela '{tabela_bd_segura}' criada com sucesso.")
             else:
-                print(f"Tabela '{tabela_bd_segura}' já existe.")  # Ao remover este print dá erro de commit Como remover esta linha?
+                 print(f"Tabela '{tabela_bd_segura}' já existe.")  # Ao remover este print dá erro de commit Como remover esta linha?
+
+                # --- Garantir novas colunas/índices para retrocompatibilidade ---
+                # Adiciona coluna 'utilizador' caso ainda não exista. Esta coluna identifica
+                # quem gravou o modelo e permite que cada utilizador tenha os seus próprios
+                # dados gerais gravados.
+                cursor.execute(
+                    f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'utilizador'"
+                )
+                if not cursor.fetchone():
+                    try:
+                        cursor.execute(
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN utilizador VARCHAR(255) NOT NULL DEFAULT '' AFTER nome"
+                        )
+                        print(
+                            f"Coluna 'utilizador' adicionada à '{tabela_bd_segura}'."
+                        )
+                    except mysql.connector.Error as alter_err:
+                        print(
+                            f"Erro ao adicionar coluna utilizador: {alter_err}"
+                        )
+
+                # Atualiza índice único para incluir a coluna 'utilizador'
+                cursor.execute(
+                    f"SHOW INDEX FROM `{tabela_bd_segura}` WHERE Key_name='idx_nome_utilizador_linha'"
+                )
+                if not cursor.fetchone():
+                    try:
+                        cursor.execute(
+                            f"SHOW INDEX FROM `{tabela_bd_segura}` WHERE Key_name='idx_nome_linha'"
+                        )
+                        if cursor.fetchone():
+                            cursor.execute(
+                                f"ALTER TABLE `{tabela_bd_segura}` DROP INDEX idx_nome_linha"
+                            )
+                        cursor.execute(
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD UNIQUE KEY idx_nome_utilizador_linha (nome, utilizador, linha)"
+                        )
+                        cursor.execute(
+                            f"ALTER TABLE `{tabela_bd_segura}` ADD INDEX idx_utilizador (utilizador)"
+                        )
+                        print(
+                            f"Índices atualizados para incluir coluna 'utilizador'."
+                        )
+                    except mysql.connector.Error as alter_err:
+                        print(
+                            f"Erro ao atualizar índices de '{tabela_bd_segura}': {alter_err}"
+                        )
+
                 # Garante que a nova coluna 'descricao_modelo' esteja presente
                 cursor.execute(
                     f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'descricao_modelo'"

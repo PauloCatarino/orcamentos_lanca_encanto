@@ -28,8 +28,10 @@ from dados_gerais_manager import listar_nomes_descricoes_dados_gerais
 class ImportarDadosGeralDialog(QDialog):
     def __init__(self, main_window, parent=None): # Modified: Accept main_window instead of ui
         super().__init__(parent)
-        self.main_window = main_window # Modified: Store main_window
-        self.ui = main_window.ui # Keep ui for accessing UI elements, but use main_window for parent purposes
+        self.main_window = main_window # Janela principal
+        self.ui = main_window.ui # Interface da janela principal
+        # Guarda o utilizador atual para filtrar modelos
+        self.utilizador = self.ui.comboBox_utilizador.currentText()
         self.setWindowTitle("Importar Dados Gerais dos 4 Separadores")
         self.setMinimumSize(800, 600)
 
@@ -51,7 +53,7 @@ class ImportarDadosGeralDialog(QDialog):
             group_layout = QVBoxLayout(group)
             lista = QListWidget()
             lista.setSelectionMode(QListWidget.SingleSelection)
-            nomes_desc = listar_nomes_descricoes_dados_gerais(tabela, somente_completos=True)
+            nomes_desc = listar_nomes_descricoes_dados_gerais(tabela, somente_completos=True, utilizador=self.utilizador)
             self.descricoes[tabela] = nomes_desc
             for nome, desc in nomes_desc.items():
                 item = QListWidgetItem(nome)
@@ -217,8 +219,8 @@ class ImportarDadosGeralDialog(QDialog):
         try:
             
             from dados_gerais_manager import importar_dados_gerais_com_opcao
-            # Aqui passamos o modelo escolhido para que a função não solicite novamente o nome
-            importar_dados_gerais_com_opcao(self.main_window, tabela, mapeamento, nome)
+            # Importa os dados filtrando pelo utilizador atual
+            importar_dados_gerais_com_opcao(self.main_window, tabela, mapeamento, nome, utilizador=self.utilizador)
            
         except ImportError:
             # Se não existir, você pode implementar a lógica similar à função importar_dados_gerais_com_opcao,
