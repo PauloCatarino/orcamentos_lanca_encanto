@@ -343,7 +343,8 @@ def importar_dados_item_orcamento_tab_ferragens(parent):
 
     try:
         # Importa usando a função genérica, passando "ferragens" como tipo e nosso mapeamento
-        importar_dados_gerais_com_opcao(parent, "ferragens", mapeamento)
+        utilizador = parent.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(parent, "ferragens", mapeamento, utilizador=utilizador)
     finally:
         # Restaura para não atrapalhar outras partes do código
         ui.Tab_Ferragens = original_tab

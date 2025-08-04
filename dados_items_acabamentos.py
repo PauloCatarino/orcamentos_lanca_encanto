@@ -304,7 +304,8 @@ def importar_dados_item_tab_acabamentos(parent):
 
     try:
         # Importa usando a função genérica, passando "acabamentos" como tipo e nosso mapeamento
-        importar_dados_gerais_com_opcao(parent, "acabamentos", mapeamento)
+        utilizador = parent.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(parent, "acabamentos", mapeamento, utilizador=utilizador)
     finally:
         # Restaura para não atrapalhar outras partes do código
         ui.Tab_Acabamentos = original_tab

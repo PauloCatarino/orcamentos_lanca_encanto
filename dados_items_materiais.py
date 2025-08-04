@@ -339,7 +339,8 @@ def importar_dados_item_orcamento_tab_material(parent):
 
     try:
         # Importa usando a função genérica, passando "materiais" como tipo e nosso mapeamento
-        importar_dados_gerais_com_opcao(parent, "materiais", mapeamento)
+        utilizador = parent.ui.comboBox_utilizador.currentText()
+        importar_dados_gerais_com_opcao(parent, "materiais", mapeamento, utilizador=utilizador)
     finally:
         ui.Tab_Material = original_tab
 
