@@ -40,7 +40,8 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
         with obter_cursor() as cursor:
             # Verifica se a tabela já existe
             cursor.execute(f"SHOW TABLES LIKE '{tabela_bd_segura}'")
-            if not cursor.fetchone():
+            tabelas = cursor.fetchall()
+            if not tabelas:
                 # Monta a definição das colunas a partir da lista 'colunas'
                 # Ignora a primeira coluna ('material' ou similar, que é o nome da linha na UI)
                 # e colunas que são apenas botões ou não armazenáveis diretamente.
