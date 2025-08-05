@@ -84,9 +84,7 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 cursor.execute(sql_create)
                 print(f"Tabela '{tabela_bd_segura}' criada com sucesso.")
             else:
-                 print(f"Tabela '{tabela_bd_segura}' já existe.")  # Ao remover este print dá erro de commit Como remover esta linha?
-
-                # --- Garantir novas colunas/índices para retrocompatibilidade ---
+                # Tabela já existe: garantir colunas/índices atualizados
                 # Adiciona coluna 'utilizador' caso ainda não exista. Esta coluna identifica
                 # quem gravou o modelo e permite que cada utilizador tenha os seus próprios
                 # dados gerais gravados.
