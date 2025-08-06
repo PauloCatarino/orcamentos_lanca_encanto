@@ -2440,7 +2440,8 @@ def duplicar_item_orcamento(ui):
                 "preco_unitario, preco_total, custo_produzido, custo_total_orlas, "
                 "custo_total_mao_obra, custo_total_materia_prima, custo_total_acabamentos, "
                 "margem_lucro_perc, valor_margem, custos_admin_perc, valor_custos_admin, "
-                "margem_acabamentos_perc, valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas "
+                "margem_acabamentos_perc, valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas, "
+                "margem_mao_obra_perc, valor_mao_obra "  # campos de margem de mão de obra incluídos
                 "FROM orcamento_items WHERE id_item=%s",
                 (int(id_item_str),))
             dados = cursor.fetchone()
