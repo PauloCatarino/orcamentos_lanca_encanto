@@ -1251,7 +1251,7 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
     except Exception as e:
         print(f"Erro ao atualizar status para 'Enviado': {e}")
 
-    QMessageBox.information(None, "Sucesso", f"Email enviado para {destino}.")
+    QMessageBox.information(None, "Sucesso", f"Email enviado para {destino}")
 
 
 # =============================================================================
