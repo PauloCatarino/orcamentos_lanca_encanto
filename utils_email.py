@@ -32,6 +32,7 @@ def send_email(destino: str, assunto: str, corpo_html: str, anexos=None) -> None
     password = os.getenv("SMTP_PASSWORD", "")
     use_ssl = _env_bool("SMTP_SSL", "false")
     use_tls = _env_bool("SMTP_TLS", "false")
+    copia = os.getenv("EMAIL_COPIA", "projetos@lancaencanto.pt")  # Default copy email
 
     assinatura = load_signature()
     corpo_html = corpo_html.replace("{{assinatura}}", assinatura)
@@ -43,22 +44,27 @@ def send_email(destino: str, assunto: str, corpo_html: str, anexos=None) -> None
             outlook = win32com.client.Dispatch("Outlook.Application")
             mail = outlook.CreateItem(0)
             mail.To = destino
+            mail.CC = copia
             mail.Subject = assunto or "Orçamento"
             mail.HTMLBody = corpo_html
             for path in anexos or []:
                 if os.path.exists(path):
                     mail.Attachments.Add(path)
+            # garante que fica em "Items Enviados"
+            mail.SaveSentMessageFolder = outlook.Session.GetDefaultFolder(5)
             mail.Send()
-            _log_result(destino, assunto, "OK", anexos)
+            _log_result(f"{destino};{copia}", assunto, "OK", anexos)
             return
         except Exception as e:
-            _log_result(destino, assunto, f"ERRO: {e}", anexos)
+            _log_result(f"{destino};{copia}", assunto, f"ERRO: {e}", anexos)
             raise
 
     msg = EmailMessage()
     msg["Subject"] = assunto or "Orçamento"
     msg["From"] = user
     msg["To"] = destino
+    if copia:
+        msg["Cc"] = copia
     msg.set_content("Este email requer visualização em HTML.")
     msg.add_alternative(corpo_html, subtype="html")
 
@@ -76,6 +82,7 @@ def send_email(destino: str, assunto: str, corpo_html: str, anexos=None) -> None
         print("SMTP_PORT:", port)
         print("SMTP_USER:", user)
         print("DESTINATARIO:", destino)
+        print("COPIA:", copia)
         print("ASSUNTO:", assunto)
         print("Corpo tamanho:", len(corpo_html))
         print("Python exe:", sys.executable)
@@ -91,9 +98,9 @@ def send_email(destino: str, assunto: str, corpo_html: str, anexos=None) -> None
                 if user:
                     smtp.login(user, password)
                 smtp.send_message(msg)
-        _log_result(destino, assunto, "OK", anexos)
+        _log_result(f"{destino};{copia}", assunto, "OK", anexos)
     except Exception as e:
-        _log_result(destino, assunto, f"ERRO: {e}", anexos)
+        _log_result(f"{destino};{copia}", assunto, f"ERRO: {e}", anexos)
         raise
 
 
