@@ -1147,10 +1147,25 @@ class Ui_MainWindow(object):
         self.Tab_Ferragens.setFont(font)
         self.Tab_Ferragens.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         self.Tab_Ferragens.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
-        self.Tab_Ferragens.setRowCount(45)
+        self.Tab_Ferragens.setRowCount(46)
         self.Tab_Ferragens.setColumnCount(20)
         self.Tab_Ferragens.setProperty("horizontalHeaderLabels", ['Ferragens', 'Descricao', 'id_fer', 'id_orcamento', 'id_verc_orcamento', 'REF_LE', 'DESCRICAO_no_ORCAMENTO', 'PLIQ', 'MARGEM', 'DESCONTO', 'UND', 'DESP', 'CORRESP_ORLA_0_4', 'CORRESP_ORLA_1_0', 'TIPO', 'FAMILIA', 'COMP_MP', 'LARG_MP', 'ESP_MP', 'MP'])
-        self.Tab_Ferragens.setProperty("verticalHeaderLabels", ['Fer_Dobradica_1', 'Fer_Dobradica_2', 'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP', 'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1', 'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD', 'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1', 'Fer_Puxador_SPP_2', 'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1', 'Fer_Sistema_Basculante_2', 'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2', 'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Fundo Aluminio', 'Fer_Calha Led', 'Fer_Fita Led', 'Fer_Transformador Led', 'Fer_Cabos Led_1', 'Fer_Cabos Led_2', 'Fer_Sensor Led_1', 'Fer_Sensor Led_2', 'Fer_Iluminacao_1', 'Fer_Iluminacao_2', 'Fer_Iluminacao_3', 'Fer_Ferragens_Diversas', 'Fer_Acessorio_1', 'Fer_Acessorio_2', 'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5', 'Fer_Acessorio_6', 'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP'])
+        self.Tab_Ferragens.setProperty(
+            "verticalHeaderLabels",
+            ['Fer_Dobradica_1', 'Fer_Dobradica_2', 'Fer_Dobradica_3',
+             'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao',
+             'Fer_Varao_SPP', 'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas',
+             'Fer_Corredica_1', 'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD',
+             'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1', 'Fer_Puxador_SPP_2',
+             'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1', 'Fer_Sistema_Basculante_2',
+             'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2',
+             'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Fundo Aluminio', 'Fer_Calha Led',
+             'Fer_Fita Led', 'Fer_Transformador Led', 'Fer_Cabos Led_1', 'Fer_Cabos Led_2',
+             'Fer_Sensor Led_1', 'Fer_Sensor Led_2', 'Fer_Iluminacao_1', 'Fer_Iluminacao_2',
+             'Fer_Iluminacao_3', 'Fer_Ferragens_Diversas', 'Fer_Acessorio_1',
+             'Fer_Acessorio_2', 'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5',
+             'Fer_Acessorio_6', 'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP']
+        )
         self.Tab_Ferragens.setObjectName("Tab_Ferragens")
         self.guardar_dados_gerais_ferragens = QtWidgets.QPushButton(self.Ferragens)
         self.guardar_dados_gerais_ferragens.setGeometry(QtCore.QRect(30, 12, 371, 31))
@@ -1704,10 +1719,25 @@ class Ui_MainWindow(object):
         self.Tab_Ferragens_11.setFont(font)
         self.Tab_Ferragens_11.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         self.Tab_Ferragens_11.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
-        self.Tab_Ferragens_11.setRowCount(45)
+        self.Tab_Ferragens_11.setRowCount(46)
         self.Tab_Ferragens_11.setColumnCount(21)
         self.Tab_Ferragens_11.setProperty("horizontalHeaderLabels", ['Ferragens', 'Descricao', 'id_fer', 'id_orcamento', 'id_verc_orcamento', 'REF_LE', 'DESCRICAO_no_ORCAMENTO', 'PLIQ', 'MARGEM', 'DESCONTO', 'UND', 'DESP', 'CORRESP_ORLA_0_4', 'CORRESP_ORLA_1_0', 'TIPO', 'FAMILIA', 'COMP_MP', 'LARG_MP', 'ESP_MP', 'MP'])
-        self.Tab_Ferragens_11.setProperty("verticalHeaderLabels", ['Fer_Dobradica_1', 'Fer_Dobradica_2', 'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP', 'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1', 'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD', 'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1', 'Fer_Puxador_SPP_2', 'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1', 'Fer_Sistema_Basculante_2', 'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2', 'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Fundo Aluminio', 'Fer_Calha Led', 'Fer_Fita Led', 'Fer_Transformador Led', 'Fer_Cabos Led_1', 'Fer_Cabos Led_2', 'Fer_Sensor_Led_1', 'Fer_Sensor_Led_2', 'Fer_Iluminacao_1', 'Fer_Iluminacao_2', 'Fer_Iluminacao_3', 'Fer_Ferragem_Diversas', 'Fer_Acessorio_1', 'Fer_Acessorio_2', 'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5', 'Fer_Acessorio_6', 'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP'])
+        self.Tab_Ferragens_11.setProperty(
+            "verticalHeaderLabels",
+            ['Fer_Dobradica_1', 'Fer_Dobradica_2', 'Fer_Dobradica_3',
+             'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao',
+             'Fer_Varao_SPP', 'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas',
+             'Fer_Corredica_1', 'Fer_Corredica_2', 'Fer_Corredica_3', 'Fer_Puxador STD',
+             'Fer_Puxador Fresado J', 'Fer_Puxador_SPP_1', 'Fer_Puxador_SPP_2',
+             'Fer_Puxador_SPP_3', 'Fer_Sistema_Basculante_1', 'Fer_Sistema_Basculante_2',
+             'Fer_Balde Lixo', 'Fer_Canto Cozinha_1', 'Fer_Canto Cozinha_2',
+             'Fer_Porta Talheres', 'Fer_Porta Calcas', 'Fer_Fundo Aluminio', 'Fer_Calha Led',
+             'Fer_Fita Led', 'Fer_Transformador Led', 'Fer_Cabos Led_1', 'Fer_Cabos Led_2',
+             'Fer_Sensor_Led_1', 'Fer_Sensor_Led_2', 'Fer_Iluminacao_1', 'Fer_Iluminacao_2',
+             'Fer_Iluminacao_3', 'Fer_Ferragem_Diversas', 'Fer_Acessorio_1',
+             'Fer_Acessorio_2', 'Fer_Acessorio_3', 'Fer_Acessorio_4', 'Fer_Acessorio_5',
+             'Fer_Acessorio_6', 'Fer_Acessorio_7', 'Fer_Acessorio_8_SPP']
+        )
         self.Tab_Ferragens_11.setObjectName("Tab_Ferragens_11")
         self.label_Tab_Ferragens_11 = QtWidgets.QLabel(self.Tab_Ferragens_3)
         self.label_Tab_Ferragens_11.setGeometry(QtCore.QRect(0, 0, 121, 19))
