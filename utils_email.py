@@ -35,6 +35,25 @@ def send_email(destino: str, assunto: str, corpo_html: str, anexos=None) -> None
 
     assinatura = load_signature()
     corpo_html = corpo_html.replace("{{assinatura}}", assinatura)
+    use_outlook = _env_bool("USE_OUTLOOK", "false")
+    if use_outlook:
+        try:
+            import win32com.client
+
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            mail = outlook.CreateItem(0)
+            mail.To = destino
+            mail.Subject = assunto or "Orçamento"
+            mail.HTMLBody = corpo_html
+            for path in anexos or []:
+                if os.path.exists(path):
+                    mail.Attachments.Add(path)
+            mail.Send()
+            _log_result(destino, assunto, "OK", anexos)
+            return
+        except Exception as e:
+            _log_result(destino, assunto, f"ERRO: {e}", anexos)
+            raise
 
     msg = EmailMessage()
     msg["Subject"] = assunto or "Orçamento"

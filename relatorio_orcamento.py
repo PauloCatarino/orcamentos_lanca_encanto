@@ -242,7 +242,8 @@ def gerar_corpo_email_html(valor_orcamento):
         with open(assinatura_path, "r", encoding="utf-8") as f:
             assinatura_html = f.read()
     # Substitui as variáveis no HTML
-    corpo_html = corpo_html.replace("{{valor}}", f"{valor_orcamento:.2f}")
+    valor_formatado = f"{valor_orcamento:.2f}".replace('.', ',')
+    corpo_html = corpo_html.replace("{{valor}}", valor_formatado)
     corpo_html = corpo_html.replace("{{assinatura}}", assinatura_html)
     return corpo_html
 
@@ -1218,11 +1219,8 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
     if obra:
         assunto += f" | Ref. Obra {obra}"
 
-    subtotal = ui.label_subtotal_2.text().split(":")[-1].strip()
-    try:
-        valor_orcamento = float(subtotal.replace("€", "").replace(",", ".").strip())
-    except Exception:
-        valor_orcamento = 0.0
+    subtotal_txt = ui.label_subtotal_2.text().split(":")[-1].strip()
+    valor_orcamento = _parse_float(subtotal_txt)
 
      # -- GERA O CORPO HTML JÁ FORMATADO --
     corpo_default = gerar_corpo_email_html(valor_orcamento)
