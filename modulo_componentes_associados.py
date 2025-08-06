@@ -402,6 +402,18 @@ regras_qt_und = {
         "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, >=1600mm: 2+(úteis/750mm) +1 se LARG >= 605mm"
     },
 
+    "DOBRADICA_3": {  # Nova dobradiça equivalente às anteriores
+        "formula": lambda m: (
+            (
+                2 if float(m.get("COMP", 0)) < 850 else
+                3 if float(m.get("COMP", 0)) < 1600 else
+                2 + int((float(m.get("COMP", 0)) - 2 * 120) / 750)
+            )
+            + (1 if float(m.get("LARG", 0)) >= 605 else 0)
+        ),
+        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, >=1600mm: 2+(úteis/750mm) +1 se LARG >= 605mm",
+    },
+
     "PUXADOR": {
         # NOTA: Regra original usava qt_und da porta. Isso é feito abaixo na função.
         "default": 1, # Valor base antes de multiplicar pelo QT_und do principal

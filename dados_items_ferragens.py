@@ -71,7 +71,7 @@ FERRAGENS_COLUNAS = [
 # que poderá ser orçado e exibido na Tab_Ferragens_11.
 ###############################################################
 FERRAGENS_LINHAS = [
-    'Fer_Dobradica_1', 'Fer_Dobradica_2',
+    'Fer_Dobradica_1', 'Fer_Dobradica_2', 'Fer_Dobradica_3',
     'Fer_Suporte Prateleira_1', 'Fer_Suporte Prateleira_2', 'Fer_Suporte Varao', 'Fer_Varao_SPP',
     'Fer_Perfil_SPP', 'Fer_Terminais',
     'Fer_Rodape_PVC', 'Fer_Pes_1', 'Fer_Pes_2', 'Fer_Grampas', 'Fer_Corredica_1',
@@ -437,6 +437,7 @@ def configurar_tabela_ferragens(parent):
     tipo_padrao = {
         'Fer_Dobradica_1': 'DOBRADICAS',
         'Fer_Dobradica_2': 'DOBRADICAS',
+        'Fer_Dobradica_3': 'DOBRADICAS',  # Terceira dobradiça com mesma categoria
         'Fer_Suporte Prateleira_1': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Prateleira_2': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',
@@ -787,6 +788,7 @@ def carregar_dados_items(parent):
     tipo_padrao = {
         'Fer_Dobradica_1': 'DOBRADICAS',
         'Fer_Dobradica_2': 'DOBRADICAS',
+        'Fer_Dobradica_3': 'DOBRADICAS',  # Nova dobradiça semelhante
         'Fer_Suporte Prateleira_1': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Prateleira_2': 'SUPORTE PRATELEIRA',
         'Fer_Suporte Varao': 'SUPORTE VARAO',

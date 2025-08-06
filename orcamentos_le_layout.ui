@@ -3310,7 +3310,7 @@
            <enum>Qt::ScrollBarAlwaysOn</enum>
           </property>
           <property name="rowCount">
-           <number>45</number>
+           <number>46</number>
           </property>
           <property name="columnCount">
            <number>20</number>
@@ -3343,6 +3343,7 @@
            <stringlist>
             <string>Fer_Dobradica_1</string>
             <string>Fer_Dobradica_2</string>
+            <string>Fer_Dobradica_3</string>
             <string>Fer_Suporte Prateleira_1</string>
             <string>Fer_Suporte Prateleira_2</string>
             <string>Fer_Suporte Varao</string>
@@ -5387,7 +5388,7 @@
              <enum>Qt::ScrollBarAlwaysOn</enum>
             </property>
             <property name="rowCount">
-             <number>45</number>
+             <number>46</number>
             </property>
             <property name="columnCount">
              <number>21</number>
@@ -5420,6 +5421,7 @@
              <stringlist>
               <string>Fer_Dobradica_1</string>
               <string>Fer_Dobradica_2</string>
+              <string>Fer_Dobradica_3</string>
               <string>Fer_Suporte Prateleira_1</string>
               <string>Fer_Suporte Prateleira_2</string>
               <string>Fer_Suporte Varao</string>
