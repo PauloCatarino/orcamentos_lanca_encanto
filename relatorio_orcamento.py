@@ -265,19 +265,21 @@ def _parse_float(value: str) -> float:
     txt = txt.replace('€', '').replace('$', '').replace('\xa0', '').replace(' ', '')
     print(f"DEBUG _parse_float: após remover símbolos='{txt}'")
     
-    # Se contém vírgula, assumimos formato português/europeu (1.234,56)
-    if ',' in txt:
-        # Separa a parte decimal
-        partes = txt.split(',')
-        if len(partes) == 2:
-            # Remove pontos da parte inteira (separadores de milhares)
-            parte_inteira = partes[0].replace('.', '')
-            parte_decimal = partes[1]
-            txt = f"{parte_inteira}.{parte_decimal}"
+    # Trata presença de separadores de milhares/decimais
+    if ',' in txt and '.' in txt:
+        # Quando ambos existem, determina qual é o separador decimal
+        if txt.rfind(',') > txt.rfind('.'):  # formato europeu: 1.234,56
+            txt = txt.replace('.', '').replace(',', '.')
             print(f"DEBUG _parse_float: formato europeu convertido='{txt}'")
+        else:  # formato americano: 1,234.56
+            txt = txt.replace(',', '')
+            print(f"DEBUG _parse_float: formato americano convertido='{txt}'")
+    elif ',' in txt:
+        # Apenas vírgula -> formato europeu simples
+        txt = txt.replace('.', '').replace(',', '.')
+        print(f"DEBUG _parse_float: apenas vírgula convertido='{txt}'")
     else:
-        # Se não tem vírgula, pode ser formato americano ou número simples
-        # Apenas remove pontos se houver mais de um (separadores de milhares)
+        # Apenas ponto -> remove pontos extra (separadores de milhares)
         pontos = txt.count('.')
         if pontos > 1:
             # Remove todos os pontos exceto o último
