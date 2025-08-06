@@ -92,7 +92,8 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 cursor.execute(
                     f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'utilizador'"
                 )
-                if not cursor.fetchone():
+                col_utilizador = cursor.fetchall()
+                if not col_utilizador:
                     try:
                         cursor.execute(
                             f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN utilizador VARCHAR(255) NOT NULL DEFAULT '' AFTER nome"
@@ -109,12 +110,14 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 cursor.execute(
                     f"SHOW INDEX FROM `{tabela_bd_segura}` WHERE Key_name='idx_nome_utilizador_linha'"
                 )
-                if not cursor.fetchone():
+                idx_nome_utilizador_linha = cursor.fetchall()
+                if not idx_nome_utilizador_linha:
                     try:
                         cursor.execute(
                             f"SHOW INDEX FROM `{tabela_bd_segura}` WHERE Key_name='idx_nome_linha'"
                         )
-                        if cursor.fetchone():
+                        idx_nome_linha = cursor.fetchall()
+                        if idx_nome_linha:
                             cursor.execute(
                                 f"ALTER TABLE `{tabela_bd_segura}` DROP INDEX idx_nome_linha"
                             )
@@ -136,7 +139,8 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 cursor.execute(
                     f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'descricao_modelo'"
                 )
-                if not cursor.fetchone():
+                col_descricao_modelo = cursor.fetchall()
+                if not col_descricao_modelo:
                     try:
                         cursor.execute(
                             f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN descricao_modelo TEXT NULL AFTER nome"
@@ -151,12 +155,13 @@ def criar_tabela_dados_gerais(nome_tabela, colunas, linhas):
                 cursor.execute(
                     f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'nao_stock'"
                 )
-                if not cursor.fetchone():
+                col_nao_stock = cursor.fetchall()
+                if not col_nao_stock:
                     try:
                         cursor.execute(
                             f"SHOW COLUMNS FROM `{tabela_bd_segura}` LIKE 'MP'"
                         )
-                        has_mp = cursor.fetchone() is not None
+                        has_mp = bool(cursor.fetchall())
                         if has_mp:
                             cursor.execute(
                                 f"ALTER TABLE `{tabela_bd_segura}` ADD COLUMN nao_stock TINYINT NULL DEFAULT 0 AFTER `MP`"
