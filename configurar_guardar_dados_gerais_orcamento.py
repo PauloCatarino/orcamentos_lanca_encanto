@@ -913,12 +913,12 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                     else:
                         with obter_cursor() as cursor_mp:
                             cursor_mp.execute(
-                                "SELECT DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, MARGEM, DESCONTO, UND, DESP, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COMP_MP, LARG_MP, ESP_MP FROM materias_primas WHERE Ref_LE = %s",
+                                "SELECT DESCRICAO_do_PHC, DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, MARGEM, DESCONTO, UND, DESP, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COMP_MP, LARG_MP, ESP_MP FROM materias_primas WHERE Ref_LE = %s",
                                 (ref_le,))
                             dados_atuais_mp = cursor_mp.fetchone()
                             dados_mp_cache[ref_le] = dados_atuais_mp
                 if dados_atuais_mp:
-                    map_mp_cols = ["descricao_no_orcamento", "ptab", "pliq", "margem", "desconto",
+                    map_mp_cols = ["descricao", "descricao_no_orcamento", "ptab", "pliq", "desc1_plus", "desc2_minus",
                                    "und", "desp", "corres_orla_0_4", "corres_orla_1_0", "comp_mp", "larg_mp", "esp_mp"]
                     dados_mp_dict = dict(zip(map_mp_cols, dados_atuais_mp))
                     for campo_mp, col_ui in mapeamento.items():
