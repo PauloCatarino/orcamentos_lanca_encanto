@@ -281,10 +281,11 @@ def calcular_orlas_para_linha(ui, row):
             dígito = orla_code[dados_lado['digit_idx']] if dados_lado['digit_idx'] < len(orla_code) else '0'
 
             esp_orla_lado = 0.0
-            ml_lado = 0.0
-            custo_lado = 0.0
-            pliq_orla_m2 = 0.0 
-            desp_orla_fracao = 0.10 # Inicializa desperdício da orla com 10% (valor padrão)
+            ml_lado_unidade = 0.0  # ML por unidade de peça
+            custo_lado_unidade = 0.0  # Custo por unidade de peça
+            pliq_orla_m2 = 0.0
+            desp_orla_fracao = 0.10  # Inicializa desperdício da orla com 10% (valor padrão)
+            desperdicio_utilizado = DESPERDICIO_ORLA_PADRAO  # Valor usado na fórmula de custo
 
             if dígito != '0':
                 # Determina a referência da orla com base no dígito
@@ -297,19 +298,15 @@ def calcular_orlas_para_linha(ui, row):
                 # Realiza os cálculos APENAS se os dados da orla forem válidos e o fator de preço for válido
                 # (pliq_orla_m2 > 0 E price_factor > 0)
                 # A espessura da orla (esp_orla_lado) pode ser preenchida mesmo se o preço for zero.
-                esp_orla_lado = esp_mp_orla # A espessura da orla vem direta da DB
+                esp_orla_lado = esp_mp_orla  # Espessura da orla diretamente da BD
 
                 if pliq_orla_m2 > 0 and price_factor > 0 and dados_lado['dim'] > 0:
-                    # Metros Lineares: dimensão da peça (em mm) convertida para metros
-                    ml_por_unidade = dados_lado['dim'] / 1000.0  # ML por uma unidade de peça
-                    ml_lado = ml_por_unidade * qt_total_val     # Multiplicado pela quantidade total
+                    # Metros lineares por unidade de peça
+                    ml_lado_unidade = dados_lado['dim'] / 1000.0
 
-                    # Custo por ML de orla: (preço €/m² / fator €/ml para 1 €/m²) * (1 + desperdício da orla)
-                    # Custo = ML * (Preço_Orla_m2 / Fator_Conversao) * (1 + Desperdicio_Orla)
-                    # ml_lado já é em metros.
-                    # custo_lado é o custo da orla para UM lado de UMA unidade de peça.
-                    # Custo por ML de orla: inclui desperdício
-                    custo_lado = ml_lado * (pliq_orla_m2 / price_factor) * (1 + desp_orla_fracao if desp_orla_fracao > 0 else DESPERDICIO_ORLA_PADRAO)
+                    # Custo da orla para um lado de uma unidade de peça
+                    desperdicio_utilizado = desp_orla_fracao if desp_orla_fracao > 0 else DESPERDICIO_ORLA_PADRAO
+                    custo_lado_unidade = ml_lado_unidade * (pliq_orla_m2 / price_factor) * (1 + desperdicio_utilizado)
 
 
             # --- Preencher colunas na tabela ---
@@ -321,26 +318,25 @@ def calcular_orlas_para_linha(ui, row):
             # Colunas de Metros Lineares (ML_Cx/Lx)
             idx_ml = globals()[f'IDX_ML_{lado}']
             # Formata com 1 decimal, mesmo se for 0
-            set_item(table, row, idx_ml, f"{ml_lado:.1f}")  # Usa set_item
+            set_item(table, row, idx_ml, f"{ml_lado_unidade:.1f}")  # ML por unidade
             # Tooltip com fórmula e valores do cálculo de ML
             item_ml = table.item(row, idx_ml)
             if item_ml:
                 item_ml.setToolTip(
-                    f"Fórmula ML {lado}: (Dimensão / 1000) * Qt_Total\n"
-                    f"= ({dados_lado['dim']} mm / 1000) * {qt_total_val}"
-                    f" = {ml_lado:.1f} m"
+                    f"Fórmula ML {lado}: Dimensão / 1000\n"
+                    f"= ({dados_lado['dim']} mm / 1000) = {ml_lado_unidade:.1f} m"
                 )
 
             # Colunas de Custo (CUSTO_ML_Cx/Lx)
             idx_custo_ml = globals()[f'IDX_CUSTO_ML_{lado}']
             # Formata como moeda, arredonda para 2 decimais, mesmo se for 0
-            set_item(table, row, idx_custo_ml, formatar_valor_moeda(round(custo_lado, 2))) # Usa set_item
+            set_item(table, row, idx_custo_ml, formatar_valor_moeda(round(custo_lado_unidade, 2)))
 
             # Adicionar tooltip com a fórmula e valores para CUSTO_ML
             tooltip_custo = (
-                f"Fórmula Custo {lado}: (Dimensão / 1000 * Qt_Total) * (PliQ_Orla / Fator) * (1 + Desp_Orla)\n"
-                f"= ({dados_lado['dim']} mm / 1000) * {qt_total_val} * ({pliq_orla_m2:.2f} €/m² / {price_factor:.3f}) * (1 + {desp_orla_fracao:.2%})\n"
-                f"= {round(custo_lado, 2):.2f} €"
+                f"Fórmula Custo {lado}: (Dimensão / 1000) * (PliQ_Orla / Fator) * (1 + Desp_Orla)\n"
+                f"= ({dados_lado['dim']} mm / 1000) * ({pliq_orla_m2:.2f} €/m² / {price_factor:.3f}) * (1 + {desperdicio_utilizado:.2%})\n"
+                f"= {round(custo_lado_unidade, 2):.2f} €"
             )
             # Certifica-se que o item existe antes de definir o tooltip
             item_custo = table.item(row, idx_custo_ml) # Obtém o item que set_item criou ou usou

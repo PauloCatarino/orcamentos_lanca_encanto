@@ -42,18 +42,18 @@ from PyQt5.QtCore import Qt, QCoreApplication # QCoreApplication para processEve
 from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item , obter_diretorio_base
 
 # Variáveis configuráveis - os valores poderão ser alterados via interface futuramente
-VALOR_SECCIONADORA = 1.0            # €/ML para a máquina Seccionadora
-VALOR_ORLADORA = 0.70              # €/ML para a máquina Orladora
-CNC_PRECO_PECA_BAIXO = 2.0          # €/peça se AREA_M2_und <= 0.7
-CNC_PRECO_PECA_MEDIO = 2.5         # €/peça se AREA_M2_und < 1 (mas > 0.7)
-CNC_PRECO_PECA_ALTO = 3.0          # €/peça se AREA_M2_und >= 1
-VALOR_ABD = 0.80                 # €/peça para a máquina ABD
-EUROS_HORA_CNC = 60.0            # €/hora para a máquina CNC
-EUROS_HORA_PRENSA = 22.0          # €/hora para a máquina Prensa
-EUROS_HORA_ESQUAD = 20.0          # €/hora para a máquina Esquadrejadora
-EUROS_EMBALAGEM_M3 = 50.0         # €/M³ para Embalagem
-EUROS_HORA_MO = 22.0              # €/hora para Mão de Obra
-MODO_PRODUCAO = "STD"              # Modo de produção padrão (STD, SERIE, etc.)
+VALOR_SECCIONADORA = 0.45            # €/ML para a máquina Seccionadora
+VALOR_ORLADORA = 0.65                # €/ML para a máquina Orladora
+CNC_PRECO_PECA_BAIXO = 0.75          # €/peça se AREA_M2_und <= 0.7
+CNC_PRECO_PECA_MEDIO = 1.25          # €/peça se AREA_M2_und < 1 (mas > 0.7)
+CNC_PRECO_PECA_ALTO = 1.75           # €/peça se AREA_M2_und >= 1
+VALOR_ABD = 0.60                     # €/peça para a máquina ABD
+EUROS_HORA_CNC = 55.0                # €/hora para a máquina CNC
+EUROS_HORA_PRENSA = 50.0             # €/hora para a máquina Prensa
+EUROS_HORA_ESQUAD = 20.0              # €/hora para a máquina Esquadrejadora
+EUROS_EMBALAGEM_M3 = 50.0             # €/M³ para Embalagem
+EUROS_HORA_MO = 17.5                   # €/hora para Mão de Obra
+MODO_PRODUCAO = "STD"                  # Modo de produção padrão (STD, SERIE, etc.)
 
 def aplicar_valores_maquinas(modo="STD", num_orc=None, ver_orc=None):
     """Atualiza as variáveis globais com valores da BD.
@@ -122,14 +122,14 @@ IDX_COMP_RES = 50            # Resultado do Comprimento (mm)
 IDX_LARG_RES = 51            # Resultado da Largura (mm)
 IDX_ESP_RES = 52             # Resultado da Espessura (mm) da peça
 IDX_QT_TOTAL = 49            # Quantidade Total (Qt_mod * Qt_und)
-IDX_ML_C1 = 41               # Metros Lineares Orla C1
-IDX_ML_C2 = 42               # Metros Lineares Orla C2
-IDX_ML_L1 = 43               # Metros Lineares Orla L1
-IDX_ML_L2 = 44               # Metros Lineares Orla L2
-IDX_CUSTO_ML_C1 = 45         # Custo ML Orla C1
-IDX_CUSTO_ML_C2 = 46         # Custo ML Orla C2
-IDX_CUSTO_ML_L1 = 47         # Custo ML Orla L1
-IDX_CUSTO_ML_L2 = 48         # Custo ML Orla L2
+IDX_ML_C1 = 41               # Metros Lineares Orla C1 (por unidade)
+IDX_ML_C2 = 42               # Metros Lineares Orla C2 (por unidade)
+IDX_ML_L1 = 43               # Metros Lineares Orla L1 (por unidade)
+IDX_ML_L2 = 44               # Metros Lineares Orla L2 (por unidade)
+IDX_CUSTO_ML_C1 = 45         # Custo ML Orla C1 (por unidade)
+IDX_CUSTO_ML_C2 = 46         # Custo ML Orla C2 (por unidade)
+IDX_CUSTO_ML_L1 = 47         # Custo ML Orla L1 (por unidade)
+IDX_CUSTO_ML_L2 = 48         # Custo ML Orla L2 (por unidade)
 
 # Índices das colunas CPxx base (lidos do Excel)
 IDX_CP01_SEC_BASE = 63       # CP01_SEC (do Excel)
@@ -474,31 +474,15 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
                     converter_texto_para_valor(safe_item_text(table, row, IDX_ML_L1), "moeda") + \
                     converter_texto_para_valor(safe_item_text(table, row, IDX_ML_L2), "moeda") # Soma ML orlas (calculado em modulo_calculo_orlas)
 
-    if not orla_checkbox_ativo and cp02_orl_base >= 1 and soma_ml_orlas > 0 and qt_total > 0: # Qt_Total usado como divisor? Regra original confusa. Custo Orla por Peça / Qt_Total?
-            # Regra original: CP02_ORL_und = (Soma ML orlas) * Orladora / QT_TOTAL
-            # Isto parece CUSTO TOTAL orla para o item / QT_TOTAL de peças.
-            # MAS a descrição diz custo por PEÇA, não por ITEM.
-            # Custo Orladora por ML é VALOR_ORLADORA (€/ML).
-            # Custo TOTAL de orla para UMA peça = Soma ML * VALOR_ORLADORA.
-            # O QT_TOTAL é a quantidade de PEÇAS. A regra original parece dividir o custo TOTAL pela quantidade de peças.
-            # Vamos calcular o Custo TOTAL de orla para o ITEM e dividir por QT_TOTAL como na regra original.
-            # Soma Custo ML orlas (col 45-48) já inclui preço e desperdício da orla!
-            # Regra original pode estar a usar CUSTO_ML_Cx/Lx que já está em €/Peça (unidade de orla).
-            # Se for isso: Soma Custo ML (col 45-48) já é custo por peça. Soma (CUSTO_ML_C1 + .. + CUSTO_ML_L2) é custo TOTAL orla por peça.
-            # Vamos usar a soma dos Custo_ML_xx (col 45-48) que já é o custo da orla por peça.
-            soma_custo_ml_orlas_und = converter_texto_para_valor(safe_item_text(table, row, IDX_CUSTO_ML_C1), "moeda") + \
-                                    converter_texto_para_valor(safe_item_text(table, row, IDX_CUSTO_ML_C2), "moeda") + \
-                                    converter_texto_para_valor(safe_item_text(table, row, IDX_CUSTO_ML_L1), "moeda") + \
-                                    converter_texto_para_valor(safe_item_text(table, row, IDX_CUSTO_ML_L2), "moeda")
-            # Regra original: CP02_ORL_und = (Soma dos ML dos lados) * Orladora / QT_TOTAL
-            # Isto parece usar a soma dos ML e MULTIPLICAR por VALOR_ORLADORA (€/ML) e depois dividir por QT_TOTAL.
-            # Vamos seguir essa regra literal, assumindo que Soma dos ML dos lados refere-se à soma_ml_orlas.
-            # É estranho dividir por QT_TOTAL se o custo deve ser POR UNIDADE DE PEÇA.
-            # Talvez a regra original quisesse dizer Custo por ITEM / QT_TOTAL?
-            # Custo por ITEM = (Soma ML * VALOR_ORLADORA). Custo por PEÇA = Custo por ITEM / QT_TOTAL. Sim, parece ser isso.
-            custo_orla_total_item = soma_ml_orlas * VALOR_ORLADORA # Custo total de orla para 1 ITEM (todas as peças)
-            orl_und = custo_orla_total_item / qt_total # Custo de orla por PEÇA
-            formula_orl_tooltip = f"(Soma ML * VALOR_ORLADORA) / Qt_Total\n= ({soma_ml_orlas:.2f} m * {VALOR_ORLADORA:.2f} €/ML) / {qt_total:.0f} = {round(orl_und, 2):.2f}€"
+    if not orla_checkbox_ativo and cp02_orl_base >= 1 and soma_ml_orlas > 0:
+            # CP02_ORL_und representa o custo da orladora por unidade de peça.
+            # As colunas ML_xx já contêm os metros lineares por unidade, logo
+            # basta multiplicar a soma dos ML pelo valor da orladora.
+            orl_und = soma_ml_orlas * VALOR_ORLADORA
+            formula_orl_tooltip = (
+                f"Soma ML * VALOR_ORLADORA\n"
+                f"= {soma_ml_orlas:.2f} m * {VALOR_ORLADORA:.2f} €/ML = {round(orl_und, 2):.2f}€"
+            )
     else:
         if orla_checkbox_ativo:
             orl_und = 0.0

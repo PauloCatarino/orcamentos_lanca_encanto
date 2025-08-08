@@ -166,9 +166,11 @@ def atualizar_custos_precos_items(num_orc, versao):
                 soma_und = p["Soma_Custo_und"]
                 soma_acb = p["Soma_Custo_ACB"]
 
-                orlas += float(cml1 or 0) + float(cml2 or 0) + float(cml3 or 0) + float(cml4 or 0)
-                mao += float(soma_und or 0)
-                acab += float(soma_acb or 0)
+                # Custos por peça multiplicados pela quantidade total da peça
+                qt = float(qt_total or 0)
+                orlas += (float(cml1 or 0) + float(cml2 or 0) + float(cml3 or 0) + float(cml4 or 0)) * qt
+                mao += float(soma_und or 0) * qt
+                acab += float(soma_acb or 0) * qt
 
                 if cp09 and not mps_flag:
                     desp_frac = float(desp_p or 0)
