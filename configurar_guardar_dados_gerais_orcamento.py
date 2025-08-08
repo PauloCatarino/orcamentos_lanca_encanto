@@ -918,37 +918,52 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                             dados_atuais_mp = cursor_mp.fetchone()
                             dados_mp_cache[ref_le] = dados_atuais_mp
                 if dados_atuais_mp:
-                    map_mp_cols = ["descricao", "descricao_no_orcamento", "ptab", "pliq", "desc1_plus", "desc2_minus",
-                                   "und", "desp", "corres_orla_0_4", "corres_orla_1_0", "comp_mp", "larg_mp", "esp_mp"]
+                    map_mp_cols = [
+                        "descricao",
+                        "descricao_no_orcamento",
+                        "ptab",
+                        "pliq",
+                        "desc1_plus",
+                        "desc2_minus",
+                        "und",
+                        "desp",
+                        "corres_orla_0_4",
+                        "corres_orla_1_0",
+                        "comp_mp",
+                        "larg_mp",
+                        "esp_mp",
+                    ]
                     dados_mp_dict = dict(zip(map_mp_cols, dados_atuais_mp))
                     for campo_mp, col_ui in mapeamento.items():
-                        if campo_mp in dados_mp_dict:
+                        if campo_mp == "descricao":
+                            valor_bd = reg_dict.get("descricao")
+                            texto_formatado = str(valor_bd) if valor_bd is not None else ""
+                        elif campo_mp in dados_mp_dict:
                             valor_bd = dados_mp_dict[campo_mp]
                             texto_formatado = ""
                             if valor_bd is not None:
                                 if campo_mp in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
-                                    texto_formatado = formatar_valor_moeda(
-                                        valor_bd)
+                                    texto_formatado = formatar_valor_moeda(valor_bd)
                                 elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
-                                    texto_formatado = formatar_valor_percentual(
-                                        valor_bd)
+                                    texto_formatado = formatar_valor_percentual(valor_bd)
                                 else:
                                     texto_formatado = str(valor_bd)
-                            widget = table.cellWidget(linha_ui, col_ui)
-                            if isinstance(widget, QComboBox):
-                                idx = widget.findText(
-                                    texto_formatado, Qt.MatchFixedString)
-                                widget.setCurrentIndex(idx if idx >= 0 else -1)
-                            else:
-                                item = table.item(linha_ui, col_ui)
-                                if not item:
-                                    item = QTableWidgetItem()
-                                    table.setItem(linha_ui, col_ui, item)
-                                item.setText(texto_formatado)
-                        elif campo_mp == "ref_le":  # Mantem ref_le original se dados_mp não encontrado
+                        else:
                             valor_bd = reg_dict.get(campo_mp)
-                            texto_formatado = str(
-                                valor_bd) if valor_bd is not None else ""
+                            texto_formatado = ""
+                            if valor_bd is not None:
+                                if campo_mp in ("pliq", "ptab", "comp_mp", "larg_mp", "esp_mp"):
+                                    texto_formatado = formatar_valor_moeda(valor_bd)
+                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
+                                    texto_formatado = formatar_valor_percentual(valor_bd)
+                                else:
+                                    texto_formatado = str(valor_bd)
+
+                        widget = table.cellWidget(linha_ui, col_ui)
+                        if isinstance(widget, QComboBox):
+                            idx = widget.findText(texto_formatado, Qt.MatchFixedString)
+                            widget.setCurrentIndex(idx if idx >= 0 else -1)
+                        else:
                             item = table.item(linha_ui, col_ui)
                             if not item:
                                 item = QTableWidgetItem()

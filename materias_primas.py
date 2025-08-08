@@ -595,7 +595,7 @@ def atualizar_dados_de_excel(ui):
                 # Parsing de valores numéricos
                 preco = parse_excel_moeda(row.get("PRECO_TABELA", "0"))
                 pliq_excel = parse_excel_moeda(row.get("PLIQ", "0")) # Lê PLIQ do Excel
-                plus  = parse_excel_percent_inteiro(row.get("DESC1_(+)", "0"))
+                plus  = parse_excel_percent_inteiro(row.get("MRG_(+)", "0"))
                 minus = parse_excel_percent_inteiro(row.get("DESC2_(-)", "0"))
                 dsp   = parse_excel_percent(row.get("DESP", "0"))
                 esp   = parse_excel_float(row.get("ESP_MP", "0"))
