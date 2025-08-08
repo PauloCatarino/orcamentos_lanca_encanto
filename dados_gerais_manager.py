@@ -474,13 +474,16 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                     ]
                     dados_mp_dict = dict(zip(map_mp_cols, dados_atuais_mp))
 
-                    # Atualiza a linha na UI com os dados de materias_primas
+                    # Atualiza a linha na UI considerando dados de materias_primas e da BD
                     for campo_mp, col_ui in mapeamento.items():
-                        # Se o campo existe nos dados obtidos de materias_primas, usa esse valor
-                        if campo_mp in dados_mp_dict:
-                             valor_bd = dados_mp_dict[campo_mp]
-                             texto_formatado = ""
-                             if valor_bd is not None:
+                        if campo_mp == "descricao":
+                            # Usa sempre a descrição original do registo
+                            valor_bd = reg_dict.get("descricao")
+                            texto_formatado = str(valor_bd) if valor_bd is not None else ""
+                        elif campo_mp in dados_mp_dict:
+                            valor_bd = dados_mp_dict[campo_mp]
+                            texto_formatado = ""
+                            if valor_bd is not None:
                                 if campo_mp in ("pliq", "ptab"):
                                     texto_formatado = formatar_valor_moeda(valor_bd)
                                 elif campo_mp in ("comp_mp", "larg_mp", "esp_mp"):
@@ -489,33 +492,33 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                     texto_formatado = formatar_valor_percentual(valor_bd)
                                 else:
                                     texto_formatado = str(valor_bd)
-                             # Preenche widget ou item
-                             widget = table.cellWidget(linha_ui, col_ui)
-                             if isinstance(widget, QComboBox):
-                                 idx = widget.findText(texto_formatado, Qt.MatchFixedString); widget.setCurrentIndex(idx if idx >= 0 else -1)
-                             else:
-                                 item = table.item(linha_ui, col_ui)
-                                 if not item:
-                                     item = QTableWidgetItem()
-                                     table.setItem(linha_ui, col_ui, item)
-                                 if campo_mp == "nao_stock":
-                                     item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                                     item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
-                                 else:
-                                     item.setText(texto_formatado)
-                        # Se o campo é ref_le, mantém o valor original dos dados gerais importados
-                        elif campo_mp == "ref_le":
-                             valor_bd = reg_dict.get(campo_mp)
-                             texto_formatado = str(valor_bd) if valor_bd is not None else ""
-                             item = table.item(linha_ui, col_ui)
-                             if not item:
-                                 item = QTableWidgetItem()
-                                 table.setItem(linha_ui, col_ui, item)
-                             if campo_mp == "nao_stock":
-                                 item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                                 item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
-                             else:
-                                 item.setText(texto_formatado)
+                        else:
+                            valor_bd = reg_dict.get(campo_mp)
+                            texto_formatado = ""
+                            if valor_bd is not None:
+                                if campo_mp in ("pliq", "ptab"):
+                                    texto_formatado = formatar_valor_moeda(valor_bd)
+                                elif campo_mp in ("comp_mp", "larg_mp", "esp_mp"):
+                                    texto_formatado = f"{float(valor_bd):.1f}"
+                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
+                                    texto_formatado = formatar_valor_percentual(valor_bd)
+                                else:
+                                    texto_formatado = str(valor_bd)
+
+                        widget = table.cellWidget(linha_ui, col_ui)
+                        if isinstance(widget, QComboBox):
+                            idx = widget.findText(texto_formatado, Qt.MatchFixedString)
+                            widget.setCurrentIndex(idx if idx >= 0 else -1)
+                        else:
+                            item = table.item(linha_ui, col_ui)
+                            if not item:
+                                item = QTableWidgetItem()
+                                table.setItem(linha_ui, col_ui, item)
+                            if campo_mp == "nao_stock":
+                                item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                                item.setCheckState(Qt.Checked if valor_bd else Qt.Unchecked)
+                            else:
+                                item.setText(texto_formatado)
 
                 else:
                     # Se não encontrou em materias_primas, mantém os dados gerais originais (mesma lógica da opção 1)
