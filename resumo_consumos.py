@@ -199,11 +199,12 @@ def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
         custo_lados = [row['custo_ml_c1'], row['custo_ml_c2'], row['custo_ml_l1'], row['custo_ml_l2']]
         orla_codes = row['orla_codes']
         largura = row['largura_orla']
+        qt = float(row.get('qt_total', 0) or 0)  # Quantidade total da peça
         for i, lado in enumerate(lados):
             code = orla_codes[i]
-            ml = float(ml_lados[i]) if not pd.isnull(ml_lados[i]) else 0.0
-            custo = float(custo_lados[i]) if not pd.isnull(custo_lados[i]) else 0.0
-            if code == 0 or ml == 0:
+            ml_unit = float(ml_lados[i]) if not pd.isnull(ml_lados[i]) else 0.0
+            custo_unit = float(custo_lados[i]) if not pd.isnull(custo_lados[i]) else 0.0
+            if code == 0 or ml_unit == 0:
                 continue
             if code == 1:
                 espessura, ref = '0.4mm', clean_ref(row['corres_orla_0_4'])
@@ -217,8 +218,8 @@ def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
                 'descricao_material': row.get('descricao_no_orcamento', ''),
                 'espessura_orla': espessura,
                 'largura_orla': largura,
-                'ml': ml,
-                'custo': custo
+                'ml': ml_unit * qt,
+                'custo': custo_unit * qt
             })
     df_resumo = pd.DataFrame(resumo)
     if df_resumo.empty:
@@ -319,7 +320,9 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
         (df_orla['orla_l1'] > 0).astype(int) +
         (df_orla['orla_l2'] > 0).astype(int)
     )
-    ml_orla = (df_orla['ml_c1'] + df_orla['ml_c2'] + df_orla['ml_l1'] + df_orla['ml_l2']).sum().round(2)
+    ml_orla = (
+        (df_orla['ml_c1'] + df_orla['ml_c2'] + df_orla['ml_l1'] + df_orla['ml_l2']) * df_orla['qt_total']
+    ).sum().round(2)
     pecas_orladas = (df_orla['passagens'] * df_orla['qt_total']).sum()
     pecas_cnc = df.loc[df['cp03_cnc'] >= 1, 'qt_total'].sum()
     pecas_abd = df.loc[df['cp04_abd'] >= 1, 'qt_total'].sum()

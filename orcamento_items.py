@@ -1683,8 +1683,8 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
             # Query para somar os custos relevantes da tabela dados_def_pecas
             # O critério de busca é ids (item do orcamento), num_orc (numero orcamento), ver_orc (versao orcamento)
             query = f"""
-                SELECT SUM(CUSTO_ML_C1 + CUSTO_ML_C2 + CUSTO_ML_L1 + CUSTO_ML_L2),
-                       SUM(Soma_Custo_und), -- Soma_Custo_und já é por unidade de peça
+                SELECT SUM((CUSTO_ML_C1 + CUSTO_ML_C2 + CUSTO_ML_L1 + CUSTO_ML_L2) * QT_Total),
+                       SUM(Soma_Custo_und * QT_Total),
                        SUM(CUSTO_MP_Total),
                        SUM(Soma_Custo_ACB)
                 FROM dados_def_pecas
@@ -1694,18 +1694,12 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                            num_orc_str, ver_orc_str))
             res = cursor.fetchone()
 
-            if res and res[0] is not None:  # Verifica se há resultados válidos e não são None
+            if res and res[0] is not None:  # Verifica se há resultados válidos
+                # Os valores retornados já consideram a multiplicação por QT_Total na query.
                 total_orlas = float(res[0]) if res[0] is not None else 0.0
-                # A soma da mão de obra (Soma_Custo_und) já vem por peça. Deve ser multiplicada por QT_Total do item.
-                # No entanto, a regra indica `SUM(Soma_Custo_und * QT_Total)`. Precisamos mudar a lógica aqui.
-                # A Soma_Custo_und (col 79) é o custo unitário por peça. QT_Total (col 49) é a quantidade total de peças.
-                # A soma no DB deve ser do custo total de cada peça.
-                # A query já está a fazer SUM(Soma_Custo_und * QT_Total)
                 total_mao_obra = float(res[1]) if res[1] is not None else 0.0
-                total_materia_prima = float(
-                    res[2]) if res[2] is not None else 0.0
-                total_acabamentos = float(
-                    res[3]) if res[3] is not None else 0.0
+                total_materia_prima = float(res[2]) if res[2] is not None else 0.0
+                total_acabamentos = float(res[3]) if res[3] is not None else 0.0
                 # print(f"[DEBUG] Custos DB para item {id_item_orcamento_str}: Orlas={total_orlas:.2f}, MO={total_mao_obra:.2f}, MP={total_materia_prima:.2f}, Acab={total_acabamentos:.2f}")
             else:
                 print(
