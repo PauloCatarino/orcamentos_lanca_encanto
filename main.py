@@ -35,7 +35,7 @@ Anaconda Prompt
  ______________________________//________________________
 
 git add .
-git commit -m "228 Commit"
+git commit -m "229 Commit"
 git push origin main
 
 ______________________________//________________________
@@ -165,11 +165,11 @@ class MainApp(QMainWindow):
         self.navegacao_index = 0   # Índice que indica qual item do QTreeWidget separador 'Orcaemnto de Items' está sendo exibido # Variável para controlar a navegação entre itens do orçamento
         # Inicializa os lineEdits de percentagem com valores por defeito
         # Estes valores de percentagem por defeito estão no separador Orcamento de Items e existe uma grupobox com o nome "Margens e Custos"
-        self.ui.lineEdit_margem_lucro.setText("15%")
-        self.ui.lineEdit_custos_administrativos.setText("5%")
-        self.ui.margem_acabamentos.setText("3%") # Margem sobre o total de custos dos acabamentos
-        self.ui.margem_MP_orlas.setText("2%") # Margem sobre as Materias Primas (Placas & Orlas & Ferragens)
-        self.ui.margem_mao_obra.setText("4%") # Margem sobre a Mão de Obra
+        self.ui.lineEdit_margem_lucro.setText("5%")
+        self.ui.lineEdit_custos_administrativos.setText("3%")
+        self.ui.margem_acabamentos.setText("5%") # Margem sobre o total de custos dos acabamentos
+        self.ui.margem_MP_orlas.setText("15%") # Margem sobre as Materias Primas (Placas & Orlas & Ferragens)
+        self.ui.margem_mao_obra.setText("5%") # Margem sobre a Mão de Obra
 
         # Conectar funcionalidades do separador Clientes
         # # Separador Clientes

@@ -447,7 +447,7 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                             # Seleciona apenas as colunas necessárias para atualização
                             cursor_mp.execute(
                                 """
-                                SELECT DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, MARGEM, DESCONTO,
+                                SELECT DESCRICAO_do_PHC, DESCRICAO_no_ORCAMENTO, PRECO_TABELA, PLIQ, MARGEM, DESCONTO,
                                        UND, DESP, CORESP_ORLA_0_4, CORESP_ORLA_1_0, COMP_MP, LARG_MP, ESP_MP
                                 FROM materias_primas WHERE Ref_LE = %s
                                 """,
@@ -458,11 +458,12 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                 if dados_atuais_mp:
                     # Mapeia os dados de materias_primas para os nomes de campo usados no mapeamento UI
                     map_mp_cols = [
+                        "descricao",
                         "descricao_no_orcamento",
                         "ptab",
                         "pliq",
-                        "margem",
-                        "desconto",
+                        "desc1_plus",
+                        "desc2_minus",
                         "und",
                         "desp",
                         "corres_orla_0_4",
@@ -484,7 +485,7 @@ def importar_dados_gerais_com_opcao(parent_app, nome_tabela, mapeamento, modelo_
                                     texto_formatado = formatar_valor_moeda(valor_bd)
                                 elif campo_mp in ("comp_mp", "larg_mp", "esp_mp"):
                                     texto_formatado = f"{float(valor_bd):.1f}"
-                                elif campo_mp in ("MARGEM", "DESCONTO", "desp"):
+                                elif campo_mp in ("desc1_plus", "desc2_minus", "desp"):
                                     texto_formatado = formatar_valor_percentual(valor_bd)
                                 else:
                                     texto_formatado = str(valor_bd)
