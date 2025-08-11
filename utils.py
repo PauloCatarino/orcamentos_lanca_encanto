@@ -566,19 +566,32 @@ def adicionar_menu_limpar_alterar(
 # Variável global para armazenar dados de uma linha copiada genericamente
 _copied_row_generica = []
 
+def _allowed_check_columns(tabela):
+    """
+    Devolve um set com os índices de colunas que aceitam checkbox.
+    1º tenta ler da propriedade 'checkbox_columns';
+    2º se não houver, procura cabeçalho 'nao_stock' (case-insensitive).
+    """
+    cols = tabela.property("checkbox_columns")
+    if isinstance(cols, (set, list, tuple)):
+        return {int(i) for i in cols}
+    permitidas = set()
+    for i in range(tabela.columnCount()):
+        h = tabela.horizontalHeaderItem(i)
+        if h and h.text().strip().lower().replace(" ", "_") == "nao_stock":
+            permitidas.add(i)
+    return permitidas
 
 def copiar_linha_tabela(tabela):
-    """Copia os valores da linha selecionada da ``tabela``.
-
-    São considerados tanto itens simples quanto widgets como ``QComboBox`` e
-    ``QLineEdit``. O resultado é guardado em ``_copied_row_generica`` para uso
-    posterior na função :func:`colar_linha_tabela`.
-    """
+    """Copia valores da linha selecionada respeitando colunas de checkbox permitidas."""
+    from PyQt5.QtWidgets import QMessageBox
     global _copied_row_generica
     row = tabela.currentRow()
     if row < 0:
         QMessageBox.warning(tabela.window(), "Copiar", "Nenhuma linha selecionada para copiar.")
         return
+
+    allowed = _allowed_check_columns(tabela)
     dados = []
     for c in range(tabela.columnCount()):
         w = tabela.cellWidget(row, c)
@@ -588,7 +601,8 @@ def copiar_linha_tabela(tabela):
             dados.append(("widget", w.text()))
         else:
             item = tabela.item(row, c)
-            if item and item.flags() & Qt.ItemIsUserCheckable:
+            # Só tratamos como 'check' se a coluna estiver na lista permitida
+            if item and (item.flags() & Qt.ItemIsUserCheckable) and (c in allowed):
                 dados.append(("check", item.checkState()))
             else:
                 dados.append(("item", item.text() if item else ""))
@@ -604,63 +618,41 @@ def colar_linha_tabela(tabela):
         (flags atuais do item, propriedade 'checkbox_columns' ou header 'nao_stock').
       - Em qualquer outra coluna, cola o valor copiado como texto normal.
     """
-    global _copied_row_generica
+    from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
     if not _copied_row_generica:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha copiada.")
         return
 
-    # Conjunto de linhas selecionadas
     selected = {idx.row() for idx in tabela.selectionModel().selectedRows()}
     if not selected:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha selecionada para colar.")
         return
 
-    # Helper: decide se a célula (row,col) aceita checkbox
-    def destino_aceita_checkbox(row, col):
-        # 1) se já existe item com flag checkable
-        it = tabela.item(row, col)
-        if it and (it.flags() & Qt.ItemIsUserCheckable):
-            return True
-        # 2) se a tabela anunciou explicitamente colunas checkbox
-        cols_prop = tabela.property("checkbox_columns")
-        if isinstance(cols_prop, (set, list, tuple)) and col in set(cols_prop):
-            return True
-        # 3) heurística via header (compatível com “nao_stock”)
-        hdr = tabela.horizontalHeaderItem(col)
-        if hdr:
-            nome = hdr.text().strip().lower().replace(" ", "_")
-            if nome in {"nao_stock", "não_stock"}:
-                return True
-        return False
+    allowed = _allowed_check_columns(tabela)
 
     for r in selected:
         for c, (tipo, valor) in enumerate(_copied_row_generica):
             w = tabela.cellWidget(r, c)
-
-            # 1) Se é combobox, procura texto
             if w and tipo == "combo" and hasattr(w, "findText"):
                 idx = w.findText(valor)
                 w.setCurrentIndex(idx if idx >= 0 else -1)
-
-            # 2) Se é widget “textual” (ex.: QLineEdit) ou item normal
             elif w and hasattr(w, "setText") and tipo in ("widget", "item"):
                 w.setText(valor)
-
             else:
-                # 3) Celula baseada em QTableWidgetItem
+                # Celas sem widget: QTableWidgetItem
+                item = tabela.item(r, c)
                 if tipo == "check":
-                    # Só cria checkboxes se a coluna aceitar checkbox
-                    if destino_aceita_checkbox(r, c):
-                        item = tabela.item(r, c)
+                    if c in allowed:
                         if not item:
                             item = QTableWidgetItem()
                             item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                             tabela.setItem(r, c, item)
                         item.setCheckState(valor)
                     else:
-                        # Cola como texto simples: "1" para marcado, "" para não marcado
-                        texto = "1" if int(valor) == int(Qt.Checked) else ""
-                        set_item(tabela, r, c, texto)
+                        # Se por algum engano veio 'check' numa coluna não permitida,
+                        # convertemos para item normal e limpamos o estado.
+                        normal = QTableWidgetItem("")
+                        tabela.setItem(r, c, normal)
                 else:
                     set_item(tabela, r, c, valor)
 
