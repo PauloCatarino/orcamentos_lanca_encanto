@@ -19,7 +19,7 @@ import math
 import re
 import os
 import mysql.connector
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QComboBox
 from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
@@ -597,37 +597,63 @@ def copiar_linha_tabela(tabela):
 
 
 def colar_linha_tabela(tabela):
-    """Cola os valores previamente copiados nas linhas selecionadas da ``tabela``."""
+    """
+    Cola os valores previamente copiados nas linhas selecionadas, respeitando
+    o tipo da célula de destino:
+      - Se for QComboBox: seleciona pelo texto.
+      - Se for widget com setText(): escreve o texto.
+      - Se for item checkável: altera apenas o estado (não cria checkboxes novos).
+      - Caso contrário: escreve texto simples.
+    """
     if not _copied_row_generica:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha copiada.")
         return
+
     selected = {idx.row() for idx in tabela.selectionModel().selectedRows()}
     if not selected:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha selecionada para colar.")
         return
-    for r in selected:
-        for c, (tipo, valor) in enumerate(_copied_row_generica):
-            w = tabela.cellWidget(r, c)
-            if w and tipo == "combo" and hasattr(w, "findText"):
-                idx = w.findText(valor)
-                w.setCurrentIndex(idx if idx >= 0 else -1)
-            elif w and hasattr(w, "setText") and tipo in ("widget", "item"):
-                w.setText(valor)
-            else:
+
+    tabela.blockSignals(True)
+    try:
+        for r in selected:
+            for c, (tipo, valor) in enumerate(_copied_row_generica):
+                w = tabela.cellWidget(r, c)
+
+                # 1) Combos: escolhe a opção pelo texto
+                if isinstance(w, QComboBox):
+                    idx = w.findText(valor)
+                    w.setCurrentIndex(idx if idx >= 0 else -1)
+                    continue
+
+                # 2) Widgets com setText (ex.: QLineEdit em algum caso)
+                if w is not None and hasattr(w, "setText"):
+                    w.setText(valor)
+                    continue
+
+                # 3) Itens normais
                 item = tabela.item(r, c)
-                if tipo == "check":
-                    if not item:
-                        item = QTableWidgetItem()
-                        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                        tabela.setItem(r, c, item)
-                    item.setCheckState(valor)
+                if item is None:
+                    # Cria item sem mexer em flags (NÃO adiciona checkable onde não existe)
+                    item = QTableWidgetItem()
+                    tabela.setItem(r, c, item)
+
+                # Se o **destino** é checkável, só muda o estado (não converte outras colunas em checkbox)
+                if item.flags() & Qt.ItemIsUserCheckable:
+                    if tipo == "check":
+                        item.setCheckState(valor)
+                    else:
+                        # Também aceita strings "0/1/True/False"
+                        txt = str(valor).strip().lower()
+                        state = Qt.Checked if txt in ("1", "true", "checked") else Qt.Unchecked
+                        item.setCheckState(state)
                 else:
-                    set_item(tabela, r, c, valor)
-    QMessageBox.information(
-        tabela.window(),
-        "Colar",
-        f"Dados colados em {len(selected)} linha(s).",
-    )
+                    # Destino não é checkável -> texto simples
+                    item.setText(valor)
+    finally:
+        tabela.blockSignals(False)
+
+    QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected)} linha(s).")
 
 
 def limpar_dados_tabela(tabela):
