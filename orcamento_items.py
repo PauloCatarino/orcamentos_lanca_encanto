@@ -72,7 +72,7 @@ import tabela_def_pecas_items
 import modulo_dados_definicoes
 from modulo_dados_definicoes import salvar_dados_def_pecas # Importa a função para salvar os dados de definições de peças
 from modulo_calculos_custos import aplicar_valores_maquinas # Importa a função para aplicar os valores das máquinas de produção
-from maquinas_orcamento import registrar_valores_maquinas_orcamento, carregar_ou_inicializar_maquinas_orcamento # Garante que os valores das máquinas de produção são registrados no orçamento
+from maquinas_orcamento import (registrar_valores_maquinas_orcamento, carregar_ou_inicializar_maquinas_orcamento, criar_tabela_maquinas_orcamento) # Garante que os valores das máquinas de produção são registrados no orçamento
 from margens_ajustes_percentagens import (criar_tabela_margens_ajustes, carregar_ou_inicializar_margens, salvar_margens) # Importa as funções para criar a tabela de margens e carregar/inicializar margens
 
 
@@ -926,24 +926,24 @@ def abrir_orcamento(main_window):
         # ui.orcamentar_items.click() # Simula clique para carregar tudo
         # --- FIM ADICIONADO ---
         # print("Orçamento aberto e itens carregados.")
-        # NOVO: Após carregar todos os itens do orçamento, atualiza os custos e preços para todos
-        # Não força a margem global ao abrir um orçamento, mantém as margens individuais se existirem.
-        carregar_ou_inicializar_maquinas_orcamento(
-            ui.lineEdit_num_orcamento.text().strip(),
-            ui.lineEdit_versao_orcamento.text().strip(),
-            ui,
-        )
-        carregar_ou_inicializar_margens(
-            ui.lineEdit_num_orcamento.text().strip(),
-            ui.lineEdit_versao_orcamento.text().strip(),
-            ui,
-        )
+        # NOVO: Após carregar todos os itens do orçamento, atualiza os custos e preços para todos␊
+        # Não força a margem global ao abrir um orçamento, mantém as margens individuais se existirem.␊
+        num_orc = ui.lineEdit_num_orcamento.text().strip()
+        ver_orc = ui.lineEdit_versao_orcamento.text().strip()
+
+        # Garante a existência da tabela de máquinas de produção por orçamento
+        criar_tabela_maquinas_orcamento()
+
+        # Carrega os valores de produção; se for a primeira vez, inicializa com os padrões
+        carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui)
+
+        # Carrega as margens específicas do orçamento
+        carregar_ou_inicializar_margens(num_orc, ver_orc, ui)
+
         atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
-        registrar_valores_maquinas_orcamento(
-            ui.lineEdit_num_orcamento.text().strip(),
-            ui.lineEdit_versao_orcamento.text().strip(),
-            ui,
-        )
+
+        # Regista novamente os valores apresentados para garantir persistência
+        registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui)
 
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao abrir orçamento: {err}")
