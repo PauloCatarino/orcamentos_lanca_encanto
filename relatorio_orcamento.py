@@ -523,10 +523,15 @@ def preencher_campos_relatorio(ui: QtWidgets.QWidget) -> None:
         
 
 
+    # Atualiza os rótulos de totais no separador "Relatorio Orcamento"
     ui.label_total_qt_2.setText(f"Total QT: {total_qt:g}")
     ui.label_subtotal_2.setText(f"Subtotal: {subtotal:,.2f}")
-    ui.label_iva_2.setText("IVA: 23%")
-    total_geral = subtotal * 1.23
+    # Calcula o IVA a 23% e mostra o valor em euros
+    iva = subtotal * 0.23
+    ui.label_iva_2.setText(f"IVA (23%): {iva:,.2f}€")
+
+    # Total geral resulta da soma do subtotal com o IVA calculado
+    total_geral = subtotal + iva
     ui.label_total_geral_2.setText(f"Total Geral: {total_geral:,.2f}")
     ui.label_paginacao_2.setText("1/1")
 
@@ -759,41 +764,47 @@ def gera_pdf(ui: QtWidgets.QWidget, caminho: str) -> None:
     elems.append(table)
     elems.append(Spacer(1, 2))
 
-    # 9. Quadro dos totais (igual)
-    def add_euro(valor):
+    # 9. Quadro dos totais (com destaque no Subtotal)
+    def add_euro(valor: str) -> str:
+        """Garante que a string termina com o símbolo do euro."""
         valor = valor.strip()
         return valor if "€" in valor else valor + "€"
 
+    # Obtém os valores formatados a partir dos rótulos do separador
     subtotal_val = add_euro(ui.label_subtotal_2.text().split(":")[-1].strip())
-    iva_val = ui.label_iva_2.text().split(":")[-1].strip()
+    iva_val = add_euro(ui.label_iva_2.text().split(":")[-1].strip())
     total_geral_val = add_euro(ui.label_total_geral_2.text().split(":")[-1].strip())
     total_qt_val = ui.label_total_qt_2.text().split(":")[-1].strip()
 
+    # Estilo especial para destacar uma linha (utilizado no Subtotal)
     bold_total_style = ParagraphStyle(
         "BoldTotal",
         parent=styles["Normal"],
         alignment=2,  # Direita
         fontSize=11,
         textColor=colors.darkblue,
-        fontName="Helvetica-Bold"
+        fontName="Helvetica-Bold",
     )
+
+    # Linhas da tabela de totais (Subtotal destacado, Total Geral simples)
     totais_data = [
         ["", ""],
         ["Total QT:", total_qt_val],
-        ["Subtotal:", subtotal_val],
+        [Paragraph("Subtotal:", bold_total_style), Paragraph(subtotal_val, bold_total_style)],
         ["IVA (23%):", iva_val],
-        [Paragraph("Total Geral:", bold_total_style), Paragraph(total_geral_val, bold_total_style)]
+        ["Total Geral:", total_geral_val],
     ]
     totais_table = Table(totais_data, colWidths=[90, 80], hAlign="RIGHT")
     totais_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, -1), (-1, -1), 11),
-        ("TEXTCOLOR", (0, -1), (-1, -1), colors.darkblue),
-        ("TOPPADDING", (0, -1), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.lightgrey),
-        ("BOX", (0, -1), (-1, -1), 1.0, colors.HexColor("#002060")),
+        # Aplica formatação especial apenas à linha do Subtotal (índice 2)
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 2), (-1, 2), 11),
+        ("TEXTCOLOR", (0, 2), (-1, 2), colors.darkblue),
+        ("TOPPADDING", (0, 2), (-1, 2), 6),
+        ("BOTTOMPADDING", (0, 2), (-1, 2), 6),
+        ("BACKGROUND", (0, 2), (-1, 2), colors.lightgrey),
+        ("BOX", (0, 2), (-1, 2), 1.0, colors.HexColor("#002060")),
     ]))
     elems.append(totais_table)
 
@@ -975,7 +986,8 @@ def gera_excel(ui: QtWidgets.QWidget, caminho: str) -> None:
         return v if '€' in v else f"{v} €"
 
     subtotal_val = euro(ui.label_subtotal_2.text().split(":")[-1].strip())
-    iva_val = ui.label_iva_2.text().split(":")[-1].strip()
+    # IVA agora vem com valor em euros; garante o sufixo "€"
+    iva_val = euro(ui.label_iva_2.text().split(":")[-1].strip())
     total_geral_val = euro(ui.label_total_geral_2.text().split(":")[-1].strip())
     total_qt_val = ui.label_total_qt_2.text().split(":")[-1].strip()
 
