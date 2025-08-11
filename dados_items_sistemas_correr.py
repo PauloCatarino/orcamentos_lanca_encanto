@@ -24,7 +24,16 @@ from PyQt5.QtCore import Qt
 import mysql.connector # Importar para capturar erros específicos
 
 # Funções utilitárias (formatação/conversão de valores e filtros)
-from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_texto_para_valor, get_distinct_values_with_filter, adicionar_menu_limpar)
+from utils import (
+    formatar_valor_moeda,
+    formatar_valor_percentual,
+    converter_texto_para_valor,
+    get_distinct_values_with_filter,
+    adicionar_menu_limpar_alterar,
+    copiar_linha_tabela,
+    colar_linha_tabela,
+    limpar_dados_tabela,
+)
 
 # Diálogo de seleção de material/ferragem/ssitemascorrer/acabamentos
 from dados_gerais_materiais_escolher import MaterialSelectionDialog
@@ -898,8 +907,17 @@ def inicializar_dados_items_sistemas_correr(parent):
     ui.limpar_linha_tab_sistemas_correr_2.clicked.connect(lambda: limpar_linha_tab_sistemas_correr_2(parent))
 
     # Botão para importar dados (ex.: a partir de modelos existentes)
-    ui.importar_dados_item_tab_sistemas_correr_3.clicked.connect(lambda: importar_dados_item_tab_sistemas_correr_3(parent))
-    adicionar_menu_limpar(ui.Tab_Sistemas_Correr_11, lambda: limpar_linha_tab_sistemas_correr_2(parent))
+    ui.importar_dados_item_tab_sistemas_correr_3.clicked.connect(
+        lambda: importar_dados_item_tab_sistemas_correr_3(parent)
+    )
+    # Menu de contexto com ações adicionais (limpar tabela, copiar e colar linha)
+    adicionar_menu_limpar_alterar(
+        ui.Tab_Sistemas_Correr_11,
+        lambda: limpar_linha_tab_sistemas_correr_2(parent),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Sistemas_Correr_11),
+        callback_colar=lambda: colar_linha_tabela(ui.Tab_Sistemas_Correr_11),
+        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Sistemas_Correr_11),
+    )
 
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Sistemas_Correr_11 com o botão "Limpar Linha Selecionada" 
