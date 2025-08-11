@@ -42,13 +42,13 @@ from PyQt5.QtCore import Qt, QCoreApplication # QCoreApplication para processEve
 from utils import formatar_valor_moeda, converter_texto_para_valor, safe_item_text, set_item , obter_diretorio_base
 
 # Variáveis configuráveis - os valores poderão ser alterados via interface futuramente
-VALOR_SECCIONADORA = 0.45            # €/ML para a máquina Seccionadora
-VALOR_ORLADORA = 0.65                # €/ML para a máquina Orladora
-CNC_PRECO_PECA_BAIXO = 0.75          # €/peça se AREA_M2_und <= 0.7
-CNC_PRECO_PECA_MEDIO = 1.25          # €/peça se AREA_M2_und < 1 (mas > 0.7)
-CNC_PRECO_PECA_ALTO = 1.75           # €/peça se AREA_M2_und >= 1
+VALOR_SECCIONADORA = 0.40            # €/ML para a máquina Seccionadora
+VALOR_ORLADORA = 0.60                # €/ML para a máquina Orladora
+CNC_PRECO_PECA_BAIXO = 0.65          # €/peça se AREA_M2_und <= 0.7
+CNC_PRECO_PECA_MEDIO = 1.10          # €/peça se AREA_M2_und < 1 (mas > 0.7)
+CNC_PRECO_PECA_ALTO = 1.50           # €/peça se AREA_M2_und >= 1
 VALOR_ABD = 0.60                     # €/peça para a máquina ABD
-EUROS_HORA_CNC = 55.0                # €/hora para a máquina CNC
+EUROS_HORA_CNC = 53.0                # €/hora para a máquina CNC
 EUROS_HORA_PRENSA = 50.0             # €/hora para a máquina Prensa
 EUROS_HORA_ESQUAD = 20.0              # €/hora para a máquina Esquadrejadora
 EUROS_EMBALAGEM_M3 = 50.0             # €/M³ para Embalagem
