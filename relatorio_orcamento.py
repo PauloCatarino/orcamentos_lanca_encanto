@@ -45,7 +45,7 @@ import subprocess
 import sys
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QHeaderView, QMessageBox, QVBoxLayout, QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QListWidget, QDialogButtonBox, QFileDialog, QLabel, QWidget, QHBoxLayout
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QListWidget, QDialogButtonBox, QFileDialog, QLabel, QWidget, QHBoxLayout, QLineEdit
 from PyQt5.QtWidgets import QApplication
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -88,7 +88,7 @@ class EmailDialog(QDialog):
     Diálogo PyQt para editar o corpo do email (com HTML), gerir anexos (adicionar/remover)
     e aceder à função de envio rápido por WhatsApp Web (abre o browser com o número do cliente).
     """
-    def __init__(self, html_default, anexos_iniciais=None, pasta_default=None, telemovel=None, pdf_path=None, parent=None):
+    def __init__(self, html_default, anexos_iniciais=None, pasta_default=None, telemovel=None, pdf_path=None, destino="", parent=None):
         # Construtor do diálogo. Recebe:
         # - html_default: corpo do email já formatado (HTML)
         # - anexos_iniciais: lista de anexos já incluídos (ex: PDF gerado)
@@ -110,7 +110,17 @@ class EmailDialog(QDialog):
         self.telemovel = telemovel or ""
         self.pdf_path = pdf_path
 
+        # Layout principal do diálogo
         layout = QVBoxLayout(self)
+
+        # Campo para o email do destinatário (permite edição antes do envio)
+        destino_layout = QHBoxLayout()
+        destino_lbl = QLabel("Destinatário:")
+        self.destino_edit = QLineEdit(self)
+        self.destino_edit.setText(destino)
+        destino_layout.addWidget(destino_lbl)
+        destino_layout.addWidget(self.destino_edit)
+        layout.addLayout(destino_layout)
 
         # Corpo do email (HTML)
         corpo_lbl = QLabel("<b>Corpo do Email:</b>")
@@ -178,11 +188,12 @@ class EmailDialog(QDialog):
         return False
 
     def get_corpo_e_anexos(self):
-        # Devolve o corpo do email (HTML) e a lista de caminhos dos anexos selecionados.
+        # Devolve o corpo do email (HTML), anexos e destinatário editado.
         corpo_html = self.text_edit.toHtml()
         anexos = [self.anexos_list.item(i).text() for i in range(self.anexos_list.count())]
-        return corpo_html, anexos
-    
+        destino = self.destino_edit.text().strip()
+        return corpo_html, anexos, destino
+
     def enviar_whatsapp(self):
         # Abre o browser na conversa WhatsApp Web do cliente, com mensagem pré-preenchida.
         # Depois abre a pasta do PDF, para anexar facilmente o orçamento.
@@ -1229,9 +1240,11 @@ def enviar_orcamento_por_email(ui: QtWidgets.QWidget) -> None:
 
     # -- GERA O CORPO HTML JÁ FORMATADO   E ABRE PARA ADICIONAR ANEXOS NA PASTA DO ORÇAMENTO--
     telemovel = ui.lineEdit_telemovel_3.text().strip()
-    dlg = EmailDialog(corpo_default, anexos_iniciais=[pdf_path], pasta_default=pasta, telemovel=telemovel, pdf_path=pdf_path)
+    # Passa o email do cliente para o diálogo para permitir edição antes do envio
+    dlg = EmailDialog(corpo_default, anexos_iniciais=[pdf_path], pasta_default=pasta,
+                     telemovel=telemovel, pdf_path=pdf_path, destino=destino)
     if dlg.exec_() == QDialog.Accepted:
-        corpo_final, anexos = dlg.get_corpo_e_anexos()
+        corpo_final, anexos, destino = dlg.get_corpo_e_anexos()
     else:
         QMessageBox.information(None, "Cancelado", "Envio cancelado pelo utilizador.")
         return
