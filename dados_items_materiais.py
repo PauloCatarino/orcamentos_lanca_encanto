@@ -441,7 +441,12 @@ def configurar_tabela_material(parent):
             combo_t = tabela.cellWidget(r, tipo_idx)
             if isinstance(combo_t, QComboBox):
                 combo_t.setCurrentIndex(-1)
-    apply_row_selection_style(tabela)
+    
+    # --- Diz à tabela quais colunas são de checkbox (usado pelo colar/cópia) ---
+    chk_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c.get('checkbox')), None)
+    if chk_idx is not None:
+        # guarda um set com os índices das colunas checkbox
+        ui.Tab_Material_11.setProperty("checkbox_columns", {chk_idx})
 
         
 # =============================================================================
