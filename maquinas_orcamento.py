@@ -197,9 +197,13 @@ def registrar_valores_maquinas_orcamento(num_orc, ver_orc, ui=None):
 def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
     """Carrega valores do orçamento ou cria registros padrão.
 
+    Retorna ``True`` se já existiam dados para este orçamento ou ``False``
+    caso seja a primeira vez que está a ser iniciado.
+
     Se ``ui`` for fornecida e possuir ``tableWidget_orcamento_maquinas``,
     também preenche essa tabela com os valores carregados ou iniciais.
     """
+    dados_existiam = False
     try:
         with obter_cursor() as cursor:
             cursor.execute(
@@ -211,7 +215,9 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
                 (num_orc, ver_orc),
             )
             linhas = cursor.fetchall()
+            dados_existiam = bool(linhas)  # Marca se já havia dados
             if not linhas:
+                # Primeira vez: regista os valores padrão das máquinas
                 registrar_valores_maquinas_orcamento(num_orc, ver_orc)
                 cursor.execute(
                     """
@@ -274,6 +280,7 @@ def carregar_ou_inicializar_maquinas_orcamento(num_orc, ver_orc, ui=None):
             _restaurar_ordem_colunas(tbl)
     except Exception as e:
         print(f"Erro ao carregar valores de máquinas do orçamento: {e}")
+    return dados_existiam
 
 
 def salvar_tabela_orcamento_maquinas(ui):
