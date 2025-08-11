@@ -520,12 +520,17 @@ def adicionar_menu_limpar(tabela, callback):
 def adicionar_menu_limpar_alterar(
     tabela,
     callback_limpar,
-    callback_alterar,
+    callback_alterar=None,
     callback_copiar=None,
     callback_colar=None,
     callback_limpar_tabela=None,
 ):
-    """Menu de contexto com opções adicionais."""
+    """Cria um menu de contexto para a ``tabela`` com opções adicionais.
+
+    Esta função pode ser utilizada tanto nas tabelas de Dados Gerais quanto
+    nas tabelas de dados dos itens. Se ``callback_alterar`` não for
+    fornecido, a opção "Atualizar dados..." não será exibida.
+    """
     from PyQt5.QtWidgets import QMenu
 
     def abrir_menu2(pos):
@@ -536,9 +541,11 @@ def adicionar_menu_limpar_alterar(
             acao_limpar_tabela = menu.addAction("Limpar Dados Tabela")
         acao_copiar = menu.addAction("Copiar Linha selecionada")
         acao_colar = menu.addAction("Colar Linha selecionada")
-        acao_aplicar = menu.addAction(
-            "Atualizar dados para todos os items do orçamento e Tab_def_pecas"
-        )
+        acao_aplicar = None
+        if callback_alterar:
+            acao_aplicar = menu.addAction(
+                "Atualizar dados para todos os items do orçamento e Tab_def_pecas"
+            )
 
         acao_ret = menu.exec_(tabela.mapToGlobal(pos))
         if acao_ret == acao_limpar:
@@ -549,11 +556,105 @@ def adicionar_menu_limpar_alterar(
             callback_copiar()
         elif acao_ret == acao_colar and callback_colar:
             callback_colar()
-        elif acao_ret == acao_aplicar:
+        elif acao_ret == acao_aplicar and callback_alterar:
             callback_alterar()
 
     tabela.setContextMenuPolicy(Qt.CustomContextMenu)
     tabela.customContextMenuRequested.connect(abrir_menu2)
+
+
+# Variável global para armazenar dados de uma linha copiada genericamente
+_copied_row_generica = []
+
+
+def copiar_linha_tabela(tabela):
+    """Copia os valores da linha selecionada da ``tabela``.
+
+    São considerados tanto itens simples quanto widgets como ``QComboBox`` e
+    ``QLineEdit``. O resultado é guardado em ``_copied_row_generica`` para uso
+    posterior na função :func:`colar_linha_tabela`.
+    """
+    global _copied_row_generica
+    row = tabela.currentRow()
+    if row < 0:
+        QMessageBox.warning(tabela.window(), "Copiar", "Nenhuma linha selecionada para copiar.")
+        return
+    dados = []
+    for c in range(tabela.columnCount()):
+        w = tabela.cellWidget(row, c)
+        if w and hasattr(w, "currentText"):
+            dados.append(("combo", w.currentText()))
+        elif w and hasattr(w, "text"):
+            dados.append(("widget", w.text()))
+        else:
+            item = tabela.item(row, c)
+            if item and item.flags() & Qt.ItemIsUserCheckable:
+                dados.append(("check", item.checkState()))
+            else:
+                dados.append(("item", item.text() if item else ""))
+    _copied_row_generica = dados
+    QMessageBox.information(tabela.window(), "Copiar", "Linha copiada.")
+
+
+def colar_linha_tabela(tabela):
+    """Cola os valores previamente copiados nas linhas selecionadas da ``tabela``."""
+    if not _copied_row_generica:
+        QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha copiada.")
+        return
+    selected = {idx.row() for idx in tabela.selectionModel().selectedRows()}
+    if not selected:
+        QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha selecionada para colar.")
+        return
+    for r in selected:
+        for c, (tipo, valor) in enumerate(_copied_row_generica):
+            w = tabela.cellWidget(r, c)
+            if w and tipo == "combo" and hasattr(w, "findText"):
+                idx = w.findText(valor)
+                w.setCurrentIndex(idx if idx >= 0 else -1)
+            elif w and hasattr(w, "setText") and tipo in ("widget", "item"):
+                w.setText(valor)
+            else:
+                item = tabela.item(r, c)
+                if tipo == "check":
+                    if not item:
+                        item = QTableWidgetItem()
+                        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                        tabela.setItem(r, c, item)
+                    item.setCheckState(valor)
+                else:
+                    set_item(tabela, r, c, valor)
+    QMessageBox.information(
+        tabela.window(),
+        "Colar",
+        f"Dados colados em {len(selected)} linha(s).",
+    )
+
+
+def limpar_dados_tabela(tabela):
+    """Limpa todos os dados da ``tabela`` mantendo o número de linhas."""
+    total_rows = tabela.rowCount()
+    total_cols = tabela.columnCount()
+    tabela.blockSignals(True)
+    for r in range(total_rows):
+        for c in range(total_cols):
+            w = tabela.cellWidget(r, c)
+            if w:
+                if hasattr(w, "setCurrentIndex"):
+                    w.setCurrentIndex(-1)
+                elif hasattr(w, "clear"):
+                    w.clear()
+            item = tabela.item(r, c)
+            if item:
+                if item.flags() & Qt.ItemIsUserCheckable:
+                    item.setCheckState(Qt.Unchecked)
+                item.setText("")
+    tabela.blockSignals(False)
+    tabela.clearSelection()
+    QMessageBox.information(
+        tabela.window(),
+        "Limpar Dados Tabela",
+        "Todos os dados da tabela foram limpos.",
+    )
 
 
 def copiar_valores_tabela(origem, destino):
