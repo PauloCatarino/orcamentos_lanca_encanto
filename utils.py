@@ -597,63 +597,78 @@ def copiar_linha_tabela(tabela):
 
 
 def colar_linha_tabela(tabela):
+    """Cola os valores previamente copiados nas linhas selecionadas da `tabela`.
+
+    Regras:
+      - Só cria checkboxes nas colunas que já são/foram definidas como checkbox
+        (flags atuais do item, propriedade 'checkbox_columns' ou header 'nao_stock').
+      - Em qualquer outra coluna, cola o valor copiado como texto normal.
     """
-    Cola os valores previamente copiados nas linhas selecionadas, respeitando
-    o tipo da célula de destino:
-      - Se for QComboBox: seleciona pelo texto.
-      - Se for widget com setText(): escreve o texto.
-      - Se for item checkável: altera apenas o estado (não cria checkboxes novos).
-      - Caso contrário: escreve texto simples.
-    """
+    global _copied_row_generica
     if not _copied_row_generica:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha copiada.")
         return
 
+    # Conjunto de linhas selecionadas
     selected = {idx.row() for idx in tabela.selectionModel().selectedRows()}
     if not selected:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha selecionada para colar.")
         return
 
-    tabela.blockSignals(True)
-    try:
-        for r in selected:
-            for c, (tipo, valor) in enumerate(_copied_row_generica):
-                w = tabela.cellWidget(r, c)
+    # Helper: decide se a célula (row,col) aceita checkbox
+    def destino_aceita_checkbox(row, col):
+        # 1) se já existe item com flag checkable
+        it = tabela.item(row, col)
+        if it and (it.flags() & Qt.ItemIsUserCheckable):
+            return True
+        # 2) se a tabela anunciou explicitamente colunas checkbox
+        cols_prop = tabela.property("checkbox_columns")
+        if isinstance(cols_prop, (set, list, tuple)) and col in set(cols_prop):
+            return True
+        # 3) heurística via header (compatível com “nao_stock”)
+        hdr = tabela.horizontalHeaderItem(col)
+        if hdr:
+            nome = hdr.text().strip().lower().replace(" ", "_")
+            if nome in {"nao_stock", "não_stock"}:
+                return True
+        return False
 
-                # 1) Combos: escolhe a opção pelo texto
-                if isinstance(w, QComboBox):
-                    idx = w.findText(valor)
-                    w.setCurrentIndex(idx if idx >= 0 else -1)
-                    continue
+    for r in selected:
+        for c, (tipo, valor) in enumerate(_copied_row_generica):
+            w = tabela.cellWidget(r, c)
 
-                # 2) Widgets com setText (ex.: QLineEdit em algum caso)
-                if w is not None and hasattr(w, "setText"):
-                    w.setText(valor)
-                    continue
+            # 1) Se é combobox, procura texto
+            if w and tipo == "combo" and hasattr(w, "findText"):
+                idx = w.findText(valor)
+                w.setCurrentIndex(idx if idx >= 0 else -1)
 
-                # 3) Itens normais
-                item = tabela.item(r, c)
-                if item is None:
-                    # Cria item sem mexer em flags (NÃO adiciona checkable onde não existe)
-                    item = QTableWidgetItem()
-                    tabela.setItem(r, c, item)
+            # 2) Se é widget “textual” (ex.: QLineEdit) ou item normal
+            elif w and hasattr(w, "setText") and tipo in ("widget", "item"):
+                w.setText(valor)
 
-                # Se o **destino** é checkável, só muda o estado (não converte outras colunas em checkbox)
-                if item.flags() & Qt.ItemIsUserCheckable:
-                    if tipo == "check":
+            else:
+                # 3) Celula baseada em QTableWidgetItem
+                if tipo == "check":
+                    # Só cria checkboxes se a coluna aceitar checkbox
+                    if destino_aceita_checkbox(r, c):
+                        item = tabela.item(r, c)
+                        if not item:
+                            item = QTableWidgetItem()
+                            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                            tabela.setItem(r, c, item)
                         item.setCheckState(valor)
                     else:
-                        # Também aceita strings "0/1/True/False"
-                        txt = str(valor).strip().lower()
-                        state = Qt.Checked if txt in ("1", "true", "checked") else Qt.Unchecked
-                        item.setCheckState(state)
+                        # Cola como texto simples: "1" para marcado, "" para não marcado
+                        texto = "1" if int(valor) == int(Qt.Checked) else ""
+                        set_item(tabela, r, c, texto)
                 else:
-                    # Destino não é checkável -> texto simples
-                    item.setText(valor)
-    finally:
-        tabela.blockSignals(False)
+                    set_item(tabela, r, c, valor)
 
-    QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected)} linha(s).")
+    QMessageBox.information(
+        tabela.window(),
+        "Colar",
+        f"Dados colados em {len(selected)} linha(s).",
+    )
 
 
 def limpar_dados_tabela(tabela):
