@@ -32,6 +32,7 @@ from utils import (
     copiar_linha_tabela,
     colar_linha_tabela,
     limpar_dados_tabela,
+    COLS_COPIAR_ITENS,
 )
 
 # Diálogo de seleção de material/ferragem/ssitemascorrer/acabamentos
@@ -892,7 +893,7 @@ def inicializar_dados_items_acabamentos(parent):
     adicionar_menu_limpar_alterar(
         ui.Tab_Acabamentos_12,
         lambda: limpar_linha_tab_acabamentos(parent),
-        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Acabamentos_12),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS),
         callback_colar=lambda: colar_linha_tabela(ui.Tab_Acabamentos_12),
         callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Acabamentos_12),
     )
