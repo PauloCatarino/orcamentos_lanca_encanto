@@ -408,6 +408,16 @@ def configurar_tabela_acabamentos(parent):
                 combo_t.setCurrentIndex(-1)
     apply_row_selection_style(tabela)
 
+    # No fim de configurar_tabela_acabamentos(...)
+    nomes_para_copiar = [
+        'ref_le', 'descricao_no_orcamento', 'ptab', 'pliq',
+        'desc1_plus', 'desc2_minus', 'und',
+        'corres_orla_0_4', 'corres_orla_1_0',
+        'comp_mp', 'larg_mp', 'esp_mp',
+    ]
+    copy_cols = {i for i, c in enumerate(ACABAMENTOS_COLUNAS) if c['nome'] in nomes_para_copiar}
+    ui.Tab_Acabamentos_12.setProperty("copy_columns", copy_cols)
+
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Acabamentos_12 com o botão "Limpar Linha Selecionada" 
 # =============================================================================

@@ -450,6 +450,24 @@ def configurar_tabela_material(parent):
         # Guarda numa propriedade da própria QTableWidget
         tabela.setProperty("checkbox_columns", {chk_idx})
 
+    # Lista das colunas que entram no copiar/colar
+    nomes_para_copiar = [
+        'ref_le', 'descricao_no_orcamento', 'ptab', 'pliq',
+        'desc1_plus', 'desc2_minus', 'und',
+        'corres_orla_0_4', 'corres_orla_1_0',
+        'comp_mp', 'larg_mp', 'esp_mp',
+        'nao_stock',  # só existe aqui
+    ]
+
+    # Converte nomes -> índices a partir de MATERIAIS_COLUNAS
+    copy_cols = {i for i, c in enumerate(MATERIAIS_COLUNAS) if c['nome'] in nomes_para_copiar}
+    ui.Tab_Material_11.setProperty("copy_columns", copy_cols)
+
+    # Marca quais colunas são checkboxes (apenas 'nao_stock')
+    chk_idx = next((i for i, c in enumerate(MATERIAIS_COLUNAS) if c.get('checkbox')), None)
+    if chk_idx is not None:
+        ui.Tab_Material_11.setProperty("checkbox_columns", {chk_idx})
+
         
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Material_11 com o botão "Limpar Linha Selecionada" 

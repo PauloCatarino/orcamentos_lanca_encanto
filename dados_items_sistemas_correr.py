@@ -425,6 +425,18 @@ def configurar_tabela_sistemas_correr(parent):
                     combo.setCurrentIndex(idx)
     apply_row_selection_style(tabela)
 
+    # No fim de configurar_tabela_sistemas_correr(...)
+    nomes_para_copiar = [
+        'ref_le', 'descricao_no_orcamento', 'ptab', 'pliq',
+        'desc1_plus', 'desc2_minus', 'und',
+        'corres_orla_0_4', 'corres_orla_1_0',
+        'comp_mp', 'larg_mp', 'esp_mp',
+    ]
+    copy_cols = {i for i, c in enumerate(SISTEMAS_CORRER_COLUNAS) if c['nome'] in nomes_para_copiar}
+    ui.Tab_Sistemas_Correr_11.setProperty("copy_columns", copy_cols)
+
+
+
 def criar_tabela_dados_items_sistemas_correr():
     """
     Cria a tabela 'dados_items_sistemas_correr' no banco de dados,
