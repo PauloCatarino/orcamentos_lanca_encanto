@@ -25,7 +25,8 @@ from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
 
 # Mostrar (True) ou ocultar (False) os popups de copiar/colar tabelas dados items
-MOSTRAR_POPUPS_DADOS_ITEMS = False # deixe False para não mostrar "Linha copiada", "Dados colados", etc.
+MOSTRAR_POPUPS_DADOS_GERAIS = False  # usado pelas tabelas dos DADOS GERAIS -> deixe False para não mostrar "Linha copiada", "Dados colados", etc.
+MOSTRAR_POPUPS_DADOS_ITEMS  = False  # usado pelas tabelas dos DADOS DE ITENS -> deixe False para não mostrar "Linha copiada", "Dados colados", etc.
 
 # Cor de seleção para linhas das tabelas | # Cor de fundo para linhas selecionadas
 ROW_SELECTION_COLOR = QColor(173, 216, 230)  # Azul claro  Esta variavel serve para alterar a cor de seleção das linhas nas tabelas
