@@ -88,6 +88,7 @@ Dashboard visual e compacto de resumos de custos (PyQt5).
 
 import os
 import io
+from matplotlib import style
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -232,6 +233,8 @@ def colwidths_pdf(cols_abrev, tabela=None):
             larguras.append(56)
         elif c in ["N/Stock"]:
             larguras.append(43)
+        elif tabela == "Orlas" and c == "Desc. Mat.":
+            larguras.append(260)  # largura fixa confortável para a descrição das orlas
         elif "Custo" in c or "Valor" in c or "C. Tot." in c:
             larguras.append(63)
         elif c in ["Área", "m² Usad."]:
@@ -549,6 +552,9 @@ class DashboardResumoCustos(QWidget):
                 df_str["Tipo"] = df_str["Tipo"].apply(
                     lambda t: Paragraph(str(t), styles["Normal"])
                 )
+            # 1) Em "Orlas", transformar "Desc. Mat." em Paragraph para quebrar linhas
+            if key == "Orlas" and "Desc. Mat." in df_str.columns:
+                df_str["Desc. Mat."] = df_str["Desc. Mat."].apply(lambda t: Paragraph(str(t), styles["Normal"]))
             # Ajuste visual da coluna 'N/Stock'
             data = [col_abrev] + df_str.values.tolist()
             col_widths = colwidths_pdf(col_abrev, key)
@@ -560,6 +566,7 @@ class DashboardResumoCustos(QWidget):
             except Exception:
                 pass
             table = Table(data, colWidths=col_widths, hAlign='LEFT', repeatRows=1)
+            # Estilo base (centraliza tudo)
             style = TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.darkgrey),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -572,6 +579,11 @@ class DashboardResumoCustos(QWidget):
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
                 ("WORDWRAP", (0, 0), (-1, -1)),
             ])
+            # 2) Sobrescrever alinhamento da coluna "Desc. Mat." para ESQUERDA
+            if key == "Orlas" and "Desc. Mat." in col_abrev:
+                idx_desc = col_abrev.index("Desc. Mat.")
+                style.add("ALIGN", (idx_desc, 1), (idx_desc, -1), "LEFT")   # só dados (da linha 1 para baixo)
+
             table.setStyle(style)
             story.append(table)
             if key in graficos_funcs:

@@ -1739,7 +1739,11 @@ def conectar_inserir_def_pecas_tab_items(ui):
             fm = table.fontMetrics()
             if fm.boundingRect(texto).width() > table.columnWidth(col) - 4:
                 QToolTip.showText(
-                    QtGui.QCursor.pos(), texto, table, msecShowTime=10000
+                    QtGui.QCursor.pos(),
+                    texto,
+                    table,
+                    table.visualItemRect(item),
+                    10000,
                 )
             else:
                 QToolTip.hideText()
