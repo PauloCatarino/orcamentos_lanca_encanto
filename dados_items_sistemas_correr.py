@@ -76,6 +76,12 @@ SISTEMAS_CORRER_COLUNAS = [
     {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}
 ]
 
+# Colunas a copiar/colar na Tab_Sistemas_Correr_11 (Dados do Item)
+# ref_le(5), descricao_no_orcamento(6), ptab(7), pliq(8), Margem(desc1_plus=9),
+# Desconto(desc2_minus=10), und(11), Desperdicio(12), corres_orla_0_4(13), corres_orla_1_0(14),
+# comp_mp(17), larg_mp(18), esp_mp(19) e nao_stock(21)
+COLS_COPIAR_ITENS_SIST_CORRER = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+
 # Definição dos nomes das linhas para a tabela de Sistemas Correr
 # Cada linha representa um tipo de sistema correr (calha puxador, rodizios, etc.)
 # que poderá ser orçado e exibido na Tab_Sistemas_Correr_11.
@@ -927,8 +933,8 @@ def inicializar_dados_items_sistemas_correr(parent):
     adicionar_menu_limpar_alterar(
         ui.Tab_Sistemas_Correr_11,
         lambda: limpar_linha_tab_sistemas_correr_2(parent),
-        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS),
-        callback_colar=lambda: colar_linha_tabela(ui.Tab_Sistemas_Correr_11),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS_SIST_CORRER),
+        callback_colar=lambda: colar_linha_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS_SIST_CORRER),
         callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Sistemas_Correr_11),
     )
 
