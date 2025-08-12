@@ -1070,5 +1070,5 @@ def inicializar_dados_items_ferragens(parent):
         lambda: limpar_linha_tab_ferragens(parent),
         callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Ferragens_11, COLS_COPIAR_ITENS_FERRAGENS),
         callback_colar=lambda: colar_linha_tabela(ui.Tab_Ferragens_11, COLS_COPIAR_ITENS_FERRAGENS),
-        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Ferragens_11),
-    )
+        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Ferragens_11, COLS_COPIAR_ITENS_FERRAGENS),
+)

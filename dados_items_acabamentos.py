@@ -902,5 +902,5 @@ def inicializar_dados_items_acabamentos(parent):
         lambda: limpar_linha_tab_acabamentos(parent),
         callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS_ACABAMENTOS),
         callback_colar=lambda: colar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS_ACABAMENTOS),
-        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Acabamentos_12),
-    )
+        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS_ACABAMENTOS),
+)

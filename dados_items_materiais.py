@@ -961,6 +961,6 @@ def inicializar_dados_items_material(parent):
         ui.Tab_Material_11,
         lambda: limpar_linha_tab_material(parent),
         callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
-        callback_colar=lambda: colar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
-        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Material_11),
-    )
+    callback_colar=lambda: colar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
+    callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
+)
