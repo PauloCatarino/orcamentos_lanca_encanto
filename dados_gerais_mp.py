@@ -18,8 +18,12 @@ from PyQt5.QtCore import Qt
 
 from dados_gerais_manager import obter_nome_para_salvar, guardar_dados_gerais, importar_dados_gerais_com_opcao
 #from configurar_guardar_dados_gerais_orcamento import guardar_dados_gerais_orcamento
-from utils import adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item, formatar_valor_moeda, converter_texto_para_valor
+from utils import MOSTRAR_POPUPS_DADOS_GERAIS, adicionar_menu_limpar, adicionar_menu_limpar_alterar, set_item, formatar_valor_moeda, converter_texto_para_valor
 from modulo_orquestrador import atualizar_tudo
+
+# --- FLAGS GERAIS DE UI (para suprimir popups nas tabelas gerais) ---
+MOSTRAR_POPUPS_DADOS_GERAIS = False  # deixe False para não mostrar "Linha copiada", "Dados colados", etc.
+
 
 # Índice da coluna BLK na tabela tab_def_pecas
 IDX_BLK = 12 
@@ -197,11 +201,12 @@ def limpar_linha_por_tab(main_window, nome_tabela):
         table.clearSelection()
         for r in selected:
             table.selectRow(r)
-        QMessageBox.information(
-            main_window,
-            "Limpar Linha",
-            f"{len(selected)} linha(s) da aba '{nome_tabela}' limpa(s) com sucesso.",
-        )
+        if MOSTRAR_POPUPS_DADOS_GERAIS:  # Se MOSTRAR_POPUPS_DADOS_GERAIS for True mostra a mensagem ao utilizador Se MOSTRAR_POPUPS_DADOS_GERAIS for False não mostra
+            QMessageBox.information(
+                main_window,
+                "Limpar Linha",
+                f"{len(selected)} linha(s) da aba '{nome_tabela}' limpa(s) com sucesso.",
+            )
     else:
         QMessageBox.warning(
             main_window,
@@ -231,11 +236,13 @@ def limpar_tabela_por_tab(main_window, nome_tabela):
     for r in range(total_rows):
         limpar_linha_dados_gerais(table, r, cols)
     table.clearSelection()
-    QMessageBox.information(
-        main_window,
-        "Limpar Dados Tabela",
-        f"Todos os dados da aba '{nome_tabela}' foram limpos.",
-    )
+    # Mostra a confirmação só se a flag estiver ligada
+    if MOSTRAR_POPUPS_DADOS_GERAIS:  # Se MOSTRAR_POPUPS_DADOS_GERAIS for True mostra a mensagem ao utilizador Se MOSTRAR_POPUPS_DADOS_GERAIS for False não mostra
+        QMessageBox.information(
+            main_window,
+            "Limpar Dados Tabela",
+            f"Todos os dados da aba '{nome_tabela}' foram limpos.",
+        )
 
 # --- Constantes de colunas a limpar para cada tipo de tabela ---
 COLUNAS_LIMPAR_MATERIAIS = [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
@@ -290,7 +297,9 @@ def copiar_linha_dados_gerais(table_widget):
         item = table_widget.item(row, col)
         dados.append(item.text() if item else "")
     _copied_row_dados_gerais = dados
-    QMessageBox.information(table_widget.window(), "Copiar", "Linha copiada.")
+    # Só informa se a flag estiver ativa
+    if MOSTRAR_POPUPS_DADOS_GERAIS:  # Se MOSTRAR_POPUPS_DADOS_GERAIS for True mostra a mensagem ao utilizador Se MOSTRAR_POPUPS_DADOS_GERAIS for False não mostra
+        QMessageBox.information(table_widget.window(), "Copiar", "Linha copiada.")
 
 
 def colar_linha_dados_gerais(table_widget):
@@ -311,7 +320,8 @@ def colar_linha_dados_gerais(table_widget):
         desc = converter_texto_para_valor(_copied_row_dados_gerais[5], "percentual")
         novo_pliq = round((ptab * (1 - desc)) * (1 + marg), 2)
         set_item(table_widget, r, 8, formatar_valor_moeda(novo_pliq))
-    QMessageBox.information(table_widget.window(), "Colar", f"Dados colados em {len(selected)} linha(s).")
+    if MOSTRAR_POPUPS_DADOS_GERAIS:   # Se MOSTRAR_POPUPS_DADOS_GERAIS for True mostra a mensagem ao utilizador Se MOSTRAR_POPUPS_DADOS_GERAIS for False não mostra
+        QMessageBox.information(table_widget.window(), "Colar", f"Dados colados em {len(selected)} linha(s).")
 
 def acao_guardar_dados(main_window, nome_tabela):
     """

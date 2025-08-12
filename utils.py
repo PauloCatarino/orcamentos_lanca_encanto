@@ -24,8 +24,8 @@ from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
 
-# Mostrar (True) ou ocultar (False) os popups de copiar/colar
-SHOW_COPY_PASTE_POPUPS = False
+# Mostrar (True) ou ocultar (False) os popups de copiar/colar tabelas dados items
+MOSTRAR_POPUPS_DADOS_ITEMS = False # deixe False para não mostrar "Linha copiada", "Dados colados", etc.
 
 # Cor de seleção para linhas das tabelas | # Cor de fundo para linhas selecionadas
 ROW_SELECTION_COLOR = QColor(173, 216, 230)  # Azul claro  Esta variavel serve para alterar a cor de seleção das linhas nas tabelas
@@ -646,7 +646,7 @@ def copiar_linha_tabela(tabela, cols=None, col_nao_stock=None):
                 dados.append((c, "item", item.text() if item else ""))
 
     _copied_row_generica = dados
-    if SHOW_COPY_PASTE_POPUPS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
+    if MOSTRAR_POPUPS_DADOS_ITEMS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
         QMessageBox.information(tabela.window(), "Copiar", f"Copiadas {len(dados)} coluna(s) da linha.")
 
 def colar_linha_tabela(tabela, cols=None, col_nao_stock=None):
@@ -700,7 +700,7 @@ def colar_linha_tabela(tabela, cols=None, col_nao_stock=None):
                 # texto normal
                 from utils import set_item  # já existe no mesmo módulo
                 set_item(tabela, r, c, valor)
-    if SHOW_COPY_PASTE_POPUPS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
+    if MOSTRAR_POPUPS_DADOS_ITEMS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
         QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected_rows)} linha(s).")
 
 
