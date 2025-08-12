@@ -179,6 +179,7 @@ IDX_COMP_ASS_3 = 36
 
 
 IDX_DEF_PECA = 2   # Coluna para Def_Peca
+IDX_DESCRICAO = 3  # Coluna para Descricao
 IDX_QT_MOD = 4   # Coluna que contém a quantidade modificada (QT_mod)
 IDX_QT_UND = 5   # Coluna que contém a quantidade unitária (QT_und)
 IDX_COMP = 6   # Coluna para COMP (comprimento, etc.) - Fórmula
@@ -1511,12 +1512,20 @@ def on_item_changed_def_pecas(item):
                     item.setText(texto_formatado)  # Atualiza o texto da célula
             except Exception as e:
                 print(f"[ERRO Format ItemChanged] L{row+1} C{col+1}: {e}")
-        elif col == IDX_DESCRICAO_LIVRE:
+        elif col in (IDX_DESCRICAO_LIVRE, IDX_DEF_PECA, IDX_DESCRICAO):
             fm = table.fontMetrics()
-            if fm.boundingRect(texto_atual).width() > table.columnWidth(col) - 4:
-                item.setToolTip(texto_atual)
+            existing = item.toolTip()
+            is_truncated = fm.boundingRect(texto_atual).width() > table.columnWidth(col) - 4
+            if is_truncated:
+                if existing and texto_atual not in existing:
+                    item.setToolTip(f"{texto_atual}\n{existing}")
+                else:
+                    item.setToolTip(texto_atual)
             else:
-                item.setToolTip("")
+                if existing and texto_atual not in existing:
+                    item.setToolTip(existing)
+                else:
+                    item.setToolTip("")
 
     finally:
         _editando_programaticamente_def_pecas = False  # Libera flag para futuras edições
@@ -1710,7 +1719,7 @@ def conectar_inserir_def_pecas_tab_items(ui):
         lambda: inserir_pecas_selecionadas(ui))
     # print("[INFO] Botão 'Inserir Peças Selecionadas' conectado.")
 
-    # Atualiza tooltips de Descricao_Livre ao passar o rato
+    # Atualiza tooltips ao passar o rato para colunas com texto possivelmente truncado
     table = ui.tab_def_pecas
     table.setMouseTracking(True)
     table.viewport().setMouseTracking(True)
@@ -1722,18 +1731,20 @@ def conectar_inserir_def_pecas_tab_items(ui):
 
     # liga cellEntered ao handler
     def _on_cell_hover(row, col):
-        if col == IDX_DESCRICAO_LIVRE:
+        if col in (IDX_DESCRICAO_LIVRE, IDX_DEF_PECA, IDX_DESCRICAO):
             item = table.item(row, col)
             if not item:
                 return
             texto = item.text()
             fm = table.fontMetrics()
-            # só mostra se estiver truncado
             if fm.boundingRect(texto).width() > table.columnWidth(col) - 4:
-                # mostra tooltip na posição do cursor
-                QToolTip.showText(QtGui.QCursor.pos(), texto, table)
+                QToolTip.showText(
+                    QtGui.QCursor.pos(), texto, table, msecShowTime=10000
+                )
             else:
                 QToolTip.hideText()
+        else:
+            QToolTip.hideText()
 
     table.cellEntered.connect(_on_cell_hover)
 
