@@ -70,6 +70,13 @@ ACABAMENTOS_COLUNAS = [
     {'nome': 'esp_mp', 'tipo': 'REAL', 'visivel': True, 'editavel': True},
     {'nome': 'MP', 'tipo': 'TEXT', 'visivel': True, 'botao': True, 'texto_botao': 'Escolher', 'funcao_botao': None}  # Será atribuído abaixo
 ]
+
+# Colunas a copiar/colar na Tab_Acabamentos_12 (Dados do Item)
+# ref_le(5), descricao_no_orcamento(6), ptab(7), pliq(8), Margem(desc1_plus=9),
+# Desconto(desc2_minus=10), und(11), Desperdicio(12), corres_orla_0_4(13), corres_orla_1_0(14),
+# comp_mp(17), larg_mp(18), esp_mp(19) e nao_stock(21)
+COLS_COPIAR_ITENS_ACABAMENTOS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]
+
 ###############################################################
 # Definição das linhas para a tabela de Acabamentos
 ###############################################################
@@ -893,7 +900,7 @@ def inicializar_dados_items_acabamentos(parent):
     adicionar_menu_limpar_alterar(
         ui.Tab_Acabamentos_12,
         lambda: limpar_linha_tab_acabamentos(parent),
-        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS),
-        callback_colar=lambda: colar_linha_tabela(ui.Tab_Acabamentos_12),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS_ACABAMENTOS),
+        callback_colar=lambda: colar_linha_tabela(ui.Tab_Acabamentos_12, COLS_COPIAR_ITENS_ACABAMENTOS),
         callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Acabamentos_12),
     )

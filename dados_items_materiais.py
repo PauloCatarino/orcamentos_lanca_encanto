@@ -74,6 +74,12 @@ MATERIAIS_COLUNAS = [
     {'nome': 'nao_stock', 'tipo': 'INTEGER', 'visivel': True, 'checkbox': True}
 ]
 
+# Colunas a copiar/colar na Tab_Material_11 (Dados do Item)
+# ref_le(5), descricao_no_orcamento(6), ptab(7), pliq(8), Margem(desc1_plus=9),
+# Desconto(desc2_minus=10), und(11), Desperdicio(12), corres_orla_0_4(13), corres_orla_1_0(14),
+# comp_mp(17), larg_mp(18), esp_mp(19) e nao_stock(21)
+COLS_COPIAR_ITENS_MATERIAL = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21]
+
 ###############################################################
 # Definição das linhas para a tabela de Materiais
 ###############################################################
@@ -954,7 +960,7 @@ def inicializar_dados_items_material(parent):
     adicionar_menu_limpar_alterar(
         ui.Tab_Material_11,
         lambda: limpar_linha_tab_material(parent),
-        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS, col_nao_stock=21),
-        callback_colar=lambda: colar_linha_tabela(ui.Tab_Material_11),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
+        callback_colar=lambda: colar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS_MATERIAL, col_nao_stock=21),
         callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Material_11),
     )
