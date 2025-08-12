@@ -35,12 +35,12 @@ Anaconda Prompt
  ______________________________//________________________
 
 git add .
-git commit -m "240 Commit"
+git commit -m "241 Commit"
 git push origin main
 
 ______________________________//________________________
 
-crtl + swift + p    escolher  o interpretador -> Python 3.12.8(venv)
+crtl + shift + p    escolher  o interpretador -> Python 3.12.8(venv)
 ______________________________//________________________
 
 Criar o ficheiro executavel para o PyInstaller ->          pyinstaller --onefile --windowed --add-data "martelo.png;." main.py
