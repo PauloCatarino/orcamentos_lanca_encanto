@@ -564,94 +564,63 @@ def adicionar_menu_limpar_alterar(
 
 
 # Variável global para armazenar dados de uma linha copiada genericamente
-_copied_row_generica = [] # agora guardamos (col_index, tipo, valor)
+# Cada entrada é uma tupla (coluna, tipo, valor)
+_copied_row_generica = []
 
-def _allowed_check_columns(tabela):
+# Colunas utilizadas ao copiar/colar linhas das tabelas de itens
+# ref_le, descricao_no_orcamento, ptab, pliq, Margem, Desconto, und,
+# corres_orla_0_4, corres_orla_1_0, comp_mp, larg_mp, esp_mp
+COLS_COPIAR_ITENS = [5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19]
+
+
+def copiar_linha_tabela(tabela, colunas=None, col_nao_stock=None):
+    """Copia os valores da linha selecionada da ``tabela``.
+
+    ``colunas`` define explicitamente quais índices de colunas devem ser
+    copiados. Caso seja ``None`` todas as colunas serão consideradas.
+    ``col_nao_stock`` indica a coluna com o checkbox ``nao_stock`` que só deve
+    ser copiada se estiver marcada.
     """
-    Devolve um set com os índices de colunas que aceitam checkbox.
-    1º tenta ler da propriedade 'checkbox_columns';
-    2º se não houver, procura cabeçalho 'nao_stock' (case-insensitive).
-    """
-    cols = tabela.property("checkbox_columns")
-    if isinstance(cols, (set, list, tuple)):
-        return {int(i) for i in cols}
-    permitidas = set()
-    for i in range(tabela.columnCount()):
-        h = tabela.horizontalHeaderItem(i)
-        if h and h.text().strip().lower().replace(" ", "_") == "nao_stock":
-            permitidas.add(i)
-    return permitidas
-
-def copiar_linha_tabela(tabela):
-    """Copia apenas as colunas configuradas em tabela.property('copy_columns').
-    Para colunas checkbox, só copia se estiverem marcadas."""
-    from PyQt5.QtWidgets import QMessageBox
-    from PyQt5.QtCore import Qt
-
     global _copied_row_generica
     row = tabela.currentRow()
     if row < 0:
         QMessageBox.warning(tabela.window(), "Copiar", "Nenhuma linha selecionada para copiar.")
         return
 
-    # Conjunto de colunas autorizadas a participar na cópia
-    allowed = tabela.property("copy_columns")
-    cols = sorted(list(allowed)) if isinstance(allowed, (set, list, tuple)) else range(tabela.columnCount())
-
+    cols = colunas if colunas is not None else range(tabela.columnCount())
     dados = []
     for c in cols:
+        if c >= tabela.columnCount():
+            continue
         w = tabela.cellWidget(row, c)
-
-        # Widgets (combos/line edits)
         if w and hasattr(w, "currentText"):
             dados.append((c, "combo", w.currentText()))
-            continue
-        if w and hasattr(w, "text"):
+        elif w and hasattr(w, "text"):
             dados.append((c, "widget", w.text()))
-            continue
-
-        # Itens normais / checkbox
-        item = tabela.item(row, c)
-        if item and (item.flags() & Qt.ItemIsUserCheckable):
-            # Só copia se estiver marcado (evita criar checkboxes indesejados ao colar)
-            if item.checkState() == Qt.Checked:
-                dados.append((c, "check", Qt.Checked))
-            # se estiver desmarcado, simplesmente não adiciona
         else:
-            dados.append((c, "item", item.text() if item else ""))
-
+            item = tabela.item(row, c)
+            if item and item.flags() & Qt.ItemIsUserCheckable:
+                # Apenas copia o nao_stock se estiver marcado
+                if c == col_nao_stock and item.checkState() != Qt.Checked:
+                    continue
+                dados.append((c, "check", item.checkState()))
+            else:
+                dados.append((c, "item", item.text() if item else ""))
     _copied_row_generica = dados
     QMessageBox.information(tabela.window(), "Copiar", "Linha copiada.")
 
-def colar_linha_tabela(tabela):
-    """Cola apenas nas colunas configuradas. Para checkboxes, só cola se a coluna
-    estiver listada em tabela.property('checkbox_columns')."""
-    from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
-    from PyQt5.QtCore import Qt
 
+def colar_linha_tabela(tabela):
+    """Cola os valores previamente copiados nas linhas selecionadas da ``tabela``."""
     if not _copied_row_generica:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha copiada.")
         return
-
-    selected_rows = {idx.row() for idx in tabela.selectionModel().selectedRows()}
-    if not selected_rows:
+    selected = {idx.row() for idx in tabela.selectionModel().selectedRows()}
+    if not selected:
         QMessageBox.warning(tabela.window(), "Colar", "Nenhuma linha selecionada para colar.")
         return
-
-    # Colunas autorizadas (se não existir, cola em todas as colunas do *payload*)
-    allowed = tabela.property("copy_columns")
-    allowed_set = set(allowed) if isinstance(allowed, (set, list, tuple)) else None
-
-    # Colunas onde é permitido ter checkbox (evita criar checks em colunas erradas)
-    chk_allowed = tabela.property("checkbox_columns")
-    chk_allowed = set(chk_allowed) if isinstance(chk_allowed, (set, list, tuple)) else set()
-
-    for r in selected_rows:
+    for r in selected:
         for c, tipo, valor in _copied_row_generica:
-            # Se existir restrição de colunas, respeita
-            if allowed_set is not None and c not in allowed_set:
-                continue
-
             w = tabela.cellWidget(r, c)
             if w and tipo == "combo" and hasattr(w, "findText"):
                 idx = w.findText(valor)
@@ -661,18 +630,18 @@ def colar_linha_tabela(tabela):
             else:
                 item = tabela.item(r, c)
                 if tipo == "check":
-                    # Só cria/ajusta checkbox se a coluna fizer parte das checkbox permitidas
-                    if c not in chk_allowed:
-                        continue
                     if not item:
                         item = QTableWidgetItem()
                         item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                         tabela.setItem(r, c, item)
-                    item.setCheckState(valor)  # será Qt.Checked
+                    item.setCheckState(valor)
                 else:
                     set_item(tabela, r, c, valor)
-
-    QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected_rows)} linha(s).")
+    QMessageBox.information(
+        tabela.window(),
+        "Colar",
+        f"Dados colados em {len(selected)} linha(s).",
+    )
 
 
 def limpar_dados_tabela(tabela):
@@ -700,6 +669,7 @@ def limpar_dados_tabela(tabela):
         "Limpar Dados Tabela",
         "Todos os dados da tabela foram limpos.",
     )
+
 
 
 def copiar_valores_tabela(origem, destino):

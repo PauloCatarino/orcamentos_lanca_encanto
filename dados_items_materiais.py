@@ -30,6 +30,7 @@ from utils import (
     copiar_linha_tabela,
     colar_linha_tabela,
     limpar_dados_tabela,
+    COLS_COPIAR_ITENS,
 )
 
 # Diálogo de seleção de material
@@ -944,6 +945,7 @@ def inicializar_dados_items_material(parent):
     ui.guardar_dados_item_orcamento_tab_material.clicked.connect(lambda: guardar_dados_item_orcamento_tab_material(parent))
     # Conectar o botão 'limpar_linha_tab_materiais' à função:
     ui.limpar_linha_tab_material.clicked.connect(lambda: limpar_linha_tab_material(parent))
+
     # Conecta o botão "Importar Dados Item Tabela Material"
     ui.importar_dados_item_tab_material.clicked.connect(
         lambda: importar_dados_item_orcamento_tab_material(parent)
@@ -952,7 +954,7 @@ def inicializar_dados_items_material(parent):
     adicionar_menu_limpar_alterar(
         ui.Tab_Material_11,
         lambda: limpar_linha_tab_material(parent),
-        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Material_11),
+        callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Material_11, COLS_COPIAR_ITENS, col_nao_stock=21),
         callback_colar=lambda: colar_linha_tabela(ui.Tab_Material_11),
         callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Material_11),
     )
