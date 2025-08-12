@@ -935,8 +935,8 @@ def inicializar_dados_items_sistemas_correr(parent):
         lambda: limpar_linha_tab_sistemas_correr_2(parent),
         callback_copiar=lambda: copiar_linha_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS_SIST_CORRER),
         callback_colar=lambda: colar_linha_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS_SIST_CORRER),
-        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Sistemas_Correr_11),
-    )
+        callback_limpar_tabela=lambda: limpar_dados_tabela(ui.Tab_Sistemas_Correr_11, COLS_COPIAR_ITENS_SIST_CORRER),
+)
 
 # =============================================================================
 # Função para limpar as colunas da linha selecionada na Tab_Sistemas_Correr_11 com o botão "Limpar Linha Selecionada" 

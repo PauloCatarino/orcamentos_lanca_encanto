@@ -24,6 +24,9 @@ from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
 
+# Mostrar (True) ou ocultar (False) os popups de copiar/colar
+SHOW_COPY_PASTE_POPUPS = False
+
 # Cor de seleção para linhas das tabelas | # Cor de fundo para linhas selecionadas
 ROW_SELECTION_COLOR = QColor(173, 216, 230)  # Azul claro  Esta variavel serve para alterar a cor de seleção das linhas nas tabelas
 
@@ -643,7 +646,8 @@ def copiar_linha_tabela(tabela, cols=None, col_nao_stock=None):
                 dados.append((c, "item", item.text() if item else ""))
 
     _copied_row_generica = dados
-    QMessageBox.information(tabela.window(), "Copiar", f"Copiadas {len(dados)} coluna(s) da linha.")
+    if SHOW_COPY_PASTE_POPUPS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
+        QMessageBox.information(tabela.window(), "Copiar", f"Copiadas {len(dados)} coluna(s) da linha.")
 
 def colar_linha_tabela(tabela, cols=None, col_nao_stock=None):
     """
@@ -696,36 +700,75 @@ def colar_linha_tabela(tabela, cols=None, col_nao_stock=None):
                 # texto normal
                 from utils import set_item  # já existe no mesmo módulo
                 set_item(tabela, r, c, valor)
+    if SHOW_COPY_PASTE_POPUPS:  # Mostrar popups de copiar/colar se ativado = TRUE mostra a mensagem
+        QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected_rows)} linha(s).")
 
-    QMessageBox.information(tabela.window(), "Colar", f"Dados colados em {len(selected_rows)} linha(s).")
 
 
+def limpar_dados_tabela(tabela, cols=None, col_nao_stock=None):
+    """
+    Limpa só as colunas indicadas em `cols`.
+    - Se `cols` for None, tenta usar tabela.property("copy_columns"); caso contrário, limpa todas.
+    - `col_nao_stock`: índice da coluna checkbox (só Materiais). Mantém a checkbox **apenas** nela e deixa-a desmarcada.
+      Em todas as outras colunas, remove a flag de checkbox se existir.
+    """
+    from PyQt5.QtWidgets import QTableWidgetItem
+    from PyQt5.QtCore import Qt
 
-def limpar_dados_tabela(tabela):
-    """Limpa todos os dados da ``tabela`` mantendo o número de linhas."""
-    total_rows = tabela.rowCount()
-    total_cols = tabela.columnCount()
+    # Descobre colunas a limpar
+    if cols is None:
+        prop = tabela.property("copy_columns")
+        if isinstance(prop, (list, set, tuple)):
+            cols = list(prop)
+        else:
+            cols = list(range(tabela.columnCount()))
+    cols = sorted(set(int(c) for c in cols))
+
+    # Descobre coluna da checkbox (nao_stock) se não tiver sido passada
+    if col_nao_stock is None:
+        prop_chk = tabela.property("checkbox_columns")
+        if isinstance(prop_chk, (list, set, tuple)) and len(prop_chk) > 0:
+            col_nao_stock = int(list(prop_chk)[0])
+        elif isinstance(prop_chk, int):
+            col_nao_stock = prop_chk
+
     tabela.blockSignals(True)
+    total_rows = tabela.rowCount()
+
     for r in range(total_rows):
-        for c in range(total_cols):
+        for c in cols:
             w = tabela.cellWidget(r, c)
             if w:
+                # Limpa widgets (combos, lineedits)
                 if hasattr(w, "setCurrentIndex"):
                     w.setCurrentIndex(-1)
                 elif hasattr(w, "clear"):
                     w.clear()
+                continue
+
+            # Limpa QTableWidgetItem
             item = tabela.item(r, c)
-            if item:
-                if item.flags() & Qt.ItemIsUserCheckable:
-                    item.setCheckState(Qt.Unchecked)
+            if not item:
+                item = QTableWidgetItem("")
+                tabela.setItem(r, c, item)
+            else:
                 item.setText("")
+
+            # Gestão de checkbox:
+            if col_nao_stock is not None and c == col_nao_stock:
+                # Apenas aqui pode existir uma checkbox (desmarcada)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                item.setCheckState(Qt.Unchecked)
+            else:
+                # Em todas as outras colunas, remover qualquer checkbox residual
+                if item.flags() & Qt.ItemIsUserCheckable:
+                    item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+                    # Apaga o estado de check visual (garante que não aparece caixinha)
+                    item.setData(Qt.CheckStateRole, None)
+
     tabela.blockSignals(False)
     tabela.clearSelection()
-    QMessageBox.information(
-        tabela.window(),
-        "Limpar Dados Tabela",
-        "Todos os dados da tabela foram limpos.",
-    )
+    # Sem popup aqui
 
 
 
