@@ -485,8 +485,6 @@ def salvar_dados_def_pecas(ui, silent=False):
             if dados_para_inserir:
                 cursor.executemany(insert_sql, dados_para_inserir)
                 print(f"{len(dados_para_inserir)} linha(s) guardada(s) com sucesso.")
-                if not silent:
-                    QMessageBox.information(None, "Guardar Dados", f"{len(dados_para_inserir)} linha(s) guardada(s) com sucesso.")
             else:
                 print("Nenhum dado válido para inserir.")
 
