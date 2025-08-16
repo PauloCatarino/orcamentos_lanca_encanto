@@ -769,7 +769,6 @@ def copy_selected_rows(ui):
             row_items.append(item.clone() if item else None)
         has_button = table.cellWidget(r, 33) is not None
         _copied_rows_def_pecas.append((row_items, has_button))
-    QMessageBox.information(table.window(), "Copiar", f"{len(selected_rows)} linha(s) copiada(s).")
 
 
 # Função auxiliar para colar as linhas copiadas abaixo da seleção atual na Tab_Def_Pecas
@@ -1859,16 +1858,15 @@ def show_context_menu(ui, pos):
 
     # Processa a ação selecionada
     if action == action_delete:
-        if QMessageBox.question(table.window(), "Confirmar Exclusão", f"Deseja excluir {len(selected_rows)} linha(s) selecionada(s)?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
-            # Coleta os índices das linhas selecionadas e os remove (do último para o primeiro)
-            for index in sorted(selected_rows, key=lambda x: x.row(), reverse=True):
-                table.removeRow(index.row())
+        # Remove as linhas selecionadas diretamente, sem confirmação do usuário
+        for index in sorted(selected_rows, key=lambda x: x.row(), reverse=True):
+            table.removeRow(index.row())
 
-            # Após a exclusão, renumera os IDs e chama o orquestrador para reprocessar tudo (cálculos, etc.)
-            update_ids(table)
-            print(
-                "[INFO] Menu Contexto: Chamando orquestrador após exclusão de linha(s).")
-            atualizar_tudo(ui)  # Passa a referência da UI
+        # Após a exclusão, renumera os IDs e chama o orquestrador para reprocessar tudo (cálculos, etc.)
+        update_ids(table)
+        print(
+            "[INFO] Menu Contexto: Chamando orquestrador após exclusão de linha(s).")
+        atualizar_tudo(ui)  # Passa a referência da UI
 
     # __________
 
