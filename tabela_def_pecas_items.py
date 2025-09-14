@@ -1837,12 +1837,18 @@ def show_context_menu(ui, pos):
     table = ui.tab_def_pecas
     menu = QMenu()
 
-    # Ações do menu
+    # Ações do menu (mantidas) — agora com ícones no lado esquerdo
+    s = table.style()
     action_delete = menu.addAction("Excluir Linha(s) Selecionada(s)")
+    action_delete.setIcon(s.standardIcon(QStyle.SP_TrashIcon))
     action_insert_above = menu.addAction("Inserir Linha Vazia Acima")
+    action_insert_above.setIcon(s.standardIcon(QStyle.SP_ArrowUp))
     action_insert_below = menu.addAction("Inserir Linha Vazia Abaixo")
+    action_insert_below.setIcon(s.standardIcon(QStyle.SP_ArrowDown))
     action_copy = menu.addAction("Copiar Linha(s) ")  # Manter como placeholder
+    action_copy.setIcon(s.standardIcon(QStyle.SP_DialogOpenButton))
     action_paste = menu.addAction("Inserir Linha(s) Copiada(s) Abaixo")
+    action_paste.setIcon(s.standardIcon(QStyle.SP_DialogSaveButton))
 
     # Desabilitar ações se nenhuma linha estiver selecionada (exceto inserir no final)
     selected_rows = table.selectionModel().selectedRows()

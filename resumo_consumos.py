@@ -48,6 +48,32 @@ COLUNAS_DADOS_DEF_PECAS = [
     'cp07_embalagem_und', 'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'soma_custo_und', 'soma_custo_total', 'soma_custo_acb'
 ]
 
+# Helpers de normalização para filtros por orçamento/versão
+def _to_ver_str(v) -> str:
+    """Converte diferentes representações de versão para string com 2 dígitos.
+    Exemplos: '0' -> '00', 0 -> '00', '01' -> '01', '1.0' -> '01'.
+    """
+    s = str(v).strip()
+    if s == "":
+        return ""
+    try:
+        # aceita inteiros, strings '01', floats '1.0'
+        return f"{int(float(s)) :02d}"
+    except Exception:
+        # fallback: zfill(2)
+        return s.zfill(2)
+
+def _norm_ver_series(series: pd.Series) -> pd.Series:
+    return series.apply(_to_ver_str)
+
+def _filter_orc_vers(df: pd.DataFrame, num_orc, versao) -> pd.Series:
+    num = str(num_orc).strip()
+    ver = _to_ver_str(versao)
+    left_num = df['num_orc'].astype(str).str.strip()
+    # normaliza versão do DF para 2 dígitos de forma robusta
+    left_ver = _norm_ver_series(df['ver_orc'].astype(str).str.strip())
+    return (left_num == num) & (left_ver == ver)
+
 # =============================================================================
 # 1A. Função: resumo_geral_pecas
 # =============================================================================
@@ -58,10 +84,7 @@ def resumo_geral_pecas(df_pecas: pd.DataFrame, num_orc, versao) -> pd.DataFrame:
     if df_pecas.empty:
         return pd.DataFrame(columns=COLUNAS_DADOS_DEF_PECAS)
     df = df_pecas.copy()
-    df = df[
-        (df['num_orc'].astype(str) == str(num_orc)) &
-        (df['ver_orc'].astype(str) == str(versao))
-    ].copy()
+    df = df[_filter_orc_vers(df, num_orc, versao)].copy()
     # Garante que todas as colunas estão presentes, mesmo que vazias
     for col in COLUNAS_DADOS_DEF_PECAS:
         if col not in df.columns:
@@ -83,9 +106,7 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
     ]
     if pecas.empty:
         return pd.DataFrame(columns=cols_esperadas)
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
+    df = pecas[_filter_orc_vers(pecas, num_orc, versao)].copy()
     df = df[df['und'] == 'M2']
     if df.empty:
         return pd.DataFrame(columns=cols_esperadas)
@@ -114,10 +135,11 @@ def resumo_placas(pecas: pd.DataFrame, num_orc, versao, itens_materiais: pd.Data
     # Marca materiais de não stock com um visto
     if itens_materiais is not None and not itens_materiais.empty:
         try:
+            df_it = itens_materiais.copy()
             filtro = (
-                itens_materiais['num_orc'].astype(str) == str(num_orc)
+                df_it['num_orc'].astype(str).str.strip() == str(num_orc).strip()
             ) & (
-                itens_materiais['ver_orc'].astype(str) == str(versao)
+                _norm_ver_series(df_it['ver_orc'].astype(str).str.strip()) == _to_ver_str(versao)
             ) & (
                 itens_materiais.get('nao_stock', 0).astype(int) == 1
             )
@@ -187,7 +209,7 @@ def clean_ref(ref):
     return str(ref).strip()
 
 def resumo_orlas(pecas: pd.DataFrame, num_orc, versao):
-    df = pecas[(pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))].copy()
+    df = pecas[_filter_orc_vers(pecas, num_orc, versao)].copy()
     if df.empty:
         return pd.DataFrame(columns=['ref_orla', 'descricao_material', 'espessura_orla', 'largura_orla', 'ml_total', 'custo_total'])
     df['orla_codes'] = df['def_peca'].apply(get_orla_codes)
@@ -251,9 +273,7 @@ def resumo_ferragens(pecas: pd.DataFrame, num_orc, versao):
     ]
     if pecas.empty:
         return pd.DataFrame(columns=cols_esperadas)
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
+    df = pecas[_filter_orc_vers(pecas, num_orc, versao)].copy()
     df = df[df['ref_le'].astype(str).str.startswith("FER")]
     if df.empty:
         return pd.DataFrame(columns=cols_esperadas)
@@ -286,9 +306,7 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
     cols_esperadas = ["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]
     if pecas.empty:
         return pd.DataFrame(columns=cols_esperadas)
-    df = pecas[
-        (pecas['num_orc'].astype(str) == str(num_orc)) & (pecas['ver_orc'].astype(str) == str(versao))
-    ].copy()
+    df = pecas[_filter_orc_vers(pecas, num_orc, versao)].copy()
     if df.empty:
         return pd.DataFrame(columns=cols_esperadas)
     numeric_cols = [
@@ -450,7 +468,7 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
 
     orcamentos_filtrados = orcamentos[
         (orcamentos['num_orcamento'].astype(str).str.strip() == num_orc_f) &
-        (orcamentos['versao'].astype(str).str.strip().apply(lambda x: x.zfill(2)) == ver_f)
+        (_norm_ver_series(orcamentos['versao'].astype(str).str.strip()) == ver_f)
     ].copy()
     id_orcamento = None
     if not orcamentos_filtrados.empty and 'id' in orcamentos_filtrados.columns:
@@ -458,6 +476,21 @@ def gerar_resumos_excel(path_excel, num_orc, versao):
         orcamento_items_filtrados = orcamento_items[orcamento_items['id_orcamento'].astype(int) == id_orcamento].copy()
     else:
         orcamento_items_filtrados = pd.DataFrame(columns=orcamento_items.columns)
+
+    # Filtrar peças para conter apenas items ainda existentes (defensivo contra órfãos)
+    try:
+        itens_validos = set()
+        if not orcamento_items_filtrados.empty:
+            # 'item' pode vir como str/int; normalizar para str
+            itens_validos = set(orcamento_items_filtrados['item'].astype(str).str.strip().tolist())
+        if itens_validos:
+            pecas = pecas[
+                _filter_orc_vers(pecas, num_orc, versao)
+            ]
+            pecas = pecas[pecas['ids'].astype(str).str.strip().isin(itens_validos)].copy()
+        # Senão, deixa seguir (acabará vazio)
+    except Exception:
+        pass
 
     # Executa cada resumo
     df_resumogeral = resumo_geral_pecas(pecas, num_orc, versao)

@@ -51,9 +51,11 @@ Observação: Certifique-se de que a função get_connection(), importada do mó
 """
 
 import datetime
+import uuid
 import mysql.connector  # Adicionado para erros específicos
 from PyQt5.QtCore import QDate, Qt, QTimer, QObject, QEvent  # Importado QTimer
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QTreeWidgetItem,  QMenu, QDialog
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QTreeWidgetItem,  QMenu, QDialog, QStyle
+from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtGui import QColor  # Importar QColor para a coloração de células
 # Importa a função de conexão MySQL (já configurada no módulo de conexão)
 from db_connection import obter_cursor
@@ -198,33 +200,35 @@ def configurar_orcamento_ui(main_window):
     criar_tabela_margens_ajustes()
     ui = main_window.ui  # Obtém ui a partir de main_window
 
-    # Conecta os validadores para os lineEdits de percentagem
-    ui.lineEdit_margem_lucro.textChanged.connect(
-        lambda: _validate_percentage_input(ui.lineEdit_margem_lucro, 0, 99))
-    ui.lineEdit_custos_administrativos.textChanged.connect(
-        lambda: _validate_percentage_input(ui.lineEdit_custos_administrativos, 0, 99))
-    ui.margem_acabamentos.textChanged.connect(
-        lambda: _validate_percentage_input(ui.margem_acabamentos, 0, 99))
-    ui.margem_MP_orlas.textChanged.connect(
-        lambda: _validate_percentage_input(ui.margem_MP_orlas, 0, 99))
-    ui.margem_mao_obra.textChanged.connect(
-        lambda: _validate_percentage_input(ui.margem_mao_obra, 0, 99))
+    # Configuração simplificada de edição para os lineEdits de percentagem:
+    # - O utilizador digita 2.5 ou 8 e ao terminar (Enter/saida de foco)
+    #   o valor é normalizado para "2.50%" ou "8.00%".
+    # - Evita formatação a cada tecla (textChanged), só no commit da edição.
+    for _le in (
+        ui.lineEdit_margem_lucro,
+        ui.lineEdit_custos_administrativos,
+        ui.margem_acabamentos,
+        ui.margem_MP_orlas,
+        ui.margem_mao_obra,
+    ):
+        _setup_percentage_line_edit(_le)
 
     # Perguntar se deve aplicar percentagens globais a todas as linhas
+    # Saída de foco (editingFinished) também normaliza e pergunta aplicar
     ui.lineEdit_margem_lucro.editingFinished.connect(
-        lambda: _prompt_apply_global_percentage(
+        lambda: _on_global_percentage_edit(
             ui, ui.lineEdit_margem_lucro, COL_MARGEM_PERC, force_margin=True))
     ui.lineEdit_custos_administrativos.editingFinished.connect(
-        lambda: _prompt_apply_global_percentage(
+        lambda: _on_global_percentage_edit(
             ui, ui.lineEdit_custos_administrativos, COL_CUSTOS_ADMIN_PERC))
     ui.margem_acabamentos.editingFinished.connect(
-        lambda: _prompt_apply_global_percentage(
+        lambda: _on_global_percentage_edit(
             ui, ui.margem_acabamentos, COL_MARGEM_ACAB_PERC))
     ui.margem_MP_orlas.editingFinished.connect(
-        lambda: _prompt_apply_global_percentage(
+        lambda: _on_global_percentage_edit(
             ui, ui.margem_MP_orlas, COL_MARGEM_MP_ORLAS_PERC))
     ui.margem_mao_obra.editingFinished.connect(
-        lambda: _prompt_apply_global_percentage(
+        lambda: _on_global_percentage_edit(
             ui, ui.margem_mao_obra, COL_MARGEM_MAO_OBRA_PERC))
 
 
@@ -264,12 +268,12 @@ def configurar_orcamento_ui(main_window):
     # Este botão irá disparar o cálculo e atualização de todas as colunas de custo e preço por item.
     # Por padrão, não força a margem global.
     ui.pushButton_atualiza_preco_items.clicked.connect(
-        lambda: atualizar_custos_e_precos_itens(ui, force_global_margin_update=False))
+        lambda: _run_with_busy(ui, lambda: atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)))
 
     # NOVO/MODIFICADO: Conexão para o botão "Atualiza Preco Final"
     # Este botão recalcula o preço final do orçamento, e pode ajustar a margem.
     ui.pushButton_atualiza_preco_final.clicked.connect(
-        lambda: calcular_preco_final_orcamento(ui))
+        lambda: _run_with_busy(ui, lambda: calcular_preco_final_orcamento(ui)))
 
     ui.checkBox_producao_std.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "STD") if ui.checkBox_producao_std.isChecked() else None)
     ui.checkBox_producao_serie.stateChanged.connect(lambda: on_modo_producao_changed(main_window, "SERIE") if ui.checkBox_producao_serie.isChecked() else None)
@@ -310,6 +314,36 @@ def configurar_orcamento_ui(main_window):
 
     # Inicializa o campo de item com "1"
     ui.lineEdit_item_orcamento.setText("1")
+
+    # Navegação com Enter entre Altura -> Largura -> Profundidade
+    # Facilita a introdução rápida das medidas no groupBox de linhas
+    def _focus_and_select(widget):
+        try:
+            widget.setFocus()
+            widget.selectAll()
+        except Exception:
+            pass
+
+    # Enter em Código -> foca Descrição
+    ui.lineEdit_codigo_orcamento.returnPressed.connect(
+        lambda: _focus_and_select(ui.plainTextEdit_descricao_orcamento)
+    )
+
+    ui.lineEdit_altura_orcamento.returnPressed.connect(
+        lambda: _focus_and_select(ui.lineEdit_largura_orcamento)
+    )
+    ui.lineEdit_largura_orcamento.returnPressed.connect(
+        lambda: _focus_and_select(ui.lineEdit_profundidade_orcamento)
+    )
+
+    # Validadores numéricos básicos para Altura/Largura/Profundidade/QT
+    for _le in (
+        ui.lineEdit_altura_orcamento,
+        ui.lineEdit_largura_orcamento,
+        ui.lineEdit_profundidade_orcamento,
+        ui.lineEdit_qt_orcamento,
+    ):
+        _setup_numeric_line_edit(_le)
 
 # NOVO: Função de validação para os lineEdits de percentagem
 
@@ -362,7 +396,12 @@ class _ClearOnFocusFilter(QObject):
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.FocusIn:
-            obj.clear()
+            # Em vez de limpar (o que podia interferir quando um diálogo fecha e o foco volta),
+            # apenas seleciona todo o conteúdo para facilitar a substituição rápida.
+            try:
+                obj.selectAll()
+            except Exception:
+                pass
         return False
 
 
@@ -375,9 +414,106 @@ def _setup_percentage_line_edit(line_edit):
         line_edit._focus_filter = filtro
 
 
+def _setup_numeric_line_edit(line_edit):
+    """Normaliza um QLineEdit numérico ao terminar edição (Enter/focus-out).
+
+    Regras:
+    - Aceita vírgula ou ponto como separador decimal.
+    - Remove espaços; vazio vira 0.
+    - Mantém até 2 casas decimais; valores negativos são forçados para 0.
+    """
+    def _normalize():
+        txt = (line_edit.text() or "").strip().replace(" ", "")
+        if not txt:
+            line_edit.setText("0")
+            return
+        try:
+            val = float(txt.replace(",", "."))
+        except ValueError:
+            QMessageBox.warning(line_edit.window(), "Valor inválido", "Insira um número válido.")
+            return
+        if val < 0:
+            val = 0.0
+        # Para quantidades inteiras (heurística): se o nome contém 'qt'
+        name = getattr(line_edit, 'objectName', lambda: "")()
+        if name and 'qt' in name.lower():
+            line_edit.setText(f"{int(round(val))}")
+        else:
+            line_edit.setText(f"{val:.2f}")
+
+    # Select all ao focar
+    filtro = _ClearOnFocusFilter(line_edit)
+    line_edit.installEventFilter(filtro)
+    if not hasattr(line_edit, "_focus_filter"):
+        line_edit._focus_filter = filtro
+    # Normaliza em Enter e focus-out
+    try:
+        line_edit.returnPressed.connect(_normalize)
+    except Exception:
+        pass
+    line_edit.editingFinished.connect(_normalize)
+
+
+def _run_with_busy(ui, fn):
+    """Executa uma função com UI em modo 'busy' e botões críticos desativados."""
+    btns = [
+        getattr(ui, 'pushButton_atualiza_preco_items', None),
+        getattr(ui, 'pushButton_atualiza_preco_final', None),
+        getattr(ui, 'pushButton_Export_PDF_Relatorio', None),
+        getattr(ui, 'orcamentar_items', None),
+    ]
+    # Desativar
+    for b in btns:
+        if b is not None:
+            try:
+                b.setEnabled(False)
+            except Exception:
+                pass
+    try:
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        fn()
+    finally:
+        QGuiApplication.restoreOverrideCursor()
+        for b in btns:
+            if b is not None:
+                try:
+                    b.setEnabled(True)
+                except Exception:
+                    pass
+
+
+def _normalize_percentage_line_edit(line_edit, min_val=0, max_val=99):
+    """Normaliza o conteúdo de um QLineEdit de percentagem.
+
+    Interpreta entrada do utilizador como percentagem direta:
+    - "2.5" → "2.50%"
+    - "8"   → "8.00%"
+    - aceita vírgula decimal e presença/ausência de "%".
+    """
+    txt = (line_edit.text() or "").strip()
+    if not txt:
+        line_edit.setText("0.00%")
+        return
+    try:
+        val = float(txt.replace("%", "").replace(",", "."))
+    except ValueError:
+        QMessageBox.warning(line_edit.window(), "Entrada Inválida",
+                            "Insira um valor numérico (ex.: 2.5 ou 8).")
+        return
+    if not (min_val <= val <= max_val):
+        QMessageBox.warning(line_edit.window(), "Valor Inválido",
+                            f"A percentagem deve estar entre {min_val}% e {max_val}%.")
+        return
+    formatted = f"{val:.2f}%"
+    if txt != formatted:
+        line_edit.blockSignals(True)
+        line_edit.setText(formatted)
+        line_edit.blockSignals(False)
+
+
 def _on_global_percentage_edit(ui, line_edit, column_idx, force_margin=False):
-    """Valida o valor editado e, se confirmado, aplica a todas as linhas."""
-    _validate_percentage_input(line_edit, 0, 99)
+    """Normaliza e, se confirmado, aplica o novo valor a todas as linhas."""
+    _normalize_percentage_line_edit(line_edit, 0, 99)
     _prompt_apply_global_percentage(ui, line_edit, column_idx, force_margin)
 
 
@@ -976,7 +1112,8 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                        custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
                        valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
                        margem_mao_obra_perc, valor_mao_obra
-                FROM orcamento_items WHERE id_orcamento=%s ORDER BY id_item
+                FROM orcamento_items WHERE id_orcamento=%s
+                ORDER BY CAST(item AS UNSIGNED), id_item
             """, (id_orcamento,))
             registros = cursor.fetchall()
         # print(f"Encontrados {len(registros)} itens.")
@@ -2149,6 +2286,146 @@ def calcular_preco_final_orcamento(ui):
     target_price = converter_texto_para_valor(
         target_price_str, "moeda") if target_price_str else 0.0
 
+    # NOVO: Ajuste multi-parâmetro por prioridades para atingir objetivo
+    if target_price > 0.0:
+        # Helper local para ler totais atuais e coeficientes efetivos
+        def _ler_totais_e_coeficientes():
+            """Retorna (total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt).
+
+            - total_atual: soma de Preco_Total atual.
+            - S_cp_qt:     Σ(CustoProduzido*QT) para TODAS as linhas (usado por Margem Lucro).
+            - S_admin_cp_qt: Σ(CustoProduzido*QT) apenas onde Admin usa valor global.
+            - S_mp_orlas_qt: Σ((MP+Orlas)*QT) apenas onde MP/Orlas usa valor global.
+            - S_mo_qt:     Σ(Mão de Obra*QT) apenas onde Mão de Obra usa valor global.
+            """
+            total_atual_local = 0.0
+            S_cp_qt_local = 0.0
+            S_admin_cp_qt_local = 0.0
+            S_mp_orlas_qt_local = 0.0
+            S_mo_qt_local = 0.0
+
+            global_admin = converter_texto_para_valor(
+                ui.lineEdit_custos_administrativos.text(), "percentual")
+            global_mp_orlas = converter_texto_para_valor(
+                ui.margem_MP_orlas.text(), "percentual")
+            global_mao_obra = converter_texto_para_valor(
+                ui.margem_mao_obra.text(), "percentual")
+
+            for r in range(tbl.rowCount()):
+                qt = converter_texto_para_valor(_get_cell_text(tbl, r, COL_QT), "moeda") or 0.0
+                if qt <= 0:
+                    qt = 1.0
+                total_atual_local += converter_texto_para_valor(
+                    _get_cell_text(tbl, r, COL_PRECO_TOTAL), "moeda")
+
+                custo_prod = converter_texto_para_valor(_get_cell_text(tbl, r, COL_CUSTO_PRODUZIDO), "moeda")
+                custo_mp = converter_texto_para_valor(_get_cell_text(tbl, r, COL_CUSTO_MP), "moeda")
+                custo_orlas = converter_texto_para_valor(_get_cell_text(tbl, r, COL_CUSTO_ORLAS), "moeda")
+                custo_mo = converter_texto_para_valor(_get_cell_text(tbl, r, COL_CUSTO_MO), "moeda")
+
+                S_cp_qt_local += custo_prod * qt
+
+                admin_cell = converter_texto_para_valor(
+                    _get_cell_text(tbl, r, COL_CUSTOS_ADMIN_PERC), "percentual")
+                if abs(admin_cell - global_admin) <= 0.001:
+                    S_admin_cp_qt_local += custo_prod * qt
+
+                mp_orlas_cell = converter_texto_para_valor(
+                    _get_cell_text(tbl, r, COL_MARGEM_MP_ORLAS_PERC), "percentual")
+                if abs(mp_orlas_cell - global_mp_orlas) <= 0.001:
+                    S_mp_orlas_qt_local += (custo_mp + custo_orlas) * qt
+
+                mao_obra_cell = converter_texto_para_valor(
+                    _get_cell_text(tbl, r, COL_MARGEM_MAO_OBRA_PERC), "percentual")
+                if abs(mao_obra_cell - global_mao_obra) <= 0.001:
+                    S_mo_qt_local += custo_mo * qt
+
+            return (
+                total_atual_local,
+                S_cp_qt_local,
+                S_mp_orlas_qt_local,
+                S_mo_qt_local,
+                S_admin_cp_qt_local,
+            )
+
+        # Garantir consistência inicial
+        atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+
+        total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt = _ler_totais_e_coeficientes()
+        tol = 1.0  # tolerância ±1€
+
+        # Até 3 passagens para acomodar arredondamentos e overrides
+        for _pass in range(3):
+            erro = target_price - total_atual
+            if abs(erro) <= tol:
+                break
+
+            # 1) Margem de Lucro (%) — afeta todas as linhas (forçamos global)
+            if S_cp_qt > 0:
+                curr = converter_texto_para_valor(ui.lineEdit_margem_lucro.text(), "percentual")
+                novo = max(0.0, min(0.99, curr + erro / S_cp_qt))
+                if abs(novo - curr) > 1e-9:
+                    ui.lineEdit_margem_lucro.setText(formatar_valor_percentual(novo))
+                    atualizar_custos_e_precos_itens(ui, force_global_margin_update=True)
+                    total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt = _ler_totais_e_coeficientes()
+                    erro = target_price - total_atual
+                    if abs(erro) <= tol:
+                        break
+
+            # 2) Custos Administrativos (%) — apenas onde usa global
+            if S_admin_cp_qt > 0 and abs(erro) > tol:
+                curr = converter_texto_para_valor(ui.lineEdit_custos_administrativos.text(), "percentual")
+                novo = max(0.0, min(0.99, curr + erro / S_admin_cp_qt))
+                if abs(novo - curr) > 1e-9:
+                    ui.lineEdit_custos_administrativos.setText(formatar_valor_percentual(novo))
+                    atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+                    total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt = _ler_totais_e_coeficientes()
+                    erro = target_price - total_atual
+                    if abs(erro) <= tol:
+                        break
+
+            # 3) Margem_MP_Orlas (%) — apenas onde usa global
+            if S_mp_orlas_qt > 0 and abs(erro) > tol:
+                curr = converter_texto_para_valor(ui.margem_MP_orlas.text(), "percentual")
+                novo = max(0.0, min(0.99, curr + erro / S_mp_orlas_qt))
+                if abs(novo - curr) > 1e-9:
+                    ui.margem_MP_orlas.setText(formatar_valor_percentual(novo))
+                    atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+                    total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt = _ler_totais_e_coeficientes()
+                    erro = target_price - total_atual
+                    if abs(erro) <= tol:
+                        break
+
+            # 4) Margem_Mão de Obra (%) — apenas onde usa global
+            if S_mo_qt > 0 and abs(erro) > tol:
+                curr = converter_texto_para_valor(ui.margem_mao_obra.text(), "percentual")
+                novo = max(0.0, min(0.99, curr + erro / S_mo_qt))
+                if abs(novo - curr) > 1e-9:
+                    ui.margem_mao_obra.setText(formatar_valor_percentual(novo))
+                    atualizar_custos_e_precos_itens(ui, force_global_margin_update=False)
+                    total_atual, S_cp_qt, S_mp_orlas_qt, S_mo_qt, S_admin_cp_qt = _ler_totais_e_coeficientes()
+
+        desvio = target_price - total_atual
+        if abs(desvio) <= tol:
+            QMessageBox.information(
+                ui.tabWidget_orcamento,
+                "Objetivo Atingido",
+                f"Preço final ajustado para {formatar_valor_moeda(total_atual)} (desvio {formatar_valor_moeda(desvio)}).",
+            )
+        else:
+            QMessageBox.warning(
+                ui.tabWidget_orcamento,
+                "Objetivo Parcial",
+                f"Não foi possível atingir exatamente {formatar_valor_moeda(target_price)} (desvio {formatar_valor_moeda(desvio)}). \n"
+                f"Verifique se existem linhas com percentagens sobrepostas (override).",
+            )
+
+        ui.lineEdit_atingir_preco_final.clear()
+
+        # Atualiza o campo de preço final na UI e sai
+        ui.lineEdit_preco_final_orcamento.setText(formatar_valor_moeda(total_atual))
+        return
+
     # Coletar todos os valores individuais dos itens em listas
     preco_total_items = []  # Lista para armazenar os Preco_Total de cada item
     # Usaremos estes para o cálculo da nova margem percentual global
@@ -2380,14 +2657,199 @@ def configurar_context_menu_tabela(ui):
 def exibir_menu_contexto_tabela(ui, pos):
     """Exibe o menu de contexto da tabela de artigos."""
     menu = QMenu()
+    s = ui.tableWidget_artigos.style()
+
+    # NOVO: opções mover acima/abaixo com ícones
+    acao_mover_cima = menu.addAction("Mover linha para cima")
+    acao_mover_cima.setIcon(s.standardIcon(QStyle.SP_ArrowUp))
+    acao_mover_baixo = menu.addAction("Mover linha para baixo")
+    acao_mover_baixo.setIcon(s.standardIcon(QStyle.SP_ArrowDown))
+
+    # Desabilitar nas extremidades
+    row_sel = ui.tableWidget_artigos.currentRow()
+    if row_sel <= 0:
+        acao_mover_cima.setEnabled(False)
+    if row_sel < 0 or row_sel >= ui.tableWidget_artigos.rowCount()-1:
+        acao_mover_baixo.setEnabled(False)
+
+    menu.addSeparator()
+
+    # Ícones para duplicar/eliminar
     acao_duplicar = menu.addAction("Duplicar Linha de Artigo")
+    acao_duplicar.setIcon(s.standardIcon(QStyle.SP_FileDialogNewFolder))
     acao_eliminar = menu.addAction("Eliminar Linha de Artigo")
+    acao_eliminar.setIcon(s.standardIcon(QStyle.SP_TrashIcon))
 
     acao = menu.exec_(ui.tableWidget_artigos.mapToGlobal(pos))
-    if acao == acao_duplicar:
+    if acao == acao_mover_cima:
+        mover_linha_artigo(ui, direcao=-1)
+    elif acao == acao_mover_baixo:
+        mover_linha_artigo(ui, direcao=1)
+    elif acao == acao_duplicar:
         duplicar_item_orcamento(ui)
     elif acao == acao_eliminar:
         excluir_item_orcamento(ui)
+
+
+def mover_linha_artigo(ui, direcao: int):
+    """Move a linha selecionada uma posição para cima (direcao=-1) ou para baixo (direcao=1).
+
+    Implementação segura: troca os números do campo "Item" entre as duas linhas
+    e atualiza as tabelas associadas na BD usando UPDATE com CASE (sem valores
+    temporários). Após a atualização, recarrega a tabela ordenando por "Item"
+    e mantém a seleção do mesmo registro (via id_item).
+    """
+    tbl = ui.tableWidget_artigos
+    row_sel = tbl.currentRow()
+    if row_sel < 0:
+        QMessageBox.information(ui.tabWidget_orcamento, "Mover Linha", "Nenhuma linha selecionada.")
+        return
+
+    target_row = row_sel + (1 if direcao > 0 else -1)
+    if target_row < 0 or target_row >= tbl.rowCount():
+        return  # Nada a fazer nas extremidades
+
+    # Guardar id_item do registo selecionado para restaurar seleção após recarregar
+    id_item_sel = _get_cell_text(tbl, row_sel, COL_ID_ITEM)
+
+    item_a = _get_cell_text(tbl, row_sel, COL_ITEM_NUM)
+    item_b = _get_cell_text(tbl, target_row, COL_ITEM_NUM)
+    if not item_a or not item_b:
+        return
+
+    id_orc_str = ui.lineEdit_id.text().strip()
+    num_orc = ui.lineEdit_num_orcamento.text().strip()
+    ver_orc = ui.lineEdit_versao_orcamento.text().strip()
+    if not id_orc_str.isdigit():
+        QMessageBox.warning(None, "Erro", "ID do orçamento inválido.")
+        return
+    id_orc = int(id_orc_str)
+
+    # Trocar os números do item nas tabelas relacionadas usando CASE para evitar colisão
+    try:
+        with obter_cursor() as cursor:
+            tmp_item = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE orcamento_items SET item=%s WHERE id_orcamento=%s AND item=%s",
+                (tmp_item, id_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE orcamento_items SET item=%s WHERE id_orcamento=%s AND item=%s",
+                (item_a, id_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE orcamento_items SET item=%s WHERE id_orcamento=%s AND item=%s",
+                (item_b, id_orc, tmp_item),
+            )
+
+            # dados_modulo_medidas
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_modulo_medidas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_modulo_medidas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_modulo_medidas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+            # dados_def_pecas
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_def_pecas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_def_pecas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_def_pecas SET ids=%s WHERE num_orc=%s AND ver_orc=%s AND ids=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+            # dados_items_materiais
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_items_materiais SET id_mat=%s WHERE num_orc=%s AND ver_orc=%s AND id_mat=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_items_materiais SET id_mat=%s WHERE num_orc=%s AND ver_orc=%s AND id_mat=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_items_materiais SET id_mat=%s WHERE num_orc=%s AND ver_orc=%s AND id_mat=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+            # dados_items_ferragens
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_items_ferragens SET id_fer=%s WHERE num_orc=%s AND ver_orc=%s AND id_fer=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_items_ferragens SET id_fer=%s WHERE num_orc=%s AND ver_orc=%s AND id_fer=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_items_ferragens SET id_fer=%s WHERE num_orc=%s AND ver_orc=%s AND id_fer=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+            # dados_items_sistemas_correr
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_items_sistemas_correr SET id_sc=%s WHERE num_orc=%s AND ver_orc=%s AND id_sc=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_items_sistemas_correr SET id_sc=%s WHERE num_orc=%s AND ver_orc=%s AND id_sc=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_items_sistemas_correr SET id_sc=%s WHERE num_orc=%s AND ver_orc=%s AND id_sc=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+            # dados_items_acabamentos
+            tmp = f"TMP_{uuid.uuid4().hex[:8]}"
+            cursor.execute(
+                "UPDATE dados_items_acabamentos SET id_acb=%s WHERE num_orc=%s AND ver_orc=%s AND id_acb=%s",
+                (tmp, num_orc, ver_orc, item_a),
+            )
+            cursor.execute(
+                "UPDATE dados_items_acabamentos SET id_acb=%s WHERE num_orc=%s AND ver_orc=%s AND id_acb=%s",
+                (item_a, num_orc, ver_orc, item_b),
+            )
+            cursor.execute(
+                "UPDATE dados_items_acabamentos SET id_acb=%s WHERE num_orc=%s AND ver_orc=%s AND id_acb=%s",
+                (item_b, num_orc, ver_orc, tmp),
+            )
+
+        # Recarregar ordenando por "Item" para refletir visualmente a nova ordem
+        carregar_itens_orcamento(ui, id_orc)
+
+        # Restaurar seleção do mesmo registro (via id_item)
+        for r in range(tbl.rowCount()):
+            if _get_cell_text(tbl, r, COL_ID_ITEM) == id_item_sel:
+                tbl.setCurrentCell(r, COL_ITEM_NUM)
+                break
+
+        # Mantém consistência de totais
+        calcular_preco_final_orcamento(ui)
+
+    except mysql.connector.Error as err:
+        print(f"[ERRO] Mover linha (BD): {err}")
+        QMessageBox.critical(None, "Erro BD", f"Falha ao mover linha: {err}")
+    except Exception as e:
+        print(f"[ERRO] Mover linha: {e}")
+        QMessageBox.critical(None, "Erro", f"Falha ao mover linha: {e}")
 
 
 def duplicar_registos_associados(cursor, tabela, coluna_item, item_antigo, item_novo, num_orc, ver_orc):
@@ -2524,16 +2986,62 @@ def excluir_item_orcamento(ui):
                 "DELETE FROM dados_items_acabamentos WHERE id_acb=%s AND num_orc=%s AND ver_orc=%s",
                 (item_num, num_orc, ver_orc))
 
+        # Limpeza extra: remove registos órfãos em todas as tabelas associadas
+        _limpar_registos_orfaos_orcamento(id_orc, num_orc, ver_orc)
+
         carregar_itens_orcamento(ui, id_orc)
         ui.lineEdit_item_orcamento.setText(
             str(obter_proximo_item_para_orcamento(id_orc)))
         QMessageBox.information(None, "OK", "Linha eliminada com sucesso.")
+        # Atualiza totais visíveis
+        calcular_preco_final_orcamento(ui)
     except mysql.connector.Error as err:
         print(f"Erro MySQL ao eliminar item: {err}")
         QMessageBox.critical(None, "Erro BD", f"Erro: {err}")
     except Exception as e:
         print(f"Erro inesperado ao eliminar item: {e}")
         QMessageBox.critical(None, "Erro", f"Erro: {e}")
+
+
+def _limpar_registos_orfaos_orcamento(id_orc: int, num_orc: str, ver_orc: str):
+    """Remove dados órfãos de todas as tabelas relacionadas a um orçamento.
+
+    Órfãos são linhas em dados_modulo_medidas, dados_def_pecas, dados_items_*
+    cujo identificador de item (ids/id_mat/id_fer/id_sc/id_acb) não existe
+    mais na tabela orcamento_items para o id_orcamento fornecido.
+    """
+    try:
+        with obter_cursor() as cursor:
+            cursor.execute(
+                "SELECT DISTINCT item FROM orcamento_items WHERE id_orcamento=%s",
+                (id_orc,),
+            )
+            itens_existentes = {str(r[0]).strip() for r in cursor.fetchall() if r and r[0] is not None}
+
+            def _delete_orfaos(tabela: str, col_item: str):
+                if not itens_existentes:
+                    cursor.execute(
+                        f"DELETE FROM {tabela} WHERE num_orc=%s AND ver_orc=%s",
+                        (num_orc, ver_orc),
+                    )
+                    return
+                placeholders = ",".join(["%s"] * len(itens_existentes))
+                sql = (
+                    f"DELETE FROM {tabela} WHERE num_orc=%s AND ver_orc=%s "
+                    f"AND {col_item} NOT IN ({placeholders})"
+                )
+                params = [num_orc, ver_orc, *list(itens_existentes)]
+                cursor.execute(sql, tuple(params))
+
+            # Aplicar a todas as tabelas associadas
+            _delete_orfaos("dados_modulo_medidas", "ids")
+            _delete_orfaos("dados_def_pecas", "ids")
+            _delete_orfaos("dados_items_materiais", "id_mat")
+            _delete_orfaos("dados_items_ferragens", "id_fer")
+            _delete_orfaos("dados_items_sistemas_correr", "id_sc")
+            _delete_orfaos("dados_items_acabamentos", "id_acb")
+    except Exception as e:
+        print(f"[AVISO] Falha ao limpar registos órfãos: {e}")
 #################################################################################################################################
 # --- Fim das funções de manipulação de itens do orçamento ---
 """

@@ -1167,16 +1167,45 @@ def exportar_relatorio(ui: QtWidgets.QWidget) -> None:
     pdf_path = os.path.join(pasta, f"{num}_{ver}.pdf")
     xls_path = os.path.join(pasta, f"{num}_{ver}.xlsx")
     xls_phc_path = os.path.join(pasta, f"{num}_{ver}_PHC.xlsx")
+    resumo_xlsx_path = os.path.join(pasta, f"Resumo_Custos_{num}_{ver}.xlsx")
+
+    # Limpar ficheiros antigos para evitar versões desatualizadas
+    for p in (pdf_path, xls_path, xls_phc_path, resumo_xlsx_path):
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            # Pode falhar se o ficheiro estiver aberto; tentaremos escrever por cima
+            pass
 
     gera_pdf(ui, pdf_path)
     gera_excel(ui, xls_path)
-    gera_excel_importacao_phc(ui, xls_phc_path)  # <--- NOVO: Gera Excel PHC
+    gera_excel_importacao_phc(ui, xls_phc_path)  # <--- Excel PHC
 
-    print(f"Relatórios guardados em:\nPDF: {pdf_path}\nXLSX: {xls_path}\nXLSX PHC: {xls_phc_path}")
+    # Também gerar o Excel de Resumos (Resumo_Custos)
+    try:
+        from resumo_consumos import gerar_resumos_excel
+        gerar_resumos_excel(resumo_xlsx_path, num, ver)
+    except Exception as e:
+        print(f"[AVISO] Falha ao gerar Resumo_Custos: {e}")
+
+    print(
+        "Relatórios guardados em:\n"
+        f"PDF: {pdf_path}\n"
+        f"XLSX: {xls_path}\n"
+        f"XLSX PHC: {xls_phc_path}\n"
+        f"Resumo: {resumo_xlsx_path}"
+    )
     QtWidgets.QMessageBox.information(
         getattr(ui, "tabWidget_orcamento", None),
         "Gerado",
-        f"Arquivos gerados:\n• {pdf_path}\n• {xls_path}\n• {xls_phc_path}",
+        (
+            "Arquivos gerados:\n"
+            f"- {pdf_path}\n"
+            f"- {xls_path}\n"
+            f"- {xls_phc_path}\n"
+            f"- {resumo_xlsx_path}"
+        ),
     )
 
 # =============================================================================
