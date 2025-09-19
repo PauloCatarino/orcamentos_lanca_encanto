@@ -19,7 +19,7 @@ import math
 import re
 import os
 import mysql.connector
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QComboBox
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QAbstractItemView, QComboBox, QStyle
 from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtGui import QColor
 from db_connection import obter_cursor
@@ -539,17 +539,23 @@ def adicionar_menu_limpar_alterar(
 
     def abrir_menu2(pos):
         menu = QMenu(tabela)
+        s = tabela.style()
         acao_limpar = menu.addAction("Limpar linha(s) selecionada(s)")
+        acao_limpar.setIcon(s.standardIcon(QStyle.SP_TrashIcon))
         acao_limpar_tabela = None
         if callback_limpar_tabela:
             acao_limpar_tabela = menu.addAction("Limpar Dados Tabela")
+            acao_limpar_tabela.setIcon(s.standardIcon(QStyle.SP_DialogResetButton))
         acao_copiar = menu.addAction("Copiar Linha selecionada")
+        acao_copiar.setIcon(s.standardIcon(QStyle.SP_DialogOpenButton))
         acao_colar = menu.addAction("Colar Linha selecionada")
+        acao_colar.setIcon(s.standardIcon(QStyle.SP_DialogSaveButton))
         acao_aplicar = None
         if callback_alterar:
             acao_aplicar = menu.addAction(
                 "Atualizar dados para todos os items do orçamento e Tab_def_pecas"
             )
+            acao_aplicar.setIcon(s.standardIcon(QStyle.SP_BrowserReload))
 
         acao_ret = menu.exec_(tabela.mapToGlobal(pos))
         if acao_ret == acao_limpar:
