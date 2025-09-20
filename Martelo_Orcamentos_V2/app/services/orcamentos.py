@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_, or_
 from ..models import Orcamento, OrcamentoItem, Client, User
 import datetime
+import re
 
 
 @dataclass
@@ -232,26 +233,53 @@ def next_seq_for_year(db: Session, ano: Optional[str] = None) -> str:
     """Devolve apenas a parte sequencial (NNNN) para o ano indicado."""
     if not ano:
         ano = str(datetime.datetime.now().year)
-    yy = ano[-2:]
+    ano_txt = str(ano).strip() or str(datetime.datetime.now().year)
+    yy = ano_txt[-2:]
     max_seq = 0
+    largura = 4
 
-    # Procura todos os números desse ano
     rows = db.execute(
-        select(Orcamento.num_orcamento).where(Orcamento.num_orcamento.like(f"{yy}%"))
+        select(Orcamento.num_orcamento).where(Orcamento.ano == ano_txt)
     ).scalars().all()
 
     # Extrai apenas a parte sequencial
-    for s in rows:
+    for raw in rows:
+        if raw is None:
+            continue
+
+        texto = str(raw).strip()
+        if not texto:
+            continue
+
+        sufixo = ""
+        prefixo = ""
+
+
+        if texto.startswith(yy):
+            prefixo = texto[: len(yy)]
+            sufixo = texto[len(yy):]
+        else:
+            m = re.search(r"(\d+)$", texto)
+            if m:
+                sufixo = m.group(1)
+                prefixo = texto[: -len(sufixo)]
+
+        if not sufixo:
+            continue
         try:
-            if len(s) >= 6 and s[:2] == yy:
-                seq = int(s[2:6])
-                if seq > max_seq:
-                    max_seq = seq
-        except Exception:
+            seq = int(sufixo)
+        except ValueError:
             continue
 
     # Devolve apenas a parte sequencial com zero à esquerda
-    return f"{max_seq+1:04d}"
+        if seq > max_seq:
+            max_seq = seq
+            largura = len(sufixo)
+            if not prefixo.strip():
+                largura = max(largura, 4)
+
+    largura = max(largura, 4)
+    return f"{max_seq + 1:0{largura}d}"
 
 
 def next_version_for(db: Session, ano: str, num_orc: str) -> str:
