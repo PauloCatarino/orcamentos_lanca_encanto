@@ -1,3 +1,4 @@
+from typing import Optional
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, Signal, QDate
 from PySide6.QtWidgets import QStyle, QCompleter, QToolButton
@@ -113,8 +114,9 @@ class OrcamentosPage(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         lay.addWidget(split)
 
+
         self._current_id = None
-        self.on_novo()
+        self._prepare_new_form()
         self.refresh()
 
     # Dados
@@ -202,10 +204,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_ano.setText(str(o.ano or ""))
         seq = str(o.num_orcamento or "")
         self.ed_num.setText(seq[2:6] if len(seq) >= 6 else seq)
-        ver = str(o.versao or "01")
-        if ver.isdigit():
-            ver = f"{int(ver):02d}"
-        self.ed_ver.setText(ver)
+        self.ed_ver.setText(self._format_version(o.versao or "01"))
         date_text = o.data or ""
         try:
             parts = [int(p) for p in date_text.split("-")]
@@ -235,26 +234,50 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_info2.setPlainText(o.info_2 or "")
 
     # Ações
-    def on_novo(self):
+    @staticmethod
+    def _format_version(value):
+        if value is None:
+            return "01"
+        text = str(value).strip()
+        if not text:
+            return "01"
+        if text.isdigit():
+            try:
+                return f"{int(text):02d}"
+            except ValueError:
+                pass
+        return text.zfill(2) if len(text) == 1 else text
+
+    def _prepare_new_form(self, ano: Optional[str] = None):
         self.table.clearSelection()
         self._current_id = None
         self._set_identity_lock(False)
-        ano_full = str(QDate.currentDate().year())
+        ano_full = (ano or str(QDate.currentDate().year())).strip() or str(QDate.currentDate().year())
         self.ed_ano.setText(ano_full)
         try:
-            self.ed_num.setText(next_seq_for_year(self.db, ano_full))
+            next_seq = next_seq_for_year(self.db, ano_full)
         except Exception:
-            self.ed_num.setText("0001")
+            next_seq = None
+        seq_txt = str(next_seq or "0001")
+        if seq_txt.isdigit():
+            seq_txt = seq_txt.zfill(4)
+        self.ed_num.setText(seq_txt)
         self.ed_ver.setText("01")
         self.ed_data.setDate(QDate.currentDate())
-        if self.cb_cliente.count() > 0:
-            self.cb_cliente.setCurrentIndex(0)
         self.cb_status.setCurrentText("Falta Orçamentar")
+        self.cb_cliente.blockSignals(True)
+        self.cb_cliente.setCurrentIndex(-1)
+        if self.cb_cliente.isEditable():
+            self.cb_cliente.setCurrentText("")
+        self.cb_cliente.blockSignals(False)
         for w in [self.ed_enc_phc, self.ed_obra, self.ed_preco, self.ed_loc]:
             w.clear()
         self.ed_desc.clear()
         self.ed_info1.clear()
         self.ed_info2.clear()
+
+    def on_novo(self):
+        self._prepare_new_form()
 
     def on_save(self):
         try:
@@ -269,9 +292,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             yy = ano_txt[-2:]
             seq = self.ed_num.text().strip().zfill(4)
             num_concat = f"{yy}{seq}"
-            versao_txt = self.ed_ver.text().strip() or "01"
-            if versao_txt.isdigit():
-                versao_txt = f"{int(versao_txt):02d}"
+            versao_txt = self._format_version(self.ed_ver.text())
             if self._current_id is None:
                 from Martelo_Orcamentos_V2.app.models import Orcamento
                 exists = self.db.execute(
@@ -322,7 +343,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             was_new = self._current_id is None
             if was_new:
                 self.refresh(select_first=False)
-                self.on_novo()
+                self._prepare_new_form(ano_txt)
             else:
                 self.refresh()
             QtWidgets.QMessageBox.information(self, "OK", "Orçamento gravado.")
@@ -383,9 +404,11 @@ class OrcamentosPage(QtWidgets.QWidget):
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta_orc = f"{o.num_orcamento}_{simplex}"
         dir_orc = os.path.join(yy_path, pasta_orc)
-        dir_ver = os.path.join(dir_orc, str(o.versao))
+        ver_dir = self._format_version(o.versao)
+        dir_ver = os.path.join(dir_orc, ver_dir)
+        alt_dir_ver = os.path.join(dir_orc, str(o.versao))
         removed = []
-        for d in [dir_ver, dir_orc]:
+        for d in dict.fromkeys([dir_ver, alt_dir_ver, dir_orc]):
             try:
                 if os.path.isdir(d):
                     import shutil
@@ -409,7 +432,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         yy_path = os.path.join(base, str(o.ano))
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta = f"{o.num_orcamento}_{simplex}"
-        dir_ver = os.path.join(yy_path, pasta, str(o.versao))
+        ver_dir = self._format_version(o.versao)
+        dir_ver = os.path.join(yy_path, pasta, ver_dir)
         try:
             os.makedirs(dir_ver, exist_ok=True)
             QtWidgets.QMessageBox.information(self, "OK", f"Pasta criada:\n{dir_ver}")
@@ -430,8 +454,16 @@ class OrcamentosPage(QtWidgets.QWidget):
         yy_path = os.path.join(base, str(o.ano))
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta = f"{o.num_orcamento}_{simplex}"
-        dir_ver = os.path.join(yy_path, pasta, str(o.versao))
-        target = dir_ver if os.path.isdir(dir_ver) else os.path.join(yy_path, pasta)
+        ver_dir = self._format_version(o.versao)
+        dir_ver = os.path.join(yy_path, pasta, ver_dir)
+        alt_dir_ver = os.path.join(yy_path, pasta, str(o.versao))
+        base_pasta = os.path.join(yy_path, pasta)
+        if os.path.isdir(dir_ver):
+            target = dir_ver
+        elif os.path.isdir(alt_dir_ver):
+            target = alt_dir_ver
+        else:
+            target = base_pasta
         try:
             if os.path.isdir(target):
                 os.startfile(target)
