@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
   `value` LONGTEXT
 ) ENGINE=InnoDB;
 
--- Clientes
+-- Clients
 CREATE TABLE IF NOT EXISTS clients (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(255) NOT NULL,

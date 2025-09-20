@@ -137,17 +137,36 @@ class OrcamentosPage(QtWidgets.QWidget):
         return row.id if row else None
 
     def _load_clients(self):
-        self._clients = list_clients(self.db)
+        current_text = self.cb_cliente.currentText().strip()
+        try:
+            with SessionLocal() as refresh_db:
+                clients = list_clients(refresh_db)
+                refresh_db.expunge_all()
+                self._clients = clients
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar clientes: {exc}")
+            return
+
+        names = [c.nome for c in self._clients]
+
         self.cb_cliente.blockSignals(True)
         self.cb_cliente.clear()
-        names = [c.nome for c in self._clients]
-        for n in names:
-            self.cb_cliente.addItem(n)
+        self.cb_cliente.addItems(names)
+        
         if self.cb_cliente.isEditable():
             comp = QCompleter(names, self)
             comp.setCaseSensitivity(Qt.CaseInsensitive)
             comp.setFilterMode(Qt.MatchContains)
             self.cb_cliente.setCompleter(comp)
+
+        if current_text:
+            idx = next((i for i, name in enumerate(names) if name == current_text), -1)
+            if idx >= 0:
+                self.cb_cliente.setCurrentIndex(idx)
+            else:
+                self.cb_cliente.setCurrentText(current_text)
+
+        self.cb_cliente.blockSignals(False)
         
 
     def reload_clients(self):
