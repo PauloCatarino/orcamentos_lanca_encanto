@@ -122,10 +122,16 @@ def create_orcamento(
     num_orcamento: str,
     versao: str = "01",
     cliente_nome: str = "",
+    client_id: Optional[int] = None,
     created_by: Optional[int] = None,
 ) -> Orcamento:
     versao = f"{int(versao):02d}" if versao and versao.isdigit() else (versao if versao else "01")
-    cli = ensure_client(db, cliente_nome)
+    if client_id:
+        cli = db.get(Client, client_id)
+        if not cli:
+            raise ValueError("Cliente não encontrado")
+    else:
+        cli = ensure_client(db, cliente_nome)
     o = Orcamento(
         ano=str(ano),
         num_orcamento=str(num_orcamento),

@@ -148,7 +148,14 @@ class OrcamentosPage(QtWidgets.QWidget):
             comp.setCaseSensitivity(Qt.CaseInsensitive)
             comp.setFilterMode(Qt.MatchContains)
             self.cb_cliente.setCompleter(comp)
-        self.cb_cliente.blockSignals(False)
+        
+
+    def reload_clients(self):
+        self._load_clients()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._load_clients()
 
     def _set_identity_lock(self, locked: bool):
         self.ed_ano.setReadOnly(locked)
@@ -264,12 +271,14 @@ class OrcamentosPage(QtWidgets.QWidget):
                         "Já existe um orçamento com este ano, número e versão.",
                     )
                     return
+                cliente = self._clients[self.cb_cliente.currentIndex()]
                 o = create_orcamento(
                     self.db,
                     ano=ano_txt,
                     num_orcamento=num_concat,
                     versao=versao_txt,
-                    cliente_nome=self._clients[self.cb_cliente.currentIndex()].nome,
+                    cliente_nome=cliente.nome,
+                    client_id=cliente.id,
                     created_by=getattr(self.current_user, 'id', None),
                 )
                 o.client_id = cid

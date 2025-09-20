@@ -30,7 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from .pages.settings import SettingsPage
         self.stack.addWidget(SettingsPage())
 
-        self.list.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.list.currentRowChanged.connect(self.on_menu_changed)
         self.pg_orc.orcamento_aberto.connect(self.on_abrir_itens)
 
         # Layout
@@ -44,3 +44,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Ir para a página Itens e carregar items do orçamento
         self.pg_itens.load_orcamento(orc_id)
         self.stack.setCurrentWidget(self.pg_itens)
+
+    def on_menu_changed(self, index: int):
+        self.stack.setCurrentIndex(index)
+        if index == 0:
+            self.pg_orc.reload_clients()
