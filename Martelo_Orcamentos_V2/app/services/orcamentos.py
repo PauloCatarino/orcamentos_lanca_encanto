@@ -229,9 +229,29 @@ def next_num_orcamento(db: Session, ano: Optional[str] = None) -> str:
 
 
 def next_seq_for_year(db: Session, ano: Optional[str] = None) -> str:
-    """Devolve apenas a parte sequencial de 4 dígitos para o ano indicado."""
-    full = next_num_orcamento(db, ano)
-    return full[2:6]
+    """Devolve apenas a parte sequencial (NNNN) para o ano indicado."""
+    if not ano:
+        ano = str(datetime.datetime.now().year)
+    yy = ano[-2:]
+    max_seq = 0
+
+    # Procura todos os números desse ano
+    rows = db.execute(
+        select(Orcamento.num_orcamento).where(Orcamento.num_orcamento.like(f"{yy}%"))
+    ).scalars().all()
+
+    # Extrai apenas a parte sequencial
+    for s in rows:
+        try:
+            if len(s) >= 6 and s[:2] == yy:
+                seq = int(s[2:6])
+                if seq > max_seq:
+                    max_seq = seq
+        except Exception:
+            continue
+
+    # Devolve apenas a parte sequencial com zero à esquerda
+    return f"{max_seq+1:04d}"
 
 
 def next_version_for(db: Session, ano: str, num_orc: str) -> str:
