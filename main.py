@@ -35,7 +35,7 @@ Anaconda Prompt
  ______________________________//________________________
 
 git add .
-git commit -m "251 Commit"
+git commit -m "252 Commit"
 git push origin main
 
 ______________________________//________________________

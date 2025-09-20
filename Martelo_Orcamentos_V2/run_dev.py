@@ -1,8 +1,17 @@
+# run_dev.py
+
 import sys
 from PySide6 import QtWidgets
-from app.db import init_db
-from ui.login import LoginDialog
-from ui.main_window import MainWindow
+from Martelo_Orcamentos_V2.app.db import SessionLocal, init_db
+from Martelo_Orcamentos_V2.ui.login import LoginDialog
+from Martelo_Orcamentos_V2.ui.main_window import MainWindow
+
+
+
+# para testar ->                 python -m Martelo_Orcamentos_V2.run_dev
+
+# user : admin
+# pass : admin123
 
 
 def main():

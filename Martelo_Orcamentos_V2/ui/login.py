@@ -1,7 +1,7 @@
 from PySide6 import QtWidgets
-from app.db import SessionLocal
-from app.models import User
-from app.security import verify_password
+from Martelo_Orcamentos_V2.app.db import SessionLocal
+from Martelo_Orcamentos_V2.app.models import User
+from Martelo_Orcamentos_V2.app.security import verify_password
 
 
 class LoginDialog(QtWidgets.QDialog):
