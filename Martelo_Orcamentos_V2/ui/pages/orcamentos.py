@@ -249,11 +249,16 @@ class OrcamentosPage(QtWidgets.QWidget):
         return text.zfill(2) if len(text) == 1 else text
 
     def _prepare_new_form(self, ano: Optional[str] = None):
+        """Prepara o formulário para um novo orçamento."""
         self.table.clearSelection()
         self._current_id = None
         self._set_identity_lock(False)
+
+        # Ano atual (ou passado como argumento)
         ano_full = (ano or str(QDate.currentDate().year())).strip() or str(QDate.currentDate().year())
         self.ed_ano.setText(ano_full)
+
+        # Calcula próximo nº sequencial (0001, 0002, …)
         try:
             next_seq = next_seq_for_year(self.db, ano_full)
         except Exception:
@@ -262,6 +267,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         if seq_txt.isdigit():
             seq_txt = seq_txt.zfill(4)
         self.ed_num.setText(seq_txt)
+
+        # Valores iniciais padrão
         self.ed_ver.setText("01")
         self.ed_data.setDate(QDate.currentDate())
         self.cb_status.setCurrentText("Falta Orçamentar")
@@ -270,6 +277,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         if self.cb_cliente.isEditable():
             self.cb_cliente.setCurrentText("")
         self.cb_cliente.blockSignals(False)
+
+        # Limpar restantes campos editáveis
         for w in [self.ed_enc_phc, self.ed_obra, self.ed_preco, self.ed_loc]:
             w.clear()
         self.ed_desc.clear()
@@ -277,23 +286,29 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_info2.clear()
 
     def on_novo(self):
+        """Ação do botão Inserir Novo Orçamento."""
         self._prepare_new_form()
 
     def on_save(self):
+        """Ação do botão Gravar Orçamento."""
         try:
             cid = self._clients[self.cb_cliente.currentIndex()].id if self.cb_cliente.currentIndex() >= 0 else None
             if not cid:
                 QtWidgets.QMessageBox.warning(self, "Cliente", "Selecione um cliente.")
                 return
+
             ano_txt = self.ed_ano.text().strip()
             if len(ano_txt) != 4 or not ano_txt.isdigit():
                 QtWidgets.QMessageBox.warning(self, "Ano", "Indique um ano válido (AAAA).")
                 return
+
             yy = ano_txt[-2:]
             seq = self.ed_num.text().strip().zfill(4)
             num_concat = f"{yy}{seq}"
             versao_txt = self._format_version(self.ed_ver.text())
+
             if self._current_id is None:
+                # Novo orçamento
                 from Martelo_Orcamentos_V2.app.models import Orcamento
                 exists = self.db.execute(
                     select(Orcamento.id).where(
@@ -305,11 +320,8 @@ class OrcamentosPage(QtWidgets.QWidget):
                     )
                 ).scalar_one_or_none()
                 if exists:
-                    QtWidgets.QMessageBox.warning(
-                        self,
-                        "Duplicado",
-                        "Já existe um orçamento com este ano, número e versão.",
-                    )
+                    QtWidgets.QMessageBox.warning(self, "Duplicado",
+                                                "Já existe um orçamento com este ano, número e versão.")
                     return
                 cliente = self._clients[self.cb_cliente.currentIndex()]
                 o = create_orcamento(
@@ -323,13 +335,15 @@ class OrcamentosPage(QtWidgets.QWidget):
                 )
                 o.client_id = cid
             else:
+                # Editar orçamento existente
                 from Martelo_Orcamentos_V2.app.models import Orcamento
                 o = self.db.get(Orcamento, self._current_id)
                 if not o:
                     QtWidgets.QMessageBox.critical(self, "Erro", "Registo não encontrado.")
                     return
                 o.client_id = cid
-            # Guardar em formato ISO para compatibilidade com DATE em MySQL
+
+            # Guardar restantes campos
             o.data = self.ed_data.date().toString("yyyy-MM-dd")
             o.status = self.cb_status.currentText()
             o.enc_phc = self.ed_enc_phc.text().strip() or None
@@ -339,13 +353,16 @@ class OrcamentosPage(QtWidgets.QWidget):
             o.localizacao = self.ed_loc.text().strip() or None
             o.info_1 = self.ed_info1.toPlainText() or None
             o.info_2 = self.ed_info2.toPlainText() or None
+
             self.db.commit()
             was_new = self._current_id is None
             if was_new:
+                # Após gravar, já prepara o próximo nº
                 self.refresh(select_first=False)
                 self._prepare_new_form(ano_txt)
             else:
                 self.refresh()
+
             QtWidgets.QMessageBox.information(self, "OK", "Orçamento gravado.")
         except Exception as e:
             self.db.rollback()
