@@ -260,12 +260,9 @@ class OrcamentosPage(QtWidgets.QWidget):
 
         # Calcula próximo nº sequencial (0001, 0002, …)
         try:
-            next_seq = next_seq_for_year(self.db, ano_full)
+            seq_txt = next_seq_for_year(self.db, ano_full)
         except Exception:
-            next_seq = None
-        seq_txt = str(next_seq or "0001")
-        if seq_txt.isdigit():
-            seq_txt = seq_txt.zfill(4)
+            seq_txt = "0001"
         self.ed_num.setText(seq_txt)
 
         # Valores iniciais padrão
