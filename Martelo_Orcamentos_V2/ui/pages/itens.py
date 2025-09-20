@@ -16,8 +16,45 @@ class ItensPage(QtWidgets.QWidget):
         self.current_user = current_user
         self.db = SessionLocal()
         self._orc_id = None
-        # Header com info do orçamento
-        self.lbl = QtWidgets.QLabel("Sem orçamento selecionado")
+
+        # Cabeçalho estilizado
+        self.header = QtWidgets.QFrame()
+        self.header.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.header.setStyleSheet("""
+            QFrame {
+                background-color: #f5f5f5;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            QLabel {
+                font-weight: bold;
+                color: #333;
+            }
+            QLabel.value {
+                font-weight: normal;
+                color: #000;
+            }
+        """)
+
+        self.lbl_cliente = QtWidgets.QLabel("Cliente:");   self.lbl_cliente_val = QtWidgets.QLabel("")
+        self.lbl_ano = QtWidgets.QLabel("Ano:");          self.lbl_ano_val = QtWidgets.QLabel("")
+        self.lbl_num = QtWidgets.QLabel("Nº Orçamento:"); self.lbl_num_val = QtWidgets.QLabel("")
+        self.lbl_ver = QtWidgets.QLabel("Versão:");       self.lbl_ver_val = QtWidgets.QLabel("")
+        self.lbl_user = QtWidgets.QLabel("Utilizador:");  self.lbl_user_val = QtWidgets.QLabel("")
+
+        for w in [self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val,
+                  self.lbl_ver_val, self.lbl_user_val]:
+            w.setProperty("class", "value")
+
+        grid = QtWidgets.QGridLayout(self.header)
+        grid.addWidget(self.lbl_cliente, 0, 0); grid.addWidget(self.lbl_cliente_val, 0, 1)
+        grid.addWidget(self.lbl_ano, 0, 2);     grid.addWidget(self.lbl_ano_val, 0, 3)
+        grid.addWidget(self.lbl_num, 1, 0);     grid.addWidget(self.lbl_num_val, 1, 1)
+        grid.addWidget(self.lbl_ver, 1, 2);     grid.addWidget(self.lbl_ver_val, 1, 3)
+        grid.addWidget(self.lbl_user, 2, 0);    grid.addWidget(self.lbl_user_val, 2, 1, 1, 3)
+
+        # Tabela de itens
         self.table = QtWidgets.QTableView(self)
         self.model = SimpleTableModel(columns=[
             ("ID", "id_item"),
@@ -45,9 +82,9 @@ class ItensPage(QtWidgets.QWidget):
         btn_del.clicked.connect(self.on_del)
         btn_up.clicked.connect(lambda: self.on_move(-1))
         btn_dn.clicked.connect(lambda: self.on_move(1))
+
         top = QtWidgets.QHBoxLayout()
-        top.addWidget(self.lbl)
-        top.addStretch(1)
+        top.addWidget(self.header, 1)
         top.addWidget(btn_add)
         top.addWidget(btn_del)
         top.addWidget(btn_up)
@@ -69,23 +106,19 @@ class ItensPage(QtWidgets.QWidget):
             if not user and getattr(self.current_user, "id", None):
                 user = self.db.get(User, getattr(self.current_user, "id", None))
             username = user.username if user else getattr(self.current_user, "username", "") or ""
-            cliente_nome = cliente.nome if cliente else ""
-            ano = o.ano or ""
-            numero = o.num_orcamento or ""
-            versao = f"{int(o.versao):02d}" if str(o.versao).isdigit() else (o.versao or "")
-            self.lbl.setText(
-                "  |  ".join(
-                    [
-                        f"Cliente: {cliente_nome}",
-                        f"Ano: {ano}",
-                        f"Nº Orçamento: {numero}",
-                        f"Versão: {versao}",
-                        f"Utilizador: {username}",
-                    ]
-                )
-            )
+
+            self.lbl_cliente_val.setText(cliente.nome if cliente else "")
+            self.lbl_ano_val.setText(o.ano or "")
+            self.lbl_num_val.setText(o.num_orcamento or "")
+            self.lbl_ver_val.setText(f"{int(o.versao):02d}" if str(o.versao).isdigit() else (o.versao or ""))
+            self.lbl_user_val.setText(username)
         else:
-            self.lbl.setText("Sem orçamento selecionado")
+            self.lbl_cliente_val.setText("")
+            self.lbl_ano_val.setText("")
+            self.lbl_num_val.setText("")
+            self.lbl_ver_val.setText("")
+            self.lbl_user_val.setText("")
+
         self.refresh()
 
     def refresh(self):
@@ -119,7 +152,8 @@ class ItensPage(QtWidgets.QWidget):
         id_item = self.selected_id()
         if not id_item:
             return
-        if QtWidgets.QMessageBox.question(self, "Confirmar", f"Eliminar item {id_item}?") != QtWidgets.QMessageBox.Yes:
+        if QtWidgets.QMessageBox.question(self, "Confirmar",
+                                          f"Eliminar item {id_item}?") != QtWidgets.QMessageBox.Yes:
             return
         try:
             delete_item(self.db, id_item)
