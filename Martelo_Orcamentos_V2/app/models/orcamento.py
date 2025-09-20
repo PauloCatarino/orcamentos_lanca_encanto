@@ -28,16 +28,20 @@ class Orcamento(Base):
     num_orcamento = Column(String(16), nullable=False, index=True)
     versao = Column(String(2), nullable=False, default="00", index=True)
     client_id = Column(BigInteger, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
-    status = Column(String(32), nullable=True)
-    data = Column(String(10), nullable=True)
+    status = Column(String(32), nullable=True)  # Falta Orçamentar; Enviado; Adjudicado; Sem Interesse; Não Adjudicado
+    data = Column(String(10), nullable=True)  # dd-mm-aaaa
     preco_total = Column(Numeric(14, 2), nullable=True)
     ref_cliente = Column(String(64), nullable=True)
+    enc_phc = Column(String(64), nullable=True)
     obra = Column(String(255), nullable=True)
+    descricao_orcamento = Column(Text, nullable=True)
     localizacao = Column(String(255), nullable=True)
     info_1 = Column(Text, nullable=True)
     info_2 = Column(Text, nullable=True)
     notas = Column(Text, nullable=True)
     extras = Column(JSON, nullable=True)
+    reservado1 = Column(String(255), nullable=True)
+    reservado2 = Column(String(255), nullable=True)
     created_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -89,4 +93,3 @@ class OrcamentoItem(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     orcamento = relationship("Orcamento", back_populates="items")
-

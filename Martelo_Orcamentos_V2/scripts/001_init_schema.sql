@@ -4,6 +4,19 @@ CREATE DATABASE IF NOT EXISTS `orcamentos_v2`
   DEFAULT COLLATE utf8mb4_unicode_ci;
 USE `orcamentos_v2`;
 
+-- Limpeza para ambiente de testes (DROP com ordem segura)
+DROP TABLE IF EXISTS dados_items_acabamentos;
+DROP TABLE IF EXISTS dados_items_sistemas_correr;
+DROP TABLE IF EXISTS dados_items_ferragens;
+DROP TABLE IF EXISTS dados_items_materiais;
+DROP TABLE IF EXISTS dados_def_pecas;
+DROP TABLE IF EXISTS dados_modulo_medidas;
+DROP TABLE IF EXISTS orcamento_items;
+DROP TABLE IF EXISTS orcamentos;
+DROP TABLE IF EXISTS clients;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS app_settings;
+
 -- Tabela de utilizadores
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -16,19 +29,33 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- App settings (key/value)
+CREATE TABLE IF NOT EXISTS app_settings (
+  `key` VARCHAR(64) PRIMARY KEY,
+  `value` LONGTEXT
+) ENGINE=InnoDB;
+
 -- Clientes
 CREATE TABLE IF NOT EXISTS clients (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(255) NOT NULL,
+  nome_simplex VARCHAR(255),
   morada TEXT,
   email VARCHAR(255),
+  web_page VARCHAR(255),
   telefone VARCHAR(64),
+  telemovel VARCHAR(64),
   num_cliente_phc VARCHAR(64),
+  info_1 LONGTEXT,
+  info_2 LONGTEXT,
   notas LONGTEXT,
   extras JSON,
+  reservado1 VARCHAR(255),
+  reservado2 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_clients_nome (nome)
+  INDEX ix_clients_nome (nome),
+  INDEX ix_clients_nome_simplex (nome_simplex)
 ) ENGINE=InnoDB;
 
 -- Orçamentos
@@ -42,12 +69,16 @@ CREATE TABLE IF NOT EXISTS orcamentos (
   data VARCHAR(10),
   preco_total DECIMAL(14,2),
   ref_cliente VARCHAR(64),
+  enc_phc VARCHAR(64),
   obra VARCHAR(255),
+  descricao_orcamento LONGTEXT,
   localizacao VARCHAR(255),
   info_1 LONGTEXT,
   info_2 LONGTEXT,
   notas LONGTEXT,
   extras JSON,
+  reservado1 VARCHAR(255),
+  reservado2 VARCHAR(255),
   created_by BIGINT NULL,
   updated_by BIGINT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -108,9 +139,7 @@ CREATE TABLE IF NOT EXISTS dados_modulo_medidas (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_medidas_item (id_item_fk),
-  CONSTRAINT fk_medidas_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_medidas_item (id_item_fk)
 ) ENGINE=InnoDB;
 
 -- Definição de peças
@@ -139,9 +168,7 @@ CREATE TABLE IF NOT EXISTS dados_def_pecas (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_def_item (id_item_fk),
-  CONSTRAINT fk_def_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_def_item (id_item_fk)
 ) ENGINE=InnoDB;
 
 -- Tabelas de itens associados (materiais/ferragens/sistemas/acabamentos)
@@ -157,9 +184,7 @@ CREATE TABLE IF NOT EXISTS dados_items_materiais (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_mat_item (id_item_fk),
-  CONSTRAINT fk_mat_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_mat_item (id_item_fk)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS dados_items_ferragens (
@@ -172,9 +197,7 @@ CREATE TABLE IF NOT EXISTS dados_items_ferragens (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_fer_item (id_item_fk),
-  CONSTRAINT fk_fer_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_fer_item (id_item_fk)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS dados_items_sistemas_correr (
@@ -187,9 +210,7 @@ CREATE TABLE IF NOT EXISTS dados_items_sistemas_correr (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_sc_item (id_item_fk),
-  CONSTRAINT fk_sc_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_sc_item (id_item_fk)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS dados_items_acabamentos (
@@ -202,8 +223,5 @@ CREATE TABLE IF NOT EXISTS dados_items_acabamentos (
   reservado1 VARCHAR(255), reservado2 VARCHAR(255), reservado3 VARCHAR(255),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX ix_acb_item (id_item_fk),
-  CONSTRAINT fk_acb_item FOREIGN KEY(id_item_fk) REFERENCES orcamento_items(id_item)
-    ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX ix_acb_item (id_item_fk)
 ) ENGINE=InnoDB;
-

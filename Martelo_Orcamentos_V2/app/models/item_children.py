@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, String, Text, DateTime, ForeignKey, Numeric, Integer
+from sqlalchemy import BigInteger, Column, String, Text, DateTime, Numeric, Integer
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -7,7 +7,9 @@ from ..db import Base
 
 class _ChildBase:
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    id_item_fk = Column(BigInteger, ForeignKey("orcamento_items.id_item", ondelete="CASCADE"), nullable=False, index=True)
+    # NOTA: FK removida temporariamente para evitar problemas de criação em alguns ambientes.
+    # A coluna mantém o mesmo nome e tipo para reativar a FK numa fase posterior.
+    id_item_fk = Column(BigInteger, nullable=False, index=True)
     notas = Column(Text, nullable=True)
     extras = Column(JSON, nullable=True)
     reservado1 = Column(String(255), nullable=True)
@@ -137,4 +139,3 @@ class DadosItemsAcabamentos(_DadosItemsBase):
     linha = Column(Integer, default=1)
     custo_acb_und = Column(Numeric(12, 2))
     custo_acb_total = Column(Numeric(12, 2))
-

@@ -13,18 +13,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Barra lateral (placeholder)
         self.list = QtWidgets.QListWidget()
-        self.list.addItems(["Orçamentos", "Itens", "Dados Gerais", "Relatórios", "Configurações"])
+        self.list.addItems(["Orçamentos", "Itens", "Clientes", "Dados Gerais", "Relatórios", "Configurações"])
         self.list.setFixedWidth(220)
 
         # Área central
         self.stack = QtWidgets.QStackedWidget()
-        self.pg_orc = OrcamentosPage()
-        self.pg_itens = ItensPage()
-        self.stack.addWidget(self.pg_orc)
-        self.stack.addWidget(self.pg_itens)
+        self.pg_orc = OrcamentosPage(current_user=self.current_user)
+        self.pg_itens = ItensPage(current_user=self.current_user)
+        from .pages.clientes import ClientesPage
+        self.pg_clientes = ClientesPage()
+        self.stack.addWidget(self.pg_orc)        # idx 0
+        self.stack.addWidget(self.pg_itens)      # idx 1
+        self.stack.addWidget(self.pg_clientes)   # idx 2
         self.stack.addWidget(QtWidgets.QLabel("Página Dados Gerais (em construção)", alignment=Qt.AlignCenter))
         self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
-        self.stack.addWidget(QtWidgets.QLabel("Página Configurações (em construção)", alignment=Qt.AlignCenter))
+        from .pages.settings import SettingsPage
+        self.stack.addWidget(SettingsPage())
 
         self.list.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.pg_orc.orcamento_aberto.connect(self.on_abrir_itens)

@@ -5,10 +5,12 @@ from ..models.qt_table import SimpleTableModel
 
 
 class ItensPage(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
+        self.current_user = current_user
         self.db = SessionLocal()
         self._orc_id = None
+        # Header com info do orçamento
         self.lbl = QtWidgets.QLabel("Sem orçamento selecionado")
         self.table = QtWidgets.QTableView(self)
         self.model = SimpleTableModel(columns=[
@@ -50,8 +52,18 @@ class ItensPage(QtWidgets.QWidget):
         lay.addWidget(self.table)
 
     def load_orcamento(self, orc_id: int):
+        from app.models import Orcamento, Client
         self._orc_id = orc_id
-        self.lbl.setText(f"Orçamento #{orc_id}")
+        o = self.db.get(Orcamento, orc_id)
+        if o:
+            c = self.db.get(Client, o.client_id)
+            # mostrar cliente, ano 4 dígitos, nº sequencial (4), versão e utilizador
+            ano_full = o.ano
+            num_seq = o.num_orcamento[2:6] if o.num_orcamento and len(o.num_orcamento) >= 6 else o.num_orcamento
+            user = getattr(self.current_user, 'username', '') or ''
+            self.lbl.setText(f"Cliente: {c.nome if c else ''}  |  Ano: {ano_full}  |  Nº: {num_seq}  |  Versão: {o.versao}  |  Utilizador: {user}")
+        else:
+            self.lbl.setText("Sem orçamento selecionado")
         self.refresh()
 
     def refresh(self):
@@ -106,4 +118,3 @@ class ItensPage(QtWidgets.QWidget):
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao mover: {e}")
         self.refresh()
-

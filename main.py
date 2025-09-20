@@ -11,7 +11,8 @@ e conecta os módulos responsáveis por gerenciar:
   - Orçamentos e itens de orçamento
   - Materiais-primas
   - Dados gerais (materiais, ferragens, etc.)
-  - Configurações
+  - Configuraçõesexit
+
   - Gestão de Módulos Pré-definidos:
     - Permite aos utilizadores gravar conjuntos de peças da 'tab_def_pecas' como módulos reutilizáveis.
     - Oferece uma interface para importar módulos guardados para o orçamento atual.
@@ -35,7 +36,7 @@ Anaconda Prompt
  ______________________________//________________________
 
 git add .
-git commit -m "252 Commit"
+git commit -m "253 Commit"
 git push origin main
 
 ______________________________//________________________

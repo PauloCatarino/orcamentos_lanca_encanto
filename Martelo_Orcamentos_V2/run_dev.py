@@ -10,6 +10,8 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 # para testar ->                 python -m Martelo_Orcamentos_V2.run_dev
 
+## Credenciais iniciais para o admin (se não existir, criar com script seed_admin.py): ->     python -m Martelo_Orcamentos_V2.scripts.seed_admin --username admin --password admin123 --role admin
+
 # user : admin
 # pass : admin123
 

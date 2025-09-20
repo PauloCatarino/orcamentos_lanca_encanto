@@ -4,29 +4,22 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
 from Martelo_Orcamentos_V2.app.config import settings
 
-# Configuração de logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-)
+# Logging básico
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Base declarativa do ORM
 Base = declarative_base()
 
-# Criar engine SQLAlchemy usando a URI do .env
-engine = create_engine(
-    settings.DB_URI,
-    pool_pre_ping=True,   # evita erros de "MySQL server has gone away"
-    echo=False            # podes pôr True para debug detalhado das queries
-)
+# Engine
+engine = create_engine(settings.DB_URI, pool_pre_ping=True, echo=False)
 
-# Criar sessão (SessionLocal será usada em todo o projeto)
+# Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
-    """Função geradora para obter e fechar sessão automaticamente."""
+    """Gerador de sessão para uso em serviços/GUI."""
     db = SessionLocal()
     try:
         yield db
@@ -35,22 +28,40 @@ def get_db():
 
 
 def init_db():
-    """Cria as tabelas no banco de dados, se não existirem."""
+    """Cria as tabelas se não existirem via ORM.
+    Se falhar (ex.: ordem de FKs), aplica o script SQL completo uma vez.
+    """
     try:
+        # Importar modelos para registar as tabelas
+        try:
+            from .models import user, client, orcamento, item_children, app_setting  # noqa: F401
+        except Exception:
+            pass
         Base.metadata.create_all(bind=engine)
         logger.info("Tabelas criadas/atualizadas com sucesso (ORM).")
     except SQLAlchemyError as e:
-        logger.error("Erro ao criar as tabelas: %s", e)
-        raise
+        logger.error("Erro ao criar as tabelas (ORM): %s", e)
+        # Fallback: executar script SQL uma vez
+        try:
+            script_path = "Martelo_Orcamentos_V2/scripts/001_init_schema.sql"
+            with open(script_path, "r", encoding="utf-8") as f:
+                sql = f.read()
+            with engine.begin() as conn:
+                for stmt in sql.split(";\n"):
+                    s = stmt.strip()
+                    if s:
+                        conn.execute(text(s))
+            logger.info("Schema criado via script SQL de fallback.")
+        except Exception as ee:
+            logger.error("Falha ao aplicar script SQL: %s", ee)
+            raise
 
 
 def test_connection():
-    """Testa a ligação com a base de dados."""
     try:
         with engine.connect() as connection:
-            # IMPORTANTE: usar text() para queries no SQLAlchemy 2.0+
-            result = connection.execute(text("SELECT 1"))
-            logger.info("Ligação à base de dados bem-sucedida! Resultado: %s", result.scalar())
+            res = connection.execute(text("SELECT 1"))
+            logger.info("Ligação MySQL OK. Resultado: %s", res.scalar())
     except SQLAlchemyError as e:
-        logger.error("Falha na ligação ao MySQL: %s", e)
+        logger.error("Falha na ligação: %s", e)
         raise
