@@ -370,7 +370,11 @@ class OrcamentosPage(QtWidgets.QWidget):
         if not oid:
             return
         try:
-            dup = duplicate_orcamento_version(self.db, oid)
+            dup = duplicate_orcamento_version(
+                self.db,
+                oid,
+                created_by=getattr(self.current_user, 'id', None),
+            )
             self.db.commit()
             self.refresh()
             QtWidgets.QMessageBox.information(self, "OK", f"Criada versão {dup.versao} do orçamento {dup.num_orcamento}.")

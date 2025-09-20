@@ -1,6 +1,12 @@
 from PySide6 import QtWidgets
 from Martelo_Orcamentos_V2.app.db import SessionLocal
-from Martelo_Orcamentos_V2.app.services.orcamentos import list_items, create_item, delete_item, move_item
+from Martelo_Orcamentos_V2.app.services.orcamentos import (
+    list_items,
+    create_item,
+    delete_item,
+    move_item,
+)
+from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from ..models.qt_table import SimpleTableModel
 
 
@@ -52,16 +58,32 @@ class ItensPage(QtWidgets.QWidget):
         lay.addWidget(self.table)
 
     def load_orcamento(self, orc_id: int):
-        from app.models import Orcamento, Client
+        """Carrega dados do orçamento selecionado e apresenta informações básicas."""
         self._orc_id = orc_id
         o = self.db.get(Orcamento, orc_id)
         if o:
-            c = self.db.get(Client, o.client_id)
-            # mostrar cliente, ano 4 dígitos, nº sequencial (4), versão e utilizador
-            ano_full = o.ano
-            num_seq = o.num_orcamento[2:6] if o.num_orcamento and len(o.num_orcamento) >= 6 else o.num_orcamento
-            user = getattr(self.current_user, 'username', '') or ''
-            self.lbl.setText(f"Cliente: {c.nome if c else ''}  |  Ano: {ano_full}  |  Nº: {num_seq}  |  Versão: {o.versao}  |  Utilizador: {user}")
+            cliente = self.db.get(Client, o.client_id)
+            user = None
+            if o.created_by:
+                user = self.db.get(User, o.created_by)
+            if not user and getattr(self.current_user, "id", None):
+                user = self.db.get(User, getattr(self.current_user, "id", None))
+            username = user.username if user else getattr(self.current_user, "username", "") or ""
+            cliente_nome = cliente.nome if cliente else ""
+            ano = o.ano or ""
+            numero = o.num_orcamento or ""
+            versao = f"{int(o.versao):02d}" if str(o.versao).isdigit() else (o.versao or "")
+            self.lbl.setText(
+                "  |  ".join(
+                    [
+                        f"Cliente: {cliente_nome}",
+                        f"Ano: {ano}",
+                        f"Nº Orçamento: {numero}",
+                        f"Versão: {versao}",
+                        f"Utilizador: {username}",
+                    ]
+                )
+            )
         else:
             self.lbl.setText("Sem orçamento selecionado")
         self.refresh()

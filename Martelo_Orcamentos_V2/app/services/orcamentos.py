@@ -295,7 +295,12 @@ def next_version_for(db: Session, ano: str, num_orc: str) -> str:
     return f"{(maxv+1):02d}"
 
 
-def duplicate_orcamento_version(db: Session, orc_id: int) -> Orcamento:
+def duplicate_orcamento_version(
+    db: Session,
+    orc_id: int,
+    *,
+    created_by: Optional[int] = None,
+) -> Orcamento:
     o = db.get(Orcamento, orc_id)
     if not o:
         raise ValueError("Orçamento não encontrado")
@@ -317,6 +322,7 @@ def duplicate_orcamento_version(db: Session, orc_id: int) -> Orcamento:
         info_2=o.info_2,
         notas=o.notas,
         extras=o.extras,
+        created_by=o.created_by,
     )
     db.add(dup)
     db.flush()
