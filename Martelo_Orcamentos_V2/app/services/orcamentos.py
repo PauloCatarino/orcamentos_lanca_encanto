@@ -1,12 +1,103 @@
+from dataclasses import dataclass
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_, or_
-from ..models import Orcamento, OrcamentoItem, Client
+from ..models import Orcamento, OrcamentoItem, Client, User
 import datetime
 
 
-def list_orcamentos(db: Session) -> List[Orcamento]:
-    return db.execute(select(Orcamento).order_by(Orcamento.ano.desc(), Orcamento.num_orcamento, Orcamento.versao)).scalars().all()
+@dataclass
+class OrcamentoResumo:
+    id: int
+    ano: str
+    num_orcamento: str
+    versao: str
+    cliente: str
+    data: str
+    preco: str
+    utilizador: str
+    estado: str
+    obra: str
+    descricao: str
+    localizacao: str
+    info_1: str
+    info_2: str
+
+
+def _format_versao(value: Optional[str]) -> str:
+    if value is None:
+        return "00"
+    try:
+        return f"{int(str(value)):02d}"
+    except Exception:
+        return str(value)
+
+
+def _format_preco(value) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        return f"{float(value):.2f}"
+    except Exception:
+        return str(value)
+
+
+def _select_orcamentos():
+    return (
+        select(
+            Orcamento.id.label("id"),
+            Orcamento.ano.label("ano"),
+            Orcamento.num_orcamento.label("num_orcamento"),
+            Orcamento.versao.label("versao"),
+            Client.nome_simplex.label("cliente_simplex"),
+            Client.nome.label("cliente_nome"),
+            Orcamento.data.label("data"),
+            Orcamento.preco_total.label("preco_total"),
+            User.username.label("utilizador"),
+            Orcamento.status.label("estado"),
+            Orcamento.obra.label("obra"),
+            Orcamento.descricao_orcamento.label("descricao"),
+            Orcamento.localizacao.label("localizacao"),
+            Orcamento.info_1.label("info_1"),
+            Orcamento.info_2.label("info_2"),
+        )
+        .select_from(Orcamento)
+        .outerjoin(Client, Orcamento.client_id == Client.id)
+        .outerjoin(User, Orcamento.created_by == User.id)
+    )
+
+
+def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
+    rows = db.execute(stmt).all()
+    parsed: List[OrcamentoResumo] = []
+    for row in rows:
+        cliente = row.cliente_simplex or row.cliente_nome or ""
+        parsed.append(
+            OrcamentoResumo(
+                id=row.id,
+                ano=str(row.ano or ""),
+                num_orcamento=str(row.num_orcamento or ""),
+                versao=_format_versao(row.versao),
+                cliente=cliente,
+                data=row.data or "",
+                preco=_format_preco(row.preco_total),
+                utilizador=row.utilizador or "",
+                estado=row.estado or "",
+                obra=row.obra or "",
+                descricao=row.descricao or "",
+                localizacao=row.localizacao or "",
+                info_1=row.info_1 or "",
+                info_2=row.info_2 or "",
+            )
+        )
+    return parsed
+
+
+def list_orcamentos(db: Session) -> List[OrcamentoResumo]:
+    stmt = _select_orcamentos().order_by(
+        Orcamento.ano.desc(), Orcamento.num_orcamento, Orcamento.versao
+    )
+    return _rows_from_stmt(db, stmt)
 
 
 def get_orcamento(db: Session, orc_id: int) -> Optional[Orcamento]:
@@ -179,14 +270,14 @@ def duplicate_orcamento_version(db: Session, orc_id: int) -> Orcamento:
     return dup
 
 
-def search_orcamentos(db: Session, query: str) -> List[Orcamento]:
+def search_orcamentos(db: Session, query: str) -> List[OrcamentoResumo]:
     if not (query or "").strip():
         return list_orcamentos(db)
     terms = [t.strip() for t in query.split('%') if t.strip()]
     if not terms:
         return list_orcamentos(db)
     # Join leve com clients para procurar por nome
-    stmt = select(Orcamento).join(Client, Orcamento.client_id == Client.id)
+    stmt = _select_orcamentos()
     for t in terms:
         like = f"%{t}%"
         stmt = stmt.where(
@@ -206,4 +297,4 @@ def search_orcamentos(db: Session, query: str) -> List[Orcamento]:
             )
         )
     stmt = stmt.order_by(Orcamento.ano.desc(), Orcamento.num_orcamento, Orcamento.versao)
-    return db.execute(stmt).scalars().all()
+    return _rows_from_stmt(db, stmt)

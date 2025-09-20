@@ -1,6 +1,7 @@
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, Signal, QDate
 from PySide6.QtWidgets import QStyle, QCompleter, QToolButton
+from sqlalchemy import select, and_
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.orcamentos import (
     list_orcamentos, create_orcamento, delete_orcamento,
@@ -35,8 +36,16 @@ class OrcamentosPage(QtWidgets.QWidget):
             ("Ano", "ano"),
             ("Nº Orçamento", "num_orcamento"),
             ("Versão", "versao"),
-            ("Cliente", "client_id"),
-            ("Preço Total", "preco_total"),
+            ("Cliente", "cliente"),
+            ("Data", "data"),
+            ("Preço", "preco"),
+            ("Utilizador", "utilizador"),
+            ("Estado", "estado"),
+            ("Obra", "obra"),
+            ("Descrição", "descricao"),
+            ("Localização", "localizacao"),
+            ("Info 1", "info_1"),
+            ("Info 2", "info_2"),
         ])
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -109,11 +118,13 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.refresh()
 
     # Dados
-    def refresh(self):
+    def refresh(self, select_first: bool = True):
         rows = list_orcamentos(self.db)
         self.model.set_rows(rows)
-        if rows:
+        if rows and select_first:
             self.table.selectRow(0)
+        elif not select_first:
+            self.table.clearSelection()
 
     def selected_row(self):
         idx = self.table.currentIndex()
@@ -139,6 +150,12 @@ class OrcamentosPage(QtWidgets.QWidget):
             self.cb_cliente.setCompleter(comp)
         self.cb_cliente.blockSignals(False)
 
+    def _set_identity_lock(self, locked: bool):
+        self.ed_ano.setReadOnly(locked)
+        self.ed_ver.setReadOnly(locked)
+        # O número é sempre gerido automaticamente
+        self.ed_num.setReadOnly(True)
+
     def load_selected(self):
         row = self.selected_row()
         if not row:
@@ -148,6 +165,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         if not o:
             return
         self._current_id = o.id
+        self._set_identity_lock(True)
         try:
             cli = self.db.get(Client, o.client_id)
             names = [c.nome for c in self._clients]
@@ -155,19 +173,36 @@ class OrcamentosPage(QtWidgets.QWidget):
                 self.cb_cliente.setCurrentIndex(names.index(cli.nome))
         except Exception:
             pass
-        self.ed_ano.setText(o.ano or "")
-        seq = (o.num_orcamento or "")
+        self.ed_ano.setText(str(o.ano or ""))
+        seq = str(o.num_orcamento or "")
         self.ed_num.setText(seq[2:6] if len(seq) >= 6 else seq)
-        self.ed_ver.setText(o.versao or "01")
+        ver = str(o.versao or "01")
+        if ver.isdigit():
+            ver = f"{int(ver):02d}"
+        self.ed_ver.setText(ver)
+        date_text = o.data or ""
         try:
-            d, m, a = (o.data or "").split("-")
-            self.ed_data.setDate(QDate(int(a), int(m), int(d)))
+            parts = [int(p) for p in date_text.split("-")]
+            if len(parts) == 3:
+                if len(str(parts[0])) == 4:
+                    year, month, day = parts
+                else:
+                    day, month, year = parts
+                self.ed_data.setDate(QDate(year, month, day))
+            else:
+                self.ed_data.setDate(QDate.currentDate())
         except Exception:
             self.ed_data.setDate(QDate.currentDate())
         self.cb_status.setCurrentText(o.status or "Falta Orçamentar")
         self.ed_enc_phc.setText(o.enc_phc or "")
         self.ed_obra.setText(o.obra or "")
-        self.ed_preco.setText(str(o.preco_total or ""))
+        if o.preco_total is None:
+            self.ed_preco.clear()
+        else:
+            try:
+                self.ed_preco.setText(f"{float(o.preco_total):.2f}")
+            except Exception:
+                self.ed_preco.setText(str(o.preco_total))
         self.ed_desc.setPlainText(o.descricao_orcamento or "")
         self.ed_loc.setText(o.localizacao or "")
         self.ed_info1.setPlainText(o.info_1 or "")
@@ -175,6 +210,9 @@ class OrcamentosPage(QtWidgets.QWidget):
 
     # Ações
     def on_novo(self):
+        self.table.clearSelection()
+        self._current_id = None
+        self._set_identity_lock(False)
         ano_full = str(QDate.currentDate().year())
         self.ed_ano.setText(ano_full)
         try:
@@ -185,7 +223,12 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_data.setDate(QDate.currentDate())
         if self.cb_cliente.count() > 0:
             self.cb_cliente.setCurrentIndex(0)
-        self._current_id = None
+        self.cb_status.setCurrentText("Falta Orçamentar")
+        for w in [self.ed_enc_phc, self.ed_obra, self.ed_preco, self.ed_loc]:
+            w.clear()
+        self.ed_desc.clear()
+        self.ed_info1.clear()
+        self.ed_info2.clear()
 
     def on_save(self):
         try:
@@ -193,15 +236,39 @@ class OrcamentosPage(QtWidgets.QWidget):
             if not cid:
                 QtWidgets.QMessageBox.warning(self, "Cliente", "Selecione um cliente.")
                 return
-            yy = (self.ed_ano.text().strip()[-2:]) if self.ed_ano.text().strip() else ""
+            ano_txt = self.ed_ano.text().strip()
+            if len(ano_txt) != 4 or not ano_txt.isdigit():
+                QtWidgets.QMessageBox.warning(self, "Ano", "Indique um ano válido (AAAA).")
+                return
+            yy = ano_txt[-2:]
             seq = self.ed_num.text().strip().zfill(4)
             num_concat = f"{yy}{seq}"
+            versao_txt = self.ed_ver.text().strip() or "01"
+            if versao_txt.isdigit():
+                versao_txt = f"{int(versao_txt):02d}"
             if self._current_id is None:
+                from Martelo_Orcamentos_V2.app.models import Orcamento
+                exists = self.db.execute(
+                    select(Orcamento.id).where(
+                        and_(
+                            Orcamento.ano == ano_txt,
+                            Orcamento.num_orcamento == num_concat,
+                            Orcamento.versao == versao_txt,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if exists:
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Duplicado",
+                        "Já existe um orçamento com este ano, número e versão.",
+                    )
+                    return
                 o = create_orcamento(
                     self.db,
-                    ano=self.ed_ano.text().strip(),
+                    ano=ano_txt,
                     num_orcamento=num_concat,
-                    versao=self.ed_ver.text().strip() or "01",
+                    versao=versao_txt,
                     cliente_nome=self._clients[self.cb_cliente.currentIndex()].nome,
                     created_by=getattr(self.current_user, 'id', None),
                 )
@@ -212,9 +279,6 @@ class OrcamentosPage(QtWidgets.QWidget):
                 if not o:
                     QtWidgets.QMessageBox.critical(self, "Erro", "Registo não encontrado.")
                     return
-                o.ano = self.ed_ano.text().strip()
-                o.num_orcamento = num_concat
-                o.versao = self.ed_ver.text().strip()
                 o.client_id = cid
             # Guardar em formato ISO para compatibilidade com DATE em MySQL
             o.data = self.ed_data.date().toString("yyyy-MM-dd")
@@ -227,7 +291,12 @@ class OrcamentosPage(QtWidgets.QWidget):
             o.info_1 = self.ed_info1.toPlainText() or None
             o.info_2 = self.ed_info2.toPlainText() or None
             self.db.commit()
-            self.refresh()
+            was_new = self._current_id is None
+            if was_new:
+                self.refresh(select_first=False)
+                self.on_novo()
+            else:
+                self.refresh()
             QtWidgets.QMessageBox.information(self, "OK", "Orçamento gravado.")
         except Exception as e:
             self.db.rollback()
@@ -286,7 +355,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta_orc = f"{o.num_orcamento}_{simplex}"
         dir_orc = os.path.join(yy_path, pasta_orc)
-        dir_ver = os.path.join(dir_orc, o.versao)
+        dir_ver = os.path.join(dir_orc, str(o.versao))
         removed = []
         for d in [dir_ver, dir_orc]:
             try:
@@ -312,7 +381,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         yy_path = os.path.join(base, str(o.ano))
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta = f"{o.num_orcamento}_{simplex}"
-        dir_ver = os.path.join(yy_path, pasta, o.versao)
+        dir_ver = os.path.join(yy_path, pasta, str(o.versao))
         try:
             os.makedirs(dir_ver, exist_ok=True)
             QtWidgets.QMessageBox.information(self, "OK", f"Pasta criada:\n{dir_ver}")
@@ -333,7 +402,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         yy_path = os.path.join(base, str(o.ano))
         simplex = (client.nome_simplex or client.nome or "CLIENTE").upper().replace(' ', '_')
         pasta = f"{o.num_orcamento}_{simplex}"
-        dir_ver = os.path.join(yy_path, pasta, o.versao)
+        dir_ver = os.path.join(yy_path, pasta, str(o.versao))
         target = dir_ver if os.path.isdir(dir_ver) else os.path.join(yy_path, pasta)
         try:
             if os.path.isdir(target):
