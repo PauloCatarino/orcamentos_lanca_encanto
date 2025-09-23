@@ -47,31 +47,35 @@ class ItensPage(QtWidgets.QWidget):
                   self.lbl_ver_val, self.lbl_user_val]:
             w.setProperty("class", "value")
 
-        # Layout mais compacto do cabeçalho
+        # Layout mais compacto: 3 linhas, 2 colunas
         grid = QtWidgets.QGridLayout(self.header)
-        grid.setContentsMargins(5, 5, 5, 5)   # margens menores
-        grid.setSpacing(8)                    # menos espaço entre widgets
+        grid.setContentsMargins(5, 5, 5, 5)  # margens menores
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
 
-        # Linha 1 -> Cliente | Ano | Versão
+        # Ajustar largura mínima das labels (nomes fixos)
+        for lbl in [self.lbl_cliente, self.lbl_user, self.lbl_ano, self.lbl_num, self.lbl_ver]:
+            lbl.setMinimumWidth(80)   # largura mínima para alinhar
+            lbl.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
+
+        # Linha 0: Cliente | Utilizador
         grid.addWidget(self.lbl_cliente, 0, 0)
         grid.addWidget(self.lbl_cliente_val, 0, 1)
+        grid.addWidget(self.lbl_user, 0, 2)
+        grid.addWidget(self.lbl_user_val, 0, 3)
 
-        grid.addWidget(self.lbl_ano, 0, 2)
-        grid.addWidget(self.lbl_ano_val, 0, 3)
+        # Linha 1: Ano (sozinho, ocupa mais colunas para ser compacto)
+        grid.addWidget(self.lbl_ano, 1, 0)
+        grid.addWidget(self.lbl_ano_val, 1, 1, 1, 3)
 
-        grid.addWidget(self.lbl_ver, 0, 4)
-        grid.addWidget(self.lbl_ver_val, 0, 5)
+        # Linha 2: Nº Orçamento | Versão
+        grid.addWidget(self.lbl_num, 2, 0)
+        grid.addWidget(self.lbl_num_val, 2, 1)
+        grid.addWidget(self.lbl_ver, 2, 2)
+        grid.addWidget(self.lbl_ver_val, 2, 3)
 
-        # Linha 2 -> Nº Orçamento | Utilizador | Espaço reservado
-        grid.addWidget(self.lbl_num, 1, 0)
-        grid.addWidget(self.lbl_num_val, 1, 1)
-
-        grid.addWidget(self.lbl_user, 1, 2)
-        grid.addWidget(self.lbl_user_val, 1, 3)
-
-        # Espaço reservado para outro menu no futuro
-        grid.addWidget(QtWidgets.QLabel(""), 1, 4)
-        grid.addWidget(QtWidgets.QLabel(""), 1, 5)
+        # Reservar colunas extras à direita (para futuro menu)
+        grid.setColumnStretch(4, 1)   # espaço flexível à direita
 
         # Tabela de itens
         self.table = QtWidgets.QTableView(self)
