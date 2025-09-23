@@ -119,23 +119,41 @@ class ItensPage(QtWidgets.QWidget):
 
     def load_orcamento(self, orc_id: int):
         """Carrega dados do orçamento selecionado e apresenta informações básicas."""
+
+        # Helpers locais para garantir sempre string
+        def _txt(v) -> str:
+            """Converte qualquer valor para texto, devolvendo '' se None."""
+            return "" if v is None else str(v)
+
+        def _fmt_ver(v) -> str:
+            """Formata versão como 2 dígitos (01, 02, ...). Se não der, devolve texto simples."""
+            if v is None or v == "":
+                return ""
+            try:
+                return f"{int(v):02d}"
+            except (TypeError, ValueError):
+                return _txt(v)
+
         self._orc_id = orc_id
         o = self.db.get(Orcamento, orc_id)
         if o:
+            # Cliente e utilizador
             cliente = self.db.get(Client, o.client_id)
             user = None
             if o.created_by:
                 user = self.db.get(User, o.created_by)
             if not user and getattr(self.current_user, "id", None):
                 user = self.db.get(User, getattr(self.current_user, "id", None))
-            username = user.username if user else getattr(self.current_user, "username", "") or ""
+            username = getattr(user, "username", "") or getattr(self.current_user, "username", "") or ""
 
-            self.lbl_cliente_val.setText(cliente.nome if cliente else "")
-            self.lbl_ano_val.setText(o.ano or "")
-            self.lbl_num_val.setText(o.num_orcamento or "")
-            self.lbl_ver_val.setText(f"{int(o.versao):02d}" if str(o.versao).isdigit() else (o.versao or ""))
-            self.lbl_user_val.setText(username)
+            # Preencher labels SEM lançar TypeError (sempre string)
+            self.lbl_cliente_val.setText(_txt(getattr(cliente, "nome", "")))
+            self.lbl_ano_val.setText(_txt(getattr(o, "ano", "")))                # <- antes passava int
+            self.lbl_num_val.setText(_txt(getattr(o, "num_orcamento", "")))
+            self.lbl_ver_val.setText(_fmt_ver(getattr(o, "versao", "")))         # <- robusto a int/str/None
+            self.lbl_user_val.setText(_txt(username))
         else:
+            # Limpar quando não há orçamento
             self.lbl_cliente_val.setText("")
             self.lbl_ano_val.setText("")
             self.lbl_num_val.setText("")
