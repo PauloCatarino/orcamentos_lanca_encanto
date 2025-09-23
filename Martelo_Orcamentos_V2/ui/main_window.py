@@ -41,13 +41,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(central)
 
     def on_abrir_itens(self, orc_id: int):
-        # Ir para a página Itens e carregar items do orçamento
+        # Ir para a página Itens e carregar dados do orçamento
         self.pg_itens.load_orcamento(orc_id)
+
+        # Selecionar a aba "Itens" na lista lateral
         current_row = self.list.currentRow()
         if current_row != 1:
             self.list.blockSignals(True)
             self.list.setCurrentRow(1)
             self.list.blockSignals(False)
+
+        # Garantir que o stack também mostra a página Itens
+        self.stack.setCurrentIndex(1)
 
     def on_menu_changed(self, index: int):
         self.stack.setCurrentIndex(index)
