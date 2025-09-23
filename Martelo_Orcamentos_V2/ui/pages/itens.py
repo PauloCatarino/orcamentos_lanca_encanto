@@ -47,12 +47,31 @@ class ItensPage(QtWidgets.QWidget):
                   self.lbl_ver_val, self.lbl_user_val]:
             w.setProperty("class", "value")
 
+        # Layout mais compacto do cabeçalho
         grid = QtWidgets.QGridLayout(self.header)
-        grid.addWidget(self.lbl_cliente, 0, 0); grid.addWidget(self.lbl_cliente_val, 0, 1)
-        grid.addWidget(self.lbl_ano, 0, 2);     grid.addWidget(self.lbl_ano_val, 0, 3)
-        grid.addWidget(self.lbl_num, 1, 0);     grid.addWidget(self.lbl_num_val, 1, 1)
-        grid.addWidget(self.lbl_ver, 1, 2);     grid.addWidget(self.lbl_ver_val, 1, 3)
-        grid.addWidget(self.lbl_user, 2, 0);    grid.addWidget(self.lbl_user_val, 2, 1, 1, 3)
+        grid.setContentsMargins(5, 5, 5, 5)   # margens menores
+        grid.setSpacing(8)                    # menos espaço entre widgets
+
+        # Linha 1 -> Cliente | Ano | Versão
+        grid.addWidget(self.lbl_cliente, 0, 0)
+        grid.addWidget(self.lbl_cliente_val, 0, 1)
+
+        grid.addWidget(self.lbl_ano, 0, 2)
+        grid.addWidget(self.lbl_ano_val, 0, 3)
+
+        grid.addWidget(self.lbl_ver, 0, 4)
+        grid.addWidget(self.lbl_ver_val, 0, 5)
+
+        # Linha 2 -> Nº Orçamento | Utilizador | Espaço reservado
+        grid.addWidget(self.lbl_num, 1, 0)
+        grid.addWidget(self.lbl_num_val, 1, 1)
+
+        grid.addWidget(self.lbl_user, 1, 2)
+        grid.addWidget(self.lbl_user_val, 1, 3)
+
+        # Espaço reservado para outro menu no futuro
+        grid.addWidget(QtWidgets.QLabel(""), 1, 4)
+        grid.addWidget(QtWidgets.QLabel(""), 1, 5)
 
         # Tabela de itens
         self.table = QtWidgets.QTableView(self)
