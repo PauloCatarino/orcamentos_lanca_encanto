@@ -9,11 +9,16 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 
 # para testar ->                                     python -m Martelo_Orcamentos_V2.run_dev
+
+#(.venv) PS C:\Users\Utilizador\Documents\ORCAMENTOS_LE\ORCAMENTOS_LE\orcamentos_lanca_encanto>python -m Martelo_Orcamentos_V2.run_dev → Usar como módulo, mas tens de estar na pasta acima.
+
+
+
 # Ativar o ambiente virtual powershell  ->          .\.venv\Scripts\Activate.ps1
 
 '''
 git add .
-git commit -m "267 Commit"
+git commit -m "268 Commit"
 git push origin main
 
 '''
