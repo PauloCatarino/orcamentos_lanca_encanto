@@ -378,18 +378,21 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
             return
 
+        versao_norm = versao_atual.zfill(2)
+
+        # ✅ 1. Calcular o próximo número de item
+        proximo_numero = self._next_item_number(self._orc_id, versao_norm)
+
+        # ✅ 2. Limpar campos do formulário
         self._clear_form()
 
-        prox = self._next_item_number(self._orc_id, versao_atual.zfill(2))
-        self.edit_item.setText(str(prox))      # número sequencial em texto
-        self.edit_item.setReadOnly(True)       # reforço
+        # ✅ 3. Preencher automaticamente o campo item com o próximo número
+        self.edit_item.setText(str(proximo_numero))
+        self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
-        # Foco amigável
-        try:
-            self.edit_codigo.setFocus()
-        except Exception:
-            pass
+        # ✅ 4. Posicionar o cursor no primeiro campo útil
+        self.edit_codigo.setFocus()
 
     def on_save_item(self):
         """
