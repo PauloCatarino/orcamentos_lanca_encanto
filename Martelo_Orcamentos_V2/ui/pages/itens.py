@@ -393,10 +393,13 @@ class ItensPage(QtWidgets.QWidget):
 
     def on_save_item(self):
         """
-        Grava o item atualmente preenchido no formulário na base de dados:
-        - Usa o nº 'Item' calculado automaticamente.
-        - Seleciona a última linha após inserção.
+        Grava um item no orçamento:
+        - Se não houver item selecionado => INSERE novo item.
+        - Se houver item selecionado => ATUALIZA item existente.
+        - O campo 'item' é sempre automático e não pode ser alterado.
+        - O formulário é limpo após a gravação e já mostra o próximo número de item.
         """
+
         if not self._orc_id:
             QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
             return
@@ -406,37 +409,76 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
             return
 
-        # Garante que o campo 'Item' está calculado
-        if not (self.edit_item.text() or "").strip():
-            prox = self._next_item_number(self._orc_id, versao_atual.zfill(2))
-            self.edit_item.setText(str(prox))
+        versao_norm = versao_atual.zfill(2)
 
-        # Recolhe dados
+        # Verificar se há item selecionado (para decidir se é INSERT ou UPDATE)
+        idx = self.table.currentIndex()
+        id_item = None
+        if idx.isValid():
+            try:
+                row = self.model.get_row(idx.row())
+                id_item = row.id_item
+            except Exception:
+                id_item = None
+
+        # ✅ Calcular o próximo número de item se for novo
+        if not (self.edit_item.text() or "").strip():
+            proximo_numero = self._next_item_number(self._orc_id, versao_norm)
+            self.edit_item.setText(str(proximo_numero))
+
+        # ✅ Coletar dados do formulário
         try:
             form = self._collect_form_data()
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
             return
 
-        data = {
-            "id_orcamento": self._orc_id,
-            "versao": versao_atual.zfill(2),
-            "item": form["item"],  # número em string (ex.: "1", "2", ...)
-            "codigo": form["codigo"],
-            "descricao": form["descricao"],
-            "altura": form["altura"],
-            "largura": form["largura"],
-            "profundidade": form["profundidade"],
-            "und": form["und"] or "und",
-            "qt": form["qt"],
-            "created_by": self._current_user_id(),
-        }
-
         try:
-            create_item(self.db, **data)
+            if id_item:  # ATUALIZAR ITEM EXISTENTE
+                update_item(
+                    self.db,
+                    id_item,
+                    versao=versao_norm,
+                    item=form["item"],  # mantém o número original
+                    codigo=form["codigo"],
+                    descricao=form["descricao"],
+                    altura=form["altura"],
+                    largura=form["largura"],
+                    profundidade=form["profundidade"],
+                    und=form["und"],
+                    qt=form["qt"],
+                    updated_by=self._current_user_id(),
+                )
+                mensagem = "Item atualizado com sucesso."
+            else:  # INSERIR NOVO ITEM
+                create_item(
+                    self.db,
+                    self._orc_id,
+                    versao=versao_norm,
+                    item=form["item"],
+                    codigo=form["codigo"],
+                    descricao=form["descricao"],
+                    altura=form["altura"],
+                    largura=form["largura"],
+                    profundidade=form["profundidade"],
+                    und=form["und"] or "und",
+                    qt=form["qt"],
+                    created_by=self._current_user_id(),
+                )
+                mensagem = "Item gravado com sucesso."
+
             self.db.commit()
             self.refresh(select_last=True)
-            QMessageBox.information(self, "Sucesso", "Item gravado com sucesso.")
+            QMessageBox.information(self, "Sucesso", mensagem)
+
+            # ✅ Limpar formulário e preparar para novo item
+            self._clear_form()
+            proximo_numero = self._next_item_number(self._orc_id, versao_norm)
+            self.edit_item.setText(str(proximo_numero))
+            self.edit_item.setReadOnly(True)
+            self.edit_item.setStyleSheet("background-color: #eaeaea;")
+            self.edit_codigo.setFocus()
+
         except Exception as e:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Erro ao gravar item:\n{str(e)}")
@@ -446,8 +488,8 @@ class ItensPage(QtWidgets.QWidget):
     # =========================================
     def on_edit(self):
         """
-        Edita o item selecionado sem permitir alterar o campo 'item'.
-        - 'item' mantém o valor original (sequencial).
+        Edita manualmente o item selecionado (opcional).
+        - Campo 'item' permanece bloqueado e inalterável.
         """
         idx = self.table.currentIndex()
         if not idx.isValid():
@@ -461,47 +503,36 @@ class ItensPage(QtWidgets.QWidget):
             return
 
         id_item = row.id_item
+        versao_norm = (self.lbl_ver_val.text() or "").strip().zfill(2)
 
-        # 🔒 Campo 'Item' sempre bloqueado
-        self.edit_item.setReadOnly(True)
-        self.edit_item.setStyleSheet("background-color: #eaeaea;")
-
-        # Recolher valor original do campo item direto da BD (garantia extra)
-        original_item = self.db.execute(
-            select(OrcamentoItem.item).where(OrcamentoItem.id_item == id_item)
-        ).scalar()
-
-        versao_atual = (self.lbl_ver_val.text() or "").strip()
-
-        # Recolhe dados do formulário
         try:
             form = self._collect_form_data()
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
             return
 
-        data = {
-            "id_item": id_item,
-            "versao": versao_atual.zfill(2) if versao_atual else None,
-            "item": original_item,  # mantém o número sequencial inalterado
-            "codigo": form["codigo"],
-            "descricao": form["descricao"],
-            "altura": form["altura"],
-            "largura": form["largura"],
-            "profundidade": form["profundidade"],
-            "und": form["und"],
-            "qt": form["qt"],
-            "updated_by": self._current_user_id(),
-        }
-
         try:
-            update_item(self.db, **data)
+            update_item(
+                self.db,
+                id_item,
+                versao=versao_norm,
+                item=row.item_nome,  # mantém número original
+                codigo=form["codigo"],
+                descricao=form["descricao"],
+                altura=form["altura"],
+                largura=form["largura"],
+                profundidade=form["profundidade"],
+                und=form["und"],
+                qt=form["qt"],
+                updated_by=self._current_user_id(),
+            )
             self.db.commit()
             self.refresh()
             QMessageBox.information(self, "Sucesso", "Item atualizado com sucesso.")
         except Exception as e:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Erro ao atualizar item:\n{str(e)}")
+
 
     def on_del(self):
         id_item = self.selected_id()
