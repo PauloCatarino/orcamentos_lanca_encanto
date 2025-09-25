@@ -365,56 +365,71 @@ class ItensPage(QtWidgets.QWidget):
 
 
     def on_add(self):
-        """Insere um novo item no orçamento com todos os campos corretos."""
+        """
+        Adiciona um novo item ao orçamento atual:
+        - Gera automaticamente o nº de item começando em 1 (sequencial)
+        por orçamento e versão.
+        - Preenche os campos padrão.
+        - Atualiza a tabela e seleciona a nova linha.
+        """
+
+        # Verificar se existe orçamento carregado
         if not self._orc_id:
-            QtWidgets.QMessageBox.warning(
-                self, "Orçamento não carregado",
-                "Nenhum orçamento está ativo. Carregue um orçamento antes de adicionar itens."
-            )
+            QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
             return
 
-        # Tentar obter a versão atual do orçamento a partir do label (lbl_ver_val)
+        # Obter a versão atual
         versao_atual = self.lbl_ver_val.text().strip()
         if not versao_atual:
-            QtWidgets.QMessageBox.warning(
-                self, "Versão não definida",
-                "A versão do orçamento não está definida. Verifique os dados do orçamento."
-            )
+            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida para este orçamento.")
             return
 
-        try:
-            # Coleta dados do formulário (item, código, medidas, etc.)
-            data = self._collect_form_data()
+        # 🔎 Calcular o número sequencial do item para este orçamento e versão
+        from sqlalchemy import func
+        from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 
-            # 🔄 Ajustar o nome da chave 'item_nome' para 'item'
-            if "item_nome" in data:
-                data["item"] = data.pop("item_nome")
-
-            # 🆕 Adicionar campo 'versao' ao dicionário de inserção
-            data["versao"] = versao_atual.zfill(2)  # garante formato '01', '02', etc.
-
-        except ValueError as exc:
-            QtWidgets.QMessageBox.warning(self, "Dados inválidos", str(exc))
-            return
-
-        # Inserção no banco de dados
-        try:
-            create_item(
-                self.db,
-                self._orc_id,
-                created_by=self._current_user_id(),
-                **data,
+        total_itens = self.db.execute(
+            select(func.count(OrcamentoItem.id_item)).where(
+                OrcamentoItem.id_orcamento == self._orc_id,
+                OrcamentoItem.versao == versao_atual.zfill(2)
             )
+        ).scalar() or 0
+
+        proximo_numero = total_itens + 1
+
+        # Preencher campo "Item" automaticamente e bloquear edição
+        self.edit_item.setText(str(proximo_numero))
+        self.edit_item.setReadOnly(True)
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
+
+        # ✅ Preparar os dados do novo item
+        data = {
+            "id_orcamento": self._orc_id,
+            "versao": versao_atual.zfill(2),
+            "item": str(proximo_numero),  # preenchido automaticamente
+            "codigo": self.edit_codigo.text(),
+            "descricao": self.edit_descricao.toPlainText(),
+            "altura": self.edit_altura.text() or 0,
+            "largura": self.edit_largura.text() or 0,
+            "profundidade": self.edit_profundidade.text() or 0,
+            "und": self.edit_und.text() or "und",
+            "qt": self.edit_qt.text() or 1,
+            "created_by": self._current_user_id() if hasattr(self, "_current_user_id") else None,
+        }
+
+        # ✅ Inserir o novo item
+        from Martelo_Orcamentos_V2.app.services.orcamentos import create_item
+        try:
+            create_item(self.db, **data)
             self.db.commit()
+
+            # Atualizar tabela e selecionar o último item
+            self.refresh(select_last=True)
+
+            QMessageBox.information(self, "Sucesso", f"Item {proximo_numero} adicionado com sucesso.")
         except Exception as e:
             self.db.rollback()
-            QtWidgets.QMessageBox.critical(
-                self, "Erro ao criar item", f"Falha ao criar item: {e}"
-            )
-            return
-
-        # Atualizar a tabela e selecionar o último item inserido
-        self.refresh(select_last=True)
+            QMessageBox.critical(self, "Erro", f"Erro ao adicionar item:\n{str(e)}")
 
     def on_edit(self):
         """Edita o item selecionado no orçamento garantindo consistência com a base de dados."""
