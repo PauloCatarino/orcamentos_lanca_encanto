@@ -235,11 +235,42 @@ def create_item(
     return item_row
 
 
-def delete_item(db: Session, id_item: int) -> None:
+def delete_item(
+    db: Session,
+    id_item: int,
+    *,
+    deleted_by: Optional[int] = None
+) -> bool:
+    """
+    Elimina um item de orçamento com validações e logging.
+    Retorna True se foi eliminado, False se não foi encontrado.
+    """
     it = db.get(OrcamentoItem, id_item)
     if not it:
-        return
+        return False
+
+    orc_id = it.id_orcamento
+    item_nome = it.item or "(sem nome)"
+
+    # Log opcional (podes mais tarde gravar em tabela de histórico)
+    print(f"[LOG] Item '{item_nome}' (ID={id_item}) removido do orçamento {orc_id} por utilizador {deleted_by}")
+
     db.delete(it)
+    db.flush()
+
+    # ✅ Reorganizar ordenação dos restantes itens
+    rows = db.execute(
+        select(OrcamentoItem)
+        .where(OrcamentoItem.id_orcamento == orc_id)
+        .order_by(OrcamentoItem.item_ord)
+    ).scalars().all()
+
+    for idx, row in enumerate(rows, start=1):
+        row.item_ord = idx
+        row.updated_by = deleted_by
+
+    db.flush()
+    return True
 
 
 def update_item(
@@ -283,28 +314,57 @@ def update_item(
     return it
 
 
-def move_item(db: Session, id_item: int, direction: int) -> None:
+def move_item(
+    db: Session,
+    id_item: int,
+    direction: int,
+    *,
+    moved_by: Optional[int] = None
+) -> bool:
+    """
+    Move um item para cima (-1) ou para baixo (+1) com validações e logging.
+    Retorna True se o movimento foi realizado, False caso contrário.
+    """
     it = db.get(OrcamentoItem, id_item)
     if not it:
-        return
-    # encontra vizinho
+        return False
+
+    # Selecionar o vizinho na direção desejada
     if direction > 0:
         neighbor = db.execute(
             select(OrcamentoItem)
-            .where(OrcamentoItem.id_orcamento == it.id_orcamento, OrcamentoItem.item_ord > it.item_ord)
+            .where(
+                OrcamentoItem.id_orcamento == it.id_orcamento,
+                OrcamentoItem.item_ord > it.item_ord
+            )
             .order_by(OrcamentoItem.item_ord.asc())
             .limit(1)
         ).scalar_one_or_none()
     else:
         neighbor = db.execute(
             select(OrcamentoItem)
-            .where(OrcamentoItem.id_orcamento == it.id_orcamento, OrcamentoItem.item_ord < it.item_ord)
+            .where(
+                OrcamentoItem.id_orcamento == it.id_orcamento,
+                OrcamentoItem.item_ord < it.item_ord
+            )
             .order_by(OrcamentoItem.item_ord.desc())
             .limit(1)
         ).scalar_one_or_none()
+
     if not neighbor:
-        return
+        print("[LOG] Movimento ignorado: sem vizinho disponível.")
+        return False
+
+    # ✅ Troca de posições
     it.item_ord, neighbor.item_ord = neighbor.item_ord, it.item_ord
+    it.updated_by = moved_by
+    neighbor.updated_by = moved_by
+
+    # Log do movimento
+    print(f"[LOG] Item ID={id_item} trocado com ID={neighbor.id_item} no orçamento {it.id_orcamento} por utilizador {moved_by}")
+
+    db.flush()
+    return True
 
 
 def next_num_orcamento(db: Session, ano: Optional[str] = None) -> str:
