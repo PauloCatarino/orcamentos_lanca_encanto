@@ -1,13 +1,25 @@
+# Martelo_Orcamentos_V2/ui/pages/itens.py
+# -----------------------------------------------------------------------------
+# Página de Itens do Orçamento (V2)
+# - Campo "Item" é sempre gerado automaticamente (sequencial por orçamento+versão)
+#   e não pode ser editado pelo utilizador.
+# - Botões: "Inserir Novo Item" (limpa e prepara formulário) e
+#           "Gravar Item" (insere na BD e seleciona última linha).
+# - Edição: "Editar Item" atualiza os campos permitidos, mantendo o "Item".
+# - Descrição: QTextEdit (multi-linha), usa .toPlainText().
+# -----------------------------------------------------------------------------
+
 from decimal import Decimal, InvalidOperation
 from typing import Optional
+
 from PySide6 import QtWidgets, QtCore
-from PySide6.QtWidgets import QMessageBox  # ✅ Importa QMessageBox
-from PySide6.QtCore import Qt              # ✅ Importa Qt
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt
 
 # SQLAlchemy
-from sqlalchemy import select, func        # ✅ Importa select e func
+from sqlalchemy import select, func
 
-# Ligações ao projeto
+# Projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.orcamentos import (
     list_items,
@@ -17,6 +29,7 @@ from Martelo_Orcamentos_V2.app.services.orcamentos import (
     move_item,
 )
 from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
+from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 from ..models.qt_table import SimpleTableModel
 
 
@@ -27,24 +40,13 @@ class ItensPage(QtWidgets.QWidget):
         self.db = SessionLocal()
         self._orc_id = None
 
-        # Cabeçalho estilizado
+        # ---------- Cabeçalho ----------
         self.header = QtWidgets.QFrame()
         self.header.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.header.setStyleSheet("""
-            QFrame {
-                background-color: #f5f5f5;
-                border: 1px solid #ccc;
-                border-radius: 8px;
-                padding: 10px;
-            }
-            QLabel {
-                font-weight: bold;
-                color: #333;
-            }
-            QLabel.value {
-                font-weight: normal;
-                color: #000;
-            }
+            QFrame { background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 8px; padding: 10px; }
+            QLabel { font-weight: bold; color: #333; }
+            QLabel.value { font-weight: normal; color: #000; }
         """)
 
         self.lbl_cliente = QtWidgets.QLabel("Cliente:");   self.lbl_cliente_val = QtWidgets.QLabel("")
@@ -53,55 +55,34 @@ class ItensPage(QtWidgets.QWidget):
         self.lbl_ver = QtWidgets.QLabel("Versão:");       self.lbl_ver_val = QtWidgets.QLabel("")
         self.lbl_user = QtWidgets.QLabel("Utilizador:");  self.lbl_user_val = QtWidgets.QLabel("")
 
-        for w in [self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val,
-                  self.lbl_ver_val, self.lbl_user_val]:
+        for w in [self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val, self.lbl_ver_val, self.lbl_user_val]:
             w.setProperty("class", "value")
 
-        # Layout mais compacto: 3 linhas, 2 colunas
         grid = QtWidgets.QGridLayout(self.header)
-        grid.setContentsMargins(5, 5, 5, 5)  # margens menores
+        grid.setContentsMargins(5, 5, 5, 5)
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(6)
 
-        # Ajustar largura mínima das labels (nomes fixos)
         for lbl in [self.lbl_cliente, self.lbl_user, self.lbl_ano, self.lbl_num, self.lbl_ver]:
-            lbl.setMinimumWidth(80)   # largura mínima para alinhar
+            lbl.setMinimumWidth(80)
             lbl.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
 
-        # Linha 0: Cliente | Utilizador
-        grid.addWidget(self.lbl_cliente, 0, 0)
-        grid.addWidget(self.lbl_cliente_val, 0, 1)
-        grid.addWidget(self.lbl_user, 0, 2)
-        grid.addWidget(self.lbl_user_val, 0, 3)
+        grid.addWidget(self.lbl_cliente, 0, 0); grid.addWidget(self.lbl_cliente_val, 0, 1)
+        grid.addWidget(self.lbl_user, 0, 2);    grid.addWidget(self.lbl_user_val, 0, 3)
 
-        # Linha 1: Ano (sozinho, ocupa mais colunas para ser compacto)
-        grid.addWidget(self.lbl_ano, 1, 0)
-        grid.addWidget(self.lbl_ano_val, 1, 1, 1, 3)
+        grid.addWidget(self.lbl_ano, 1, 0);     grid.addWidget(self.lbl_ano_val, 1, 1, 1, 3)
 
-        # Linha 2: Nº Orçamento | Versão
-        grid.addWidget(self.lbl_num, 2, 0)
-        grid.addWidget(self.lbl_num_val, 2, 1)
-        grid.addWidget(self.lbl_ver, 2, 2)
-        grid.addWidget(self.lbl_ver_val, 2, 3)
+        grid.addWidget(self.lbl_num, 2, 0);     grid.addWidget(self.lbl_num_val, 2, 1)
+        grid.addWidget(self.lbl_ver, 2, 2);     grid.addWidget(self.lbl_ver_val, 2, 3)
+        grid.setColumnStretch(4, 1)
 
-        # Reservar colunas extras à direita (para futuro menu)
-        grid.setColumnStretch(4, 1)   # espaço flexível à direita
-
-# Formulário de inserção/edição
+        # ---------- Formulário ----------
         self.form_frame = QtWidgets.QFrame()
         self.form_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.form_frame.setStyleSheet("""
-            QFrame {
-                background-color: #fdfdfd;
-                border: 1px solid #d0d0d0;
-                border-radius: 6px;
-            }
-            QLabel {
-                font-weight: 600;
-            }
-            QLineEdit {
-                padding: 4px;
-            }
+            QFrame { background-color: #fdfdfd; border: 1px solid #d0d0d0; border-radius: 6px; }
+            QLabel { font-weight: 600; }
+            QLineEdit, QTextEdit { padding: 4px; }
         """)
         form = QtWidgets.QGridLayout(self.form_frame)
         form.setContentsMargins(8, 8, 8, 8)
@@ -112,10 +93,13 @@ class ItensPage(QtWidgets.QWidget):
             return QtWidgets.QLabel(text)
 
         self.edit_item = QtWidgets.QLineEdit()
-        self.edit_item.setReadOnly(True)  # ✅ impede edição manual desde o início
+        self.edit_item.setReadOnly(True)  # 🔒 Item nunca é editável
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
         self.edit_codigo = QtWidgets.QLineEdit()
-        self.edit_descricao = QtWidgets.QLineEdit()
+        # Descrição multi-linha (confirmado por ti): QTextEdit
+        self.edit_descricao = QtWidgets.QTextEdit()
+        self.edit_descricao.setPlaceholderText("Descrição do item (multi-linha)")
+
         self.edit_altura = QtWidgets.QLineEdit()
         self.edit_largura = QtWidgets.QLineEdit()
         self.edit_profundidade = QtWidgets.QLineEdit()
@@ -124,34 +108,25 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_und.setPlaceholderText("und")
         self.edit_qt.setPlaceholderText("1")
 
-        form.addWidget(_label("Item"), 0, 0)
-        form.addWidget(self.edit_item, 0, 1)
-        form.addWidget(_label("Código"), 0, 2)
-        form.addWidget(self.edit_codigo, 0, 3)
+        form.addWidget(_label("Item"), 0, 0);      form.addWidget(self.edit_item, 0, 1)
+        form.addWidget(_label("Código"), 0, 2);    form.addWidget(self.edit_codigo, 0, 3)
 
-        form.addWidget(_label("Descrição"), 1, 0)
-        form.addWidget(self.edit_descricao, 1, 1, 1, 3)
+        form.addWidget(_label("Descrição"), 1, 0); form.addWidget(self.edit_descricao, 1, 1, 1, 3)
 
-        form.addWidget(_label("Altura"), 2, 0)
-        form.addWidget(self.edit_altura, 2, 1)
-        form.addWidget(_label("Largura"), 2, 2)
-        form.addWidget(self.edit_largura, 2, 3)
+        form.addWidget(_label("Altura"), 2, 0);    form.addWidget(self.edit_altura, 2, 1)
+        form.addWidget(_label("Largura"), 2, 2);   form.addWidget(self.edit_largura, 2, 3)
 
-        form.addWidget(_label("Profundidade"), 3, 0)
-        form.addWidget(self.edit_profundidade, 3, 1)
-        form.addWidget(_label("Und"), 3, 2)
-        form.addWidget(self.edit_und, 3, 3)
+        form.addWidget(_label("Profundidade"), 3, 0); form.addWidget(self.edit_profundidade, 3, 1)
+        form.addWidget(_label("Und"), 3, 2);          form.addWidget(self.edit_und, 3, 3)
 
-        form.addWidget(_label("QT"), 4, 0)
-        form.addWidget(self.edit_qt, 4, 1)
-        form.setColumnStretch(1, 1)
-        form.setColumnStretch(3, 1)
+        form.addWidget(_label("QT"), 4, 0);        form.addWidget(self.edit_qt, 4, 1)
+        form.setColumnStretch(1, 1); form.setColumnStretch(3, 1)
 
-        # Tabela de itens
+        # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
         self.model = SimpleTableModel(columns=[
             ("ID", "id_item"),
-            ("Item", "item_nome"),
+            ("Item", "item_nome"),  # mapeia para coluna 'item' (ORM usa synonym)
             ("Codigo", "codigo"),
             ("Descricao", "descricao"),
             ("Altura", "altura"),
@@ -186,13 +161,16 @@ class ItensPage(QtWidgets.QWidget):
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.selectionModel().selectionChanged.connect(self.on_selection_changed)
 
-        # Toolbar
-        btn_add = QtWidgets.QPushButton("Novo Item")
+        # ---------- Toolbar ----------
+        btn_add = QtWidgets.QPushButton("Inserir Novo Item")  # antes: "Novo Item"
+        btn_save = QtWidgets.QPushButton("Gravar Item")       # novo
         btn_edit = QtWidgets.QPushButton("Editar Item")
         btn_del = QtWidgets.QPushButton("Eliminar Item")
         btn_up = QtWidgets.QPushButton("↑")
         btn_dn = QtWidgets.QPushButton("↓")
-        btn_add.clicked.connect(self.on_add)
+
+        btn_add.clicked.connect(self.on_new_item)
+        btn_save.clicked.connect(self.on_save_item)
         btn_edit.clicked.connect(self.on_edit)
         btn_del.clicked.connect(self.on_del)
         btn_up.clicked.connect(lambda: self.on_move(-1))
@@ -203,6 +181,7 @@ class ItensPage(QtWidgets.QWidget):
         buttons.setSpacing(8)
         buttons.addStretch(1)
         buttons.addWidget(btn_add)
+        buttons.addWidget(btn_save)
         buttons.addWidget(btn_edit)
         buttons.addWidget(btn_del)
         buttons.addWidget(btn_up)
@@ -218,16 +197,15 @@ class ItensPage(QtWidgets.QWidget):
 
         self._clear_form()
 
+    # =========================================
+    # Carregamento, refresh e helpers
+    # =========================================
     def load_orcamento(self, orc_id: int):
-        """Carrega dados do orçamento selecionado e apresenta informações básicas."""
-
-        # Helpers locais para garantir sempre string
+        """Carrega dados do orçamento e preenche cabeçalho."""
         def _txt(v) -> str:
-            """Converte qualquer valor para texto, devolvendo '' se None."""
             return "" if v is None else str(v)
 
         def _fmt_ver(v) -> str:
-            """Formata versão como 2 dígitos (01, 02, ...). Se não der, devolve texto simples."""
             if v is None or v == "":
                 return ""
             try:
@@ -238,7 +216,6 @@ class ItensPage(QtWidgets.QWidget):
         self._orc_id = orc_id
         o = self.db.get(Orcamento, orc_id)
         if o:
-            # Cliente e utilizador
             cliente = self.db.get(Client, o.client_id)
             user = None
             if o.created_by:
@@ -247,14 +224,12 @@ class ItensPage(QtWidgets.QWidget):
                 user = self.db.get(User, getattr(self.current_user, "id", None))
             username = getattr(user, "username", "") or getattr(self.current_user, "username", "") or ""
 
-            # Preencher labels SEM lançar TypeError (sempre string)
             self.lbl_cliente_val.setText(_txt(getattr(cliente, "nome", "")))
-            self.lbl_ano_val.setText(_txt(getattr(o, "ano", "")))                # <- antes passava int
+            self.lbl_ano_val.setText(_txt(getattr(o, "ano", "")))
             self.lbl_num_val.setText(_txt(getattr(o, "num_orcamento", "")))
-            self.lbl_ver_val.setText(_fmt_ver(getattr(o, "versao", "")))         # <- robusto a int/str/None
+            self.lbl_ver_val.setText(_fmt_ver(getattr(o, "versao", "")))
             self.lbl_user_val.setText(_txt(username))
         else:
-            # Limpar quando não há orçamento
             self.lbl_cliente_val.setText("")
             self.lbl_ano_val.setText("")
             self.lbl_num_val.setText("")
@@ -287,10 +262,11 @@ class ItensPage(QtWidgets.QWidget):
             return None
         row = self.model.get_row(idx.row())
         return row.id_item
-    
+
     def _current_user_id(self):
         return getattr(self.current_user, "id", None)
 
+    # ---------- Helpers de parsing/validação ----------
     def _parse_decimal(self, text: Optional[str], *, default: Optional[Decimal] = None) -> Optional[Decimal]:
         if text is None:
             return default
@@ -303,23 +279,18 @@ class ItensPage(QtWidgets.QWidget):
         except (InvalidOperation, ValueError):
             raise ValueError
 
-    def _decimal_from_input(
-        self,
-        widget: QtWidgets.QLineEdit,
-        label: str,
-        *,
-        default: Optional[Decimal] = None,
-    ) -> Optional[Decimal]:
+    def _decimal_from_input(self, widget: QtWidgets.QLineEdit, label: str, *, default: Optional[Decimal] = None) -> Optional[Decimal]:
         try:
             return self._parse_decimal(widget.text(), default=default)
         except ValueError:
             raise ValueError(f"Valor inválido para {label}.")
 
+    # Coleta os dados do formulário (OBS: 'descricao' é QTextEdit → toPlainText)
     def _collect_form_data(self) -> dict:
         return {
-            "item_nome": self.edit_item.text().strip() or None,
+            "item": self.edit_item.text().strip() or None,  # nome visível do item
             "codigo": self.edit_codigo.text().strip() or None,
-            "descricao": self.edit_descricao.text().strip() or None,
+            "descricao": (self.edit_descricao.toPlainText().strip() or None),
             "altura": self._decimal_from_input(self.edit_altura, "Altura"),
             "largura": self._decimal_from_input(self.edit_largura, "Largura"),
             "profundidade": self._decimal_from_input(self.edit_profundidade, "Profundidade"),
@@ -340,15 +311,19 @@ class ItensPage(QtWidgets.QWidget):
         return text
 
     def _populate_form(self, item):
+        # item.item_nome mapeia para coluna "item" na BD (synonym no ORM)
         self.edit_item.setText(item.item_nome or "")
         self.edit_codigo.setText(item.codigo or "")
-        self.edit_descricao.setText(item.descricao or "")
+        self.edit_descricao.setPlainText(item.descricao or "")
         self.edit_altura.setText(self._format_decimal(item.altura))
         self.edit_largura.setText(self._format_decimal(item.largura))
         self.edit_profundidade.setText(self._format_decimal(item.profundidade))
         self.edit_und.setText(item.und or "und")
         qt_txt = self._format_decimal(item.qt)
         self.edit_qt.setText(qt_txt or "1")
+        # 🔒 garantir sempre bloqueado
+        self.edit_item.setReadOnly(True)
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
     def _clear_form(self):
         self.edit_item.clear()
@@ -359,6 +334,8 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_profundidade.clear()
         self.edit_und.setText("und")
         self.edit_qt.setText("1")
+        self.edit_item.setReadOnly(True)
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
     def on_selection_changed(self, selected, deselected):
         idx = self.table.currentIndex()
@@ -372,135 +349,156 @@ class ItensPage(QtWidgets.QWidget):
             return
         self._populate_form(row)
 
+    # =========================================
+    # Inserção com nova lógica de botões
+    # =========================================
+    def _next_item_number(self, orc_id: int, versao: str) -> int:
+        """Devolve o próximo número sequencial de item para (orc_id, versao)."""
+        total = self.db.execute(
+            select(func.count(OrcamentoItem.id_item)).where(
+                OrcamentoItem.id_orcamento == orc_id,
+                OrcamentoItem.versao == versao
+            )
+        ).scalar() or 0
+        return int(total) + 1
 
-    def on_add(self):
+    def on_new_item(self):
         """
-        Adiciona um novo item ao orçamento atual:
-        - Gera automaticamente o nº de item começando em 1 (sequencial)
-        por orçamento e versão.
-        - Preenche os campos padrão.
-        - Atualiza a tabela e seleciona a nova linha.
+        Prepara o formulário para inserir um novo item:
+        - Limpa os campos.
+        - Calcula e preenche o próximo nº de 'Item' (sequencial por orçamento+versão).
+        - Mantém o campo 'Item' bloqueado.
         """
-
-        # Verificar se existe orçamento carregado
         if not self._orc_id:
             QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
             return
 
-        # Obter a versão atual
-        versao_atual = self.lbl_ver_val.text().strip()
-        if not versao_atual:
-            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida para este orçamento.")
-            return
-
-        # 🔎 Calcular o número sequencial do item para este orçamento e versão
-        from sqlalchemy import func
-        from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
-
-        total_itens = self.db.execute(
-            select(func.count(OrcamentoItem.id_item)).where(
-                OrcamentoItem.id_orcamento == self._orc_id,
-                OrcamentoItem.versao == versao_atual.zfill(2)
-            )
-        ).scalar() or 0
-
-        proximo_numero = total_itens + 1
-
-        # Preencher campo "Item" automaticamente e bloquear edição
-        self.edit_item.setText(str(proximo_numero))
-        self.edit_item.setReadOnly(True)
-        self.edit_item.setStyleSheet("background-color: #eaeaea;")
-
-        # ✅ Preparar os dados do novo item
-        data = {
-            "id_orcamento": self._orc_id,
-            "versao": versao_atual.zfill(2),
-            "item": str(proximo_numero),  # preenchido automaticamente
-            "codigo": self.edit_codigo.text(),
-            "descricao": self.edit_descricao.toPlainText(),
-            "altura": self.edit_altura.text() or 0,
-            "largura": self.edit_largura.text() or 0,
-            "profundidade": self.edit_profundidade.text() or 0,
-            "und": self.edit_und.text() or "und",
-            "qt": self.edit_qt.text() or 1,
-            "created_by": self._current_user_id() if hasattr(self, "_current_user_id") else None,
-        }
-
-        # ✅ Inserir o novo item
-        from Martelo_Orcamentos_V2.app.services.orcamentos import create_item
-        try:
-            create_item(self.db, **data)
-            self.db.commit()
-
-            # Atualizar tabela e selecionar o último item
-            self.refresh(select_last=True)
-
-            QMessageBox.information(self, "Sucesso", f"Item {proximo_numero} adicionado com sucesso.")
-        except Exception as e:
-            self.db.rollback()
-            QMessageBox.critical(self, "Erro", f"Erro ao adicionar item:\n{str(e)}")
-
-    def on_edit(self):
-        """
-        Edita o item selecionado sem permitir alterar o campo 'item'.
-        - 'item' permanece com o valor original (sequencial e automático).
-        - Atualiza apenas os campos permitidos.
-        """
-
-        # Verificar se existe linha selecionada
-        selected = self.tab_artigos.currentRow()
-        if selected < 0:
-            QMessageBox.warning(self, "Aviso", "Selecione um item para editar.")
-            return
-
-        # Obter ID do item selecionado
-        id_item = self.tab_artigos.item(selected, 0).data(Qt.ItemDataRole.UserRole)
-        if not id_item:
-            QMessageBox.warning(self, "Aviso", "Item inválido ou não encontrado.")
-            return
-
-        # Obter versão atual
-        versao_atual = self.lbl_ver_val.text().strip()
+        versao_atual = (self.lbl_ver_val.text() or "").strip()
         if not versao_atual:
             QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
             return
 
-        # 🔒 Garantir que o campo ITEM não é editável
+        self._clear_form()
+
+        prox = self._next_item_number(self._orc_id, versao_atual.zfill(2))
+        self.edit_item.setText(str(prox))      # número sequencial em texto
+        self.edit_item.setReadOnly(True)       # reforço
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
+
+        # Foco amigável
+        try:
+            self.edit_codigo.setFocus()
+        except Exception:
+            pass
+
+    def on_save_item(self):
+        """
+        Grava o item atualmente preenchido no formulário na base de dados:
+        - Usa o nº 'Item' calculado automaticamente.
+        - Seleciona a última linha após inserção.
+        """
+        if not self._orc_id:
+            QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
+            return
+
+        versao_atual = (self.lbl_ver_val.text() or "").strip()
+        if not versao_atual:
+            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
+            return
+
+        # Garante que o campo 'Item' está calculado
+        if not (self.edit_item.text() or "").strip():
+            prox = self._next_item_number(self._orc_id, versao_atual.zfill(2))
+            self.edit_item.setText(str(prox))
+
+        # Recolhe dados
+        try:
+            form = self._collect_form_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
+            return
+
+        data = {
+            "id_orcamento": self._orc_id,
+            "versao": versao_atual.zfill(2),
+            "item": form["item"],  # número em string (ex.: "1", "2", ...)
+            "codigo": form["codigo"],
+            "descricao": form["descricao"],
+            "altura": form["altura"],
+            "largura": form["largura"],
+            "profundidade": form["profundidade"],
+            "und": form["und"] or "und",
+            "qt": form["qt"],
+            "created_by": self._current_user_id(),
+        }
+
+        try:
+            create_item(self.db, **data)
+            self.db.commit()
+            self.refresh(select_last=True)
+            QMessageBox.information(self, "Sucesso", "Item gravado com sucesso.")
+        except Exception as e:
+            self.db.rollback()
+            QMessageBox.critical(self, "Erro", f"Erro ao gravar item:\n{str(e)}")
+
+    # =========================================
+    # Edição, Eliminação e Movimento
+    # =========================================
+    def on_edit(self):
+        """
+        Edita o item selecionado sem permitir alterar o campo 'item'.
+        - 'item' mantém o valor original (sequencial).
+        """
+        idx = self.table.currentIndex()
+        if not idx.isValid():
+            QMessageBox.warning(self, "Aviso", "Selecione um item para editar.")
+            return
+
+        try:
+            row = self.model.get_row(idx.row())
+        except IndexError:
+            QMessageBox.warning(self, "Aviso", "Seleção inválida.")
+            return
+
+        id_item = row.id_item
+
+        # 🔒 Campo 'Item' sempre bloqueado
         self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
-        # Recuperar o valor atual do campo item da base de dados (garantia extra)
-        from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
-        from sqlalchemy import select
-
+        # Recolher valor original do campo item direto da BD (garantia extra)
         original_item = self.db.execute(
-            select(OrcamentoItem.item)
-            .where(OrcamentoItem.id_item == id_item)
+            select(OrcamentoItem.item).where(OrcamentoItem.id_item == id_item)
         ).scalar()
 
-        # ✅ Preparar os dados para atualizar (sem alterar o campo 'item')
+        versao_atual = (self.lbl_ver_val.text() or "").strip()
+
+        # Recolhe dados do formulário
+        try:
+            form = self._collect_form_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", str(e))
+            return
+
         data = {
             "id_item": id_item,
-            "versao": versao_atual.zfill(2),
-            "item": original_item,  # <- mantém o valor original, sem permitir alterações
-            "codigo": self.edit_codigo.text(),
-            "descricao": self.edit_descricao.toPlainText(),
-            "altura": self.edit_altura.text() or 0,
-            "largura": self.edit_largura.text() or 0,
-            "profundidade": self.edit_profundidade.text() or 0,
-            "und": self.edit_und.text() or "und",
-            "qt": self.edit_qt.text() or 1,
-            "updated_by": self._current_user_id() if hasattr(self, "_current_user_id") else None,
+            "versao": versao_atual.zfill(2) if versao_atual else None,
+            "item": original_item,  # mantém o número sequencial inalterado
+            "codigo": form["codigo"],
+            "descricao": form["descricao"],
+            "altura": form["altura"],
+            "largura": form["largura"],
+            "profundidade": form["profundidade"],
+            "und": form["und"],
+            "qt": form["qt"],
+            "updated_by": self._current_user_id(),
         }
 
-        # Atualizar item no banco de dados
-        from Martelo_Orcamentos_V2.app.services.orcamentos import update_item
         try:
             update_item(self.db, **data)
             self.db.commit()
             self.refresh()
-
-            QMessageBox.information(self, "Sucesso", "Item atualizado com sucesso (número mantido).")
+            QMessageBox.information(self, "Sucesso", "Item atualizado com sucesso.")
         except Exception as e:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Erro ao atualizar item:\n{str(e)}")
@@ -509,17 +507,17 @@ class ItensPage(QtWidgets.QWidget):
         id_item = self.selected_id()
         if not id_item:
             return
-        if QtWidgets.QMessageBox.question(self, "Confirmar",
-                                          f"Eliminar item {id_item}?") != QtWidgets.QMessageBox.Yes:
-            return
         current_row = self.table.currentIndex().row()
+        if QtWidgets.QMessageBox.question(self, "Confirmar", f"Eliminar item {id_item}?") != QtWidgets.QMessageBox.Yes:
+            return
         try:
-            delete_item(self.db, id_item)
+            delete_item(self.db, id_item, deleted_by=self._current_user_id())
             self.db.commit()
         except Exception as e:
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
             return
+        # Após eliminar, atualiza e mantém seleção coerente
         self.refresh(select_row=current_row)
 
     def on_move(self, direction: int):
@@ -528,10 +526,11 @@ class ItensPage(QtWidgets.QWidget):
             return
         current_row = self.table.currentIndex().row()
         try:
-            move_item(self.db, id_item, direction)
+            move_item(self.db, id_item, direction, moved_by=self._current_user_id())
             self.db.commit()
         except Exception as e:
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao mover: {e}")
             return
-        self.refresh(select_row=current_row + direction)
+        self.refresh(select_row=current_row)
+# Fim do ficheiro
