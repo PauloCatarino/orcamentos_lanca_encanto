@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_, or_
@@ -41,6 +42,37 @@ def _format_preco(value) -> str:
         return f"{float(value):.2f}"
     except Exception:
         return str(value)
+
+def _normalize_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_codigo(value: Optional[str]) -> Optional[str]:
+    text = _normalize_text(value)
+    return text.upper() if text else None
+
+
+def _coerce_decimal(value, default: Decimal) -> Decimal:
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return value
+    text = str(value).strip()
+    if not text:
+        return default
+    text = text.replace(",", ".")
+    try:
+        return Decimal(text)
+    except Exception:
+        return default
+
+
+DECIMAL_ZERO = Decimal("0")
+DECIMAL_ONE = Decimal("1")
+
 
 
 def _select_orcamentos():
@@ -165,14 +197,33 @@ def _next_item_ord(db: Session, orc_id: int) -> int:
     return int(q or 0) + 1
 
 
-def create_item(db: Session, orc_id: int, *, codigo: str = "", descricao: str = "") -> OrcamentoItem:
+def create_item(
+    db: Session,
+    orc_id: int,
+    *,
+    item_nome: Optional[str] = None,
+    codigo: Optional[str] = None,
+    descricao: Optional[str] = None,
+    altura=None,
+    largura=None,
+    profundidade=None,
+    und: Optional[str] = None,
+    qt=None,
+    created_by: Optional[int] = None,
+) -> OrcamentoItem:
     item = OrcamentoItem(
         id_orcamento=orc_id,
         item_ord=_next_item_ord(db, orc_id),
-        codigo=codigo.upper() if codigo else None,
-        descricao=descricao or None,
-        und="und",
-        qt=1,
+        item_nome=_normalize_text(item_nome),
+        codigo=_normalize_codigo(codigo),
+        descricao=_normalize_text(descricao),
+        altura=_coerce_decimal(altura, DECIMAL_ZERO),
+        largura=_coerce_decimal(largura, DECIMAL_ZERO),
+        profundidade=_coerce_decimal(profundidade, DECIMAL_ZERO),
+        und=_normalize_text(und) or "und",
+        qt=_coerce_decimal(qt, DECIMAL_ONE),
+        created_by=created_by,
+        updated_by=created_by,
     )
     db.add(item)
     db.flush()
@@ -184,6 +235,38 @@ def delete_item(db: Session, id_item: int) -> None:
     if not it:
         return
     db.delete(it)
+
+
+def update_item(
+    db: Session,
+    id_item: int,
+    *,
+    item_nome: Optional[str] = None,
+    codigo: Optional[str] = None,
+    descricao: Optional[str] = None,
+    altura=None,
+    largura=None,
+    profundidade=None,
+    und: Optional[str] = None,
+    qt=None,
+    updated_by: Optional[int] = None,
+) -> OrcamentoItem:
+    it = db.get(OrcamentoItem, id_item)
+    if not it:
+        raise ValueError("Item não encontrado")
+
+    it.item_nome = _normalize_text(item_nome)
+    it.codigo = _normalize_codigo(codigo)
+    it.descricao = _normalize_text(descricao)
+    it.altura = _coerce_decimal(altura, DECIMAL_ZERO)
+    it.largura = _coerce_decimal(largura, DECIMAL_ZERO)
+    it.profundidade = _coerce_decimal(profundidade, DECIMAL_ZERO)
+    it.und = _normalize_text(und) or "und"
+    it.qt = _coerce_decimal(qt, DECIMAL_ONE)
+    it.updated_by = updated_by
+
+    db.flush()
+    return it
 
 
 def move_item(db: Session, id_item: int, direction: int) -> None:

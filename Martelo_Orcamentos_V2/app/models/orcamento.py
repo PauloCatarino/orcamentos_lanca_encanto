@@ -61,6 +61,8 @@ class OrcamentoItem(Base):
     id_orcamento = Column(BigInteger, ForeignKey("orcamentos.id", ondelete="CASCADE"), nullable=False)
     item_ord = Column(Integer, nullable=False, default=1)  # apenas ordenação visual
 
+    item_nome = Column("item", String(255), nullable=True)
+
     codigo = Column(String(64), nullable=True)
     descricao = Column(Text, nullable=True)
     altura = Column(Numeric(10, 2), nullable=True, default=0)
@@ -72,6 +74,7 @@ class OrcamentoItem(Base):
     preco_unitario = Column(Numeric(14, 2), nullable=True, default=0)
     preco_total = Column(Numeric(14, 2), nullable=True, default=0)
     custo_produzido = Column(Numeric(14, 2), nullable=True, default=0)
+    ajuste = Column(Numeric(14, 2), nullable=True, default=0)
     custo_total_orlas = Column(Numeric(14, 2), nullable=True, default=0)
     custo_total_mao_obra = Column(Numeric(14, 2), nullable=True, default=0)
     custo_total_materia_prima = Column(Numeric(14, 2), nullable=True, default=0)
@@ -90,6 +93,11 @@ class OrcamentoItem(Base):
 
     notas = Column(Text, nullable=True)
     extras = Column(JSON, nullable=True)
+    reservado_1 = Column(String(255), nullable=True)
+    reservado_2 = Column(String(255), nullable=True)
+    reservado_3 = Column(String(255), nullable=True)
+    created_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
