@@ -352,15 +352,25 @@ class ItensPage(QtWidgets.QWidget):
     # =========================================
     # Inserção com nova lógica de botões
     # =========================================
-    def _next_item_number(self, orc_id: int, versao: str) -> int:
-        """Devolve o próximo número sequencial de item para (orc_id, versao)."""
-        total = self.db.execute(
-            select(func.count(OrcamentoItem.id_item)).where(
-                OrcamentoItem.id_orcamento == orc_id,
-                OrcamentoItem.versao == versao
-            )
-        ).scalar() or 0
-        return int(total) + 1
+    def _next_item_number(self, orc_id, versao):
+        """
+        Calcula o próximo número de item com base nos itens já existentes
+        no orçamento e versão atuais.
+        """
+        try:
+            result = self.db.execute(
+                text("""
+                    SELECT COALESCE(MAX(item), 0) + 1 AS next_item
+                    FROM orcamento_items
+                    WHERE id_orcamento = :orc_id AND versao = :versao
+                """),
+                {"orc_id": orc_id, "versao": versao}
+            ).fetchone()
+
+            return result.next_item if result else 1
+        except Exception as e:
+            print("Erro ao calcular próximo item:", e)
+            return 1
 
     def on_new_item(self):
         """
