@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import Qt
 
 # SQLAlchemy
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 # Projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
@@ -357,20 +357,13 @@ class ItensPage(QtWidgets.QWidget):
         Calcula o próximo número de item com base nos itens já existentes
         no orçamento e versão atuais.
         """
-        try:
-            result = self.db.execute(
-                text("""
-                    SELECT COALESCE(MAX(item), 0) + 1 AS next_item
-                    FROM orcamento_items
-                    WHERE id_orcamento = :orc_id AND versao = :versao
-                """),
-                {"orc_id": orc_id, "versao": versao}
-            ).fetchone()
-
-            return result.next_item if result else 1
-        except Exception as e:
-            print("Erro ao calcular próximo item:", e)
-            return 1
+        total = self.db.execute(
+            select(func.count(OrcamentoItem.id_item)).where(
+                OrcamentoItem.id_orcamento == orc_id,
+                OrcamentoItem.versao == versao
+            )
+        ).scalar() or 0
+        return total + 1
 
     def on_new_item(self):
         """
