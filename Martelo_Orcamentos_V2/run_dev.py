@@ -18,7 +18,7 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 '''
 git add .
-git commit -m "273 Commit"
+git commit -m "274 Commit"
 git push origin main
 
 '''

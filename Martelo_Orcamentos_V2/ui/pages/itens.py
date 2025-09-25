@@ -365,13 +365,39 @@ class ItensPage(QtWidgets.QWidget):
 
 
     def on_add(self):
+        """Insere um novo item no orçamento com todos os campos corretos."""
         if not self._orc_id:
+            QtWidgets.QMessageBox.warning(
+                self, "Orçamento não carregado",
+                "Nenhum orçamento está ativo. Carregue um orçamento antes de adicionar itens."
+            )
             return
+
+        # Tentar obter a versão atual do orçamento a partir do label (lbl_ver_val)
+        versao_atual = self.lbl_ver_val.text().strip()
+        if not versao_atual:
+            QtWidgets.QMessageBox.warning(
+                self, "Versão não definida",
+                "A versão do orçamento não está definida. Verifique os dados do orçamento."
+            )
+            return
+
         try:
+            # Coleta dados do formulário (item, código, medidas, etc.)
             data = self._collect_form_data()
+
+            # 🔄 Ajustar o nome da chave 'item_nome' para 'item'
+            if "item_nome" in data:
+                data["item"] = data.pop("item_nome")
+
+            # 🆕 Adicionar campo 'versao' ao dicionário de inserção
+            data["versao"] = versao_atual.zfill(2)  # garante formato '01', '02', etc.
+
         except ValueError as exc:
             QtWidgets.QMessageBox.warning(self, "Dados inválidos", str(exc))
             return
+
+        # Inserção no banco de dados
         try:
             create_item(
                 self.db,
@@ -382,8 +408,12 @@ class ItensPage(QtWidgets.QWidget):
             self.db.commit()
         except Exception as e:
             self.db.rollback()
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao criar item: {e}")
+            QtWidgets.QMessageBox.critical(
+                self, "Erro ao criar item", f"Falha ao criar item: {e}"
+            )
             return
+
+        # Atualizar a tabela e selecionar o último item inserido
         self.refresh(select_last=True)
 
     def on_edit(self):
