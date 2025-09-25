@@ -1,6 +1,13 @@
 from decimal import Decimal, InvalidOperation
 from typing import Optional
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
+from PySide6.QtWidgets import QMessageBox  # ✅ Importa QMessageBox
+from PySide6.QtCore import Qt              # ✅ Importa Qt
+
+# SQLAlchemy
+from sqlalchemy import select, func        # ✅ Importa select e func
+
+# Ligações ao projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.orcamentos import (
     list_items,
@@ -105,6 +112,8 @@ class ItensPage(QtWidgets.QWidget):
             return QtWidgets.QLabel(text)
 
         self.edit_item = QtWidgets.QLineEdit()
+        self.edit_item.setReadOnly(True)  # ✅ impede edição manual desde o início
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
         self.edit_codigo = QtWidgets.QLineEdit()
         self.edit_descricao = QtWidgets.QLineEdit()
         self.edit_altura = QtWidgets.QLineEdit()
@@ -432,78 +441,69 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.critical(self, "Erro", f"Erro ao adicionar item:\n{str(e)}")
 
     def on_edit(self):
-        """Edita o item selecionado no orçamento garantindo consistência com a base de dados."""
+        """
+        Edita o item selecionado sem permitir alterar o campo 'item'.
+        - 'item' permanece com o valor original (sequencial e automático).
+        - Atualiza apenas os campos permitidos.
+        """
 
-        # 🛑 Verificar se há item selecionado
-        id_item = self.selected_id()
+        # Verificar se existe linha selecionada
+        selected = self.tab_artigos.currentRow()
+        if selected < 0:
+            QMessageBox.warning(self, "Aviso", "Selecione um item para editar.")
+            return
+
+        # Obter ID do item selecionado
+        id_item = self.tab_artigos.item(selected, 0).data(Qt.ItemDataRole.UserRole)
         if not id_item:
-            QtWidgets.QMessageBox.information(
-                self,
-                "Editar Item",
-                "Selecione um item da tabela para editar."
-            )
+            QMessageBox.warning(self, "Aviso", "Item inválido ou não encontrado.")
             return
 
-        # 🛑 Verificar se um orçamento está carregado
-        if not self._orc_id:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Orçamento não carregado",
-                "Nenhum orçamento ativo. Carregue um orçamento antes de editar itens."
-            )
-            return
-
-        # 🆕 Obter a versão atual associada ao orçamento
+        # Obter versão atual
         versao_atual = self.lbl_ver_val.text().strip()
         if not versao_atual:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Versão não definida",
-                "A versão do orçamento não está definida. Verifique os dados antes de editar."
-            )
+            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
             return
 
-        # 🧪 Coletar os dados do formulário
+        # 🔒 Garantir que o campo ITEM não é editável
+        self.edit_item.setReadOnly(True)
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
+
+        # Recuperar o valor atual do campo item da base de dados (garantia extra)
+        from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
+        from sqlalchemy import select
+
+        original_item = self.db.execute(
+            select(OrcamentoItem.item)
+            .where(OrcamentoItem.id_item == id_item)
+        ).scalar()
+
+        # ✅ Preparar os dados para atualizar (sem alterar o campo 'item')
+        data = {
+            "id_item": id_item,
+            "versao": versao_atual.zfill(2),
+            "item": original_item,  # <- mantém o valor original, sem permitir alterações
+            "codigo": self.edit_codigo.text(),
+            "descricao": self.edit_descricao.toPlainText(),
+            "altura": self.edit_altura.text() or 0,
+            "largura": self.edit_largura.text() or 0,
+            "profundidade": self.edit_profundidade.text() or 0,
+            "und": self.edit_und.text() or "und",
+            "qt": self.edit_qt.text() or 1,
+            "updated_by": self._current_user_id() if hasattr(self, "_current_user_id") else None,
+        }
+
+        # Atualizar item no banco de dados
+        from Martelo_Orcamentos_V2.app.services.orcamentos import update_item
         try:
-            data = self._collect_form_data()
-        except ValueError as exc:
-            QtWidgets.QMessageBox.warning(self, "Dados inválidos", str(exc))
-            return
-
-        # 🛠️ Ajustar nomes de campos para corresponder aos nomes reais da BD
-        if "item_nome" in data:
-            data["item"] = data.pop("item_nome")
-
-        # ✅ Garantir que 'versao' é sempre enviado para a BD
-        data["versao"] = versao_atual.zfill(2)
-
-        # 🔄 Atualizar o item no banco de dados
-        current_row = self.table.currentIndex().row()
-        try:
-            update_item(
-                self.db,
-                id_item,
-                updated_by=self._current_user_id(),
-                **data,
-            )
+            update_item(self.db, **data)
             self.db.commit()
+            self.refresh()
+
+            QMessageBox.information(self, "Sucesso", "Item atualizado com sucesso (número mantido).")
         except Exception as e:
             self.db.rollback()
-            QtWidgets.QMessageBox.critical(
-                self,
-                "Erro",
-                f"Falha ao atualizar item no banco de dados:\n{e}"
-            )
-            return
-
-        # 🔄 Atualizar a tabela e manter a seleção na mesma linha
-        self.refresh(select_row=current_row)
-
-        QtWidgets.QMessageBox.information(
-            self,
-            "Item atualizado",
-            "O item foi atualizado com sucesso!"
-        )
+            QMessageBox.critical(self, "Erro", f"Erro ao atualizar item:\n{str(e)}")
 
     def on_del(self):
         id_item = self.selected_id()
