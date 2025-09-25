@@ -417,15 +417,52 @@ class ItensPage(QtWidgets.QWidget):
         self.refresh(select_last=True)
 
     def on_edit(self):
+        """Edita o item selecionado no orçamento garantindo consistência com a base de dados."""
+
+        # 🛑 Verificar se há item selecionado
         id_item = self.selected_id()
         if not id_item:
-            QtWidgets.QMessageBox.information(self, "Editar Item", "Selecione um item para editar.")
+            QtWidgets.QMessageBox.information(
+                self,
+                "Editar Item",
+                "Selecione um item da tabela para editar."
+            )
             return
+
+        # 🛑 Verificar se um orçamento está carregado
+        if not self._orc_id:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Orçamento não carregado",
+                "Nenhum orçamento ativo. Carregue um orçamento antes de editar itens."
+            )
+            return
+
+        # 🆕 Obter a versão atual associada ao orçamento
+        versao_atual = self.lbl_ver_val.text().strip()
+        if not versao_atual:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Versão não definida",
+                "A versão do orçamento não está definida. Verifique os dados antes de editar."
+            )
+            return
+
+        # 🧪 Coletar os dados do formulário
         try:
             data = self._collect_form_data()
         except ValueError as exc:
             QtWidgets.QMessageBox.warning(self, "Dados inválidos", str(exc))
             return
+
+        # 🛠️ Ajustar nomes de campos para corresponder aos nomes reais da BD
+        if "item_nome" in data:
+            data["item"] = data.pop("item_nome")
+
+        # ✅ Garantir que 'versao' é sempre enviado para a BD
+        data["versao"] = versao_atual.zfill(2)
+
+        # 🔄 Atualizar o item no banco de dados
         current_row = self.table.currentIndex().row()
         try:
             update_item(
@@ -437,9 +474,21 @@ class ItensPage(QtWidgets.QWidget):
             self.db.commit()
         except Exception as e:
             self.db.rollback()
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao atualizar item: {e}")
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Erro",
+                f"Falha ao atualizar item no banco de dados:\n{e}"
+            )
             return
+
+        # 🔄 Atualizar a tabela e manter a seleção na mesma linha
         self.refresh(select_row=current_row)
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Item atualizado",
+            "O item foi atualizado com sucesso!"
+        )
 
     def on_del(self):
         id_item = self.selected_id()
