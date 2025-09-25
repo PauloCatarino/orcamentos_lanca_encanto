@@ -246,7 +246,8 @@ def update_item(
     db: Session,
     id_item: int,
     *,
-    item_nome: Optional[str] = None,
+    versao: Optional[str] = None,         # ✅ Agora podemos atualizar a versão
+    item: Optional[str] = None,           # ✅ Nome do item alinhado com a coluna da BD
     codigo: Optional[str] = None,
     descricao: Optional[str] = None,
     altura=None,
@@ -256,11 +257,19 @@ def update_item(
     qt=None,
     updated_by: Optional[int] = None,
 ) -> OrcamentoItem:
+    """Atualiza um item existente na tabela orcamento_items."""
+
+    # 🔎 Buscar item no BD
     it = db.get(OrcamentoItem, id_item)
     if not it:
         raise ValueError("Item não encontrado")
 
-    it.item_nome = _normalize_text(item_nome)
+    # ✅ Atualizar versão se fornecida
+    if versao is not None:
+        it.versao = _format_versao(versao)
+
+    # ✅ Atualizar os restantes campos
+    it.item_nome = _normalize_text(item)
     it.codigo = _normalize_codigo(codigo)
     it.descricao = _normalize_text(descricao)
     it.altura = _coerce_decimal(altura, DECIMAL_ZERO)
