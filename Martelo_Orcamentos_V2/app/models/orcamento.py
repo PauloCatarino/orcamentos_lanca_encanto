@@ -59,6 +59,7 @@ class OrcamentoItem(Base):
 
     id_item = Column(BigInteger, primary_key=True, autoincrement=True)
     id_orcamento = Column(BigInteger, ForeignKey("orcamentos.id", ondelete="CASCADE"), nullable=False)
+    versao = Column(String(2), nullable=False, default="01", index=True)
     item_ord = Column(Integer, nullable=False, default=1)  # apenas ordenação visual
 
     item_nome = Column("item", String(255), nullable=True)
