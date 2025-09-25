@@ -200,8 +200,9 @@ def _next_item_ord(db: Session, orc_id: int) -> int:
 def create_item(
     db: Session,
     orc_id: int,
+    versao: str,  # ✅ Adiciona a versão como argumento obrigatório
     *,
-    item_nome: Optional[str] = None,
+    item: Optional[str] = None,  # ✅ Corrige o nome para coincidir com a coluna
     codigo: Optional[str] = None,
     descricao: Optional[str] = None,
     altura=None,
@@ -211,12 +212,15 @@ def create_item(
     qt=None,
     created_by: Optional[int] = None,
 ) -> OrcamentoItem:
-    item = OrcamentoItem(
-        id_orcamento=orc_id,
-        item_ord=_next_item_ord(db, orc_id),
-        item_nome=_normalize_text(item_nome),
-        codigo=_normalize_codigo(codigo),
-        descricao=_normalize_text(descricao),
+    """Cria um novo item associado ao orçamento e versão especificados."""
+
+    item_row = OrcamentoItem(
+        id_orcamento=orc_id,                  # ✅ Relacionamento correto
+        versao=_format_versao(versao),        # ✅ Garante que está no formato '01'
+        item_ord=_next_item_ord(db, orc_id),  # ✅ Ordem sequencial automática
+        item=_normalize_text(item),           # ✅ Nome da peça
+        codigo=_normalize_codigo(codigo),     # ✅ Código normalizado
+        descricao=_normalize_text(descricao), # ✅ Descrição limpa
         altura=_coerce_decimal(altura, DECIMAL_ZERO),
         largura=_coerce_decimal(largura, DECIMAL_ZERO),
         profundidade=_coerce_decimal(profundidade, DECIMAL_ZERO),
@@ -225,9 +229,10 @@ def create_item(
         created_by=created_by,
         updated_by=created_by,
     )
-    db.add(item)
+
+    db.add(item_row)
     db.flush()
-    return item
+    return item_row
 
 
 def delete_item(db: Session, id_item: int) -> None:
