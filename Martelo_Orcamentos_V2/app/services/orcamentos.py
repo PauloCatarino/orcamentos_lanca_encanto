@@ -193,16 +193,19 @@ def list_items(db: Session, orc_id: int) -> List[OrcamentoItem]:
 
 
 def _next_item_ord(db: Session, orc_id: int) -> int:
-    q = db.execute(select(func.max(OrcamentoItem.item_ord)).where(OrcamentoItem.id_orcamento == orc_id)).scalar()
+    # já existe no ficheiro, deixo aqui por referência
+    q = db.execute(
+        select(func.max(OrcamentoItem.item_ord)).where(OrcamentoItem.id_orcamento == orc_id)
+    ).scalar()
     return int(q or 0) + 1
 
 
 def create_item(
     db: Session,
     orc_id: int,
-    versao: str,  # ✅ Adiciona a versão como argumento obrigatório
+    versao: str,              # ✔ versão obrigatória
     *,
-    item: Optional[str] = None,  # ✅ Corrige o nome para coincidir com a coluna
+    item: Optional[str] = None,     # ✔ nome visível do item
     codigo: Optional[str] = None,
     descricao: Optional[str] = None,
     altura=None,
@@ -212,15 +215,30 @@ def create_item(
     qt=None,
     created_by: Optional[int] = None,
 ) -> OrcamentoItem:
-    """Cria um novo item associado ao orçamento e versão especificados."""
+    """
+    Cria um novo item associado ao orçamento.
+    - 'item' é preenchido automaticamente com a próxima sequência (1, 2, 3, ...)
+      se o utilizador não indicar um nome.
+    - 'item_ord' é a ordem visual (1..N) e acompanha a sequência.
+    """
 
-    item_row = OrcamentoItem(
-        id_orcamento=orc_id,                  # ✅ Relacionamento correto
-        versao=_format_versao(versao),        # ✅ Garante que está no formato '01'
-        item_ord=_next_item_ord(db, orc_id),  # ✅ Ordem sequencial automática
-        item=_normalize_text(item),           # ✅ Nome da peça
-        codigo=_normalize_codigo(codigo),     # ✅ Código normalizado
-        descricao=_normalize_text(descricao), # ✅ Descrição limpa
+    # Normaliza versão para '01', '02', ...
+    versao_norm = _format_versao(versao)
+
+    # Próxima ordem/sequência dentro do orçamento (por id_orcamento)
+    prox_ord = _next_item_ord(db, orc_id)
+
+    # Se o utilizador não escreveu nome, usamos a sequência como texto
+    item_val = _normalize_text(item) if item is not None else str(prox_ord)
+
+    # Constrói a entidade ORM
+    row = OrcamentoItem(
+        id_orcamento=orc_id,
+        versao=versao_norm,                 # ✔ agora o modelo aceita 'versao'
+        item_ord=prox_ord,
+        item=item_val,                      # ✔ atributo 'item' no ORM (não 'item_nome')
+        codigo=_normalize_codigo(codigo),
+        descricao=_normalize_text(descricao),
         altura=_coerce_decimal(altura, DECIMAL_ZERO),
         largura=_coerce_decimal(largura, DECIMAL_ZERO),
         profundidade=_coerce_decimal(profundidade, DECIMAL_ZERO),
@@ -230,9 +248,9 @@ def create_item(
         updated_by=created_by,
     )
 
-    db.add(item_row)
-    db.flush()
-    return item_row
+    db.add(row)
+    db.flush()   # para obter id_item imediatamente, se precisares
+    return row
 
 
 def delete_item(

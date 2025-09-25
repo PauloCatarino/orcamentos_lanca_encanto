@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.sql import func
 from ..db import Base
@@ -54,15 +55,25 @@ class Orcamento(Base):
 class OrcamentoItem(Base):
     __tablename__ = "orcamento_items"
     __table_args__ = (
-        Index("ix_item_ord", "id_orcamento", "item_ord"),
+        # Índice com versao + item_ord para ordenação eficiente
+        Index("ix_item_ord", "id_orcamento", "versao", "item_ord"),
     )
 
     id_item = Column(BigInteger, primary_key=True, autoincrement=True)
     id_orcamento = Column(BigInteger, ForeignKey("orcamentos.id", ondelete="CASCADE"), nullable=False)
-    versao = Column(String(2), nullable=False, default="01", index=True)
-    item_ord = Column(Integer, nullable=False, default=1)  # apenas ordenação visual
 
-    item_nome = Column("item", String(255), nullable=True)
+    # ✅ NOVO: versao também no modelo (já existe na BD)
+    versao = Column(String(2), nullable=False, default="01", index=True)
+
+    # Ordem visual na lista
+    item_ord = Column(Integer, nullable=False, default=1)
+
+    # ✅ Passamos a usar 'item' (coluna 'item' na BD)
+    item = Column(String(255), nullable=True)
+
+    # Compatibilidade retro: onde no código antigo se usava item_nome,
+    # continua a funcionar apontando para 'item'
+    item_nome = synonym("item")
 
     codigo = Column(String(64), nullable=True)
     descricao = Column(Text, nullable=True)
@@ -81,7 +92,7 @@ class OrcamentoItem(Base):
     custo_total_materia_prima = Column(Numeric(14, 2), nullable=True, default=0)
     custo_total_acabamentos = Column(Numeric(14, 2), nullable=True, default=0)
 
-    margem_lucro_perc = Column(Numeric(6, 4), nullable=True, default=0)  # fração 0..1
+    margem_lucro_perc = Column(Numeric(6, 4), nullable=True, default=0)
     valor_margem = Column(Numeric(14, 2), nullable=True, default=0)
     custos_admin_perc = Column(Numeric(6, 4), nullable=True, default=0)
     valor_custos_admin = Column(Numeric(14, 2), nullable=True, default=0)
@@ -97,6 +108,7 @@ class OrcamentoItem(Base):
     reservado_1 = Column(String(255), nullable=True)
     reservado_2 = Column(String(255), nullable=True)
     reservado_3 = Column(String(255), nullable=True)
+
     created_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
