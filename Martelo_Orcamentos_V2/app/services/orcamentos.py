@@ -318,7 +318,7 @@ def update_item(
         it.versao = _format_versao(versao)
 
     # ✅ Atualizar os restantes campos
-    it.item_nome = _normalize_text(item)
+    it.item = _normalize_text(item)   # ✅ Corrigido: usar 'item' em vez de 'item_nome'
     it.codigo = _normalize_codigo(codigo)
     it.descricao = _normalize_text(descricao)
     it.altura = _coerce_decimal(altura, DECIMAL_ZERO)
