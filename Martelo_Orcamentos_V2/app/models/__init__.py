@@ -10,4 +10,4 @@ from .item_children import (
     DadosItemsAcabamentos,
 )
 
-\nfrom .materia_prima import MateriaPrima, MateriaPrimaPreference\n
+from .materia_prima import MateriaPrima, MateriaPrimaPreference

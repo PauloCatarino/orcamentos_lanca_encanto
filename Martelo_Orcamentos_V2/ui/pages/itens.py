@@ -206,6 +206,22 @@ class ItensPage(QtWidgets.QWidget):
         form.addWidget(_label("Descrição"),     1, 0)
         form.addWidget(self.edit_descricao,     1, 1, 1, col-1)  # span ao longo das colunas restantes
 
+        # ---------- Função de formatação (sem casas decimais) ----------
+        def fmt2(value):
+            """
+            Formata valores numéricos removendo casas decimais.
+            - Se o valor for None → devolve string vazia.
+            - Se for número → devolve apenas a parte inteira.
+            """
+            if value is None or value == "":
+                return ""
+            try:
+                from decimal import Decimal
+                dec = Decimal(str(value))
+                return str(int(dec))  # converte para inteiro
+            except Exception:
+                return str(value)
+
         # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
 
