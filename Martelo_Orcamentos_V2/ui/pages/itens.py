@@ -638,6 +638,28 @@ class ItensPage(QtWidgets.QWidget):
         if focus_codigo:
             self.edit_codigo.setFocus()
 
+    def on_selection_changed(self, selected, deselected):
+        """
+        Atualiza o formulário quando a seleção na tabela muda.
+        - Se não houver seleção → prepara próximo item.
+        - Se houver seleção → preenche formulário com os dados do item.
+        """
+        idx = self.table.currentIndex()
+
+        # Sem seleção → preparar estado "novo item"
+        if not idx.isValid():
+            self._prepare_next_item()
+            return
+
+        try:
+            row = self.model.get_row(idx.row())
+        except Exception:
+            self._prepare_next_item()
+            return
+
+        # Preenche formulário com a linha selecionada
+        self._populate_form(row)
+
     # =========================================
     # Inserção / Atualização / Movimento
     # =========================================
