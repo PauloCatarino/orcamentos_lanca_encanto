@@ -3,23 +3,22 @@
 # Página de Itens do Orçamento (V2)
 # - Campo "Item" é sempre gerado automaticamente (sequencial por orçamento+versão)
 #   e não pode ser editado pelo utilizador.
-# - Botões: "Inserir Novo Item" (limpa e prepara formulário) e
-#           "Gravar Item" (insere ou atualiza na BD).
+# - Botões: "Inserir Novo Item" (limpa e prepara formulário),
+#           "Gravar Item" (insere/atualiza),
+#           "Eliminar Item", "↑", "↓".
 # - Descrição: QTextEdit (multi-linha), usar .toPlainText().
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
-from PySide6 import QtWidgets, QtCore
-from PySide6.QtWidgets import QMessageBox, QHeaderView, QStyle
-from PySide6.QtGui import QDoubleValidator
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt, QItemSelectionModel
+from PySide6.QtGui import QDoubleValidator
+from PySide6.QtWidgets import QHeaderView, QMessageBox, QStyle
 
-# SQLAlchemy
-from sqlalchemy import select, func, text  # ❗ se precisares de SQL cru, volta a importar `text`
+from sqlalchemy import select, func
 
-# Projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.orcamentos import (
     list_items,
@@ -38,27 +37,34 @@ class ItensPage(QtWidgets.QWidget):
         super().__init__(parent)
         self.current_user = current_user
         self.db = SessionLocal()
-        self._orc_id = None
-        self._edit_item_id = None
+        self._orc_id: Optional[int] = None
+        self._edit_item_id: Optional[int] = None
 
-        # ---------- Cabeçalho ----------
+        # ---------- Cabeçalho (já aprovado por ti; mantido) ----------
         self.header = QtWidgets.QFrame()
         self.header.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.header.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred)
         self.header.setMaximumWidth(520)
-        self.header.setStyleSheet("""
+        self.header.setStyleSheet(
+            """
             QFrame { background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 8px; padding: 8px; }
             QLabel { font-weight: bold; color: #333; }
             QLabel.value { font-weight: normal; color: #000; }
-        """)
+            """
+        )
 
-        self.lbl_cliente = QtWidgets.QLabel("Cliente:");   self.lbl_cliente_val = QtWidgets.QLabel("")
-        self.lbl_ano     = QtWidgets.QLabel("Ano:");       self.lbl_ano_val     = QtWidgets.QLabel("")
-        self.lbl_num     = QtWidgets.QLabel("Nº Orçamento:"); self.lbl_num_val  = QtWidgets.QLabel("")
-        self.lbl_ver     = QtWidgets.QLabel("Versão:");    self.lbl_ver_val     = QtWidgets.QLabel("")
-        self.lbl_user    = QtWidgets.QLabel("Utilizador:");self.lbl_user_val    = QtWidgets.QLabel("")
+        self.lbl_cliente = QtWidgets.QLabel("Cliente:")
+        self.lbl_cliente_val = QtWidgets.QLabel("")
+        self.lbl_ano = QtWidgets.QLabel("Ano:")
+        self.lbl_ano_val = QtWidgets.QLabel("")
+        self.lbl_num = QtWidgets.QLabel("Nº Orçamento:")
+        self.lbl_num_val = QtWidgets.QLabel("")
+        self.lbl_ver = QtWidgets.QLabel("Versão:")
+        self.lbl_ver_val = QtWidgets.QLabel("")
+        self.lbl_user = QtWidgets.QLabel("Utilizador:")
+        self.lbl_user_val = QtWidgets.QLabel("")
 
-        for w in [self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val, self.lbl_ver_val, self.lbl_user_val]:
+        for w in (self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val, self.lbl_ver_val, self.lbl_user_val):
             w.setProperty("class", "value")
 
         grid = QtWidgets.QGridLayout(self.header)
@@ -66,8 +72,7 @@ class ItensPage(QtWidgets.QWidget):
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(4)
 
-        # Labels compactos
-        for lbl in [self.lbl_cliente, self.lbl_user, self.lbl_ano, self.lbl_num, self.lbl_ver]:
+        for lbl in (self.lbl_cliente, self.lbl_user, self.lbl_ano, self.lbl_num, self.lbl_ver):
             lbl.setMinimumWidth(70)
             lbl.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
 
@@ -94,18 +99,14 @@ class ItensPage(QtWidgets.QWidget):
         grid.setColumnStretch(3, 1)
 
         # ============================================================
-        # FORMULÁRIO DE INSERÇÃO / EDIÇÃO DE ITENS (Compacto + Otimizado)
-        # ------------------------------------------------------------
-        # ✔ Linha 1: Item | Código | Altura | Largura | Profundidade | Qt | Und
-        # ✔ Linha 2: Descrição (ocupa toda a largura)
-        # ✔ Labels em negrito + largura mínima -> não desperdiça espaço
-        # ✔ Campos com largura por nº de caracteres (só o necessário)
-        # ✔ Altura total do formulário reduzida
+        # FORMULÁRIO DE ITENS (duas linhas, compacto)
+        #   Linha 1: Item | Código | Altura | Largura | Profundidade | Qt | Und
+        #   Linha 2: Descrição (ocupa largura total)
         # ============================================================
-
         self.form_frame = QtWidgets.QFrame()
         self.form_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.form_frame.setStyleSheet("""
+        self.form_frame.setStyleSheet(
+            """
             QFrame {
                 background-color: #fdfdfd;
                 border: 1px solid #d0d0d0;
@@ -115,21 +116,22 @@ class ItensPage(QtWidgets.QWidget):
                 font-weight: bold;
                 color: #333;
                 font-size: 12px;
-                min-width: 36px;         /* labels curtos → menos espaço desperdiçado */
+                min-width: 36px;
             }
             QLineEdit, QTextEdit {
                 padding: 3px;
                 font-size: 12px;
             }
-        """)
-
+            """
+        )
         form = QtWidgets.QGridLayout(self.form_frame)
-        form.setContentsMargins(4, 4, 4, 4)   # margens mínimas
-        form.setHorizontalSpacing(5)          # pouco espaço entre colunas
-        form.setVerticalSpacing(2)            # pouco espaço entre linhas
+        form.setContentsMargins(4, 4, 4, 4)
+        form.setHorizontalSpacing(5)
+        form.setVerticalSpacing(2)
 
-        # Helpers para criar UI de forma consistente
+        # Helpers para UI
         def _label(text: str) -> QtWidgets.QLabel:
+            """Cria label compacto com largura mínima suficiente."""
             lbl = QtWidgets.QLabel(text)
             lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             fm = lbl.fontMetrics()
@@ -137,21 +139,21 @@ class ItensPage(QtWidgets.QWidget):
             return lbl
 
         def _set_char_width(widget: QtWidgets.QWidget, chars: int):
-            """Define largura aproximada pelo nº de caracteres (compacidade controlada)."""
+            """Define largura aproximada pelo nº de caracteres (ajuda a compactar)."""
             fm = widget.fontMetrics()
             width = fm.horizontalAdvance("W" * max(chars, 1)) + 10
             widget.setFixedWidth(width)
             if isinstance(widget, QtWidgets.QLineEdit):
-                widget.setFixedHeight(24)  # inputs mais baixinhos → reduz altura total
+                widget.setFixedHeight(24)  # inputs baixos para reduzir altura total
 
-        # Validadores numéricos partilhados
-        self._numeric_validator = QDoubleValidator(0.0, 9999999.0, 3, self)
+        # Validador numérico
+        self._numeric_validator = QDoubleValidator(0.0, 9_999_999.0, 3, self)
         self._numeric_validator.setNotation(QDoubleValidator.StandardNotation)
         self._numeric_validator.setLocale(QtCore.QLocale.system())
 
         # --------- Campos (linha 1) ----------
         self.edit_item = QtWidgets.QLineEdit()
-        self.edit_item.setReadOnly(True)                      # "Item" é sempre automático
+        self.edit_item.setReadOnly(True)  # "Item" é sempre automático
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
         _set_char_width(self.edit_item, 3)
 
@@ -181,30 +183,64 @@ class ItensPage(QtWidgets.QWidget):
             field.setValidator(self._numeric_validator)
             field.setAlignment(Qt.AlignRight)
 
-        self._input_sequence = [self.edit_codigo, self.edit_altura, self.edit_largura, self.edit_profundidade, self.edit_qt, self.edit_und]
+        # Enter avança foco entre os campos de linha 1
+        self._input_sequence = [
+            self.edit_codigo,
+            self.edit_altura,
+            self.edit_largura,
+            self.edit_profundidade,
+            self.edit_qt,
+            self.edit_und,
+        ]
         for idx, widget in enumerate(self._input_sequence):
             widget.returnPressed.connect(lambda _=False, i=idx: self._focus_next_field(i))
 
         # --------- Campo (linha 2): Descrição ----------
         self.edit_descricao = QtWidgets.QTextEdit()
         self.edit_descricao.setPlaceholderText("Descrição do item...")
-        self.edit_descricao.setFixedHeight(68)  # ⬅️ 68px (conforme confirmado). Ajusta aqui se quiseres.
+        self.edit_descricao.setFixedHeight(68)  # conforme alinhado contigo
         self.edit_descricao.setMinimumWidth(240)
 
-        # --------- Layout: adicionar widgets ----------
-        # Linha 0 (compacta)
+        # --------- Layout do formulário ----------
         col = 0
-        form.addWidget(_label("Item"),          0, col); col += 1; form.addWidget(self.edit_item,        0, col); col += 1
-        form.addWidget(_label("Código"),        0, col); col += 1; form.addWidget(self.edit_codigo,      0, col); col += 1
-        form.addWidget(_label("Altura"),        0, col); col += 1; form.addWidget(self.edit_altura,      0, col); col += 1
-        form.addWidget(_label("Largura"),       0, col); col += 1; form.addWidget(self.edit_largura,     0, col); col += 1
-        form.addWidget(_label("Profundidade"),  0, col); col += 1; form.addWidget(self.edit_profundidade,0, col); col += 1
-        form.addWidget(_label("Qt"),            0, col); col += 1; form.addWidget(self.edit_qt,          0, col); col += 1
-        form.addWidget(_label("Und"),           0, col); col += 1; form.addWidget(self.edit_und,         0, col); col += 1
+        form.addWidget(_label("Item"), 0, col)
+        col += 1
+        form.addWidget(self.edit_item, 0, col)
+        col += 1
 
-        # Linha 1 (descrição ocupa o resto da largura)
-        form.addWidget(_label("Descrição"),     1, 0)
-        form.addWidget(self.edit_descricao,     1, 1, 1, col-1)  # span ao longo das colunas restantes
+        form.addWidget(_label("Código"), 0, col)
+        col += 1
+        form.addWidget(self.edit_codigo, 0, col)
+        col += 1
+
+        form.addWidget(_label("Altura"), 0, col)
+        col += 1
+        form.addWidget(self.edit_altura, 0, col)
+        col += 1
+
+        form.addWidget(_label("Largura"), 0, col)
+        col += 1
+        form.addWidget(self.edit_largura, 0, col)
+        col += 1
+
+        form.addWidget(_label("Profundidade"), 0, col)
+        col += 1
+        form.addWidget(self.edit_profundidade, 0, col)
+        col += 1
+
+        form.addWidget(_label("Qt"), 0, col)
+        col += 1
+        form.addWidget(self.edit_qt, 0, col)
+        col += 1
+
+        form.addWidget(_label("Und"), 0, col)
+        col += 1
+        form.addWidget(self.edit_und, 0, col)
+        col += 1
+
+        # Linha 2: Descrição ocupa o resto
+        form.addWidget(_label("Descrição"), 1, 0)
+        form.addWidget(self.edit_descricao, 1, 1, 1, col - 1)  # span até às colunas finais
 
         # ---------- Função de formatação (sem casas decimais) ----------
         def fmt2(value):
@@ -216,81 +252,46 @@ class ItensPage(QtWidgets.QWidget):
             if value is None or value == "":
                 return ""
             try:
-                from decimal import Decimal
-                dec = Decimal(str(value))
-                return str(int(dec))  # converte para inteiro
+                from decimal import Decimal as _D
+                return str(int(_D(str(value))))
             except Exception:
                 return str(value)
 
         # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
 
-        # Definição de colunas da tabela
         table_columns = [
-
             ("ID", "id_item"),
-
-            ("Item", "item_nome"),            # mapeia para 'item' (ORM usa synonym)
-
+            ("Item", "item_nome"),
             ("Codigo", "codigo"),
-
             ("Descricao", "descricao"),
-
             ("Altura", "altura", fmt2),
-
             ("Largura", "largura", fmt2),
-
             ("Profundidade", "profundidade", fmt2),
-
             ("Und", "und"),
-
             ("QT", "qt", fmt2),
-
             ("Preco_Unit", "preco_unitario", fmt2),
-
             ("Preco_Total", "preco_total", fmt2),
-
             ("Custo Produzido", "custo_produzido", fmt2),
-
             ("Ajuste", "ajuste", fmt2),
-
             ("Custo Total Orlas (€)", "custo_total_orlas", fmt2),
-
             ("Custo Total Mão de Obra (€)", "custo_total_mao_obra", fmt2),
-
             ("Custo Total Matéria Prima (€)", "custo_total_materia_prima", fmt2),
-
             ("Custo Total Acabamentos (€)", "custo_total_acabamentos", fmt2),
-
             ("Margem de Lucro (%)", "margem_lucro_perc", fmt2),
-
             ("Valor da Margem (€)", "valor_margem", fmt2),
-
             ("Custos Administrativos (%)", "custos_admin_perc", fmt2),
-
             ("Valor Custos Admin. (€)", "valor_custos_admin", fmt2),
-
             ("Margem_Acabamentos(%)", "margem_acabamentos_perc", fmt2),
-
             ("Valor Margem_Acabamentos (€)", "valor_acabamentos", fmt2),
-
             ("Margem MP_Orlas (%)", "margem_mp_orlas_perc", fmt2),
-
             ("Valor Margem MP_Orlas (€)", "valor_mp_orlas", fmt2),
-
             ("Margem Mao_Obra (%)", "margem_mao_obra_perc", fmt2),
-
             ("Valor Margem Mao_Obra (€)", "valor_mao_obra", fmt2),
-
             ("reservado_1", "reservado_1"),
-
             ("reservado_2", "reservado_2"),
-
             ("reservado_3", "reservado_3"),
-
         ]
-
-
 
         self.model = SimpleTableModel(columns=table_columns)
         self.table.setModel(self.model)
@@ -308,80 +309,48 @@ class ItensPage(QtWidgets.QWidget):
         header.setFont(header_font)
         header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        # Guardar larguras em atributo para ajustes futuros
+        # Larguras iniciais por coluna
         self.column_widths = {
-
             "ID": 50,
-
             "Item": 60,
-
             "Codigo": 110,
-
             "Descricao": 320,
-
             "Altura": 80,
-
             "Largura": 80,
-
             "Profundidade": 100,
-
             "Und": 60,
-
             "QT": 60,
-
             "Preco_Unit": 110,
-
             "Preco_Total": 120,
-
             "Custo Produzido": 130,
-
             "Ajuste": 110,
-
             "Custo Total Orlas (€)": 150,
-
             "Custo Total Mão de Obra (€)": 170,
-
             "Custo Total Matéria Prima (€)": 190,
-
             "Custo Total Acabamentos (€)": 180,
-
             "Margem de Lucro (%)": 150,
-
             "Valor da Margem (€)": 150,
-
             "Custos Administrativos (%)": 160,
-
             "Valor Custos Admin. (€)": 170,
-
             "Margem_Acabamentos(%)": 160,
-
             "Valor Margem_Acabamentos (€)": 190,
-
             "Margem MP_Orlas (%)": 160,
-
             "Valor Margem MP_Orlas (€)": 190,
-
             "Margem Mao_Obra (%)": 160,
-
             "Valor Margem Mao_Obra (€)": 190,
-
             "reservado_1": 120,
-
             "reservado_2": 120,
-
             "reservado_3": 120,
-
         }
-
         for idx, col_def in enumerate(table_columns):
             title = col_def[0]
             width = self.column_widths.get(title)
             if width:
                 header.resizeSection(idx, width)
 
-        # Altura padrão das linhas (ajuste estes valores conforme necessário)
-        self._row_height_collapsed = 26  # altura padrão das linhas da tabela
-        self._row_height_expanded = 70   # altura expandida para visualizar descrições longas
+        # Altura das linhas da tabela (mantida conforme pediste)
+        self._row_height_collapsed = 26
+        self._row_height_expanded = 70
         self._rows_expanded = False
 
         vert_header = self.table.verticalHeader()
@@ -392,10 +361,9 @@ class ItensPage(QtWidgets.QWidget):
         sel_model = self.table.selectionModel()
         if sel_model:
             sel_model.selectionChanged.connect(self.on_selection_changed)
-
         self._apply_row_height()
 
-        # ---------- Toolbar ----------
+        # ---------- Toolbar (separada do formulário) ----------
         style = self.style()
         btn_add = QtWidgets.QPushButton("Inserir Novo Item")
         btn_add.setIcon(style.standardIcon(QStyle.SP_FileDialogNewFolder))
@@ -407,11 +375,11 @@ class ItensPage(QtWidgets.QWidget):
         btn_expand.setIcon(style.standardIcon(QStyle.SP_TitleBarMaxButton))
         btn_collapse = QtWidgets.QPushButton("Colapsar")
         btn_collapse.setIcon(style.standardIcon(QStyle.SP_TitleBarNormalButton))
-        btn_up  = QtWidgets.QPushButton()
+        btn_up = QtWidgets.QPushButton()
         btn_up.setIcon(style.standardIcon(QStyle.SP_ArrowUp))
         btn_up.setToolTip("Mover item para cima")
         btn_up.setFixedWidth(32)
-        btn_dn  = QtWidgets.QPushButton()
+        btn_dn = QtWidgets.QPushButton()
         btn_dn.setIcon(style.standardIcon(QStyle.SP_ArrowDown))
         btn_dn.setToolTip("Mover item para baixo")
         btn_dn.setFixedWidth(32)
@@ -439,13 +407,13 @@ class ItensPage(QtWidgets.QWidget):
         # ---------- Layout raiz ----------
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        lay.setSpacing(6)  # ⬅️ ligeiramente menor para a tabela “subir” mais
+        lay.setSpacing(6)  # ligeiramente menor → a tabela sobe mais
         lay.addWidget(self.header, 0, Qt.AlignLeft)
         lay.addWidget(self.form_frame)
-        lay.addLayout(buttons)
+        lay.addLayout(buttons)  # barra separada do form
         lay.addWidget(self.table)
 
-        # Limpa tudo e prepara o próximo item (se orçamento tiver 0 linhas)
+        # Se não houver linhas no orçamento, prepara logo o próximo item
         self._clear_form()
 
     # =========================================
@@ -490,7 +458,10 @@ class ItensPage(QtWidgets.QWidget):
         self.refresh()
 
     def refresh(self, select_row: Optional[int] = None, select_last: bool = False):
-        """Atualiza linhas na tabela e seleção. Se não houver linhas, prepara próximo item."""
+        """
+        Atualiza linhas na tabela e seleção.
+        Se não houver linhas, prepara próximo item.
+        """
         if not self._orc_id:
             self.model.set_rows([])
             self._clear_form()
@@ -512,17 +483,17 @@ class ItensPage(QtWidgets.QWidget):
             # Sem linhas → prepara o nº do primeiro item
             self._prepare_next_item(focus_codigo=False)
 
-    def selected_id(self):
+    def selected_id(self) -> Optional[int]:
         idx = self.table.currentIndex()
         if not idx.isValid():
             return None
         row = self.model.get_row(idx.row())
-        return row.id_item
+        return getattr(row, "id_item", None)
 
-    def _current_user_id(self):
+    def _current_user_id(self) -> Optional[int]:
         return getattr(self.current_user, "id", None)
 
-    # ---------- Helpers de parsing/validação ----------
+    # ---------- Parsing/validação ----------
     def _parse_decimal(self, text: Optional[str], *, default: Optional[Decimal] = None) -> Optional[Decimal]:
         if text is None:
             return default
@@ -536,6 +507,7 @@ class ItensPage(QtWidgets.QWidget):
             raise ValueError
 
     def _force_uppercase(self, widget: QtWidgets.QLineEdit, text: str):
+        """Converte o texto digitado para maiúsculas mantendo a posição do cursor."""
         cursor = widget.cursorPosition()
         widget.blockSignals(True)
         widget.setText(text.upper())
@@ -543,7 +515,8 @@ class ItensPage(QtWidgets.QWidget):
         widget.blockSignals(False)
 
     def _focus_next_field(self, index: int):
-        if not getattr(self, '_input_sequence', None):
+        """Enter avança foco para o próximo campo da sequência."""
+        if not getattr(self, "_input_sequence", None):
             return
         next_index = (index + 1) % len(self._input_sequence)
         widget = self._input_sequence[next_index]
@@ -551,16 +524,23 @@ class ItensPage(QtWidgets.QWidget):
         if isinstance(widget, QtWidgets.QLineEdit):
             widget.selectAll()
 
-    def _decimal_from_input(self, widget: QtWidgets.QLineEdit, label: str, *, default: Optional[Decimal] = None) -> Optional[Decimal]:
+    def _decimal_from_input(
+        self,
+        widget: QtWidgets.QLineEdit,
+        label: str,
+        *,
+        default: Optional[Decimal] = None,
+    ) -> Optional[Decimal]:
         try:
             return self._parse_decimal(widget.text(), default=default)
         except ValueError:
             raise ValueError(f"Valor inválido para {label}.")
 
-    # Coleta os dados do formulário (OBS: 'descricao' é QTextEdit → toPlainText)
+    # ---------- Coleta/Preenche formulário ----------
     def _collect_form_data(self) -> dict:
+        """Lê e normaliza os dados do formulário para INSERT/UPDATE."""
         return {
-            "item": self.edit_item.text().strip() or None,  # nome visível do item
+            "item": self.edit_item.text().strip() or None,
             "codigo": (self.edit_codigo.text().strip().upper() or None),
             "descricao": (self.edit_descricao.toPlainText().strip() or None),
             "altura": self._decimal_from_input(self.edit_altura, "Altura"),
@@ -571,6 +551,7 @@ class ItensPage(QtWidgets.QWidget):
         }
 
     def _format_decimal(self, value) -> str:
+        """Formata decimais para exibição nos QLineEdit (sem zeros à direita)."""
         if value in (None, ""):
             return ""
         try:
@@ -583,17 +564,18 @@ class ItensPage(QtWidgets.QWidget):
         return text
 
     def _populate_form(self, item):
-        # item.item_nome mapeia para coluna "item" na BD (synonym no ORM)
-        self.edit_item.setText(item.item_nome or "")
-        self.edit_codigo.setText((item.codigo or "").upper())
-        self.edit_descricao.setPlainText(item.descricao or "")
-        self.edit_altura.setText(self._format_decimal(item.altura))
-        self.edit_largura.setText(self._format_decimal(item.largura))
-        self.edit_profundidade.setText(self._format_decimal(item.profundidade))
-        self.edit_und.setText(item.und or "und")
-        qt_txt = self._format_decimal(item.qt)
+        """Preenche os campos do formulário com um registo selecionado."""
+        self.edit_item.setText(getattr(item, "item_nome", "") or "")
+        self.edit_codigo.setText((getattr(item, "codigo", "") or "").upper())
+        self.edit_descricao.setPlainText(getattr(item, "descricao", "") or "")
+        self.edit_altura.setText(self._format_decimal(getattr(item, "altura", None)))
+        self.edit_largura.setText(self._format_decimal(getattr(item, "largura", None)))
+        self.edit_profundidade.setText(self._format_decimal(getattr(item, "profundidade", None)))
+        self.edit_und.setText(getattr(item, "und", "") or "und")
+        qt_txt = self._format_decimal(getattr(item, "qt", None))
         self.edit_qt.setText(qt_txt or "1")
-        # 🔒 manter bloqueado
+
+        # Campo "Item" permanece bloqueado
         self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
         self._edit_item_id = getattr(item, "id_item", None)
@@ -612,6 +594,7 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
         self._edit_item_id = None
 
+    # ---------- Tabela: altura de linha ----------
     def _apply_row_height(self):
         vert_header = self.table.verticalHeader()
         if not vert_header:
@@ -634,7 +617,7 @@ class ItensPage(QtWidgets.QWidget):
     def _prepare_next_item(self, *, focus_codigo: bool = True):
         """
         Limpa o formulário e prepara o próximo número de item.
-        Chamado em: Inserir Novo, após Gravar (novo/atualização), e quando não há linhas no orçamento.
+        Chamado em: Inserir Novo, após Gravar, e quando não há linhas no orçamento.
         """
         self._clear_table_selection()
         self._clear_form()
@@ -647,7 +630,6 @@ class ItensPage(QtWidgets.QWidget):
             return
 
         versao_norm = versao_atual.zfill(2)
-        # 🔑 Cálculo do próximo nº de item SEM depender do campo estar vazio
         proximo_numero = self._next_item_number(self._orc_id, versao_norm)
         self.edit_item.setText(str(proximo_numero))
         self.edit_item.setReadOnly(True)
@@ -656,36 +638,10 @@ class ItensPage(QtWidgets.QWidget):
         if focus_codigo:
             self.edit_codigo.setFocus()
 
-    def on_selection_changed(self, selected, deselected):
-        """Atualiza o formulário quando a seleção da tabela muda."""
-        idx = self.table.currentIndex()
-
-        # Sem seleção -> prepara estado "novo item"
-        if not idx.isValid():
-            self._prepare_next_item()
-            return
-
-        try:
-            row = self.model.get_row(idx.row())
-        except Exception:
-            self._prepare_next_item()
-            return
-
-        # Preenche formulário com a linha selecionada
-        self._populate_form(row)
-
-    def on_expand_rows(self):
-        self._rows_expanded = True
-        self._apply_row_height()
-
-    def on_collapse_rows(self):
-        self._rows_expanded = False
-        self._apply_row_height()
-
     # =========================================
     # Inserção / Atualização / Movimento
     # =========================================
-    def _next_item_number(self, orc_id, versao) -> int:
+    def _next_item_number(self, orc_id: int, versao: str) -> int:
         """
         Calcula o próximo número de item com base nos itens já existentes
         no orçamento e versão atuais (COUNT + 1).
@@ -693,18 +649,13 @@ class ItensPage(QtWidgets.QWidget):
         total = self.db.execute(
             select(func.count(OrcamentoItem.id_item)).where(
                 OrcamentoItem.id_orcamento == orc_id,
-                OrcamentoItem.versao == versao
+                OrcamentoItem.versao == versao,
             )
         ).scalar() or 0
         return int(total) + 1
 
     def on_new_item(self):
-        """
-        Preparar o formulário para inserir um novo item:
-        - Limpa os campos;
-        - Calcula e preenche o próximo nº de 'Item' (sequencial por orçamento+versão);
-        - Mantém o campo 'Item' bloqueado.
-        """
+        """Prepara o formulário para inserir um novo item."""
         if not self._orc_id:
             QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
             return
@@ -718,11 +669,11 @@ class ItensPage(QtWidgets.QWidget):
 
     def on_save_item(self):
         """
-        Gravar item no orçamento:
-        - Se não houver item selecionado => INSERE novo item.
-        - Se houver item selecionado => ATUALIZA item existente.
-        - O campo 'item' é sempre automático e não pode ser alterado.
-        - Após gravar (novo ou atualização): limpa e prepara próximo item.
+        Gravar item:
+        - se não houver item selecionado → INSERE;
+        - se houver item selecionado → ATUALIZA;
+        - campo 'item' é sempre automático;
+        - após gravar: limpa e prepara próximo item.
         """
         if not self._orc_id:
             QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
@@ -730,12 +681,12 @@ class ItensPage(QtWidgets.QWidget):
 
         versao_atual = (self.lbl_ver_val.text() or "").strip()
         if not versao_atual:
-            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
+            QMessageBox.warning(self, "Aviso", "Nenhuma versão definido.")
             return
 
         versao_norm = versao_atual.zfill(2)
 
-        # Verificar se há item selecionado (para decidir se é INSERT ou UPDATE)
+        # Descobrir se há item selecionado (para UPDATE)
         id_item = self._edit_item_id
         if id_item is None:
             idx = self.table.currentIndex()
@@ -746,25 +697,26 @@ class ItensPage(QtWidgets.QWidget):
                 except Exception:
                     id_item = None
 
-        # Se for NOVO e o campo "Item" ainda estiver vazio por alguma razão, calcula já aqui.
+        # Se for NOVO e por alguma razão o campo "Item" estiver vazio, calcula já
         if not (self.edit_item.text() or "").strip():
             proximo_numero = self._next_item_number(self._orc_id, versao_norm)
             self.edit_item.setText(str(proximo_numero))
 
-        # Coletar dados do formulário
+        # Ler formulário
         try:
             form = self._collect_form_data()
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
             return
 
+        # INSERT / UPDATE
         try:
-            if id_item:  # ATUALIZAR ITEM EXISTENTE
+            if id_item:
                 update_item(
                     self.db,
                     id_item,
                     versao=versao_norm,
-                    item=form["item"],  # mantém o número original
+                    item=form["item"],  # mantém nº original
                     codigo=form["codigo"],
                     descricao=form["descricao"],
                     altura=form["altura"],
@@ -775,7 +727,7 @@ class ItensPage(QtWidgets.QWidget):
                     updated_by=self._current_user_id(),
                 )
                 mensagem = "Item atualizado com sucesso."
-            else:  # INSERIR NOVO ITEM
+            else:
                 create_item(
                     self.db,
                     self._orc_id,
@@ -796,7 +748,7 @@ class ItensPage(QtWidgets.QWidget):
             self.refresh(select_last=True)
             QMessageBox.information(self, "Sucesso", mensagem)
 
-            # 🚀 Sempre preparar o próximo número após gravar (novo OU atualização)
+            # Prepara próximo número após gravar (novo OU atualização)
             self._prepare_next_item()
 
         except Exception as e:
@@ -818,9 +770,7 @@ class ItensPage(QtWidgets.QWidget):
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
             return
-        # Após eliminar, atualiza e mantém seleção coerente;
-        # se ficar sem linhas, refresh() chamará _prepare_next_item() automaticamente.
-        self.refresh(select_row=current_row)
+        self.refresh(select_row=current_row)  # mantém posição de seleção coerente
 
     def on_move(self, direction: int):
         """Mover item para cima/baixo mantendo seleção coerente."""
@@ -837,9 +787,12 @@ class ItensPage(QtWidgets.QWidget):
             return
         self.refresh(select_row=current_row)
 
+    # ---------- Expansão/Colapso visual das linhas ----------
+    def on_expand_rows(self):
+        self._rows_expanded = True
+        self._apply_row_height()
 
-
-
-
-
-
+    def on_collapse_rows(self):
+        self._rows_expanded = False
+        self._apply_row_height()
+    # =========================================
