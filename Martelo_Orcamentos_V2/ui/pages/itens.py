@@ -5,18 +5,18 @@
 #   e não pode ser editado pelo utilizador.
 # - Botões: "Inserir Novo Item" (limpa e prepara formulário) e
 #           "Gravar Item" (insere ou atualiza na BD).
-# - Descrição: QTextEdit (multi-linha), usa .toPlainText().
+# - Descrição: QTextEdit (multi-linha), usar .toPlainText().
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from PySide6 import QtWidgets, QtCore
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QHeaderView
 from PySide6.QtCore import Qt, QItemSelectionModel
 
 # SQLAlchemy
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func  # ❗ se precisares de SQL cru, volta a importar `text`
 
 # Projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
@@ -43,116 +43,106 @@ class ItensPage(QtWidgets.QWidget):
         self.header = QtWidgets.QFrame()
         self.header.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.header.setStyleSheet("""
-            QFrame { background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 8px; padding: 10px; }
+            QFrame { background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 8px; padding: 8px; }
             QLabel { font-weight: bold; color: #333; }
             QLabel.value { font-weight: normal; color: #000; }
         """)
 
         self.lbl_cliente = QtWidgets.QLabel("Cliente:");   self.lbl_cliente_val = QtWidgets.QLabel("")
-        self.lbl_ano = QtWidgets.QLabel("Ano:");          self.lbl_ano_val = QtWidgets.QLabel("")
-        self.lbl_num = QtWidgets.QLabel("Nº Orçamento:"); self.lbl_num_val = QtWidgets.QLabel("")
-        self.lbl_ver = QtWidgets.QLabel("Versão:");       self.lbl_ver_val = QtWidgets.QLabel("")
-        self.lbl_user = QtWidgets.QLabel("Utilizador:");  self.lbl_user_val = QtWidgets.QLabel("")
+        self.lbl_ano     = QtWidgets.QLabel("Ano:");       self.lbl_ano_val     = QtWidgets.QLabel("")
+        self.lbl_num     = QtWidgets.QLabel("Nº Orçamento:"); self.lbl_num_val  = QtWidgets.QLabel("")
+        self.lbl_ver     = QtWidgets.QLabel("Versão:");    self.lbl_ver_val     = QtWidgets.QLabel("")
+        self.lbl_user    = QtWidgets.QLabel("Utilizador:");self.lbl_user_val    = QtWidgets.QLabel("")
 
         for w in [self.lbl_cliente_val, self.lbl_ano_val, self.lbl_num_val, self.lbl_ver_val, self.lbl_user_val]:
             w.setProperty("class", "value")
 
         grid = QtWidgets.QGridLayout(self.header)
-        grid.setContentsMargins(5, 5, 5, 5)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
+        grid.setContentsMargins(4, 4, 4, 4)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(4)
 
+        # Labels compactos
         for lbl in [self.lbl_cliente, self.lbl_user, self.lbl_ano, self.lbl_num, self.lbl_ver]:
             lbl.setMinimumWidth(80)
             lbl.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
 
         grid.addWidget(self.lbl_cliente, 0, 0); grid.addWidget(self.lbl_cliente_val, 0, 1)
-        grid.addWidget(self.lbl_user, 0, 2);    grid.addWidget(self.lbl_user_val, 0, 3)
+        grid.addWidget(self.lbl_user,    0, 2); grid.addWidget(self.lbl_user_val,    0, 3)
 
-        grid.addWidget(self.lbl_ano, 1, 0);     grid.addWidget(self.lbl_ano_val, 1, 1, 1, 3)
+        grid.addWidget(self.lbl_ano,     1, 0); grid.addWidget(self.lbl_ano_val,     1, 1, 1, 3)
 
-        grid.addWidget(self.lbl_num, 2, 0);     grid.addWidget(self.lbl_num_val, 2, 1)
-        grid.addWidget(self.lbl_ver, 2, 2);     grid.addWidget(self.lbl_ver_val, 2, 3)
+        grid.addWidget(self.lbl_num,     2, 0); grid.addWidget(self.lbl_num_val,     2, 1)
+        grid.addWidget(self.lbl_ver,     2, 2); grid.addWidget(self.lbl_ver_val,     2, 3)
         grid.setColumnStretch(4, 1)
 
         # ============================================================
         # FORMULÁRIO DE INSERÇÃO / EDIÇÃO DE ITENS (Compacto + Otimizado)
         # ------------------------------------------------------------
-        # ✅ Objetivo: deixar o formulário mais compacto e organizado.
-        # ✅ Alterações:
-        #   - Ordem atualizada: Item | Código | Descrição | Altura | Largura | Profundidade | Qt | Und
-        #   - Labels com largura mínima fixa (evita espaços desnecessários).
-        #   - Campos ajustados em largura → mais espaço para a tabela abaixo.
-        #   - Altura total reduzida ao máximo.
+        # ✔ Linha 1: Item | Código | Altura | Largura | Profundidade | Qt | Und
+        # ✔ Linha 2: Descrição (ocupa toda a largura)
+        # ✔ Labels em negrito + largura mínima -> não desperdiça espaço
+        # ✔ Campos com largura por nº de caracteres (só o necessário)
+        # ✔ Altura total do formulário reduzida
         # ============================================================
 
         self.form_frame = QtWidgets.QFrame()
         self.form_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.form_frame.setStyleSheet("""
-            QFrame { 
-                background-color: #fdfdfd; 
-                border: 1px solid #d0d0d0; 
-                border-radius: 6px; 
+            QFrame {
+                background-color: #fdfdfd;
+                border: 1px solid #d0d0d0;
+                border-radius: 6px;
             }
-            QLabel { 
+            QLabel {
                 font-weight: bold;
                 color: #333;
                 font-size: 12px;
-                min-width: 55px;   /* 👈 força todos os labels a ficarem compactos */
+                min-width: 48px;         /* labels curtos → menos espaço desperdiçado */
             }
-            QLineEdit, QTextEdit { 
-                padding: 3px; 
+            QLineEdit, QTextEdit {
+                padding: 3px;
                 font-size: 12px;
             }
         """)
 
-        # 👉 GridLayout com margens mínimas → mais compacto
         form = QtWidgets.QGridLayout(self.form_frame)
-        form.setContentsMargins(4, 4, 4, 4)
-        form.setHorizontalSpacing(5)
-        form.setVerticalSpacing(2)
+        form.setContentsMargins(4, 4, 4, 4)   # margens mínimas
+        form.setHorizontalSpacing(5)          # pouco espaço entre colunas
+        form.setVerticalSpacing(2)            # pouco espaço entre linhas
 
-        # Helper para criar labels
+        # Helpers para criar UI de forma consistente
         def _label(text: str) -> QtWidgets.QLabel:
             lbl = QtWidgets.QLabel(text)
             lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             return lbl
 
-        # Helper para definir largura aproximada por nº de caracteres
         def _set_char_width(widget: QtWidgets.QWidget, chars: int):
+            """Define largura aproximada pelo nº de caracteres (compacidade controlada)."""
             fm = widget.fontMetrics()
             width = fm.horizontalAdvance("W" * max(chars, 1)) + 10
             widget.setFixedWidth(width)
+            if isinstance(widget, QtWidgets.QLineEdit):
+                widget.setFixedHeight(24)  # inputs mais baixinhos → reduz altura total
 
-        # ==============================
-        # CAMPOS DO FORMULÁRIO
-        # ==============================
-
-        # ITEM (automático, readonly)
+        # --------- Campos (linha 1) ----------
         self.edit_item = QtWidgets.QLineEdit()
-        self.edit_item.setReadOnly(True)
+        self.edit_item.setReadOnly(True)                      # "Item" é sempre automático
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
         _set_char_width(self.edit_item, 3)
 
-        # CÓDIGO
         self.edit_codigo = QtWidgets.QLineEdit()
         _set_char_width(self.edit_codigo, 10)
 
-        # DESCRIÇÃO (campo principal → mais largo e mais alto)
-        self.edit_descricao = QtWidgets.QTextEdit()
-        self.edit_descricao.setPlaceholderText("Descrição do item...")
-        self.edit_descricao.setFixedHeight(40)     # 👈 altura reduzida
-        self.edit_descricao.setMinimumWidth(300)   # 👈 largura maior
-
-        # ALTURA / LARGURA / PROFUNDIDADE
         self.edit_altura = QtWidgets.QLineEdit()
-        self.edit_largura = QtWidgets.QLineEdit()
-        self.edit_profundidade = QtWidgets.QLineEdit()
         _set_char_width(self.edit_altura, 5)
+
+        self.edit_largura = QtWidgets.QLineEdit()
         _set_char_width(self.edit_largura, 5)
+
+        self.edit_profundidade = QtWidgets.QLineEdit()
         _set_char_width(self.edit_profundidade, 5)
 
-        # QT e UND (QT antes de UND ✅)
         self.edit_qt = QtWidgets.QLineEdit()
         self.edit_qt.setPlaceholderText("1")
         _set_char_width(self.edit_qt, 4)
@@ -161,34 +151,34 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_und.setPlaceholderText("und")
         _set_char_width(self.edit_und, 4)
 
-        # ==============================
-        # ADICIONAR AO LAYOUT
-        # ==============================
+        # --------- Campo (linha 2): Descrição ----------
+        self.edit_descricao = QtWidgets.QTextEdit()
+        self.edit_descricao.setPlaceholderText("Descrição do item...")
+        self.edit_descricao.setFixedHeight(60)  # ⬅️ 60px (conforme confirmado). Ajusta aqui se quiseres.
+        self.edit_descricao.setMinimumWidth(280)
 
-        # Linha única de campos → super compacta
-        form.addWidget(_label("Item"), 0, 0);           form.addWidget(self.edit_item, 0, 1)
-        form.addWidget(_label("Código"), 0, 2);         form.addWidget(self.edit_codigo, 0, 3)
-        form.addWidget(_label("Descrição"), 0, 4);      form.addWidget(self.edit_descricao, 0, 5)
-        form.addWidget(_label("Altura"), 0, 6);         form.addWidget(self.edit_altura, 0, 7)
-        form.addWidget(_label("Largura"), 0, 8);        form.addWidget(self.edit_largura, 0, 9)
-        form.addWidget(_label("Prof."), 0, 10);         form.addWidget(self.edit_profundidade, 0, 11)
-        form.addWidget(_label("Qt"), 0, 12);            form.addWidget(self.edit_qt, 0, 13)
-        form.addWidget(_label("Und"), 0, 14);           form.addWidget(self.edit_und, 0, 15)
+        # --------- Layout: adicionar widgets ----------
+        # Linha 0 (compacta)
+        col = 0
+        form.addWidget(_label("Item"),          0, col); col += 1; form.addWidget(self.edit_item,        0, col); col += 1
+        form.addWidget(_label("Código"),        0, col); col += 1; form.addWidget(self.edit_codigo,      0, col); col += 1
+        form.addWidget(_label("Altura"),        0, col); col += 1; form.addWidget(self.edit_altura,      0, col); col += 1
+        form.addWidget(_label("Largura"),       0, col); col += 1; form.addWidget(self.edit_largura,     0, col); col += 1
+        form.addWidget(_label("Profundidade"),  0, col); col += 1; form.addWidget(self.edit_profundidade,0, col); col += 1
+        form.addWidget(_label("Qt"),            0, col); col += 1; form.addWidget(self.edit_qt,          0, col); col += 1
+        form.addWidget(_label("Und"),           0, col); col += 1; form.addWidget(self.edit_und,         0, col); col += 1
 
-        # ✅ Expansão proporcional → só a descrição ocupa mais espaço
-        form.setColumnStretch(5, 2)    # descrição expande mais
-        form.setColumnStretch(3, 1)    # código
-        form.setColumnStretch(7, 1)    # altura
-        form.setColumnStretch(9, 1)    # largura
-        form.setColumnStretch(11, 1)   # profundidade
-        form.setColumnStretch(13, 1)   # qt
-        form.setColumnStretch(15, 1)   # und
+        # Linha 1 (descrição ocupa o resto da largura)
+        form.addWidget(_label("Descrição"),     1, 0)
+        form.addWidget(self.edit_descricao,     1, 1, 1, col-1)  # span ao longo das colunas restantes
 
         # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
-        self.model = SimpleTableModel(columns=[
+
+        # Definição de colunas da tabela
+        table_columns = [
             ("ID", "id_item"),
-            ("Item", "item_nome"),  # mapeia para coluna 'item' (ORM usa synonym)
+            ("Item", "item_nome"),            # mapeia para 'item' (ORM usa synonym)
             ("Codigo", "codigo"),
             ("Descricao", "descricao"),
             ("Altura", "altura"),
@@ -217,18 +207,47 @@ class ItensPage(QtWidgets.QWidget):
             ("reservado_1", "reservado_1"),
             ("reservado_2", "reservado_2"),
             ("reservado_3", "reservado_3"),
-        ])
+        ]
+
+        self.model = SimpleTableModel(columns=table_columns)
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+
+        # Cabeçalho: larguras FIXAS por coluna (ajusta aqui facilmente)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Fixed)  # todas fixas por defeito
+
+        fixed_widths = {
+            "ID": 50,
+            "Item": 60,
+            "Codigo": 120,
+            "Descricao": 300,
+            "Altura": 80,
+            "Largura": 80,
+            "Profundidade": 80,
+            "Und": 60,
+            "QT": 60,
+            # Demais colunas: podes definir aqui se quiseres valores fixos
+            # "Preco_Unit": 100, "Preco_Total": 110, ...
+        }
+        # Aplica larguras fixas conforme o dicionário acima
+        for i, (title, _) in enumerate(table_columns):
+            if title in fixed_widths:
+                header.resizeSection(i, fixed_widths[title])
+
+        # Altura das linhas
+        self.table.verticalHeader().setDefaultSectionSize(22)
+
+        # Seleção → preencher formulário
         self.table.selectionModel().selectionChanged.connect(self.on_selection_changed)
 
         # ---------- Toolbar ----------
-        btn_add = QtWidgets.QPushButton("Inserir Novo Item")  # antes: "Novo Item"
-        btn_save = QtWidgets.QPushButton("Gravar Item")       # novo
+        btn_add = QtWidgets.QPushButton("Inserir Novo Item")
+        btn_save = QtWidgets.QPushButton("Gravar Item")
         btn_del = QtWidgets.QPushButton("Eliminar Item")
-        btn_up = QtWidgets.QPushButton("↑")
-        btn_dn = QtWidgets.QPushButton("↓")
+        btn_up  = QtWidgets.QPushButton("↑")
+        btn_dn  = QtWidgets.QPushButton("↓")
 
         btn_add.clicked.connect(self.on_new_item)
         btn_save.clicked.connect(self.on_save_item)
@@ -246,14 +265,16 @@ class ItensPage(QtWidgets.QWidget):
         buttons.addWidget(btn_up)
         buttons.addWidget(btn_dn)
 
+        # ---------- Layout raiz ----------
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        lay.setSpacing(8)
+        lay.setSpacing(6)  # ⬅️ ligeiramente menor para a tabela “subir” mais
         lay.addWidget(self.header)
         lay.addWidget(self.form_frame)
         lay.addLayout(buttons)
         lay.addWidget(self.table)
 
+        # Limpa tudo e prepara o próximo item (se orçamento tiver 0 linhas)
         self._clear_form()
 
     # =========================================
@@ -298,12 +319,15 @@ class ItensPage(QtWidgets.QWidget):
         self.refresh()
 
     def refresh(self, select_row: Optional[int] = None, select_last: bool = False):
+        """Atualiza linhas na tabela e seleção. Se não houver linhas, prepara próximo item."""
         if not self._orc_id:
             self.model.set_rows([])
             self._clear_form()
             return
+
         rows = list_items(self.db, self._orc_id)
         self.model.set_rows(rows)
+
         if rows:
             if select_row is not None:
                 row_to_select = max(0, min(select_row, len(rows) - 1))
@@ -313,6 +337,7 @@ class ItensPage(QtWidgets.QWidget):
                 row_to_select = 0
             self.table.selectRow(row_to_select)
         else:
+            # Sem linhas → prepara o nº do primeiro item
             self._prepare_next_item(focus_codigo=False)
 
     def selected_id(self):
@@ -380,11 +405,12 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_und.setText(item.und or "und")
         qt_txt = self._format_decimal(item.qt)
         self.edit_qt.setText(qt_txt or "1")
-        # 🔒 garantir sempre bloqueado
+        # 🔒 manter bloqueado
         self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
     def _clear_form(self):
+        """Limpa campos e deixa 'Item' readonly."""
         self.edit_item.clear()
         self.edit_codigo.clear()
         self.edit_descricao.clear()
@@ -405,7 +431,10 @@ class ItensPage(QtWidgets.QWidget):
         selection_model.setCurrentIndex(QtCore.QModelIndex(), QItemSelectionModel.Clear)
 
     def _prepare_next_item(self, *, focus_codigo: bool = True):
-        """Limpa o formulário e prepara o próximo número de item."""
+        """
+        Limpa o formulário e prepara o próximo número de item.
+        Chamado em: Inserir Novo, após Gravar (novo/atualização), e quando não há linhas no orçamento.
+        """
         self._clear_table_selection()
         self._clear_form()
 
@@ -417,6 +446,7 @@ class ItensPage(QtWidgets.QWidget):
             return
 
         versao_norm = versao_atual.zfill(2)
+        # 🔑 Cálculo do próximo nº de item SEM depender do campo estar vazio
         proximo_numero = self._next_item_number(self._orc_id, versao_norm)
         self.edit_item.setText(str(proximo_numero))
         self.edit_item.setReadOnly(True)
@@ -425,25 +455,13 @@ class ItensPage(QtWidgets.QWidget):
         if focus_codigo:
             self.edit_codigo.setFocus()
 
-    def on_selection_changed(self, selected, deselected):
-        idx = self.table.currentIndex()
-        if not idx.isValid():
-            self._clear_form()
-            return
-        try:
-            row = self.model.get_row(idx.row())
-        except IndexError:
-            self._clear_form()
-            return
-        self._populate_form(row)
-
     # =========================================
-    # Inserção com nova lógica de botões
+    # Inserção / Atualização / Movimento
     # =========================================
-    def _next_item_number(self, orc_id, versao):
+    def _next_item_number(self, orc_id, versao) -> int:
         """
         Calcula o próximo número de item com base nos itens já existentes
-        no orçamento e versão atuais.
+        no orçamento e versão atuais (COUNT + 1).
         """
         total = self.db.execute(
             select(func.count(OrcamentoItem.id_item)).where(
@@ -451,13 +469,13 @@ class ItensPage(QtWidgets.QWidget):
                 OrcamentoItem.versao == versao
             )
         ).scalar() or 0
-        return total + 1
+        return int(total) + 1
 
     def on_new_item(self):
         """
-        Prepara o formulário para inserir um novo item:
-        - Limpa os campos.
-        - Calcula e preenche o próximo nº de 'Item' (sequencial por orçamento+versão).
+        Preparar o formulário para inserir um novo item:
+        - Limpa os campos;
+        - Calcula e preenche o próximo nº de 'Item' (sequencial por orçamento+versão);
         - Mantém o campo 'Item' bloqueado.
         """
         if not self._orc_id:
@@ -473,13 +491,12 @@ class ItensPage(QtWidgets.QWidget):
 
     def on_save_item(self):
         """
-        Grava um item no orçamento:
+        Gravar item no orçamento:
         - Se não houver item selecionado => INSERE novo item.
         - Se houver item selecionado => ATUALIZA item existente.
         - O campo 'item' é sempre automático e não pode ser alterado.
-        - O formulário é limpo após a gravação e já mostra o próximo número de item.
+        - Após gravar (novo ou atualização): limpa e prepara próximo item.
         """
-
         if not self._orc_id:
             QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
             return
@@ -501,12 +518,12 @@ class ItensPage(QtWidgets.QWidget):
             except Exception:
                 id_item = None
 
-        # ✅ Calcular o próximo número de item se for novo
+        # Se for NOVO e o campo "Item" ainda estiver vazio por alguma razão, calcula já aqui.
         if not (self.edit_item.text() or "").strip():
             proximo_numero = self._next_item_number(self._orc_id, versao_norm)
             self.edit_item.setText(str(proximo_numero))
 
-        # ✅ Coletar dados do formulário
+        # Coletar dados do formulário
         try:
             form = self._collect_form_data()
         except Exception as e:
@@ -551,17 +568,15 @@ class ItensPage(QtWidgets.QWidget):
             self.refresh(select_last=True)
             QMessageBox.information(self, "Sucesso", mensagem)
 
-            # ✅ Limpar formulário e preparar para novo item
+            # 🚀 Sempre preparar o próximo número após gravar (novo OU atualização)
             self._prepare_next_item()
 
         except Exception as e:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Erro ao gravar item:\n{str(e)}")
 
-    # =========================================
-    # Eliminação e Movimento
-    # =========================================
     def on_del(self):
+        """Eliminar item selecionado e atualizar lista."""
         id_item = self.selected_id()
         if not id_item:
             return
@@ -575,10 +590,12 @@ class ItensPage(QtWidgets.QWidget):
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
             return
-        # Após eliminar, atualiza e mantém seleção coerente
+        # Após eliminar, atualiza e mantém seleção coerente;
+        # se ficar sem linhas, refresh() chamará _prepare_next_item() automaticamente.
         self.refresh(select_row=current_row)
 
     def on_move(self, direction: int):
+        """Mover item para cima/baixo mantendo seleção coerente."""
         id_item = self.selected_id()
         if not id_item:
             return
@@ -591,4 +608,3 @@ class ItensPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao mover: {e}")
             return
         self.refresh(select_row=current_row)
-# Fim do ficheiro
