@@ -1,6 +1,7 @@
 ﻿from PySide6 import QtWidgets
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
+from Martelo_Orcamentos_V2.app.services.materias_primas import KEY_MATERIAS_BASE_PATH, DEFAULT_MATERIAS_BASE_PATH
 
 
 KEY_BASE_PATH = "base_path_orcamentos"
