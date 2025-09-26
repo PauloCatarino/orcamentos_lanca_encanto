@@ -1,4 +1,4 @@
-from PySide6 import QtWidgets
+﻿from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 from .pages.orcamentos import OrcamentosPage
 from .pages.itens import ItensPage
@@ -58,3 +58,5 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.setCurrentIndex(index)
         if index == 0:
             self.pg_orc.reload_clients()
+
+

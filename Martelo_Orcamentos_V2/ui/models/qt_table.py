@@ -1,4 +1,4 @@
-from PySide6 import QtCore
+﻿from PySide6 import QtCore
 
 
 class SimpleTableModel(QtCore.QAbstractTableModel):
@@ -28,12 +28,29 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         if not index.isValid():
             return None
         row = self._rows[index.row()]
-        header, attr = self._columns[index.column()]
+        col = self._columns[index.column()]
+        if isinstance(col, (tuple, list)):
+            header = col[0]
+            attr = col[1] if len(col) > 1 else None
+            formatter = col[2] if len(col) > 2 else None
+        elif isinstance(col, dict):
+            header = col.get("header")
+            attr = col.get("attr")
+            formatter = col.get("formatter")
+        else:
+            header = col
+            attr = None
+            formatter = None
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
             try:
-                val = getattr(row, attr)
+                val = getattr(row, attr) if attr else None
             except Exception:
                 val = None
+            if formatter and val is not None:
+                try:
+                    return formatter(val)
+                except Exception:
+                    pass
             return "" if val is None else str(val)
         return None
 
@@ -41,9 +58,20 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         if role != QtCore.Qt.DisplayRole:
             return None
         if orientation == QtCore.Qt.Horizontal:
-            return self._columns[section][0] if section < len(self._columns) else ""
+            if section >= len(self._columns):
+                return ""
+            col = self._columns[section]
+            if isinstance(col, (tuple, list)):
+                return col[0]
+            if isinstance(col, dict):
+                return col.get("header", "")
+            return str(col)
         return str(section + 1)
 
     def get_row(self, r):
         return self._rows[r]
+
+
+
+
 

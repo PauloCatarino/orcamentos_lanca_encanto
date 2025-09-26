@@ -1,4 +1,4 @@
-from .user import User
+﻿from .user import User
 from .client import Client
 from .orcamento import Orcamento, OrcamentoItem
 from .item_children import (
@@ -10,3 +10,4 @@ from .item_children import (
     DadosItemsAcabamentos,
 )
 
+\nfrom .materia_prima import MateriaPrima, MateriaPrimaPreference\n
