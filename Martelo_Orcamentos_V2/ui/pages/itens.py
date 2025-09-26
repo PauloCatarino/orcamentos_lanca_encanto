@@ -76,16 +76,14 @@ class ItensPage(QtWidgets.QWidget):
         grid.setColumnStretch(4, 1)
 
         # ============================================================
-        # FORMULÁRIO DE INSERÇÃO / EDIÇÃO DE ITENS
+        # FORMULÁRIO DE INSERÇÃO / EDIÇÃO DE ITENS (Compacto + Otimizado)
         # ------------------------------------------------------------
-        # ✅ Objetivo: tornar o formulário mais compacto em altura e
-        #    largura, destacando os nomes dos campos e aumentando a
-        #    área da tabela.
-        # ✅ Alterações feitas:
-        #    - Labels em negrito para se diferenciarem dos valores.
-        #    - Campos reduzidos em largura (exceto 'Descrição').
-        #    - Altura do formulário diminuída (menos espaço vertical).
-        #    - Comentários detalhados para edição manual futura.
+        # ✅ Objetivo: deixar o formulário mais compacto e organizado.
+        # ✅ Alterações:
+        #   - Ordem atualizada: Item | Código | Descrição | Altura | Largura | Profundidade | Qt | Und
+        #   - Labels com largura mínima fixa (evita espaços desnecessários).
+        #   - Campos ajustados em largura → mais espaço para a tabela abaixo.
+        #   - Altura total reduzida ao máximo.
         # ============================================================
 
         self.form_frame = QtWidgets.QFrame()
@@ -97,9 +95,10 @@ class ItensPage(QtWidgets.QWidget):
                 border-radius: 6px; 
             }
             QLabel { 
-                font-weight: bold;           /* Destaque aos nomes dos campos */
-                color: #333; 
-                font-size: 13px;
+                font-weight: bold;
+                color: #333;
+                font-size: 12px;
+                min-width: 55px;   /* 👈 força todos os labels a ficarem compactos */
             }
             QLineEdit, QTextEdit { 
                 padding: 3px; 
@@ -107,27 +106,29 @@ class ItensPage(QtWidgets.QWidget):
             }
         """)
 
-        # 👉 GridLayout: mantém tudo em apenas 2 linhas para reduzir altura
+        # 👉 GridLayout com margens mínimas → mais compacto
         form = QtWidgets.QGridLayout(self.form_frame)
-        form.setContentsMargins(6, 6, 6, 6)
-        form.setHorizontalSpacing(6)
+        form.setContentsMargins(4, 4, 4, 4)
+        form.setHorizontalSpacing(5)
         form.setVerticalSpacing(2)
 
-        # 🔧 Helper para criar labels
+        # Helper para criar labels
         def _label(text: str) -> QtWidgets.QLabel:
-            return QtWidgets.QLabel(text)
+            lbl = QtWidgets.QLabel(text)
+            lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            return lbl
 
-        # 🔧 Helper para definir largura com base no nº de caracteres
+        # Helper para definir largura aproximada por nº de caracteres
         def _set_char_width(widget: QtWidgets.QWidget, chars: int):
             fm = widget.fontMetrics()
-            width = fm.horizontalAdvance("W" * max(chars, 1)) + 12
+            width = fm.horizontalAdvance("W" * max(chars, 1)) + 10
             widget.setFixedWidth(width)
 
         # ==============================
         # CAMPOS DO FORMULÁRIO
         # ==============================
 
-        # ITEM (somente leitura - gerado automaticamente)
+        # ITEM (automático, readonly)
         self.edit_item = QtWidgets.QLineEdit()
         self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
@@ -135,53 +136,53 @@ class ItensPage(QtWidgets.QWidget):
 
         # CÓDIGO
         self.edit_codigo = QtWidgets.QLineEdit()
-        _set_char_width(self.edit_codigo, 12)
+        _set_char_width(self.edit_codigo, 10)
 
-        # DESCRIÇÃO (campo maior)
+        # DESCRIÇÃO (campo principal → mais largo e mais alto)
         self.edit_descricao = QtWidgets.QTextEdit()
         self.edit_descricao.setPlaceholderText("Descrição do item...")
-        self.edit_descricao.setFixedHeight(50)    # altura mais baixa
-        self.edit_descricao.setMinimumWidth(400)  # largura maior
+        self.edit_descricao.setFixedHeight(40)     # 👈 altura reduzida
+        self.edit_descricao.setMinimumWidth(300)   # 👈 largura maior
 
         # ALTURA / LARGURA / PROFUNDIDADE
         self.edit_altura = QtWidgets.QLineEdit()
         self.edit_largura = QtWidgets.QLineEdit()
         self.edit_profundidade = QtWidgets.QLineEdit()
-        _set_char_width(self.edit_altura, 6)
-        _set_char_width(self.edit_largura, 6)
-        _set_char_width(self.edit_profundidade, 6)
+        _set_char_width(self.edit_altura, 5)
+        _set_char_width(self.edit_largura, 5)
+        _set_char_width(self.edit_profundidade, 5)
 
-        # UNIDADE e QT
-        self.edit_und = QtWidgets.QLineEdit()
+        # QT e UND (QT antes de UND ✅)
         self.edit_qt = QtWidgets.QLineEdit()
-        self.edit_und.setPlaceholderText("und")
         self.edit_qt.setPlaceholderText("1")
-        _set_char_width(self.edit_und, 5)
-        _set_char_width(self.edit_qt, 5)
+        _set_char_width(self.edit_qt, 4)
+
+        self.edit_und = QtWidgets.QLineEdit()
+        self.edit_und.setPlaceholderText("und")
+        _set_char_width(self.edit_und, 4)
 
         # ==============================
         # ADICIONAR AO LAYOUT
         # ==============================
 
-        # Linha 0: campos mais pequenos lado a lado
+        # Linha única de campos → super compacta
         form.addWidget(_label("Item"), 0, 0);           form.addWidget(self.edit_item, 0, 1)
         form.addWidget(_label("Código"), 0, 2);         form.addWidget(self.edit_codigo, 0, 3)
-        form.addWidget(_label("Altura"), 0, 4);         form.addWidget(self.edit_altura, 0, 5)
-        form.addWidget(_label("Largura"), 0, 6);        form.addWidget(self.edit_largura, 0, 7)
-        form.addWidget(_label("Profundidade"), 0, 8);   form.addWidget(self.edit_profundidade, 0, 9)
-        form.addWidget(_label("Und"), 0, 10);           form.addWidget(self.edit_und, 0, 11)
+        form.addWidget(_label("Descrição"), 0, 4);      form.addWidget(self.edit_descricao, 0, 5)
+        form.addWidget(_label("Altura"), 0, 6);         form.addWidget(self.edit_altura, 0, 7)
+        form.addWidget(_label("Largura"), 0, 8);        form.addWidget(self.edit_largura, 0, 9)
+        form.addWidget(_label("Prof."), 0, 10);         form.addWidget(self.edit_profundidade, 0, 11)
         form.addWidget(_label("Qt"), 0, 12);            form.addWidget(self.edit_qt, 0, 13)
+        form.addWidget(_label("Und"), 0, 14);           form.addWidget(self.edit_und, 0, 15)
 
-        # Linha 1: descrição ocupa toda a largura
-        form.addWidget(_label("Descrição"), 1, 0)
-        form.addWidget(self.edit_descricao, 1, 1, 1, 13)
-
-        # Ajustes de expansão automática
-        form.setColumnStretch(3, 1)
-        form.setColumnStretch(5, 1)
-        form.setColumnStretch(7, 1)
-        form.setColumnStretch(9, 1)
-        form.setColumnStretch(13, 3)
+        # ✅ Expansão proporcional → só a descrição ocupa mais espaço
+        form.setColumnStretch(5, 2)    # descrição expande mais
+        form.setColumnStretch(3, 1)    # código
+        form.setColumnStretch(7, 1)    # altura
+        form.setColumnStretch(9, 1)    # largura
+        form.setColumnStretch(11, 1)   # profundidade
+        form.setColumnStretch(13, 1)   # qt
+        form.setColumnStretch(15, 1)   # und
 
         # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
