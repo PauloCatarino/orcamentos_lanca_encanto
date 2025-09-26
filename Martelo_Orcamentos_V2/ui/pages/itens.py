@@ -31,27 +31,6 @@ from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 from ..models.qt_table import SimpleTableModel
 
-def on_selection_changed(self, selected, deselected):
-        """
-        Dispara quando a seleção da tabela muda.
-        - Preenche o formulário com os dados do item selecionado.
-        - Se não houver seleção, limpa o formulário e prepara o próximo número.
-        """
-        idx = self.table.currentIndex()
-
-        # 🔍 Se não houver linha selecionada → limpa e prepara o próximo número
-        if not idx.isValid():
-            self._prepare_next_item()
-            return
-
-        try:
-            row = self.model.get_row(idx.row())
-        except IndexError:
-            self._prepare_next_item()
-            return
-
-        # ✅ Preenche o formulário com os dados da linha selecionada
-        self._populate_form(row)
 
 class ItensPage(QtWidgets.QWidget):
     def __init__(self, parent=None, current_user=None):
@@ -261,7 +240,9 @@ class ItensPage(QtWidgets.QWidget):
         self.table.verticalHeader().setDefaultSectionSize(22)
 
         # Seleção → preencher formulário
-        self.table.selectionModel().selectionChanged.connect(self.on_selection_changed)
+        sel_model = self.table.selectionModel()
+        if sel_model:  # proteção extra
+            sel_model.selectionChanged.connect(self.on_selection_changed)
 
         # ---------- Toolbar ----------
         btn_add = QtWidgets.QPushButton("Inserir Novo Item")
@@ -475,6 +456,30 @@ class ItensPage(QtWidgets.QWidget):
 
         if focus_codigo:
             self.edit_codigo.setFocus()
+
+    def on_selection_changed(self, selected, deselected):
+        """
+        Dispara quando a seleção da tabela muda.
+        - Se existir seleção: preenche o formulário com a linha selecionada.
+        - Se não existir seleção: limpa e prepara o próximo número automático,
+        para permitir inserir de imediato um novo item.
+        """
+        idx = self.table.currentIndex()
+
+        # Sem seleção → prepara estado “novo item”
+        if not idx.isValid():
+            self._prepare_next_item()
+            return
+
+        try:
+            row = self.model.get_row(idx.row())
+        except Exception:
+            self._prepare_next_item()
+            return
+
+        # Preenche formulário com a linha selecionada
+        self._populate_form(row)
+
 
     # =========================================
     # Inserção / Atualização / Movimento
