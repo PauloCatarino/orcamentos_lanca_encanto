@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QMessageBox, QHeaderView
 from PySide6.QtCore import Qt, QItemSelectionModel
 
 # SQLAlchemy
-from sqlalchemy import select, func  # ❗ se precisares de SQL cru, volta a importar `text`
+from sqlalchemy import select, func, text  # ❗ se precisares de SQL cru, volta a importar `text`
 
 # Projeto
 from Martelo_Orcamentos_V2.app.db import SessionLocal
@@ -31,6 +31,27 @@ from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 from ..models.qt_table import SimpleTableModel
 
+def on_selection_changed(self, selected, deselected):
+        """
+        Dispara quando a seleção da tabela muda.
+        - Preenche o formulário com os dados do item selecionado.
+        - Se não houver seleção, limpa o formulário e prepara o próximo número.
+        """
+        idx = self.table.currentIndex()
+
+        # 🔍 Se não houver linha selecionada → limpa e prepara o próximo número
+        if not idx.isValid():
+            self._prepare_next_item()
+            return
+
+        try:
+            row = self.model.get_row(idx.row())
+        except IndexError:
+            self._prepare_next_item()
+            return
+
+        # ✅ Preenche o formulário com os dados da linha selecionada
+        self._populate_form(row)
 
 class ItensPage(QtWidgets.QWidget):
     def __init__(self, parent=None, current_user=None):
