@@ -4,8 +4,7 @@
 # - Campo "Item" é sempre gerado automaticamente (sequencial por orçamento+versão)
 #   e não pode ser editado pelo utilizador.
 # - Botões: "Inserir Novo Item" (limpa e prepara formulário) e
-#           "Gravar Item" (insere na BD e seleciona última linha).
-# - Edição: "Editar Item" atualiza os campos permitidos, mantendo o "Item".
+#           "Gravar Item" (insere ou atualiza na BD).
 # - Descrição: QTextEdit (multi-linha), usa .toPlainText().
 # -----------------------------------------------------------------------------
 
@@ -14,7 +13,7 @@ from typing import Optional
 
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtWidgets import QMessageBox
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QItemSelectionModel
 
 # SQLAlchemy
 from sqlalchemy import select, func, text
@@ -86,8 +85,8 @@ class ItensPage(QtWidgets.QWidget):
         """)
         form = QtWidgets.QGridLayout(self.form_frame)
         form.setContentsMargins(8, 8, 8, 8)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(6)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(4)
 
         def _label(text: str) -> QtWidgets.QLabel:
             return QtWidgets.QLabel(text)
@@ -99,6 +98,7 @@ class ItensPage(QtWidgets.QWidget):
         # Descrição multi-linha (confirmado por ti): QTextEdit
         self.edit_descricao = QtWidgets.QTextEdit()
         self.edit_descricao.setPlaceholderText("Descrição do item (multi-linha)")
+        self.edit_descricao.setFixedHeight(80)  # altura campo ^Descrição   
 
         self.edit_altura = QtWidgets.QLineEdit()
         self.edit_largura = QtWidgets.QLineEdit()
@@ -108,19 +108,38 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_und.setPlaceholderText("und")
         self.edit_qt.setPlaceholderText("1")
 
-        form.addWidget(_label("Item"), 0, 0);      form.addWidget(self.edit_item, 0, 1)
-        form.addWidget(_label("Código"), 0, 2);    form.addWidget(self.edit_codigo, 0, 3)
+        def _apply_char_width(widget: QtWidgets.QWidget, chars: int):
+            fm = widget.fontMetrics()
+            # largura aproximada baseada no caractere "W" (mais largo)
+            width = fm.horizontalAdvance("W" * max(chars, 1)) + 12
+            widget.setMaximumWidth(width)
 
-        form.addWidget(_label("Descrição"), 1, 0); form.addWidget(self.edit_descricao, 1, 1, 1, 3)
+        _apply_char_width(self.edit_item, 2)
+        _apply_char_width(self.edit_codigo, 30)
+        _apply_char_width(self.edit_altura, 8)
+        _apply_char_width(self.edit_largura, 8)
+        _apply_char_width(self.edit_profundidade, 8)
+        _apply_char_width(self.edit_qt, 5)
+        _apply_char_width(self.edit_und, 8)
 
-        form.addWidget(_label("Altura"), 2, 0);    form.addWidget(self.edit_altura, 2, 1)
-        form.addWidget(_label("Largura"), 2, 2);   form.addWidget(self.edit_largura, 2, 3)
+        form.addWidget(_label("Item"), 0, 0);           form.addWidget(self.edit_item, 0, 1)
+        form.addWidget(_label("Código"), 0, 2);         form.addWidget(self.edit_codigo, 0, 3)
+        form.addWidget(_label("Altura"), 0, 4);         form.addWidget(self.edit_altura, 0, 5)
+        form.addWidget(_label("Largura"), 0, 6);        form.addWidget(self.edit_largura, 0, 7)
+        form.addWidget(_label("Profundidade"), 0, 8);   form.addWidget(self.edit_profundidade, 0, 9)
+        form.addWidget(_label("QT"), 0, 10);            form.addWidget(self.edit_qt, 0, 11)
+        form.addWidget(_label("Und"), 0, 12);           form.addWidget(self.edit_und, 0, 13)
 
-        form.addWidget(_label("Profundidade"), 3, 0); form.addWidget(self.edit_profundidade, 3, 1)
-        form.addWidget(_label("Und"), 3, 2);          form.addWidget(self.edit_und, 3, 3)
+        form.addWidget(_label("Descrição"), 1, 0)
+        form.addWidget(self.edit_descricao, 1, 1, 1, 13)
 
-        form.addWidget(_label("QT"), 4, 0);        form.addWidget(self.edit_qt, 4, 1)
-        form.setColumnStretch(1, 1); form.setColumnStretch(3, 1)
+        form.setColumnStretch(1, 1)
+        form.setColumnStretch(3, 1)
+        form.setColumnStretch(5, 1)
+        form.setColumnStretch(7, 1)
+        form.setColumnStretch(9, 1)
+        form.setColumnStretch(11, 1)
+        form.setColumnStretch(13, 1)
 
         # ---------- Tabela ----------
         self.table = QtWidgets.QTableView(self)
@@ -164,14 +183,12 @@ class ItensPage(QtWidgets.QWidget):
         # ---------- Toolbar ----------
         btn_add = QtWidgets.QPushButton("Inserir Novo Item")  # antes: "Novo Item"
         btn_save = QtWidgets.QPushButton("Gravar Item")       # novo
-        btn_edit = QtWidgets.QPushButton("Editar Item")
         btn_del = QtWidgets.QPushButton("Eliminar Item")
         btn_up = QtWidgets.QPushButton("↑")
         btn_dn = QtWidgets.QPushButton("↓")
 
         btn_add.clicked.connect(self.on_new_item)
         btn_save.clicked.connect(self.on_save_item)
-        btn_edit.clicked.connect(self.on_edit)
         btn_del.clicked.connect(self.on_del)
         btn_up.clicked.connect(lambda: self.on_move(-1))
         btn_dn.clicked.connect(lambda: self.on_move(1))
@@ -182,7 +199,6 @@ class ItensPage(QtWidgets.QWidget):
         buttons.addStretch(1)
         buttons.addWidget(btn_add)
         buttons.addWidget(btn_save)
-        buttons.addWidget(btn_edit)
         buttons.addWidget(btn_del)
         buttons.addWidget(btn_up)
         buttons.addWidget(btn_dn)
@@ -254,7 +270,7 @@ class ItensPage(QtWidgets.QWidget):
                 row_to_select = 0
             self.table.selectRow(row_to_select)
         else:
-            self._clear_form()
+            self._prepare_next_item(focus_codigo=False)
 
     def selected_id(self):
         idx = self.table.currentIndex()
@@ -337,6 +353,35 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_item.setReadOnly(True)
         self.edit_item.setStyleSheet("background-color: #eaeaea;")
 
+    def _clear_table_selection(self):
+        selection_model = self.table.selectionModel()
+        if not selection_model:
+            return
+        blocker = QtCore.QSignalBlocker(selection_model)
+        selection_model.clearSelection()
+        selection_model.setCurrentIndex(QtCore.QModelIndex(), QItemSelectionModel.Clear)
+
+    def _prepare_next_item(self, *, focus_codigo: bool = True):
+        """Limpa o formulário e prepara o próximo número de item."""
+        self._clear_table_selection()
+        self._clear_form()
+
+        if not self._orc_id:
+            return
+
+        versao_atual = (self.lbl_ver_val.text() or "").strip()
+        if not versao_atual:
+            return
+
+        versao_norm = versao_atual.zfill(2)
+        proximo_numero = self._next_item_number(self._orc_id, versao_norm)
+        self.edit_item.setText(str(proximo_numero))
+        self.edit_item.setReadOnly(True)
+        self.edit_item.setStyleSheet("background-color: #eaeaea;")
+
+        if focus_codigo:
+            self.edit_codigo.setFocus()
+
     def on_selection_changed(self, selected, deselected):
         idx = self.table.currentIndex()
         if not idx.isValid():
@@ -381,21 +426,7 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
             return
 
-        versao_norm = versao_atual.zfill(2)
-
-        # ✅ 1. Calcular o próximo número de item
-        proximo_numero = self._next_item_number(self._orc_id, versao_norm)
-
-        # ✅ 2. Limpar campos do formulário
-        self._clear_form()
-
-        # ✅ 3. Preencher automaticamente o campo item com o próximo número
-        self.edit_item.setText(str(proximo_numero))
-        self.edit_item.setReadOnly(True)
-        self.edit_item.setStyleSheet("background-color: #eaeaea;")
-
-        # ✅ 4. Posicionar o cursor no primeiro campo útil
-        self.edit_codigo.setFocus()
+        self._prepare_next_item()
 
     def on_save_item(self):
         """
@@ -478,68 +509,15 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.information(self, "Sucesso", mensagem)
 
             # ✅ Limpar formulário e preparar para novo item
-            self._clear_form()
-            proximo_numero = self._next_item_number(self._orc_id, versao_norm)
-            self.edit_item.setText(str(proximo_numero))
-            self.edit_item.setReadOnly(True)
-            self.edit_item.setStyleSheet("background-color: #eaeaea;")
-            self.edit_codigo.setFocus()
+            self._prepare_next_item()
 
         except Exception as e:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Erro ao gravar item:\n{str(e)}")
 
     # =========================================
-    # Edição, Eliminação e Movimento
+    # Eliminação e Movimento
     # =========================================
-    def on_edit(self):
-        """
-        Edita manualmente o item selecionado (opcional).
-        - Campo 'item' permanece bloqueado e inalterável.
-        """
-        idx = self.table.currentIndex()
-        if not idx.isValid():
-            QMessageBox.warning(self, "Aviso", "Selecione um item para editar.")
-            return
-
-        try:
-            row = self.model.get_row(idx.row())
-        except IndexError:
-            QMessageBox.warning(self, "Aviso", "Seleção inválida.")
-            return
-
-        id_item = row.id_item
-        versao_norm = (self.lbl_ver_val.text() or "").strip().zfill(2)
-
-        try:
-            form = self._collect_form_data()
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", str(e))
-            return
-
-        try:
-            update_item(
-                self.db,
-                id_item,
-                versao=versao_norm,
-                item=row.item_nome,  # mantém número original
-                codigo=form["codigo"],
-                descricao=form["descricao"],
-                altura=form["altura"],
-                largura=form["largura"],
-                profundidade=form["profundidade"],
-                und=form["und"],
-                qt=form["qt"],
-                updated_by=self._current_user_id(),
-            )
-            self.db.commit()
-            self.refresh()
-            QMessageBox.information(self, "Sucesso", "Item atualizado com sucesso.")
-        except Exception as e:
-            self.db.rollback()
-            QMessageBox.critical(self, "Erro", f"Erro ao atualizar item:\n{str(e)}")
-
-
     def on_del(self):
         id_item = self.selected_id()
         if not id_item:
