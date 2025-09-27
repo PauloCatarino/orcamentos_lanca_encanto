@@ -1,12 +1,13 @@
 ﻿# ui/models/qt_table.py
 from PySide6 import QtCore
+from decimal import Decimal
 
 class SimpleTableModel(QtCore.QAbstractTableModel):
     """
     Tabela simples para listas de objetos (ex.: ORM).
     columns: lista de tuplos (header, attr, formatter_opcional)
-    - header: texto do cabeçalho
-    - attr: nome do atributo no objeto (ex.: 'preco_tabela')
+    - header: texto do cabeçalho (ex.: 'ID_MP', 'PRECO_TABELA')
+    - attr: nome do atributo no objeto (ex.: 'id_mp', 'preco_tabela')
     - formatter: função que recebe o valor CRU e devolve string formatada
     """
     def __init__(self, rows=None, columns=None, parent=None):
@@ -55,11 +56,32 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         except Exception:
             val = None
 
-        # Role usado pela Proxy para ORDENAR pelo valor CRU, não pelo texto
+        # -------- Role para ORDENAR: devolver números quando possível --------
         if role == QtCore.Qt.UserRole:
+            # Ordenação do ID_MP como inteiro (1,2,3,…,10,11…)
+            if header == "ID_MP":
+                try:
+                    # aceita "0012" -> 12; strings vazias continuam como None
+                    s = "" if val is None else str(val).strip()
+                    return int(s) if s != "" else None
+                except Exception:
+                    return val  # se não der para converter, volta ao valor original
+
+            # Para outros campos, se já for numérico, devolve tal e qual
+            if isinstance(val, (int, float)) or str(type(val)).endswith("Decimal'>"):
+                return val
+
+            # Se for string e parecer número, tenta Decimal (para sort correto)
+            if isinstance(val, str):
+                s = val.strip().replace("€", "").replace("%", "").replace(",", ".")
+                try:
+                    return Decimal(s)
+                except Exception:
+                    return val
+
             return val
 
-        # Apresentação / edição
+        # -------- Apresentação / edição --------
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
             if formatter and val is not None:
                 try:
@@ -68,7 +90,7 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                     pass
             return "" if val is None else str(val)
 
-        # (Opcional) alinhar à direita números
+        # -------- Alinhamento: números à direita --------
         if role == QtCore.Qt.TextAlignmentRole:
             if isinstance(val, (int, float)) or str(type(val)).endswith("Decimal'>"):
                 return int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
