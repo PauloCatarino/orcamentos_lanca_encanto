@@ -30,7 +30,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "305"
+git commit -m "306"
 git push origin main
 
 '''

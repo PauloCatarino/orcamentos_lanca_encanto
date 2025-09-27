@@ -5,6 +5,7 @@ import subprocess
 import sys
 from decimal import Decimal
 from typing import List
+from pathlib import Path  # <-- adicionar
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt, QTimer
