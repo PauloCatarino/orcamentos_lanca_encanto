@@ -4,20 +4,38 @@ CREATE DATABASE IF NOT EXISTS `orcamentos_v2`
   DEFAULT COLLATE utf8mb4_unicode_ci;
 USE `orcamentos_v2`;
 
--- Limpeza para ambiente de testes (DROP com ordem segura)
+-- ===========================
+-- Limpeza SEGURA (ambiente de testes)
+-- ===========================
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 1) Tabelas que dependem de users/clients/orcamentos/etc.
+DROP TABLE IF EXISTS materia_prima_preferences;
 DROP TABLE IF EXISTS dados_items_acabamentos;
 DROP TABLE IF EXISTS dados_items_sistemas_correr;
 DROP TABLE IF EXISTS dados_items_ferragens;
 DROP TABLE IF EXISTS dados_items_materiais;
 DROP TABLE IF EXISTS dados_def_pecas;
 DROP TABLE IF EXISTS dados_modulo_medidas;
+
+-- 2) Itens e orçamentos (filhas antes do pai)
 DROP TABLE IF EXISTS orcamento_items;
 DROP TABLE IF EXISTS orcamentos;
+
+-- 3) Pais
 DROP TABLE IF EXISTS clients;
 DROP TABLE IF EXISTS users;
+
+-- 4) Outras
 DROP TABLE IF EXISTS app_settings;
 
--- Tabela de utilizadores
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ===========================
+-- Criação de Tabelas (ordem correta)
+-- ===========================
+
+-- USERS
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(64) NOT NULL UNIQUE,
@@ -29,13 +47,13 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- App settings (key/value)
+-- APP SETTINGS
 CREATE TABLE IF NOT EXISTS app_settings (
-  `key` VARCHAR(64) PRIMARY KEY,
+  `key`   VARCHAR(64) PRIMARY KEY,
   `value` LONGTEXT
 ) ENGINE=InnoDB;
 
--- Clients
+-- CLIENTS
 CREATE TABLE IF NOT EXISTS clients (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(255) NOT NULL,
@@ -58,7 +76,7 @@ CREATE TABLE IF NOT EXISTS clients (
   INDEX ix_clients_nome_simplex (nome_simplex)
 ) ENGINE=InnoDB;
 
--- Orçamentos
+-- ORCAMENTOS
 CREATE TABLE IF NOT EXISTS orcamentos (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   ano VARCHAR(4) NOT NULL,
@@ -84,11 +102,12 @@ CREATE TABLE IF NOT EXISTS orcamentos (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY u_orc_ano_num_ver (ano, num_orcamento, versao),
-  CONSTRAINT fk_orc_cliente FOREIGN KEY (client_id) REFERENCES clients(id)
+  CONSTRAINT fk_orc_cliente FOREIGN KEY (client_id)
+    REFERENCES clients(id)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
--- Itens do orçamento
+-- ORCAMENTO ITEMS
 CREATE TABLE IF NOT EXISTS orcamento_items (
   id_item BIGINT AUTO_INCREMENT PRIMARY KEY,
   id_orcamento BIGINT NOT NULL,
@@ -129,11 +148,12 @@ CREATE TABLE IF NOT EXISTS orcamento_items (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX ix_item_ord (id_orcamento, item_ord),
-  CONSTRAINT fk_item_orc FOREIGN KEY (id_orcamento) REFERENCES orcamentos(id)
+  CONSTRAINT fk_item_orc FOREIGN KEY (id_orcamento)
+    REFERENCES orcamentos(id)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
--- Tabela genérica de medidas do módulo (FK id_item_fk)
+-- MEDIDAS DO MÓDULO
 CREATE TABLE IF NOT EXISTS dados_modulo_medidas (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   id_item_fk BIGINT NOT NULL,
@@ -149,7 +169,7 @@ CREATE TABLE IF NOT EXISTS dados_modulo_medidas (
   INDEX ix_medidas_item (id_item_fk)
 ) ENGINE=InnoDB;
 
--- Definição de peças
+-- DEF PEÇAS
 CREATE TABLE IF NOT EXISTS dados_def_pecas (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   id_item_fk BIGINT NOT NULL,
@@ -178,7 +198,7 @@ CREATE TABLE IF NOT EXISTS dados_def_pecas (
   INDEX ix_def_item (id_item_fk)
 ) ENGINE=InnoDB;
 
--- Tabelas de itens associados (materiais/ferragens/sistemas/acabamentos)
+-- ITENS: MATERIAIS / FERRAGENS / SISTEMAS / ACABAMENTOS
 CREATE TABLE IF NOT EXISTS dados_items_materiais (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   id_item_fk BIGINT NOT NULL,
@@ -231,4 +251,13 @@ CREATE TABLE IF NOT EXISTS dados_items_acabamentos (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX ix_acb_item (id_item_fk)
+) ENGINE=InnoDB;
+
+-- Preferências de colunas da página Matérias-Primas (por utilizador)
+CREATE TABLE IF NOT EXISTS materia_prima_preferences (
+  user_id BIGINT NOT NULL PRIMARY KEY,
+  columns TEXT NOT NULL,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mpp_user FOREIGN KEY (user_id)
+    REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
