@@ -10,6 +10,8 @@ from Martelo_Orcamentos_V2.app.db import SessionLocal, init_db
 from Martelo_Orcamentos_V2.ui.login import LoginDialog
 from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
+
+
 # Para correr a aplicação em modo desenvolvimento (com recarregamento automático):
 
 
@@ -23,8 +25,11 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 # Ativar o ambiente virtual powershell  ->          .\.venv_Martelo\Scripts\Activate.ps1
 
 '''
+git pull origin main  # Atualizar o repositório local
+# Fazer as alterações necessárias no código
+
 git add .
-git commit -m "301"
+git commit -m "302"
 git push origin main
 
 '''
