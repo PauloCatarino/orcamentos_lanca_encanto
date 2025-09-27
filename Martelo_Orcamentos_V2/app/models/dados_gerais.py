@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    BigInteger,
     Integer,
     Numeric,
     String,
@@ -17,8 +18,8 @@ from ..db import Base
 
 class DadosGeraisContextMixin:
     id = Column(Integer, primary_key=True, autoincrement=True)
-    cliente_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    cliente_id = Column(BigInteger, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     ano = Column(String(4), nullable=False, index=True)
     num_orcamento = Column(String(16), nullable=False, index=True)
     versao = Column(String(4), nullable=False, index=True)
