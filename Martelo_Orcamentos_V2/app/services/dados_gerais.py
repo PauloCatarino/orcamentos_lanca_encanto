@@ -115,6 +115,12 @@ MODEL_MAP = {
 DECIMAL_ZERO = Decimal("0")
 
 
+def _value(row: Any, attr: str):
+    if isinstance(row, dict):
+        return row.get(attr)
+    return getattr(row, attr, None)
+
+
 def _json_ready(value: Any):
     if isinstance(value, Decimal):
         return float(value)
@@ -221,36 +227,36 @@ def _rows_to_dict(rows: Iterable[Any], *, menu: str) -> List[Dict[str, Any]]:
             "ordem": getattr(row, "ordem", 0) or 0,
         }
         if menu == MENU_MATERIAIS:
-            preco_tab = _ensure_decimal(row.get("preco_tab"))
-            margem = _ensure_percent(row.get("margem"))
-            desconto = _ensure_percent(row.get("desconto"))
-            preco_liq = _ensure_decimal(row.get("preco_liq"))
+            preco_tab = _ensure_decimal(_value(row, "preco_tab"))
+            margem = _ensure_percent(_value(row, "margem"))
+            desconto = _ensure_percent(_value(row, "desconto"))
+            preco_liq = _ensure_decimal(_value(row, "preco_liq"))
             if preco_liq is None:
                 preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
             payload.update(
                 {
-                    "grupo_material": _normalize_grupo_material(row.get("grupo_material")),
-                    "descricao": row.get("descricao"),
-                    "ref_le": row.get("ref_le"),
-                    "descricao_material": row.get("descricao_material"),
+                    "grupo_material": _normalize_grupo_material(_value(row, "grupo_material")),
+                    "descricao": _value(row, "descricao"),
+                    "ref_le": _value(row, "ref_le"),
+                    "descricao_material": _value(row, "descricao_material"),
                     "preco_tab": preco_tab,
                     "preco_liq": preco_liq,
                     "margem": margem,
                     "desconto": desconto,
-                    "und": row.get("und"),
-                    "desp": _ensure_percent(row.get("desp")),
-                    "orl_0_4": row.get("orl_0_4"),
-                    "orl_1_0": row.get("orl_1_0"),
-                    "tipo": row.get("tipo"),
-                    "familia": row.get("familia") or "PLACAS",
-                    "comp_mp": row.get("comp_mp") or None,
-                    "larg_mp": row.get("larg_mp") or None,
-                    "esp_mp": row.get("esp_mp") or None,
-                    "id_mp": row.get("id_mp"),
-                    "nao_stock": bool(row.get("nao_stock")),
-                    "reserva_1": row.get("reserva_1"),
-                    "reserva_2": row.get("reserva_2"),
-                    "reserva_3": row.get("reserva_3"),
+                    "und": _value(row, "und"),
+                    "desp": _ensure_percent(_value(row, "desp")),
+                    "orl_0_4": _value(row, "orl_0_4"),
+                    "orl_1_0": _value(row, "orl_1_0"),
+                    "tipo": _value(row, "tipo"),
+                    "familia": _value(row, "familia") or "PLACAS",
+                    "comp_mp": _value(row, "comp_mp") or None,
+                    "larg_mp": _value(row, "larg_mp") or None,
+                    "esp_mp": _value(row, "esp_mp") or None,
+                    "id_mp": _value(row, "id_mp"),
+                    "nao_stock": bool(_value(row, "nao_stock")),
+                    "reserva_1": _value(row, "reserva_1"),
+                    "reserva_2": _value(row, "reserva_2"),
+                    "reserva_3": _value(row, "reserva_3"),
                 }
             )
         else:
@@ -335,61 +341,61 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
         "ordem": order,
     }
     if menu == MENU_MATERIAIS:
-        preco_tab = _ensure_decimal(row.get("preco_tab"))
-        margem = _ensure_percent(row.get("margem"))
-        desconto = _ensure_percent(row.get("desconto"))
-        preco_liq = _ensure_decimal(row.get("preco_liq"))
+        preco_tab = _ensure_decimal(_value(row, "preco_tab"))
+        margem = _ensure_percent(_value(row, "margem"))
+        desconto = _ensure_percent(_value(row, "desconto"))
+        preco_liq = _ensure_decimal(_value(row, "preco_liq"))
         if preco_liq is None:
             preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
         payload.update(
             {
-                "grupo_material": row.get("grupo_material"),
-                "descricao": row.get("descricao"),
-                "ref_le": row.get("ref_le"),
-                "descricao_material": row.get("descricao_material"),
+                "grupo_material": _value(row, "grupo_material"),
+                "descricao": _value(row, "descricao"),
+                "ref_le": _value(row, "ref_le"),
+                "descricao_material": _value(row, "descricao_material"),
                 "preco_tab": preco_tab,
                 "preco_liq": preco_liq,
                 "margem": margem,
                 "desconto": desconto,
-                "und": row.get("und"),
-                "desp": _ensure_percent(row.get("desp")),
-                "orl_0_4": row.get("orl_0_4"),
-                "orl_1_0": row.get("orl_1_0"),
-                "tipo": row.get("tipo"),
-                "familia": row.get("familia"),
-                "comp_mp": row.get("comp_mp") or None,
-                "larg_mp": row.get("larg_mp") or None,
-                "esp_mp": row.get("esp_mp") or None,
-                "id_mp": row.get("id_mp"),
-                "nao_stock": bool(row.get("nao_stock")),
-                "reserva_1": row.get("reserva_1"),
-                "reserva_2": row.get("reserva_2"),
-                "reserva_3": row.get("reserva_3"),
+                "und": _value(row, "und"),
+                "desp": _ensure_percent(_value(row, "desp")),
+                "orl_0_4": _value(row, "orl_0_4"),
+                "orl_1_0": _value(row, "orl_1_0"),
+                "tipo": _value(row, "tipo"),
+                "familia": _value(row, "familia"),
+                "comp_mp": _value(row, "comp_mp") or None,
+                "larg_mp": _value(row, "larg_mp") or None,
+                "esp_mp": _value(row, "esp_mp") or None,
+                "id_mp": _value(row, "id_mp"),
+                "nao_stock": bool(_value(row, "nao_stock")),
+                "reserva_1": _value(row, "reserva_1"),
+                "reserva_2": _value(row, "reserva_2"),
+                "reserva_3": _value(row, "reserva_3"),
             }
         )
     else:
-        preco_tab = _ensure_decimal(row.get("preco_tab"))
-        margem = _ensure_percent(row.get("margem"))
-        desconto = _ensure_percent(row.get("desconto"))
-        preco_liq = _ensure_decimal(row.get("preco_liq"))
+        preco_tab = _ensure_decimal(_value(row, "preco_tab"))
+        margem = _ensure_percent(_value(row, "margem"))
+        desconto = _ensure_percent(_value(row, "desconto"))
+        preco_liq = _ensure_decimal(_value(row, "preco_liq"))
         if preco_liq is None:
             preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
         payload.update(
             {
-                "categoria": row.get("categoria"),
-                "descricao": row.get("descricao"),
-                "referencia": row.get("referencia"),
-                "fornecedor": row.get("fornecedor"),
+                "categoria": _value(row, "categoria"),
+                "descricao": _value(row, "descricao"),
+                "referencia": _value(row, "referencia"),
+                "fornecedor": _value(row, "fornecedor"),
                 "preco_tab": preco_tab,
                 "preco_liq": preco_liq,
                 "margem": margem,
                 "desconto": desconto,
-                "und": row.get("und"),
-                "qt": _ensure_decimal(row.get("qt")),
-                "nao_stock": bool(row.get("nao_stock")),
-                "reserva_1": row.get("reserva_1"),
-                "reserva_2": row.get("reserva_2"),
-                "reserva_3": row.get("reserva_3"),
+                "und": _value(row, "und"),
+                "qt": _ensure_decimal(_value(row, "qt")),
+                "nao_stock": bool(_value(row, "nao_stock")),
+                "reserva_1": _value(row, "reserva_1"),
+                "reserva_2": _value(row, "reserva_2"),
+                "reserva_3": _value(row, "reserva_3"),
             }
         )
     return payload
