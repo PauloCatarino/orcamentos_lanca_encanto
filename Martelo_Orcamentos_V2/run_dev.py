@@ -1,24 +1,30 @@
 # run_dev.py
 
+
+import logging
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
+
 import sys
 from PySide6 import QtWidgets
 from Martelo_Orcamentos_V2.app.db import SessionLocal, init_db
 from Martelo_Orcamentos_V2.ui.login import LoginDialog
 from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
+# Para correr a aplicação em modo desenvolvimento (com recarregamento automático):
+
 
 
 # para testar ->                                     python -m Martelo_Orcamentos_V2.run_dev
 
-#(.venv) PS C:\Users\Utilizador\Documents\ORCAMENTOS_LE\ORCAMENTOS_LE\orcamentos_lanca_encanto>python -m Martelo_Orcamentos_V2.run_dev → Usar como módulo, mas tens de estar na pasta acima.
+#(.venv_Martelo) PS C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2> python -m Martelo_Orcamentos_V2.run_dev
 
 
 
-# Ativar o ambiente virtual powershell  ->          .\.venv\Scripts\Activate.ps1
+# Ativar o ambiente virtual powershell  ->          .\.venv_Martelo\Scripts\Activate.ps1
 
 '''
 git add .
-git commit -m "299 Commit"
+git commit -m "301"
 git push origin main
 
 '''
