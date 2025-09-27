@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, String, Numeric, Text, Integer, ForeignKey, DateTime
+﻿from sqlalchemy import Column, BigInteger, String, Numeric, Text, Integer, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from ..db import Base
 
@@ -40,7 +40,7 @@ class MateriaPrima(Base):
 class MateriaPrimaPreference(Base):
     __tablename__ = "materia_prima_preferences"
 
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    columns = Column(Text, nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    user_id   = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    columns   = Column(Text, nullable=False)
+    updated_at = Column(DateTime, server_default=func.now())
 

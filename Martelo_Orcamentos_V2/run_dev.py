@@ -16,7 +16,7 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 
 
-# para testar ->                                        python -m Martelo_Orcamentos_V2.run_dev                     
+# para testar ->                                        python -m Martelo_Orcamentos_V2.run_dev                  
 
 
 #(.venv_Martelo) PS C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2> python -m Martelo_Orcamentos_V2.run_dev
@@ -30,7 +30,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "309"
+git commit -m "310"
 git push origin main
 
 '''
