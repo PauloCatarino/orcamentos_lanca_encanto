@@ -21,6 +21,47 @@ from ..models import (
 )
 
 MATERIAIS_GRUPOS: Sequence[str] = (
+    "Costas",
+    "Laterais",
+    "Divisórias",
+    "Tetos",
+    "Fundos",
+    "Prateleiras Fixas",
+    "Prateleiras Amovíveis",
+    "Prateleiras Parede",
+    "Prateleiras",
+    "Portas Abrir",
+    "Portas Correr",
+    "Painéis",
+    "Laterais Acabamento",
+    "Tetos Acabamento",
+    "Fundos Acabamento",
+    "Costas Acabamento",
+    "Prateleiras Acabamento",
+    "Painéis Acabamento",
+    "Remates Verticais",
+    "Remates Horizontais",
+    "Guarnições Produzidas",
+    "Enchimentos Guarnições",
+    "Rodapé AGL",
+    "Gaveta Frente",
+    "Gaveta Caixa",
+    "Gaveta Fundo",
+    "Prumos",
+    "Travessas",
+    "Material_Livre_1",
+    "Material_Livre_2",
+    "Material_Livre_3",
+    "Material_Livre_4",
+    "Material_Livre_5",
+    "Material_Livre_6",
+    "Material_Livre_7",
+    "Material_Livre_8",
+    "Material_Livre_9",
+    "Material_Livre_10",
+)
+
+LEGACY_MATERIAIS_GRUPOS: Sequence[str] = (
     "Mat_Costas",
     "Mat_Laterais",
     "Mat_Divisorias",
@@ -49,6 +90,16 @@ MATERIAIS_GRUPOS: Sequence[str] = (
     "Mat_Livre_5",
 )
 
+LEGACY_TO_NEW = {old: new for old, new in zip(LEGACY_MATERIAIS_GRUPOS, MATERIAIS_GRUPOS)}
+
+
+def _normalize_grupo_material(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return value
+    return LEGACY_TO_NEW.get(value, value)
+
+
+
 MENU_MATERIAIS = "materiais"
 MENU_FERRAGENS = "ferragens"
 MENU_SIS_CORRER = "sistemas_correr"
@@ -62,6 +113,12 @@ MODEL_MAP = {
 }
 
 DECIMAL_ZERO = Decimal("0")
+
+
+def _json_ready(value: Any):
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
 
 
 @dataclass
@@ -164,30 +221,36 @@ def _rows_to_dict(rows: Iterable[Any], *, menu: str) -> List[Dict[str, Any]]:
             "ordem": getattr(row, "ordem", 0) or 0,
         }
         if menu == MENU_MATERIAIS:
+            preco_tab = _ensure_decimal(row.get("preco_tab"))
+            margem = _ensure_percent(row.get("margem"))
+            desconto = _ensure_percent(row.get("desconto"))
+            preco_liq = _ensure_decimal(row.get("preco_liq"))
+            if preco_liq is None:
+                preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
             payload.update(
                 {
-                    "grupo_material": row.grupo_material,
-                    "descricao": row.descricao,
-                    "ref_le": row.ref_le,
-                    "descricao_material": row.descricao_material,
-                    "preco_tab": row.preco_tab,
-                    "preco_liq": row.preco_liq,
-                    "margem": row.margem,
-                    "desconto": row.desconto,
-                    "und": row.und,
-                    "desp": row.desp,
-                    "orl_0_4": row.orl_0_4,
-                    "orl_1_0": row.orl_1_0,
-                    "tipo": row.tipo,
-                    "familia": row.familia,
-                    "comp_mp": row.comp_mp,
-                    "larg_mp": row.larg_mp,
-                    "esp_mp": row.esp_mp,
-                    "id_mp": row.id_mp,
-                    "nao_stock": bool(row.nao_stock),
-                    "reserva_1": row.reserva_1,
-                    "reserva_2": row.reserva_2,
-                    "reserva_3": row.reserva_3,
+                    "grupo_material": _normalize_grupo_material(row.get("grupo_material")),
+                    "descricao": row.get("descricao"),
+                    "ref_le": row.get("ref_le"),
+                    "descricao_material": row.get("descricao_material"),
+                    "preco_tab": preco_tab,
+                    "preco_liq": preco_liq,
+                    "margem": margem,
+                    "desconto": desconto,
+                    "und": row.get("und"),
+                    "desp": _ensure_percent(row.get("desp")),
+                    "orl_0_4": row.get("orl_0_4"),
+                    "orl_1_0": row.get("orl_1_0"),
+                    "tipo": row.get("tipo"),
+                    "familia": row.get("familia") or "PLACAS",
+                    "comp_mp": row.get("comp_mp") or None,
+                    "larg_mp": row.get("larg_mp") or None,
+                    "esp_mp": row.get("esp_mp") or None,
+                    "id_mp": row.get("id_mp"),
+                    "nao_stock": bool(row.get("nao_stock")),
+                    "reserva_1": row.get("reserva_1"),
+                    "reserva_2": row.get("reserva_2"),
+                    "reserva_3": row.get("reserva_3"),
                 }
             )
         else:
@@ -247,7 +310,7 @@ def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, Lis
                 "orl_0_4": None,
                 "orl_1_0": None,
                 "tipo": None,
-                "familia": None,
+                "familia": "PLACAS",
                 "comp_mp": None,
                 "larg_mp": None,
                 "esp_mp": None,
@@ -379,12 +442,13 @@ def guardar_modelo(
     db.add(modelo)
     db.flush()
     for ordem, linha in enumerate(linhas):
+        serializado = {chave: _json_ready(valor) for chave, valor in dict(linha).items()}
         db.add(
             DadosGeraisModeloItem(
                 modelo_id=modelo.id,
                 tipo_menu=tipo_menu,
                 ordem=ordem,
-                dados=json.dumps(linha),
+                dados=json.dumps(serializado),
             )
         )
     db.flush()

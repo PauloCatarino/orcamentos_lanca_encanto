@@ -28,7 +28,7 @@ class Orcamento(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     ano = Column(String(4), nullable=False, index=True)
     num_orcamento = Column(String(16), nullable=False, index=True)
-    versao = Column(String(2), nullable=False, default="00", index=True)
+    versao = Column(String(2), nullable=False, default="01", index=True)
     client_id = Column(BigInteger, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
     status = Column(String(32), nullable=True)  # Falta Orçamentar; Enviado; Adjudicado; Sem Interesse; Não Adjudicado
     data = Column(String(10), nullable=True)  # dd-mm-aaaa

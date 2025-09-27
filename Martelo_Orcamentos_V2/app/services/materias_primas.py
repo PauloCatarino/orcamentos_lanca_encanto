@@ -120,9 +120,19 @@ def set_user_columns(db: Session, user_id: int, columns: Sequence[str]) -> None:
     db.flush()
 
 
-def list_materias_primas(db: Session, query: str | None = None) -> List[MateriaPrima]:
+def list_materias_primas(
+    db: Session,
+    query: str | None = None,
+    *,
+    tipo: Optional[str] = None,
+    familia: Optional[str] = None,
+) -> List[MateriaPrima]:
     query = (query or "").strip()
     stmt = select(MateriaPrima)
+    if tipo:
+        stmt = stmt.where(MateriaPrima.tipo == tipo)
+    if familia:
+        stmt = stmt.where(MateriaPrima.familia == familia)
     if query:
         terms = [term.strip() for term in query.split('%') if term.strip()]
         if terms:
@@ -130,7 +140,7 @@ def list_materias_primas(db: Session, query: str | None = None) -> List[MateriaP
     stmt = stmt.order_by(MateriaPrima.descricao_orcamento)
     rows = db.execute(stmt).scalars().all()
     if query and not rows:
-        rows = _fuzzy_search(db, query)
+        rows = _fuzzy_search(db, query, tipo=tipo, familia=familia)
     return rows
 
 
@@ -152,8 +162,13 @@ def _build_search_filter(terms: Sequence[str]):
     return combined
 
 
-def _fuzzy_search(db: Session, raw_query: str) -> List[MateriaPrima]:
-    rows = db.execute(select(MateriaPrima)).scalars().all()
+def _fuzzy_search(db: Session, raw_query: str, *, tipo: Optional[str] = None, familia: Optional[str] = None) -> List[MateriaPrima]:
+    stmt = select(MateriaPrima)
+    if tipo:
+        stmt = stmt.where(MateriaPrima.tipo == tipo)
+    if familia:
+        stmt = stmt.where(MateriaPrima.familia == familia)
+    rows = db.execute(stmt).scalars().all()
     if not rows:
         return []
     terms = [t.strip().lower() for t in raw_query.split('%') if t.strip()]

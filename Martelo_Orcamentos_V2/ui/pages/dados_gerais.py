@@ -36,6 +36,7 @@ class ColumnSpec:
     width: Optional[int] = None
     readonly: bool = False
     options: Optional[Callable[[], Sequence[str]]] = None
+    visible: bool = True
 
 
 def _decimal(value: Optional[Decimal]) -> str:
@@ -51,7 +52,8 @@ def _money(value: Optional[Decimal]) -> str:
     if value in (None, ""):
         return ""
     try:
-        return f"{Decimal(value):.2f}"
+        amount = Decimal(value)
+        return f"{amount:.2f}€"
     except Exception:
         return str(value)
 
@@ -73,15 +75,27 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent)
         self._options_cb = options_cb
 
+    def paint(self, painter, option, index):
+        combo_opt = QtWidgets.QStyleOptionComboBox()
+        combo_opt.rect = option.rect
+        combo_opt.state = option.state
+        combo_opt.currentText = index.data(Qt.DisplayRole) or ""
+        combo_opt.editable = False
+        style = QtWidgets.QApplication.style()
+        painter.save()
+        style.drawComplexControl(QtWidgets.QStyle.ComplexControl.CC_ComboBox, combo_opt, painter)
+        style.drawControl(QtWidgets.QStyle.ControlElement.CE_ComboBoxLabel, combo_opt, painter)
+        painter.restore()
+
     def createEditor(self, parent, option, index):
         editor = QtWidgets.QComboBox(parent)
         editor.setEditable(False)
-        self._refresh(editor)
+        self._refresh(editor, index.data(Qt.DisplayRole))
         return editor
 
     def setEditorData(self, editor, index):
         value = index.model().data(index, Qt.EditRole) or ""
-        self._refresh(editor)
+        self._refresh(editor, value)
         pos = editor.findText(str(value))
         if pos < 0:
             editor.setCurrentIndex(-1)
@@ -95,13 +109,15 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
     def updateEditorGeometry(self, editor, option, index):
         editor.setGeometry(option.rect)
 
-    def _refresh(self, editor: QtWidgets.QComboBox) -> None:
-        options = list(self._options_cb() or [])
-        current = editor.currentText()
+    def _refresh(self, editor: QtWidgets.QComboBox, current_value: Optional[str]) -> None:
+        options = list(dict.fromkeys(self._options_cb() or []))
+        current = (current_value or "").strip()
+        if current and current not in options:
+            options.insert(0, current)
         editor.blockSignals(True)
         editor.clear()
         editor.addItems(options)
-        idx = editor.findText(current)
+        idx = editor.findText(current) if current else -1
         if idx >= 0:
             editor.setCurrentIndex(idx)
         editor.blockSignals(False)
@@ -136,7 +152,7 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
             if spec.kind == "percent":
                 return _percent(value)
             if spec.kind == "bool":
-                return "Sim" if value else "Não"
+                return ""
             return "" if value is None else str(value)
 
         if role == Qt.EditRole:
@@ -160,6 +176,8 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
         if role == Qt.TextAlignmentRole:
             if spec.kind in {"money", "decimal", "percent", "integer"}:
                 return int(Qt.AlignRight | Qt.AlignVCenter)
+            if spec.kind == "bool":
+                return int(Qt.AlignCenter | Qt.AlignVCenter)
 
         return None
 
@@ -219,10 +237,16 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
         if value in (None, ""):
             return None
         try:
-            text = str(value).strip().replace("€", "").replace(",", ".")
+            text = str(value).strip()
+            text = text.replace('€', '')
+            text = text.replace('EUR', '')
+            text = text.replace(' ', '')
+            text = text.replace(',', '.')
             return Decimal(text)
         except Exception:
             return None
+
+
 
     def _parse_percent(self, value) -> Optional[Decimal]:
         if value in (None, ""):
@@ -314,11 +338,13 @@ class MateriaisTableModel(DadosGeraisTableModel):
 
 
 class MateriaPrimaPicker(QDialog):
-    def __init__(self, session, parent=None):
+    def __init__(self, session, parent=None, *, tipo: Optional[str] = None, familia: Optional[str] = None):
         super().__init__(parent)
         self.session = session
+        self.filter_tipo = (tipo or "").strip() or None
+        self.filter_familia = (familia or "").strip() or None
         self.setWindowTitle("Selecionar Matéria-Prima")
-        self.resize(900, 500)
+        self.resize(1200, 700)
 
         layout = QVBoxLayout(self)
         search_layout = QHBoxLayout()
@@ -326,12 +352,26 @@ class MateriaPrimaPicker(QDialog):
         self.ed_search.setPlaceholderText("Pesquisar... use % para vários termos")
         btn_search = QPushButton("Pesquisar")
         btn_search.clicked.connect(self.refresh)
+        btn_clear = QPushButton("Limpar Filtro")
+        btn_clear.clicked.connect(self.on_clear_filters)
+
         search_layout.addWidget(self.ed_search, 1)
         search_layout.addWidget(btn_search)
+        search_layout.addWidget(btn_clear)
+
+        self.lbl_filters = QLabel()
+        self.lbl_filters.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._update_filter_label()
+
+        self._search_timer = QtCore.QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self.refresh)
+        self.ed_search.textChanged.connect(self._on_search_text_changed)
 
         self.table = QTableView(self)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.table.setSortingEnabled(True)
         self.table.doubleClicked.connect(self.accept)
 
         columns = [
@@ -346,6 +386,7 @@ class MateriaPrimaPicker(QDialog):
         self.table.setModel(self.model)
 
         layout.addLayout(search_layout)
+        layout.addWidget(self.lbl_filters)
         layout.addWidget(self.table, 1)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -355,11 +396,31 @@ class MateriaPrimaPicker(QDialog):
 
         self.refresh()
 
+    def _on_search_text_changed(self, _text: str) -> None:
+        self._search_timer.start(250)
+
+    def _update_filter_label(self) -> None:
+        tipo = self.filter_tipo or "(todos os tipos)"
+        familia = self.filter_familia or "(todas as famílias)"
+        self.lbl_filters.setText(f"Filtro atual: Tipo {tipo} | Família {familia}")
+
+    def on_clear_filters(self) -> None:
+        self.filter_tipo = None
+        self.filter_familia = None
+        self._update_filter_label()
+        self.refresh()
+
     def refresh(self):
-        rows = svc_mp.list_materias_primas(self.session, self.ed_search.text())
+        rows = svc_mp.list_materias_primas(
+            self.session,
+            self.ed_search.text(),
+            tipo=self.filter_tipo,
+            familia=self.filter_familia,
+        )
         self.model.set_rows(rows)
         if rows:
             self.table.selectRow(0)
+        self._update_filter_label()
 
     def selected(self):
         idx = self.table.currentIndex()
@@ -372,6 +433,8 @@ class MateriaPrimaPicker(QDialog):
             QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione uma matéria-prima")
             return
         super().accept()
+
+
 
 
 class DadosGeraisPage(QtWidgets.QWidget):
@@ -441,17 +504,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             toolbar = QHBoxLayout()
             toolbar.setSpacing(6)
-            btn_add = QPushButton("Adicionar")
-            btn_add.clicked.connect(lambda _, k=key: self.on_add_row(k))
-            btn_del = QPushButton("Remover")
-            btn_del.clicked.connect(lambda _, k=key: self.on_del_row(k))
             btn_save_model = QPushButton("Guardar Modelo")
             btn_save_model.clicked.connect(lambda _, k=key: self.on_guardar_modelo(k))
             btn_import_model = QPushButton("Importar Modelo")
             btn_import_model.clicked.connect(lambda _, k=key: self.on_importar_modelo(k))
 
-            toolbar.addWidget(btn_add)
-            toolbar.addWidget(btn_del)
             toolbar.addWidget(btn_save_model)
             toolbar.addWidget(btn_import_model)
             toolbar.addStretch(1)
@@ -491,28 +548,28 @@ class DadosGeraisPage(QtWidgets.QWidget):
     def _create_model(self, key: str) -> DadosGeraisTableModel:
         if key == svc_dg.MENU_MATERIAIS:
             columns = [
-                ColumnSpec("Materiais", "grupo_material", "choice", width=160, options=lambda: svc_dg.MATERIAIS_GRUPOS),
-                ColumnSpec("Descrição", "descricao", width=220),
-                ColumnSpec("Ref_LE", "ref_le", width=110),
-                ColumnSpec("Descrição Material", "descricao_material", width=240),
-                ColumnSpec("Preço Tab", "preco_tab", "money", width=100),
-                ColumnSpec("Preço Liq", "preco_liq", "money", width=100, readonly=True),
+                ColumnSpec("Materiais", "grupo_material", width=200, readonly=True),
+                ColumnSpec("Descrição", "descricao", width=240),
+                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
+                ColumnSpec("Descrição Material", "descricao_material", width=260),
+                ColumnSpec("Preço Tab", "preco_tab", "money", width=110),
+                ColumnSpec("Preço Liq", "preco_liq", "money", width=110, readonly=True),
                 ColumnSpec("Margem", "margem", "percent", width=90),
                 ColumnSpec("Desconto", "desconto", "percent", width=90),
                 ColumnSpec("Und", "und", width=60),
-                ColumnSpec("Desp", "percent", width=80),
-                ColumnSpec("ORL 0.4", "orl_0_4", width=100),
-                ColumnSpec("ORL 1.0", "orl_1_0", width=100),
-                ColumnSpec("Tipo", "tipo", "choice", width=120, options=self._tipos_options),
+                ColumnSpec("Desp", "percent", width=90),
+                ColumnSpec("ORL 0.4", "orl_0_4", width=110),
+                ColumnSpec("ORL 1.0", "orl_1_0", width=110),
+                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
                 ColumnSpec("Família", "familia", "choice", width=120, options=self._familias_options),
-                ColumnSpec("Comp MP", "comp_mp", "integer", width=90),
-                ColumnSpec("Larg MP", "larg_mp", "integer", width=90),
-                ColumnSpec("Esp MP", "esp_mp", "integer", width=90),
-                ColumnSpec("ID MP", "id_mp", width=100, readonly=True),
-                ColumnSpec("Não Stock", "nao_stock", "bool", width=80),
-                ColumnSpec("Reserva 1", "reserva_1", width=140),
-                ColumnSpec("Reserva 2", "reserva_2", width=140),
-                ColumnSpec("Reserva 3", "reserva_3", width=140),
+                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
+                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
+                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
+                ColumnSpec("ID MP", "id_mp", width=110, readonly=True),
+                ColumnSpec("Não Stock", "nao_stock", "bool", width=70),
+                ColumnSpec("Reserva 1", "reserva_1", visible=False),
+                ColumnSpec("Reserva 2", "reserva_2", visible=False),
+                ColumnSpec("Reserva 3", "reserva_3", visible=False),
             ]
             return MateriaisTableModel(columns=columns, parent=self)
 
@@ -538,6 +595,9 @@ class DadosGeraisPage(QtWidgets.QWidget):
         table = self.tables[key]
         model = self.models[key]
         for idx, spec in enumerate(model.columns):
+            if not spec.visible:
+                table.setColumnHidden(idx, True)
+                continue
             if spec.options:
                 delegate = ChoiceDelegate(spec.options, parent=table)
                 table.setItemDelegateForColumn(idx, delegate)
@@ -549,10 +609,10 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 table.setColumnWidth(idx, spec.width)
 
     def _tipos_options(self) -> Sequence[str]:
-        return self._tipos_cache
+        return self._tipos_cache or []
 
     def _familias_options(self) -> Sequence[str]:
-        return self._familias_cache
+        return self._familias_cache or ["PLACAS"]
 
     # ------------------------------------------------------------------ Data flow
     def load_orcamento(self, orcamento_id: int) -> None:
@@ -595,10 +655,18 @@ class DadosGeraisPage(QtWidgets.QWidget):
     def _carregar_tipos_familias(self) -> None:
         try:
             self._tipos_cache = svc_mp.listar_tipos(self.session)
-            self._familias_cache = svc_mp.listar_familias(self.session)
         except Exception:
             self._tipos_cache = []
-            self._familias_cache = []
+        try:
+            familias = svc_mp.listar_familias(self.session)
+        except Exception:
+            familias = []
+        self._familias_cache = ["PLACAS"]
+        if familias:
+            if "PLACAS" in familias:
+                self._familias_cache = ["PLACAS"]
+            else:
+                self._familias_cache = ["PLACAS"]
 
     # ------------------------------------------------------------------ Actions
     def on_guardar(self):
@@ -708,13 +776,19 @@ class DadosGeraisPage(QtWidgets.QWidget):
         if not idx.isValid():
             QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione uma linha.")
             return
-        picker = MateriaPrimaPicker(self.session, self)
+        current_row = model.row_at(idx.row())
+        picker = MateriaPrimaPicker(
+            self.session,
+            parent=self,
+            tipo=current_row.get("tipo"),
+            familia=current_row.get("familia") or "PLACAS",
+        )
         if picker.exec() != QDialog.Accepted:
             return
         materia = picker.selected()
         if not materia:
             return
-        row_data = {
+        update_data = {
             "ref_le": materia.ref_le,
             "descricao_material": materia.descricao_orcamento,
             "preco_tab": materia.preco_tabela,
@@ -726,13 +800,14 @@ class DadosGeraisPage(QtWidgets.QWidget):
             "orl_0_4": materia.orl_0_4,
             "orl_1_0": materia.orl_1_0,
             "tipo": materia.tipo,
-            "familia": materia.familia,
+            "familia": materia.familia or current_row.get("familia"),
             "comp_mp": int(materia.comp_mp) if materia.comp_mp not in (None, "") else None,
             "larg_mp": int(materia.larg_mp) if materia.larg_mp not in (None, "") else None,
             "esp_mp": int(materia.esp_mp) if materia.esp_mp not in (None, "") else None,
             "id_mp": materia.id_mp,
+            "nao_stock": bool(getattr(materia, 'nao_stock', False)),
         }
-        model.update_row(idx.row(), row_data)
+        model.update_row(idx.row(), update_data)
         model.recalculate(idx.row())
 
     # ------------------------------------------------------------------ Cleanup

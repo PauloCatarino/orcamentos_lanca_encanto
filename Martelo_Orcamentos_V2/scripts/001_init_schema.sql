@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS orcamentos (
 CREATE TABLE IF NOT EXISTS orcamento_items (
   id_item BIGINT AUTO_INCREMENT PRIMARY KEY,
   id_orcamento BIGINT NOT NULL,
+  versao CHAR(2) NOT NULL DEFAULT '01',
   item_ord INT NOT NULL DEFAULT 1,
   item VARCHAR(255),
   codigo VARCHAR(64),

@@ -130,8 +130,8 @@ class DadosGeraisModelo(Base):
 class DadosGeraisModeloItem(Base):
     __tablename__ = "dados_gerais_modelo_items"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    modelo_id = Column(Integer, ForeignKey("dados_gerais_modelos.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    modelo_id = Column(BigInteger, ForeignKey("dados_gerais_modelos.id", ondelete="CASCADE"), nullable=False, index=True)
     tipo_menu = Column(String(32), nullable=False)
     ordem = Column(Integer, nullable=False, default=0)
     dados = Column(Text, nullable=False)
