@@ -9,5 +9,12 @@ from .item_children import (
     DadosItemsSistemasCorrer,
     DadosItemsAcabamentos,
 )
-
 from .materia_prima import MateriaPrima, MateriaPrimaPreference
+from .dados_gerais import (
+    DadosGeraisMaterial,
+    DadosGeraisFerragem,
+    DadosGeraisSistemaCorrer,
+    DadosGeraisAcabamento,
+    DadosGeraisModelo,
+    DadosGeraisModeloItem,
+)

@@ -34,7 +34,7 @@ def init_db():
     try:
         # Importar modelos para registar as tabelas
         try:
-            from .models import user, client, orcamento, item_children, app_setting, materia_prima  # noqa: F401
+            from .models import user, client, orcamento, item_children, app_setting, materia_prima, dados_gerais  # noqa: F401
         except Exception:
             pass
         Base.metadata.create_all(bind=engine)
@@ -65,4 +65,5 @@ def test_connection():
     except SQLAlchemyError as e:
         logger.error("Falha na ligação: %s", e)
         raise
+
 

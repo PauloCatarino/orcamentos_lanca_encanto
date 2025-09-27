@@ -230,3 +230,27 @@ def import_materias_primas(db: Session, base_path: Optional[str] = None) -> int:
 
 
 
+
+def get_materia_prima_by_ref_le(db: Session, ref_le: str | None):
+    if not (ref_le or "").strip():
+        return None
+    return db.execute(
+        select(MateriaPrima).where(MateriaPrima.ref_le == ref_le.strip())
+    ).scalar_one_or_none()
+
+
+def get_materia_prima_by_id(db: Session, id_mp: str | None):
+    if not (id_mp or "").strip():
+        return None
+    return db.get(MateriaPrima, id_mp.strip())
+
+
+def listar_tipos(db: Session) -> List[str]:
+    stmt = select(MateriaPrima.tipo).where(MateriaPrima.tipo.isnot(None)).distinct().order_by(MateriaPrima.tipo)
+    return [row[0] for row in db.execute(stmt).all() if row[0]]
+
+
+def listar_familias(db: Session) -> List[str]:
+    stmt = select(MateriaPrima.familia).where(MateriaPrima.familia.isnot(None)).distinct().order_by(MateriaPrima.familia)
+    return [row[0] for row in db.execute(stmt).all() if row[0]]
+
