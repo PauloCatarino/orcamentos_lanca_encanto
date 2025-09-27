@@ -1,13 +1,14 @@
-﻿from __future__ import annotations
+﻿# ui/pages/materias_primas.py
+from __future__ import annotations
 
 import os
 import subprocess
 import sys
 from decimal import Decimal
 from typing import List
-from pathlib import Path  # <-- adicionar
+from pathlib import Path
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHeaderView, QMessageBox, QStyle
 
@@ -25,8 +26,9 @@ from Martelo_Orcamentos_V2.app.services.materias_primas import (
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
 from ..models.qt_table import SimpleTableModel
 
-
+# ----------------- helpers de formatação -----------------
 def _format_decimal(value, places: int = 2) -> str:
+    """Decimal com N casas, usado como fallback geral."""
     if value in (None, ""):
         return ""
     try:
@@ -38,7 +40,34 @@ def _format_decimal(value, places: int = 2) -> str:
         except Exception:
             return str(value)
 
+def _fmt_eur(v) -> str:
+    """Moeda em euros com 2 casas (ex.: 12.36€)."""
+    if v in (None, ""):
+        return ""
+    d = Decimal(str(v))
+    return f"{d:.2f}€"
 
+def _fmt_pct(v) -> str:
+    """Percentagem com 2 casas (assume base fracionária: 0.10 → 10.00%)."""
+    if v in (None, ""):
+        return ""
+    d = Decimal(str(v)) * Decimal("100")
+    return f"{d:.2f}%"
+
+def _fmt_int(v) -> str:
+    """Inteiro sem casas (para dimensões de placas)."""
+    if v in (None, ""):
+        return ""
+    try:
+        d = Decimal(str(v))
+        return f"{int(d)}"
+    except Exception:
+        try:
+            return f"{int(float(v))}"
+        except Exception:
+            return str(v)
+
+# ----------------- diálogo de colunas -----------------
 class ColumnSelectorDialog(QtWidgets.QDialog):
     def __init__(self, columns: List[str], selected: List[str], parent=None):
         super().__init__(parent)
@@ -67,22 +96,26 @@ class ColumnSelectorDialog(QtWidgets.QDialog):
                 result.append(item.text())
         return result
 
-
+# ----------------- página -----------------
 class MateriasPrimasPage(QtWidgets.QWidget):
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
         self.current_user = current_user
         self.db = SessionLocal()
+
+        # Metadados de colunas vindos do serviço (header, attr, kind...)
         self.columns_meta = list(get_all_columns())
         user_id = getattr(self.current_user, "id", None)
         self.visible_columns = get_user_columns(self.db, user_id)
 
+        # Pesquisar com pequeno debounce
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self.refresh_table)
 
         style = self.style()
 
+        # ---- Barra superior ----
         header_widget = QtWidgets.QWidget()
         header_layout = QtWidgets.QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -115,21 +148,41 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         header_layout.addWidget(btn_columns)
         header_layout.addWidget(self.lbl_path, 1)
 
+        # ---- Modelo + Proxy (para ordenar por valor cru) ----
         model_columns = []
         for col in self.columns_meta:
-            formatter = _format_decimal if col.kind == "numeric" else None
-            model_columns.append((col.header, col.attr, formatter))
+            fmt = None
+            # Moeda
+            if col.header in ("PRECO_TABELA", "PLIQ"):
+                fmt = _fmt_eur
+            # Percentagens
+            elif col.header in ("MARGEM", "DESCONTO", "DESP"):
+                fmt = _fmt_pct
+            # Dimensões inteiras
+            elif col.header in ("COMP_MP", "LARG_MP", "ESP_MP"):
+                fmt = _fmt_int
+            # Números restantes: 2 casas
+            elif getattr(col, "kind", None) == "numeric":
+                fmt = lambda v, p=2: _format_decimal(v, p)
+            model_columns.append((col.header, col.attr, fmt))
 
         self.model = SimpleTableModel(columns=model_columns)
 
+        self.proxy = QtCore.QSortFilterProxyModel(self)
+        self.proxy.setSourceModel(self.model)
+        self.proxy.setSortRole(Qt.UserRole)  # usa valor cru
+        self.proxy.setDynamicSortFilter(True)
+
+        # ---- Tabela ----
         self.table = QtWidgets.QTableView(self)
-        self.table.setModel(self.model)
+        self.table.setModel(self.proxy)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.doubleClicked.connect(self._show_readonly_message)
         self.table.setWordWrap(True)
         self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)  # ativa ordenação por cabeçalho
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
@@ -137,7 +190,9 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         header_font = header.font()
         header_font.setBold(True)
         header.setFont(header_font)
+        header.setSortIndicatorShown(True)
 
+        # Larguras iniciais (mantidas, ajusta à vontade)
         self.column_widths = {
             "ID_MP": 90,
             "REF_PHC": 100,
@@ -177,14 +232,17 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         self.table.verticalHeader().setDefaultSectionSize(24)
         self.table.setFocusPolicy(Qt.NoFocus)
 
+        # Layout final
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(8)
         layout.addWidget(header_widget)
         layout.addWidget(self.table, 1)
 
+        # Primeira carga
         self.refresh_table()
 
+    # ----------------- ações -----------------
     def _current_excel_path(self) -> str:
         try:
             base = get_base_path(self.db)
@@ -264,10 +322,7 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         finally:
             super().closeEvent(event)
 
-
+# Nome do ficheiro Excel esperado
 MATERIA_PRIMA_FILENAME = "TAB_MATERIAS_PRIMAS.xlsm"
-
-
-
-
-
+# Nome da folha dentro do Excel
+MATERIA_PRIMA_SHEETNAME = "MAT_PRIMAS"
