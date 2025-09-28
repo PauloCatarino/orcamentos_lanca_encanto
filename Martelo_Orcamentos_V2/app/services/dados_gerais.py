@@ -263,8 +263,13 @@ def _value(row: Any, attr: str):
 def _ensure_decimal(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    text_value = text_value.replace("%", "").replace("€", "").replace(" ", "")
+    text_value = text_value.replace(",", ".")
     try:
-        dec = Decimal(str(value).replace("%", "").replace("€", "").replace(",", "."))
+        dec = Decimal(text_value)
         return dec.quantize(Decimal("0.0001"))
     except Exception:
         return None
@@ -273,8 +278,13 @@ def _ensure_decimal(value: Any) -> Optional[Decimal]:
 def _ensure_percent(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    text_value = text_value.replace("%", "").replace(" ", "")
+    text_value = text_value.replace(",", ".")
     try:
-        dec = Decimal(str(value).replace("%", "").replace(",", "."))
+        dec = Decimal(text_value)
     except Exception:
         return None
     if dec > 1:
