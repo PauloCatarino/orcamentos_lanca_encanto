@@ -59,6 +59,8 @@ MATERIAIS_GRUPOS: Sequence[str] = (
     "Material_Livre_8",
     "Material_Livre_9",
     "Material_Livre_10",
+    "Espelho",
+    "Vidro",
 )
 
 LEGACY_MATERIAIS_GRUPOS: Sequence[str] = (
@@ -319,9 +321,16 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
         return _ensure_decimal(value)
     if field in types["bool"]:
         if isinstance(value, str):
-            value = value.strip()
+            value = value.strip().lower()
+            if value in ("true", "sim", "yes", "1"):
+                return True
+            if value in ("false", "nao", "não", "no", "0"):
+                return False
         if isinstance(value, (int, float, Decimal)):
-            return bool(Decimal(str(value)))
+            try:
+                return bool(Decimal(str(value)))
+            except Exception:
+                return False
         return bool(value)
     return value
 
