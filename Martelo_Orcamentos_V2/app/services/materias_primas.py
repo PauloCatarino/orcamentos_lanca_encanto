@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from difflib import SequenceMatcher
-from typing import Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from openpyxl import load_workbook
 from sqlalchemy import cast, select, or_, String
@@ -88,36 +88,92 @@ def get_all_columns() -> Sequence[MateriaPrimaColumn]:
     return COLUMN_DEFS
 
 
-def get_user_columns(db: Session, user_id: Optional[int]) -> List[str]:
+def get_user_layout(db: Session, user_id: Optional[int]) -> MateriaPrimaLayout:
+    layout = MateriaPrimaLayout(
+        visible=list(DEFAULT_VISIBLE_COLUMNS),
+        order=list(DEFAULT_ORDER),
+        widths={},
+    )
     if not user_id:
-        return list(DEFAULT_VISIBLE_COLUMNS)
+        return layout
     pref = db.execute(
         select(MateriaPrimaPreference).where(MateriaPrimaPreference.user_id == user_id)
     ).scalar_one_or_none()
-    if pref:
-        try:
-            data = json.loads(pref.columns)
-            if isinstance(data, list) and data:
-                return [col for col in data if any(c.header == col for c in COLUMN_DEFS)]
-        except json.JSONDecodeError:
-            pass
-    return list(DEFAULT_VISIBLE_COLUMNS)
+    if not pref or not pref.columns:
+        return layout
+    try:
+        data = json.loads(pref.columns)
+    except json.JSONDecodeError:
+        return layout
+    if isinstance(data, list):
+        visible = [col for col in data if col in DEFAULT_ORDER]
+        if visible:
+            layout.visible = visible
+        return layout
+    if isinstance(data, dict):
+        visible = [col for col in data.get("visible", []) if col in DEFAULT_ORDER]
+        order = [col for col in data.get("order", []) if col in DEFAULT_ORDER]
+        raw_widths = data.get("widths", {})
+        widths: Dict[str, int] = {}
+        for key, value in raw_widths.items():
+            if key in DEFAULT_ORDER:
+                try:
+                    widths[key] = int(value)
+                except (TypeError, ValueError):
+                    continue
+        if visible:
+            layout.visible = visible
+        if order:
+            layout.order = order
+        if widths:
+            layout.widths = widths
+    return layout
 
 
-def set_user_columns(db: Session, user_id: int, columns: Sequence[str]) -> None:
-    valid = [col for col in columns if any(c.header == col for c in COLUMN_DEFS)]
-    if not valid:
-        valid = list(DEFAULT_VISIBLE_COLUMNS)
+def save_user_layout(
+    db: Session,
+    user_id: int,
+    *,
+    visible: Optional[Sequence[str]] = None,
+    order: Optional[Sequence[str]] = None,
+    widths: Optional[Mapping[str, int]] = None,
+) -> None:
+    if not user_id:
+        return
+    valid_visible = [col for col in (visible or DEFAULT_VISIBLE_COLUMNS) if col in DEFAULT_ORDER]
+    if not valid_visible:
+        valid_visible = list(DEFAULT_VISIBLE_COLUMNS)
+    valid_order = [col for col in (order or DEFAULT_ORDER) if col in DEFAULT_ORDER]
+    valid_widths: Dict[str, int] = {}
+    if widths:
+        for key, value in widths.items():
+            if key in DEFAULT_ORDER:
+                try:
+                    valid_widths[key] = int(value)
+                except (TypeError, ValueError):
+                    continue
+    payload = json.dumps({
+        "visible": valid_visible,
+        "order": valid_order,
+        "widths": valid_widths,
+    })
     pref = db.execute(
         select(MateriaPrimaPreference).where(MateriaPrimaPreference.user_id == user_id)
     ).scalar_one_or_none()
-    payload = json.dumps(valid)
     if pref:
         pref.columns = payload
     else:
         pref = MateriaPrimaPreference(user_id=user_id, columns=payload)
         db.add(pref)
     db.flush()
+
+
+def get_user_columns(db: Session, user_id: Optional[int]) -> List[str]:
+    return get_user_layout(db, user_id).visible
+
+
+def set_user_columns(db: Session, user_id: int, columns: Sequence[str]) -> None:
+    save_user_layout(db, user_id, visible=columns, order=None, widths=None)
 
 
 def list_materias_primas(
@@ -268,4 +324,8 @@ def listar_tipos(db: Session) -> List[str]:
 def listar_familias(db: Session) -> List[str]:
     stmt = select(MateriaPrima.familia).where(MateriaPrima.familia.isnot(None)).distinct().order_by(MateriaPrima.familia)
     return [row[0] for row in db.execute(stmt).all() if row[0]]
+
+
+
+
 

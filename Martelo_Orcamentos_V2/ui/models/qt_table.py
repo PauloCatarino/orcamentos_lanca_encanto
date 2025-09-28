@@ -111,3 +111,46 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             return str(col)
         # Cabeçalho vertical = número de linha
         return str(section + 1)
+
+    def sort(self, column: int, order: QtCore.Qt.SortOrder = QtCore.Qt.SortOrder.AscendingOrder):
+        if not self._columns or column < 0 or column >= len(self._columns):
+            return
+        col = self._columns[column]
+        if isinstance(col, (tuple, list)):
+            attr = col[1] if len(col) > 1 else None
+        elif isinstance(col, dict):
+            attr = col.get("attr")
+        else:
+            attr = None
+        reverse = order == QtCore.Qt.SortOrder.DescendingOrder
+
+        def raw_value(row):
+            if not attr:
+                return row
+            try:
+                value = getattr(row, attr)
+            except Exception:
+                value = None
+            return value
+
+        def sort_key(row):
+            value = raw_value(row)
+            if value is None:
+                return float('-inf') if reverse else float('inf')
+            if isinstance(value, Decimal):
+                return float(value)
+            if isinstance(value, (int, float)):
+                return value
+            if isinstance(value, str):
+                stripped = value.strip().replace('€', '').replace('%', '').replace(',', '.')
+                try:
+                    return float(stripped)
+                except Exception:
+                    return value
+            return value
+
+        self.layoutAboutToBeChanged.emit()
+        try:
+            self._rows.sort(key=sort_key, reverse=reverse)
+        finally:
+            self.layoutChanged.emit()

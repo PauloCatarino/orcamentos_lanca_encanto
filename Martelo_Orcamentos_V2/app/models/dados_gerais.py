@@ -17,7 +17,7 @@ from ..db import Base
 
 
 class DadosGeraisContextMixin:
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
     cliente_id = Column(BigInteger, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     ano = Column(String(4), nullable=False, index=True)
@@ -120,8 +120,8 @@ class DadosGeraisAcabamento(DadosGeraisContextMixin, Base):
 class DadosGeraisModelo(Base):
     __tablename__ = "dados_gerais_modelos"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     nome_modelo = Column(String(128), nullable=False)
     tipo_menu = Column(String(32), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

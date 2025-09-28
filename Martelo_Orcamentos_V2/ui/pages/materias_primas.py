@@ -18,11 +18,12 @@ from Martelo_Orcamentos_V2.app.services.materias_primas import (
     KEY_MATERIAS_BASE_PATH,
     get_all_columns,
     get_base_path,
-    get_user_columns,
+    get_user_layout,
     import_materias_primas,
     list_materias_primas,
-    set_user_columns,
+    save_user_layout,
 )
+
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
 from ..models.qt_table import SimpleTableModel
 
@@ -105,8 +106,17 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
         # Metadados de colunas vindos do serviço (header, attr, kind...)
         self.columns_meta = list(get_all_columns())
-        user_id = getattr(self.current_user, "id", None)
-        self.visible_columns = get_user_columns(self.db, user_id)
+        self.user_id = getattr(self.current_user, "id", None)
+        layout_pref = get_user_layout(self.db, self.user_id)
+        self.visible_columns = list(layout_pref.visible)
+        self.column_order = list(layout_pref.order)
+        self.column_widths = dict(layout_pref.widths)
+        if not self.visible_columns:
+            self.visible_columns = [col.header for col in self.columns_meta]
+        if not self.column_order:
+            self.column_order = [col.header for col in self.columns_meta]
+        if not self.column_widths:
+            self.column_widths = {}
 
         # Pesquisar com pequeno debounce
         self._search_timer = QTimer(self)
@@ -133,9 +143,13 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         btn_refresh.setIcon(style.standardIcon(QStyle.SP_BrowserReload))
         btn_refresh.clicked.connect(self.on_import_excel)
 
-        btn_columns = QtWidgets.QPushButton("Colunas…")
+        btn_columns = QtWidgets.QPushButton("Colunas")
         btn_columns.setIcon(style.standardIcon(QStyle.SP_FileDialogDetailedView))
         btn_columns.clicked.connect(self.on_choose_columns)
+
+        btn_save_layout = QtWidgets.QPushButton("Gravar Layout")
+        btn_save_layout.setIcon(style.standardIcon(QStyle.SP_DialogSaveButton))
+        btn_save_layout.clicked.connect(self.on_save_layout)
 
         self.lbl_path = QtWidgets.QLabel(self._current_excel_path())
         self.lbl_path.setStyleSheet("color: #555;")
@@ -146,6 +160,7 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         header_layout.addWidget(btn_open)
         header_layout.addWidget(btn_refresh)
         header_layout.addWidget(btn_columns)
+        header_layout.addWidget(btn_save_layout)
         header_layout.addWidget(self.lbl_path, 1)
 
         # ---- Modelo + Proxy (para ordenar por valor cru) ----
@@ -193,7 +208,7 @@ class MateriasPrimasPage(QtWidgets.QWidget):
         header.setSortIndicatorShown(True)
 
         # Larguras iniciais (mantidas, ajusta à vontade)
-        self.column_widths = {
+        default_widths = {
             "ID_MP": 90,
             "REF_PHC": 100,
             "REF_FORNECEDOR": 120,
@@ -224,6 +239,10 @@ class MateriasPrimasPage(QtWidgets.QWidget):
             "NOTAS_3": 160,
             "NOTAS_4": 160,
         }
+        if not getattr(self, "column_widths", None):
+            self.column_widths = {}
+        for key, value in default_widths.items():
+            self.column_widths.setdefault(key, value)
         for index, column in enumerate(self.columns_meta):
             width = self.column_widths.get(column.header)
             if width:
@@ -256,12 +275,70 @@ class MateriasPrimasPage(QtWidgets.QWidget):
     def refresh_table(self) -> None:
         rows = list_materias_primas(self.db, self.search_edit.text())
         self.model.set_rows(rows)
-        self._apply_column_visibility()
+        self._apply_user_layout()
 
-    def _apply_column_visibility(self) -> None:
-        header_names = [col.header for col in self.columns_meta]
-        for index, header in enumerate(header_names):
-            self.table.setColumnHidden(index, header not in self.visible_columns)
+    def _apply_user_layout(self) -> None:
+        header = self.table.horizontalHeader()
+        header.setSectionsMovable(True)
+        header.blockSignals(True)
+        if not getattr(self, "column_order", None):
+            self.column_order = [col.header for col in self.columns_meta]
+        if not getattr(self, "visible_columns", None):
+            self.visible_columns = [col.header for col in self.columns_meta]
+        logical_map = {col.header: index for index, col in enumerate(self.columns_meta)}
+        for target_position, header_name in enumerate(self.column_order):
+            logical = logical_map.get(header_name)
+            if logical is None:
+                continue
+            current_visual = header.visualIndex(logical)
+            if current_visual == -1 or current_visual == target_position:
+                continue
+            header.moveSection(current_visual, target_position)
+        visible_set = set(self.visible_columns)
+        for logical, column in enumerate(self.columns_meta):
+            self.table.setColumnHidden(logical, column.header not in visible_set)
+        for logical, column in enumerate(self.columns_meta):
+            width = self.column_widths.get(column.header) if hasattr(self, "column_widths") else None
+            if width:
+                self.table.setColumnWidth(logical, width)
+        header.blockSignals(False)
+
+    def _current_layout_state(self) -> dict:
+        header = self.table.horizontalHeader()
+        order_pairs = []
+        for logical, column in enumerate(self.columns_meta):
+            visual = header.visualIndex(logical)
+            if visual >= 0:
+                order_pairs.append((visual, column.header))
+        order_pairs.sort(key=lambda item: item[0])
+        order = [name for _, name in order_pairs]
+        if not order:
+            order = [col.header for col in self.columns_meta]
+        visible = [column.header for index, column in enumerate(self.columns_meta) if not self.table.isColumnHidden(index)]
+        widths = {column.header: header.sectionSize(index) for index, column in enumerate(self.columns_meta)}
+        return {"visible": visible, "order": order, "widths": widths}
+
+    def on_save_layout(self) -> None:
+        if not self.user_id:
+            QMessageBox.information(self, "Informação", "Preferências de colunas são específicas por utilizador.")
+            return
+        state = self._current_layout_state()
+        try:
+            save_user_layout(
+                self.db,
+                self.user_id,
+                visible=state["visible"],
+                order=state["order"],
+                widths=state["widths"],
+            )
+            self.db.commit()
+            self.visible_columns = state["visible"]
+            self.column_order = state["order"]
+            self.column_widths = state["widths"]
+            QMessageBox.information(self, "Sucesso", "Layout gravado para o utilizador atual.")
+        except Exception as exc:
+            self.db.rollback()
+            QMessageBox.critical(self, "Erro", f"Falha ao gravar layout: {exc}")
 
     def on_import_excel(self) -> None:
         try:
@@ -298,15 +375,8 @@ class MateriasPrimasPage(QtWidgets.QWidget):
                 QMessageBox.information(self, "Informação", "Selecione pelo menos uma coluna.")
                 return
             self.visible_columns = selected
-            user_id = getattr(self.current_user, "id", None)
-            if user_id:
-                try:
-                    set_user_columns(self.db, user_id, self.visible_columns)
-                    self.db.commit()
-                except Exception as exc:
-                    self.db.rollback()
-                    QMessageBox.warning(self, "Aviso", f"Não foi possível gravar preferências: {exc}")
-            self._apply_column_visibility()
+            # Ajusta visibilidade imediatamente; o utilizador deve clicar em 'Gravar Layout' para persistir.
+            self._apply_user_layout()
 
     def _show_readonly_message(self) -> None:
         QMessageBox.information(

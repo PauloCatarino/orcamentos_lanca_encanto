@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -88,22 +88,125 @@ LEGACY_MATERIAIS_GRUPOS: Sequence[str] = (
     "Mat_Livre_3",
     "Mat_Livre_4",
     "Mat_Livre_5",
+    "Mat_Livre_6",
+    "Mat_Livre_7",
+    "Mat_Livre_8",
+    "Mat_Livre_9",
+    "Mat_Livre_10",
 )
 
 LEGACY_TO_NEW = {old: new for old, new in zip(LEGACY_MATERIAIS_GRUPOS, MATERIAIS_GRUPOS)}
-
-
-def _normalize_grupo_material(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return value
-    return LEGACY_TO_NEW.get(value, value)
-
-
 
 MENU_MATERIAIS = "materiais"
 MENU_FERRAGENS = "ferragens"
 MENU_SIS_CORRER = "sistemas_correr"
 MENU_ACABAMENTOS = "acabamentos"
+
+MENU_FIELDS: Dict[str, Sequence[str]] = {
+    MENU_MATERIAIS: (
+        "grupo_material",
+        "descricao",
+        "ref_le",
+        "descricao_material",
+        "preco_tab",
+        "preco_liq",
+        "margem",
+        "desconto",
+        "und",
+        "desp",
+        "orl_0_4",
+        "orl_1_0",
+        "tipo",
+        "familia",
+        "comp_mp",
+        "larg_mp",
+        "esp_mp",
+        "id_mp",
+        "nao_stock",
+        "reserva_1",
+        "reserva_2",
+        "reserva_3",
+    ),
+    MENU_FERRAGENS: (
+        "categoria",
+        "descricao",
+        "referencia",
+        "fornecedor",
+        "preco_tab",
+        "preco_liq",
+        "margem",
+        "desconto",
+        "und",
+        "qt",
+        "nao_stock",
+        "reserva_1",
+        "reserva_2",
+        "reserva_3",
+    ),
+    MENU_SIS_CORRER: (
+        "categoria",
+        "descricao",
+        "referencia",
+        "fornecedor",
+        "preco_tab",
+        "preco_liq",
+        "margem",
+        "desconto",
+        "und",
+        "qt",
+        "nao_stock",
+        "reserva_1",
+        "reserva_2",
+        "reserva_3",
+    ),
+    MENU_ACABAMENTOS: (
+        "categoria",
+        "descricao",
+        "referencia",
+        "fornecedor",
+        "preco_tab",
+        "preco_liq",
+        "margem",
+        "desconto",
+        "und",
+        "qt",
+        "nao_stock",
+        "reserva_1",
+        "reserva_2",
+        "reserva_3",
+    ),
+}
+
+MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
+    MENU_MATERIAIS: {
+        "money": ("preco_tab", "preco_liq"),
+        "percent": ("margem", "desconto", "desp"),
+        "integer": ("comp_mp", "larg_mp", "esp_mp"),
+        "decimal": (),
+        "bool": ("nao_stock",),
+    },
+    MENU_FERRAGENS: {
+        "money": ("preco_tab", "preco_liq"),
+        "percent": ("margem", "desconto"),
+        "integer": (),
+        "decimal": ("qt",),
+        "bool": ("nao_stock",),
+    },
+    MENU_SIS_CORRER: {
+        "money": ("preco_tab", "preco_liq"),
+        "percent": ("margem", "desconto"),
+        "integer": (),
+        "decimal": ("qt",),
+        "bool": ("nao_stock",),
+    },
+    MENU_ACABAMENTOS: {
+        "money": ("preco_tab", "preco_liq"),
+        "percent": ("margem", "desconto"),
+        "integer": (),
+        "decimal": ("qt",),
+        "bool": ("nao_stock",),
+    },
+}
 
 MODEL_MAP = {
     MENU_MATERIAIS: DadosGeraisMaterial,
@@ -113,18 +216,7 @@ MODEL_MAP = {
 }
 
 DECIMAL_ZERO = Decimal("0")
-
-
-def _value(row: Any, attr: str):
-    if isinstance(row, dict):
-        return row.get(attr)
-    return getattr(row, attr, None)
-
-
-def _json_ready(value: Any):
-    if isinstance(value, Decimal):
-        return float(value)
-    return value
+HUNDRED = Decimal("100")
 
 
 @dataclass
@@ -141,21 +233,39 @@ class DadosGeraisContext:
         return f"{self.ano}-{self.num_orcamento}-{self.versao}"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+@dataclass
+class ModeloResumo:
+    id: int
+    nome_modelo: str
+    tipo_menu: str
+    created_at: Optional[str]
+    linhas: int
 
-def _ensure_decimal(value: Any, *, scale: int = 4) -> Optional[Decimal]:
+
+def _normalize_grupo_material(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return value
+    return LEGACY_TO_NEW.get(value, value)
+
+
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def _value(row: Any, attr: str):
+    if isinstance(row, dict):
+        return row.get(attr)
+    return getattr(row, attr, None)
+
+
+def _ensure_decimal(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
-    if isinstance(value, Decimal):
-        return value.quantize(Decimal(10) ** -scale)
     try:
-        text = str(value).strip().replace("%", "").replace("€", "").replace(",", ".")
-        if not text:
-            return None
-        dec = Decimal(text)
-        return dec.quantize(Decimal(10) ** -scale)
+        dec = Decimal(str(value).replace("%", "").replace("€", "").replace(",", "."))
+        return dec.quantize(Decimal("0.0001"))
     except Exception:
         return None
 
@@ -163,37 +273,48 @@ def _ensure_decimal(value: Any, *, scale: int = 4) -> Optional[Decimal]:
 def _ensure_percent(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
-    if isinstance(value, Decimal):
-        return value
-    text = str(value).strip().replace("%", "")
-    if not text:
-        return None
-    text = text.replace(",", ".")
     try:
-        dec = Decimal(text)
+        dec = Decimal(str(value).replace("%", "").replace(",", "."))
     except Exception:
         return None
     if dec > 1:
-        dec = dec / Decimal("100")
+        dec = dec / HUNDRED
     return dec.quantize(Decimal("0.0001"))
 
 
 def calcular_preco_liq(preco_tab: Any, margem: Any, desconto: Any) -> Optional[Decimal]:
     p = _ensure_decimal(preco_tab)
-    m = _ensure_percent(margem) or DECIMAL_ZERO
-    d = _ensure_percent(desconto) or DECIMAL_ZERO
     if p is None:
         return None
-    try:
-        total = (p * (Decimal("1") - d)) * (Decimal("1") + m)
-        return total.quantize(Decimal("0.0001"))
-    except Exception:
+    m = _ensure_percent(margem) or DECIMAL_ZERO
+    d = _ensure_percent(desconto) or DECIMAL_ZERO
+    total = (p * (Decimal("1") - d)) * (Decimal("1") + m)
+    return total.quantize(Decimal("0.0001"))
+
+
+def _coerce_field(menu: str, field: str, value: Any) -> Any:
+    if value in (None, ""):
         return None
+    types = MENU_FIELD_TYPES[menu]
+    if field in types["money"]:
+        return _ensure_decimal(value)
+    if field in types["percent"]:
+        return _ensure_percent(value)
+    if field in types["integer"]:
+        try:
+            return int(Decimal(str(value)))
+        except Exception:
+            return None
+    if field in types["decimal"]:
+        return _ensure_decimal(value)
+    if field in types["bool"]:
+        if isinstance(value, str):
+            value = value.strip()
+        if isinstance(value, (int, float, Decimal)):
+            return bool(Decimal(str(value)))
+        return bool(value)
+    return value
 
-
-# ---------------------------------------------------------------------------
-# Context
-# ---------------------------------------------------------------------------
 
 def carregar_contexto(db: Session, orcamento_id: int) -> DadosGeraisContext:
     orc = db.get(Orcamento, orcamento_id)
@@ -205,104 +326,42 @@ def carregar_contexto(db: Session, orcamento_id: int) -> DadosGeraisContext:
     if not cliente:
         raise ValueError("Cliente associado não encontrado")
     user = db.get(User, orc.created_by) if orc.created_by else None
+    versao = str(orc.versao or "")
+    if versao.isdigit():
+        versao = f"{int(versao):02d}"
     return DadosGeraisContext(
         orcamento_id=orcamento_id,
         cliente_id=cliente.id,
         ano=str(orc.ano or ""),
         num_orcamento=str(orc.num_orcamento or ""),
-        versao=f"{int(orc.versao):02d}" if str(orc.versao or "").isdigit() else str(orc.versao or ""),
+        versao=versao,
         user_id=getattr(user, "id", None),
     )
 
 
-# ---------------------------------------------------------------------------
-# Load / Save
-# ---------------------------------------------------------------------------
-
-def _rows_to_dict(rows: Iterable[Any], *, menu: str) -> List[Dict[str, Any]]:
-    result: List[Dict[str, Any]] = []
-    for row in rows:
-        payload: Dict[str, Any] = {
-            "id": getattr(row, "id", None),
-            "ordem": getattr(row, "ordem", 0) or 0,
-        }
-        if menu == MENU_MATERIAIS:
-            preco_tab = _ensure_decimal(_value(row, "preco_tab"))
-            margem = _ensure_percent(_value(row, "margem"))
-            desconto = _ensure_percent(_value(row, "desconto"))
-            preco_liq = _ensure_decimal(_value(row, "preco_liq"))
-            if preco_liq is None:
-                preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
-            payload.update(
-                {
-                    "grupo_material": _normalize_grupo_material(_value(row, "grupo_material")),
-                    "descricao": _value(row, "descricao"),
-                    "ref_le": _value(row, "ref_le"),
-                    "descricao_material": _value(row, "descricao_material"),
-                    "preco_tab": preco_tab,
-                    "preco_liq": preco_liq,
-                    "margem": margem,
-                    "desconto": desconto,
-                    "und": _value(row, "und"),
-                    "desp": _ensure_percent(_value(row, "desp")),
-                    "orl_0_4": _value(row, "orl_0_4"),
-                    "orl_1_0": _value(row, "orl_1_0"),
-                    "tipo": _value(row, "tipo"),
-                    "familia": _value(row, "familia") or "PLACAS",
-                    "comp_mp": _value(row, "comp_mp") or None,
-                    "larg_mp": _value(row, "larg_mp") or None,
-                    "esp_mp": _value(row, "esp_mp") or None,
-                    "id_mp": _value(row, "id_mp"),
-                    "nao_stock": bool(_value(row, "nao_stock")),
-                    "reserva_1": _value(row, "reserva_1"),
-                    "reserva_2": _value(row, "reserva_2"),
-                    "reserva_3": _value(row, "reserva_3"),
-                }
-            )
-        else:
-            payload.update(
-                {
-                    "categoria": getattr(row, "categoria", None),
-                    "descricao": getattr(row, "descricao", None),
-                    "referencia": getattr(row, "referencia", None),
-                    "fornecedor": getattr(row, "fornecedor", None),
-                    "preco_tab": getattr(row, "preco_tab", None),
-                    "preco_liq": getattr(row, "preco_liq", None),
-                    "margem": getattr(row, "margem", None),
-                    "desconto": getattr(row, "desconto", None),
-                    "und": getattr(row, "und", None),
-                    "qt": getattr(row, "qt", None),
-                    "nao_stock": bool(getattr(row, "nao_stock", False)),
-                    "reserva_1": getattr(row, "reserva_1", None),
-                    "reserva_2": getattr(row, "reserva_2", None),
-                    "reserva_3": getattr(row, "reserva_3", None),
-                }
-            )
-        result.append(payload)
-    result.sort(key=lambda item: item.get("ordem", 0))
+def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "id": getattr(row, "id", None),
+        "ordem": getattr(row, "ordem", 0) or 0,
+    }
+    for field in MENU_FIELDS[menu]:
+        raw = _value(row, field)
+        coerced = _coerce_field(menu, field, raw)
+        if menu == MENU_MATERIAIS and field == "grupo_material":
+            coerced = _normalize_grupo_material(coerced)
+        if menu == MENU_MATERIAIS and field == "familia":
+            coerced = coerced or "PLACAS"
+        result[field] = coerced
     return result
 
 
-def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, List[Dict[str, Any]]]:
-    data: Dict[str, List[Dict[str, Any]]] = {}
-    for menu, model in MODEL_MAP.items():
-        stmt = (
-            select(model)
-            .where(
-                model.cliente_id == ctx.cliente_id,
-                model.ano == ctx.ano,
-                model.num_orcamento == ctx.num_orcamento,
-                model.versao == ctx.versao,
-            )
-            .order_by(model.ordem, model.id)
-        )
-        rows = db.execute(stmt).scalars().all()
-        data[menu] = _rows_to_dict(rows, menu=menu)
-    if not data[MENU_MATERIAIS]:
-        data[MENU_MATERIAIS] = [
+def _default_material_rows() -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
+        rows.append(
             {
                 "id": None,
-                "ordem": idx,
+                "ordem": ordem,
                 "grupo_material": nome,
                 "descricao": None,
                 "ref_le": None,
@@ -326,78 +385,52 @@ def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, Lis
                 "reserva_2": None,
                 "reserva_3": None,
             }
-            for idx, nome in enumerate(MATERIAIS_GRUPOS)
-        ]
+        )
+    return rows
+
+
+def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, List[Dict[str, Any]]]:
+    data: Dict[str, List[Dict[str, Any]]] = {}
+    for menu, model in MODEL_MAP.items():
+        stmt = (
+            select(model)
+            .where(
+                model.cliente_id == ctx.cliente_id,
+                model.ano == ctx.ano,
+                model.num_orcamento == ctx.num_orcamento,
+                model.versao == ctx.versao,
+            )
+            .order_by(model.ordem, model.id)
+        )
+        rows = db.execute(stmt).scalars().all()
+        data[menu] = [_row_to_dict(menu, row) for row in rows]
+    if not data.get(MENU_MATERIAIS):
+        data[MENU_MATERIAIS] = _default_material_rows()
     return data
 
 
-def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], order: int) -> Dict[str, Any]:
+def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], ordem: int) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "cliente_id": ctx.cliente_id,
         "user_id": ctx.user_id,
         "ano": ctx.ano,
         "num_orcamento": ctx.num_orcamento,
         "versao": ctx.versao,
-        "ordem": order,
+        "ordem": ordem,
     }
-    if menu == MENU_MATERIAIS:
-        preco_tab = _ensure_decimal(_value(row, "preco_tab"))
-        margem = _ensure_percent(_value(row, "margem"))
-        desconto = _ensure_percent(_value(row, "desconto"))
-        preco_liq = _ensure_decimal(_value(row, "preco_liq"))
-        if preco_liq is None:
-            preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
-        payload.update(
-            {
-                "grupo_material": _value(row, "grupo_material"),
-                "descricao": _value(row, "descricao"),
-                "ref_le": _value(row, "ref_le"),
-                "descricao_material": _value(row, "descricao_material"),
-                "preco_tab": preco_tab,
-                "preco_liq": preco_liq,
-                "margem": margem,
-                "desconto": desconto,
-                "und": _value(row, "und"),
-                "desp": _ensure_percent(_value(row, "desp")),
-                "orl_0_4": _value(row, "orl_0_4"),
-                "orl_1_0": _value(row, "orl_1_0"),
-                "tipo": _value(row, "tipo"),
-                "familia": _value(row, "familia"),
-                "comp_mp": _value(row, "comp_mp") or None,
-                "larg_mp": _value(row, "larg_mp") or None,
-                "esp_mp": _value(row, "esp_mp") or None,
-                "id_mp": _value(row, "id_mp"),
-                "nao_stock": bool(_value(row, "nao_stock")),
-                "reserva_1": _value(row, "reserva_1"),
-                "reserva_2": _value(row, "reserva_2"),
-                "reserva_3": _value(row, "reserva_3"),
-            }
-        )
-    else:
-        preco_tab = _ensure_decimal(_value(row, "preco_tab"))
-        margem = _ensure_percent(_value(row, "margem"))
-        desconto = _ensure_percent(_value(row, "desconto"))
-        preco_liq = _ensure_decimal(_value(row, "preco_liq"))
-        if preco_liq is None:
-            preco_liq = calcular_preco_liq(preco_tab, margem, desconto)
-        payload.update(
-            {
-                "categoria": _value(row, "categoria"),
-                "descricao": _value(row, "descricao"),
-                "referencia": _value(row, "referencia"),
-                "fornecedor": _value(row, "fornecedor"),
-                "preco_tab": preco_tab,
-                "preco_liq": preco_liq,
-                "margem": margem,
-                "desconto": desconto,
-                "und": _value(row, "und"),
-                "qt": _ensure_decimal(_value(row, "qt")),
-                "nao_stock": bool(_value(row, "nao_stock")),
-                "reserva_1": _value(row, "reserva_1"),
-                "reserva_2": _value(row, "reserva_2"),
-                "reserva_3": _value(row, "reserva_3"),
-            }
-        )
+    for field in MENU_FIELDS[menu]:
+        value = row.get(field)
+        if menu == MENU_MATERIAIS and field == "grupo_material":
+            value = _normalize_grupo_material(value)
+        if menu == MENU_MATERIAIS and field == "familia":
+            value = value or "PLACAS"
+        coerced = _coerce_field(menu, field, value)
+        if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
+            coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
+        payload[field] = coerced
+    if menu != MENU_MATERIAIS:
+        if payload.get("preco_liq") is None:
+            payload["preco_liq"] = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
     return payload
 
 
@@ -406,7 +439,6 @@ def guardar_dados_gerais(db: Session, ctx: DadosGeraisContext, data: Mapping[str
         model = MODEL_MAP.get(menu)
         if not model:
             continue
-        # limpa registos existentes
         db.execute(
             delete(model).where(
                 model.cliente_id == ctx.cliente_id,
@@ -417,16 +449,40 @@ def guardar_dados_gerais(db: Session, ctx: DadosGeraisContext, data: Mapping[str
         )
         if not rows:
             continue
-        for order, row in enumerate(rows):
-            payload = _normalize_row(menu, ctx, row, order)
-            record = model(**payload)
-            db.add(record)
+        for ordem, row in enumerate(rows):
+            payload = _normalize_row(menu, ctx, row, ordem)
+            db.add(model(**payload))
     db.flush()
 
 
-# ---------------------------------------------------------------------------
-# Modelos por utilizador
-# ---------------------------------------------------------------------------
+def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[str, Any]:
+    sanitized: Dict[str, Any] = {"ordem": ordem}
+    for field in MENU_FIELDS[menu]:
+        value = row.get(field)
+        if menu == MENU_MATERIAIS and field == "grupo_material":
+            value = _normalize_grupo_material(value)
+        if menu == MENU_MATERIAIS and field == "familia":
+            value = value or "PLACAS"
+        coerced = _coerce_field(menu, field, value)
+        if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
+            coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
+        sanitized[field] = _json_ready(coerced)
+    return sanitized
+
+
+def _deserialize_model_line(menu: str, payload: Mapping[str, Any]) -> Dict[str, Any]:
+    row: Dict[str, Any] = {"ordem": int(payload.get("ordem", 0))}
+    for field in MENU_FIELDS[menu]:
+        value = payload.get(field)
+        coerced = _coerce_field(menu, field, value)
+        if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
+            coerced = calcular_preco_liq(payload.get("preco_tab"), payload.get("margem"), payload.get("desconto"))
+        row[field] = coerced
+    if menu == MENU_MATERIAIS:
+        row["grupo_material"] = _normalize_grupo_material(row.get("grupo_material"))
+        row["familia"] = row.get("familia") or "PLACAS"
+    return row
+
 
 def guardar_modelo(
     db: Session,
@@ -435,26 +491,41 @@ def guardar_modelo(
     tipo_menu: str,
     nome_modelo: str,
     linhas: Sequence[Mapping[str, Any]],
+    replace_id: Optional[int] = None,
 ) -> DadosGeraisModelo:
     if tipo_menu not in MODEL_MAP:
         raise ValueError("Tipo de menu inválido")
-    if not nome_modelo.strip():
+    nome_limpo = nome_modelo.strip()
+    if not nome_limpo:
         raise ValueError("Nome do modelo obrigatório")
-    modelo = DadosGeraisModelo(
-        user_id=user_id,
-        nome_modelo=nome_modelo.strip(),
-        tipo_menu=tipo_menu,
-    )
-    db.add(modelo)
-    db.flush()
+    if replace_id:
+        modelo = db.execute(
+            select(DadosGeraisModelo).where(
+                DadosGeraisModelo.id == replace_id,
+                DadosGeraisModelo.user_id == user_id,
+            )
+        ).scalar_one_or_none()
+        if not modelo:
+            raise ValueError("Modelo não encontrado para substituir")
+        modelo.nome_modelo = nome_limpo
+        modelo.tipo_menu = tipo_menu
+        db.execute(delete(DadosGeraisModeloItem).where(DadosGeraisModeloItem.modelo_id == modelo.id))
+    else:
+        modelo = DadosGeraisModelo(
+            user_id=user_id,
+            nome_modelo=nome_limpo,
+            tipo_menu=tipo_menu,
+        )
+        db.add(modelo)
+        db.flush()
     for ordem, linha in enumerate(linhas):
-        serializado = {chave: _json_ready(valor) for chave, valor in dict(linha).items()}
+        payload = _prepare_model_line(tipo_menu, linha, ordem)
         db.add(
             DadosGeraisModeloItem(
                 modelo_id=modelo.id,
                 tipo_menu=tipo_menu,
                 ordem=ordem,
-                dados=json.dumps(serializado),
+                dados=json.dumps(payload),
             )
         )
     db.flush()
@@ -465,30 +536,56 @@ def listar_modelos(db: Session, *, user_id: int, tipo_menu: Optional[str] = None
     stmt = select(DadosGeraisModelo).where(DadosGeraisModelo.user_id == user_id)
     if tipo_menu:
         stmt = stmt.where(DadosGeraisModelo.tipo_menu == tipo_menu)
-    stmt = stmt.order_by(DadosGeraisModelo.created_at.desc())
+    stmt = stmt.order_by(DadosGeraisModelo.created_at.desc(), DadosGeraisModelo.id.desc())
     return db.execute(stmt).scalars().all()
 
 
-def carregar_modelo(db: Session, modelo_id: int) -> Dict[str, Any]:
-    modelo = db.get(DadosGeraisModelo, modelo_id)
+def carregar_modelo(db: Session, modelo_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
+    stmt = select(DadosGeraisModelo).where(DadosGeraisModelo.id == modelo_id)
+    if user_id is not None:
+        stmt = stmt.where(DadosGeraisModelo.user_id == user_id)
+    modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
         raise ValueError("Modelo não encontrado")
     itens_stmt = (
         select(DadosGeraisModeloItem)
-        .where(DadosGeraisModeloItem.modelo_id == modelo_id)
+        .where(DadosGeraisModeloItem.modelo_id == modelo.id)
         .order_by(DadosGeraisModeloItem.ordem, DadosGeraisModeloItem.id)
     )
     itens = db.execute(itens_stmt).scalars().all()
     linhas: List[Dict[str, Any]] = []
     for item in itens:
         try:
-            data = json.loads(item.dados)
+            dados = json.loads(item.dados)
         except json.JSONDecodeError:
-            data = {}
-        linhas.append(data)
-    return {
-        "modelo": modelo,
-        "linhas": linhas,
-    }
+            dados = {}
+        linhas.append(_deserialize_model_line(modelo.tipo_menu, dados))
+    return {"modelo": modelo, "linhas": linhas}
 
 
+def eliminar_modelo(db: Session, *, modelo_id: int, user_id: int) -> None:
+    stmt = select(DadosGeraisModelo).where(
+        DadosGeraisModelo.id == modelo_id,
+        DadosGeraisModelo.user_id == user_id,
+    )
+    modelo = db.execute(stmt).scalar_one_or_none()
+    if not modelo:
+        raise ValueError("Modelo não encontrado")
+    db.delete(modelo)
+    db.flush()
+
+
+def renomear_modelo(db: Session, *, modelo_id: int, user_id: int, novo_nome: str) -> DadosGeraisModelo:
+    nome_limpo = novo_nome.strip()
+    if not nome_limpo:
+        raise ValueError("Nome do modelo obrigatório")
+    stmt = select(DadosGeraisModelo).where(
+        DadosGeraisModelo.id == modelo_id,
+        DadosGeraisModelo.user_id == user_id,
+    )
+    modelo = db.execute(stmt).scalar_one_or_none()
+    if not modelo:
+        raise ValueError("Modelo não encontrado")
+    modelo.nome_modelo = nome_limpo
+    db.flush()
+    return modelo

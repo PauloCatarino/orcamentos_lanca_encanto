@@ -2,21 +2,30 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
+    QRadioButton,
     QTableView,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
 )
@@ -43,7 +52,8 @@ def _decimal(value: Optional[Decimal]) -> str:
     if value in (None, ""):
         return ""
     try:
-        return f"{Decimal(value):.4f}"
+        dec = Decimal(str(value))
+        return str(dec.quantize(Decimal('0.0001'))).replace('.', ',')
     except Exception:
         return str(value)
 
@@ -52,8 +62,17 @@ def _money(value: Optional[Decimal]) -> str:
     if value in (None, ""):
         return ""
     try:
-        amount = Decimal(value)
-        return f"{amount:.2f}€"
+        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+        return f"{str(amount).replace('.', ',')} €"
+    except Exception:
+        return str(value)
+
+
+def _int_value(value) -> str:
+    if value in (None, ""):
+        return ""
+    try:
+        return str(int(Decimal(str(value))))
     except Exception:
         return str(value)
 
@@ -66,8 +85,8 @@ def _percent(value: Optional[Decimal]) -> str:
             value = Decimal(str(value))
         except Exception:
             return str(value)
-    display = value * Decimal("100")
-    return f"{display:.2f}%"
+    display = (value * Decimal('100')).quantize(Decimal('0.01'))
+    return f"{str(display).replace('.', ',')} %"
 
 
 class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
@@ -233,6 +252,28 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
     def _after_set(self, row_index: int, field: str) -> None:
         pass
 
+    def _raw_value(self, row: Dict[str, Any], spec: ColumnSpec):
+        value = row.get(spec.field)
+        if spec.kind in {"money", "decimal", "percent"}:
+            if value is None:
+                return 0.0
+            if isinstance(value, Decimal):
+                return float(value)
+            try:
+                return float(str(value).replace(',', '.'))
+            except Exception:
+                return 0.0
+        if spec.kind == "integer":
+            if value in (None, ""):
+                return 0
+            try:
+                return int(Decimal(str(value)))
+            except Exception:
+                return 0
+        if spec.kind == "bool":
+            return 1 if value else 0
+        return value if value is not None else ""
+
     def _parse_decimal(self, value) -> Optional[Decimal]:
         if value in (None, ""):
             return None
@@ -267,6 +308,24 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
             return int(str(value).strip())
         except Exception:
             return None
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder):
+        if column < 0 or column >= len(self.columns):
+            return
+        spec = self.columns[column]
+        reverse = order == Qt.DescendingOrder
+
+        def sort_key(row: Dict[str, Any]):
+            value = self._raw_value(row, spec)
+            if isinstance(value, str):
+                return value.lower()
+            return value
+
+        self.layoutAboutToBeChanged.emit()
+        try:
+            self._rows.sort(key=sort_key, reverse=reverse)
+        finally:
+            self.layoutChanged.emit()
 
     # --- API ---
     def load_rows(self, rows: Iterable[Dict]) -> None:
@@ -375,12 +434,22 @@ class MateriaPrimaPicker(QDialog):
         self.table.doubleClicked.connect(self.accept)
 
         columns = [
-            ("ID", "id_mp"),
             ("Ref_LE", "ref_le"),
             ("Descrição", "descricao_orcamento"),
-            ("Preço", "preco_tabela", _money),
+            ("Preço Tabela", "preco_tabela", _money),
+            ("Margem", "margem", _percent),
+            ("Desconto", "desconto", _percent),
+            ("Preço Líq", "pliq", _money),
+            ("Und", "und"),
+            ("Desp", "desp", _percent),
+            ("Comp MP", "comp_mp", _int_value),
+            ("Larg MP", "larg_mp", _int_value),
+            ("Esp MP", "esp_mp", _int_value),
             ("Tipo", "tipo"),
             ("Família", "familia"),
+            ("ORL 0.4", "orl_0_4"),
+            ("ORL 1.0", "orl_1_0"),
+            ("Stock", "stock", lambda v: "1" if bool(v) else "0"),
         ]
         self.model = SimpleTableModel(columns=columns)
         self.table.setModel(self.model)
@@ -508,9 +577,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
             btn_save_model.clicked.connect(lambda _, k=key: self.on_guardar_modelo(k))
             btn_import_model = QPushButton("Importar Modelo")
             btn_import_model.clicked.connect(lambda _, k=key: self.on_importar_modelo(k))
+            btn_import_multi = QPushButton("Importar Multi Modelos")
+            btn_import_multi.clicked.connect(self.on_importar_multi_modelos)
 
             toolbar.addWidget(btn_save_model)
             toolbar.addWidget(btn_import_model)
+            toolbar.addWidget(btn_import_multi)
             toolbar.addStretch(1)
 
             if key == svc_dg.MENU_MATERIAIS:
@@ -524,7 +596,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
             table.setSelectionMode(QAbstractItemView.SingleSelection)
             table.horizontalHeader().setStretchLastSection(False)
-            table.setSortingEnabled(False)
+            table.setSortingEnabled(True)
             layout.addWidget(table, 1)
 
             self.tabs.addTab(widget, self._tab_title(key))
@@ -712,16 +784,17 @@ class DadosGeraisPage(QtWidgets.QWidget):
         if not linhas:
             QtWidgets.QMessageBox.warning(self, "Aviso", "Não há linhas para guardar.")
             return
-        nome, ok = QtWidgets.QInputDialog.getText(self, "Guardar Modelo", "Nome do modelo:")
-        if not ok or not nome.strip():
+        dialog = GuardarModeloDialog(self.session, user_id=user_id, tipo_menu=key, linhas=linhas, parent=self)
+        if dialog.exec() != QDialog.Accepted:
             return
         try:
             svc_dg.guardar_modelo(
                 self.session,
                 user_id=user_id,
                 tipo_menu=key,
-                nome_modelo=nome,
+                nome_modelo=dialog.model_name,
                 linhas=linhas,
+                replace_id=dialog.replace_model_id,
             )
             self.session.commit()
             QtWidgets.QMessageBox.information(self, "Sucesso", "Modelo guardado.")
@@ -729,44 +802,77 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.session.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao guardar modelo: {exc}")
 
+
     def on_importar_modelo(self, key: str):
         user_id = getattr(self.current_user, "id", None)
         if not user_id:
             QtWidgets.QMessageBox.warning(self, "Aviso", "Utilizador sem ID válido.")
             return
-        modelos = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=key)
-        if not modelos:
+        modelos_existentes = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=key)
+        if not modelos_existentes:
             QtWidgets.QMessageBox.information(self, "Info", "Sem modelos guardados para este submenu.")
             return
-        nomes = [f"{m.id} - {m.nome_modelo}" for m in modelos]
-        item, ok = QtWidgets.QInputDialog.getItem(self, "Importar Modelo", "Escolha o modelo:", nomes, 0, False)
-        if not ok or not item:
+        dialog = ImportarModeloDialog(self.session, user_id=user_id, tipo_menu=key, parent=self)
+        if dialog.exec() != QDialog.Accepted:
             return
-        modelo_id = int(item.split("-", 1)[0].strip())
-        try:
-            data = svc_dg.carregar_modelo(self.session, modelo_id)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelo: {exc}")
+        if not dialog.selected_lines:
             return
-        linhas = data.get("linhas", [])
-        if not linhas:
-            QtWidgets.QMessageBox.warning(self, "Aviso", "Modelo sem linhas.")
-            return
-        substituir = QtWidgets.QMessageBox.question(
-            self,
-            "Importar Modelo",
-            "Substituir as linhas atuais?",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            QtWidgets.QMessageBox.Yes,
-        )
+        self._apply_imported_rows(key, dialog.selected_lines, replace=dialog.replace_existing)
+
+
+    def _apply_imported_rows(self, key: str, rows: Sequence[Mapping[str, Any]], *, replace: bool) -> None:
         model = self.models[key]
-        if substituir == QtWidgets.QMessageBox.Yes:
-            model.load_rows(linhas)
+        if replace:
+            model.load_rows(rows)
         else:
-            existing = model.export_rows()
-            combined = existing + [dict(linha) for linha in linhas]
+            combined = model.export_rows() + [dict(r) for r in rows]
             model.load_rows(combined)
         model._reindex()
+        if key == svc_dg.MENU_MATERIAIS:
+            if isinstance(model, MateriaisTableModel):
+                for idx in range(model.rowCount()):
+                    model.recalculate(idx)
+        else:
+            self._recalculate_menu_rows(key)
+
+    def _recalculate_menu_rows(self, key: str) -> None:
+        model = self.models[key]
+        for idx in range(model.rowCount()):
+            try:
+                row = model.row_at(idx)
+            except Exception:
+                row = None
+            if not row:
+                continue
+            preco_liq = svc_dg.calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
+            if preco_liq is not None:
+                updated = dict(row)
+                updated["preco_liq"] = preco_liq
+                model.update_row(idx, updated)
+
+    def on_importar_multi_modelos(self):
+        user_id = getattr(self.current_user, "id", None)
+        if not user_id:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Utilizador sem ID válido.")
+            return
+        dialog = ImportarMultiModelosDialog(self.session, user_id=user_id, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        if not dialog.selections:
+            return
+        for menu, info in dialog.selections.items():
+            modelo_id = info.get("modelo_id")
+            if not modelo_id:
+                continue
+            try:
+                data = svc_dg.carregar_modelo(self.session, modelo_id, user_id=user_id)
+            except Exception as exc:
+                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelo: {exc}")
+                continue
+            linhas = data.get("linhas", [])
+            if not linhas:
+                continue
+            self._apply_imported_rows(menu, linhas, replace=info.get("replace", True))
 
     def on_selecionar_mp(self):
         key = svc_dg.MENU_MATERIAIS
@@ -816,6 +922,413 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.session.close()
         finally:
             super().closeEvent(event)
+
+
+
+
+
+
+
+PREVIEW_COLUMNS = {
+    svc_dg.MENU_MATERIAIS: [
+        ("Materiais", "grupo_material", "text"),
+        ("Ref_LE", "ref_le", "text"),
+        ("Descrição", "descricao_material", "text"),
+        ("Preço Tab", "preco_tab", "money"),
+        ("Preço Liq", "preco_liq", "money"),
+        ("Margem", "margem", "percent"),
+        ("Desconto", "desconto", "percent"),
+        ("Und", "und", "text"),
+    ],
+    svc_dg.MENU_FERRAGENS: [
+        ("Categoria", "categoria", "text"),
+        ("Descrição", "descricao", "text"),
+        ("Referência", "referencia", "text"),
+        ("Preço Tab", "preco_tab", "money"),
+        ("Preço Liq", "preco_liq", "money"),
+        ("Margem", "margem", "percent"),
+        ("Desconto", "desconto", "percent"),
+        ("Qt", "qt", "decimal"),
+    ],
+    svc_dg.MENU_SIS_CORRER: [
+        ("Categoria", "categoria", "text"),
+        ("Descrição", "descricao", "text"),
+        ("Referência", "referencia", "text"),
+        ("Preço Tab", "preco_tab", "money"),
+        ("Preço Liq", "preco_liq", "money"),
+        ("Margem", "margem", "percent"),
+        ("Desconto", "desconto", "percent"),
+        ("Qt", "qt", "decimal"),
+    ],
+    svc_dg.MENU_ACABAMENTOS: [
+        ("Categoria", "categoria", "text"),
+        ("Descrição", "descricao", "text"),
+        ("Referência", "referencia", "text"),
+        ("Preço Tab", "preco_tab", "money"),
+        ("Preço Liq", "preco_liq", "money"),
+        ("Margem", "margem", "percent"),
+        ("Desconto", "desconto", "percent"),
+        ("Qt", "qt", "decimal"),
+    ],
+}
+
+
+def _format_preview_value(kind: str, value: Any) -> str:
+    if kind == "money":
+        return _money(value)
+    if kind == "percent":
+        return _percent(value)
+    if kind == "decimal":
+        return _decimal(value)
+    if kind == "int":
+        if value in (None, ""):
+            return ""
+        try:
+            return str(int(Decimal(str(value))))
+        except Exception:
+            return str(value)
+    return "" if value is None else str(value)
+
+
+class GuardarModeloDialog(QDialog):
+    def __init__(self, session, user_id: int, tipo_menu: str, linhas: Sequence[Mapping[str, Any]], parent=None):
+        super().__init__(parent)
+        self.session = session
+        self.user_id = user_id
+        self.tipo_menu = tipo_menu
+        self.linhas = [dict(row) for row in linhas]
+        self.models = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.replace_model_id: Optional[int] = None
+        self.model_name: str = ""
+
+        self.setWindowTitle("Guardar Modelo")
+        self.resize(900, 600)
+
+        layout = QVBoxLayout(self)
+        split = QHBoxLayout()
+
+        self.models_list = QListWidget()
+        self.models_list.itemSelectionChanged.connect(self._on_model_selected)
+        split.addWidget(self.models_list, 1)
+
+        self.preview_table = QTableWidget()
+        self.preview_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.preview_table.setSelectionMode(QAbstractItemView.NoSelection)
+        split.addWidget(self.preview_table, 2)
+
+        layout.addLayout(split)
+
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        form.addRow("Nome do modelo:", self.name_edit)
+        layout.addLayout(form)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self._populate_models()
+        self._populate_preview()
+        if self.models_list.count() > 0:
+            self.models_list.setCurrentRow(0)
+
+    def _populate_models(self) -> None:
+        self.models_list.clear()
+        for model in self.models:
+            display = model.nome_modelo
+            created = getattr(model, "created_at", None)
+            if created:
+                try:
+                    display += f" ({created})"
+                except Exception:
+                    display += f" ({str(created)})"
+            item = QListWidgetItem(display)
+            item.setData(Qt.UserRole, model.id)
+            self.models_list.addItem(item)
+
+    def _populate_preview(self) -> None:
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS[svc_dg.MENU_FERRAGENS])
+        limit = min(len(self.linhas), 12)
+        self.preview_table.setColumnCount(len(columns))
+        self.preview_table.setRowCount(limit)
+        self.preview_table.setHorizontalHeaderLabels([col[0] for col in columns])
+        for row_idx in range(limit):
+            row_data = self.linhas[row_idx]
+            for col_idx, (_, key, kind) in enumerate(columns):
+                text = _format_preview_value(kind, row_data.get(key))
+                item = QTableWidgetItem(text)
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                self.preview_table.setItem(row_idx, col_idx, item)
+        self.preview_table.resizeColumnsToContents()
+
+    def _on_model_selected(self) -> None:
+        item = self.models_list.currentItem()
+        if not item:
+            return
+        self.name_edit.setText(item.text().split(" (")[0])
+
+    def accept(self) -> None:
+        name = self.name_edit.text().strip()
+        if not name:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Indique um nome para o modelo.")
+            return
+        replace_id: Optional[int] = None
+        for model in self.models:
+            if model.nome_modelo.strip().lower() == name.lower():
+                answer = QtWidgets.QMessageBox.question(
+                    self,
+                    "Substituir",
+                    f"Já existe um modelo chamado '{name}'. Deseja substituir?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.No,
+                )
+                if answer != QtWidgets.QMessageBox.Yes:
+                    return
+                replace_id = model.id
+                break
+        self.model_name = name
+        self.replace_model_id = replace_id
+        super().accept()
+
+
+class ImportarModeloDialog(QDialog):
+    def __init__(self, session, user_id: int, tipo_menu: str, parent=None):
+        super().__init__(parent)
+        self.session = session
+        self.user_id = user_id
+        self.tipo_menu = tipo_menu
+        self.models = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.current_model = None
+        self.current_lines: List[Dict[str, Any]] = []
+        self.selected_lines: List[Dict[str, Any]] = []
+        self.replace_existing: bool = True
+
+        self.setWindowTitle("Importar Modelo")
+        self.resize(1100, 650)
+
+        layout = QVBoxLayout(self)
+        split = QHBoxLayout()
+
+        left_layout = QVBoxLayout()
+        self.models_list = QListWidget()
+        self.models_list.itemSelectionChanged.connect(self._on_model_selected)
+        left_layout.addWidget(self.models_list)
+
+        actions_layout = QHBoxLayout()
+        self.btn_rename = QPushButton("Renomear")
+        self.btn_delete = QPushButton("Eliminar")
+        self.btn_rename.clicked.connect(self._on_rename_model)
+        self.btn_delete.clicked.connect(self._on_delete_model)
+        actions_layout.addWidget(self.btn_rename)
+        actions_layout.addWidget(self.btn_delete)
+        left_layout.addLayout(actions_layout)
+
+        split.addLayout(left_layout, 1)
+
+        self.lines_table = QTableWidget()
+        self.lines_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.lines_table.setSelectionMode(QAbstractItemView.NoSelection)
+        split.addWidget(self.lines_table, 2)
+
+        layout.addLayout(split)
+
+        options_layout = QHBoxLayout()
+        self.radio_replace = QRadioButton("Substituir linhas atuais")
+        self.radio_replace.setChecked(True)
+        self.radio_append = QRadioButton("Adicionar / mesclar")
+        options_layout.addWidget(self.radio_replace)
+        options_layout.addWidget(self.radio_append)
+        options_layout.addStretch()
+        layout.addLayout(options_layout)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self._populate_models()
+        if self.models_list.count() > 0:
+            self.models_list.setCurrentRow(0)
+        else:
+            self.btn_delete.setEnabled(False)
+            self.btn_rename.setEnabled(False)
+
+    def _populate_models(self) -> None:
+        self.models_list.clear()
+        for model in self.models:
+            display = model.nome_modelo
+            created = getattr(model, "created_at", None)
+            if created:
+                try:
+                    display += f" ({created})"
+                except Exception:
+                    display += f" ({str(created)})"
+            item = QListWidgetItem(display)
+            item.setData(Qt.UserRole, model.id)
+            self.models_list.addItem(item)
+
+    def _on_model_selected(self) -> None:
+        item = self.models_list.currentItem()
+        if not item:
+            self.current_model = None
+            self.current_lines = []
+            self.lines_table.clear()
+            self.lines_table.setRowCount(0)
+            self.lines_table.setColumnCount(0)
+            return
+        model_id = item.data(Qt.UserRole)
+        try:
+            data = svc_dg.carregar_modelo(self.session, model_id, user_id=self.user_id)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelo: {exc}")
+            return
+        self.current_model = data.get("modelo")
+        self.current_lines = [dict(row) for row in data.get("linhas", [])]
+        self._populate_lines_table()
+
+    def _populate_lines_table(self) -> None:
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS[svc_dg.MENU_FERRAGENS])
+        self.lines_table.setColumnCount(len(columns) + 1)
+        headers = ["Importar"] + [col[0] for col in columns]
+        self.lines_table.setHorizontalHeaderLabels(headers)
+        self.lines_table.setRowCount(len(self.current_lines))
+        for row_idx, row_data in enumerate(self.current_lines):
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setCheckState(Qt.Checked)
+            self.lines_table.setItem(row_idx, 0, check_item)
+            for col_idx, (_, key, kind) in enumerate(columns, start=1):
+                text = _format_preview_value(kind, row_data.get(key))
+                item = QTableWidgetItem(text)
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                self.lines_table.setItem(row_idx, col_idx, item)
+        self.lines_table.resizeColumnsToContents()
+
+    def _on_delete_model(self) -> None:
+        item = self.models_list.currentItem()
+        if not item:
+            return
+        model_id = item.data(Qt.UserRole)
+        confirm = QtWidgets.QMessageBox.question(
+            self,
+            "Eliminar",
+            "Eliminar este modelo?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if confirm != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            svc_dg.eliminar_modelo(self.session, modelo_id=model_id, user_id=self.user_id)
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {exc}")
+            return
+        self.models = [m for m in self.models if m.id != model_id]
+        self._populate_models()
+        self.models_list.setCurrentRow(0 if self.models else -1)
+
+    def _on_rename_model(self) -> None:
+        item = self.models_list.currentItem()
+        if not item:
+            return
+        model_id = item.data(Qt.UserRole)
+        model_name = item.text().split(" (")[0]
+        new_name, ok = QtWidgets.QInputDialog.getText(self, "Renomear Modelo", "Novo nome:", text=model_name)
+        if not ok or not new_name.strip():
+            return
+        try:
+            svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=self.user_id, novo_nome=new_name.strip())
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao renomear: {exc}")
+            return
+        self.models = svc_dg.listar_modelos(self.session, user_id=self.user_id, tipo_menu=self.tipo_menu)
+        self._populate_models()
+        for idx in range(self.models_list.count()):
+            if self.models_list.item(idx).data(Qt.UserRole) == model_id:
+                self.models_list.setCurrentRow(idx)
+                break
+
+    def accept(self) -> None:
+        if not self.current_lines:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione um modelo.")
+            return
+        selected: List[Dict[str, Any]] = []
+        for row_idx in range(self.lines_table.rowCount()):
+            item = self.lines_table.item(row_idx, 0)
+            if item and item.checkState() == Qt.Checked:
+                selected.append(dict(self.current_lines[row_idx]))
+        if not selected:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione pelo menos uma linha para importar.")
+            return
+        self.selected_lines = selected
+        self.replace_existing = self.radio_replace.isChecked()
+        super().accept()
+
+
+class ImportarMultiModelosDialog(QDialog):
+    def __init__(self, session, user_id: int, parent=None):
+        super().__init__(parent)
+        self.session = session
+        self.user_id = user_id
+        self.selections: Dict[str, Dict[str, Any]] = {}
+
+        self.setWindowTitle("Importar Multi Modelos")
+        self.resize(600, 420)
+
+        layout = QVBoxLayout(self)
+        self.sections: Dict[str, Dict[str, Any]] = {}
+        for menu, titulo in (
+            (svc_dg.MENU_MATERIAIS, "Materiais"),
+            (svc_dg.MENU_FERRAGENS, "Ferragens"),
+            (svc_dg.MENU_SIS_CORRER, "Sistemas Correr"),
+            (svc_dg.MENU_ACABAMENTOS, "Acabamentos"),
+        ):
+            box = QGroupBox(titulo)
+            box_layout = QVBoxLayout(box)
+            combo = QComboBox()
+            combo.addItem("(nenhum)", None)
+            modelos = svc_dg.listar_modelos(self.session, user_id=self.user_id, tipo_menu=menu)
+            for modelo in modelos:
+                display = modelo.nome_modelo
+                created = getattr(modelo, "created_at", None)
+                if created:
+                    try:
+                        display += f" ({created})"
+                    except Exception:
+                        display += f" ({str(created)})"
+                combo.addItem(display, modelo.id)
+            replace_check = QCheckBox("Substituir linhas atuais")
+            replace_check.setChecked(True)
+            box_layout.addWidget(combo)
+            box_layout.addWidget(replace_check)
+            layout.addWidget(box)
+            self.sections[menu] = {"combo": combo, "replace": replace_check}
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self._on_accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+    def _on_accept(self) -> None:
+        selections: Dict[str, Dict[str, Any]] = {}
+        for menu, widgets in self.sections.items():
+            combo: QComboBox = widgets["combo"]
+            modelo_id = combo.currentData()
+            if modelo_id:
+                selections[menu] = {
+                    "modelo_id": modelo_id,
+                    "replace": widgets["replace"].isChecked(),
+                }
+        if not selections:
+            QtWidgets.QMessageBox.information(self, "Informação", "Selecione pelo menos um modelo.")
+            return
+        self.selections = selections
+        super().accept()
 
 
 
