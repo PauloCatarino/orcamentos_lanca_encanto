@@ -71,6 +71,15 @@ DEFAULT_VISIBLE_COLUMNS: Sequence[str] = (
     "NOME_FORNECEDOR",
 )
 
+@dataclass
+class MateriaPrimaLayout:
+    visible: List[str]
+    order: List[str]
+    widths: Dict[str, int]
+
+
+DEFAULT_ORDER: List[str] = [col.header for col in COLUMN_DEFS]
+
 FUZZY_LIMIT = 75
 FUZZY_THRESHOLD = 0.65
 
