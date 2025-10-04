@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 
 # URI de ligação; ajuste conforme as suas credenciais de acesso
-DB_URI = "mysql+pymysql://orcamentos_le:admin@192.168.5.101:3306/orcamentos"
+DB_URI = "mysql+pymysql://orcamentos_le:admin@192.168.5.201:3306/orcamentos"
 
 # Criação do engine SQLAlchemy
 engine = create_engine(DB_URI)

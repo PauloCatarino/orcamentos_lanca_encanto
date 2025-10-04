@@ -135,19 +135,22 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
 
         def sort_key(row):
             value = raw_value(row)
-            if value is None:
-                return float('-inf') if reverse else float('inf')
+            if value in (None, ""):
+                return (2, "")
             if isinstance(value, Decimal):
-                return float(value)
+                return (0, float(value))
             if isinstance(value, (int, float)):
-                return value
+                return (0, float(value))
             if isinstance(value, str):
-                stripped = value.strip().replace('€', '').replace('%', '').replace(',', '.')
+                stripped = value.strip()
+                if not stripped:
+                    return (2, "")
+                numeric = stripped.replace('€', '').replace('%', '').replace(',', '.')
                 try:
-                    return float(stripped)
+                    return (0, float(numeric))
                 except Exception:
-                    return value
-            return value
+                    return (1, stripped.lower())
+            return (1, str(value).lower())
 
         self.layoutAboutToBeChanged.emit()
         try:
