@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from decimal import Decimal
 
+import itertools
+
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 
@@ -43,6 +45,8 @@ from PySide6.QtWidgets import (
     QListWidget,
 
     QListWidgetItem,
+
+    QMenu,
 
     QPushButton,
 
@@ -95,6 +99,44 @@ class ColumnSpec:
     options: Optional[Callable[[], Sequence[str]]] = None
 
     visible: bool = True
+
+
+
+MATERIAL_CLIP_FIELDS = [
+
+    "ref_le",
+
+    "descricao_material",
+
+    "preco_tab",
+
+    "preco_liq",
+
+    "margem",
+
+    "desconto",
+
+    "und",
+
+    "desp",
+
+    "orl_0_4",
+
+    "orl_1_0",
+
+    "tipo",
+
+    "comp_mp",
+
+    "larg_mp",
+
+    "esp_mp",
+
+    "id_mp",
+
+    "nao_stock",
+
+]
 
 
 
@@ -866,7 +908,7 @@ class MateriaPrimaPicker(QDialog):
 
         self.ed_search.textChanged.connect(self._on_search_text_changed)
 
-
+        QtCore.QTimer.singleShot(0, self.ed_search.setFocus)
 
         self.table = QTableView(self)
 
@@ -1056,6 +1098,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         self._familias_cache: List[str] = []
 
+        self._copied_material_rows: List[Dict[str, Any]] = []
+
 
 
         self._setup_ui()
@@ -1202,7 +1246,13 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
 
-            table.setSelectionMode(QAbstractItemView.SingleSelection)
+            if key == svc_dg.MENU_MATERIAIS:
+
+                table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
+            else:
+
+                table.setSelectionMode(QAbstractItemView.SingleSelection)
 
             table.horizontalHeader().setStretchLastSection(False)
 
@@ -1220,6 +1270,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             )
 
+            if key == svc_dg.MENU_MATERIAIS:
+
+                table.setContextMenuPolicy(Qt.CustomContextMenu)
+
+                table.customContextMenuRequested.connect(lambda pos, k=key: self._on_materials_context_menu(pos, k))
+
             layout.addWidget(table, 1)
 
 
@@ -1235,6 +1291,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.tables[key] = table
 
             table.setModel(model)
+
+
 
 
 
@@ -1350,6 +1408,124 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         return DadosGeraisTableModel(columns=columns, parent=self)
 
+
+
+    def _on_materials_context_menu(self, pos, key: str) -> None:
+
+        if key != svc_dg.MENU_MATERIAIS:
+
+            return
+
+        table = self.tables[key]
+
+        selection = table.selectionModel()
+
+        if not selection:
+
+            return
+
+        rows = sorted({index.row() for index in selection.selectedRows()})
+
+        if not rows:
+
+            return
+
+        menu = QtWidgets.QMenu(table)
+
+        act_clear = menu.addAction("Limpar linha(s) selecionada(s)")
+
+        act_copy = menu.addAction("Copiar linha(s) selecionada(s)")
+
+        act_paste = menu.addAction("Inserir linha(s) selecionada(s)")
+
+        action = menu.exec(table.viewport().mapToGlobal(pos))
+
+        if action == act_clear:
+
+            self._materials_clear_rows(rows)
+
+        elif action == act_copy:
+
+            self._materials_copy_rows(rows)
+
+        elif action == act_paste:
+
+            self._materials_paste_rows(rows)
+
+
+    def _materials_clear_rows(self, rows: List[int]) -> None:
+
+        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+
+        table = self.tables[svc_dg.MENU_MATERIAIS]
+
+        for row_idx in rows:
+
+            row = dict(model.row_at(row_idx))
+
+            for field in MATERIAL_CLIP_FIELDS:
+
+                if field == "nao_stock":
+
+                    row[field] = False
+
+                else:
+
+                    row[field] = None
+
+            model.update_row(row_idx, row)
+
+            if hasattr(model, "recalculate"):
+
+                model.recalculate(row_idx)  # type: ignore[attr-defined]
+
+        table.viewport().update()
+
+
+    def _materials_copy_rows(self, rows: List[int]) -> None:
+
+        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+
+        self._copied_material_rows = []
+
+        for row_idx in rows:
+
+            row = model.row_at(row_idx)
+
+            payload = {field: row.get(field) for field in MATERIAL_CLIP_FIELDS}
+
+            self._copied_material_rows.append(payload)
+
+
+    def _materials_paste_rows(self, rows: List[int]) -> None:
+
+        if not self._copied_material_rows:
+
+            QtWidgets.QMessageBox.information(self, "Materiais", "Nenhuma linha copiada.")
+
+            return
+
+        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+
+        table = self.tables[svc_dg.MENU_MATERIAIS]
+
+        src_iter = itertools.cycle(self._copied_material_rows)
+
+        for dest_idx in rows:
+
+            src = next(src_iter)
+
+            row = dict(model.row_at(dest_idx))
+
+            row.update(src)
+
+            model.update_row(dest_idx, row)
+
+            if hasattr(model, "recalculate"):
+
+                model.recalculate(dest_idx)  # type: ignore[attr-defined]
+
+        table.viewport().update()
 
 
     def _configure_delegates(self, key: str) -> None:

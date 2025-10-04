@@ -1,13 +1,27 @@
-﻿from PySide6 import QtCore, QtWidgets
+﻿from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
 
 
 class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
-    """Table delegate that opens editors on a single click and keeps text editing snappy."""
+    """Table delegate that opens editors on a single click and keeps editing clean."""
+
+    def paint(self, painter, option, index):
+        state_editing = getattr(QtWidgets.QStyle.StateFlag, "State_Editing", None)
+        if state_editing is None:
+            state_editing = getattr(QtWidgets.QStyle, "State_Editing", 0)
+        if option.state & state_editing:
+            return
+        super().paint(painter, option, index)
 
     def createEditor(self, parent, option, index):
         editor = super().createEditor(parent, option, index)
+        column_kind = None
+        model = index.model()
+        if hasattr(model, "columns") and 0 <= index.column() < len(model.columns):
+            column_kind = getattr(model.columns[index.column()], "kind", None)
         if isinstance(editor, QtWidgets.QLineEdit):
+            if column_kind in {"money", "decimal", "percent", "integer"}:
+                editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             QtCore.QTimer.singleShot(0, editor.selectAll)
         elif isinstance(editor, QtWidgets.QComboBox):
             QtCore.QTimer.singleShot(0, editor.showPopup)
@@ -15,7 +29,7 @@ class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
 
     def editorEvent(self, event, model, option, index):
         if (
-            event.type() == QtCore.QEvent.MouseButtonPress
+            event.type() == QtCore.QEvent.Type.MouseButtonPress
             and not (index.flags() & Qt.ItemIsUserCheckable)
         ):
             view = option.widget
