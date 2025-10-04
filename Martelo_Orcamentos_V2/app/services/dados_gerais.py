@@ -23,27 +23,27 @@ from ..models import (
 MATERIAIS_GRUPOS: Sequence[str] = (
     "Costas",
     "Laterais",
-    "Divisórias",
+    "DivisÃ³rias",
     "Tetos",
     "Fundos",
     "Prateleiras Fixas",
-    "Prateleiras Amovíveis",
+    "Prateleiras AmovÃ­veis",
     "Prateleiras Parede",
     "Prateleiras",
-    "Portas Abrir",
-    "Portas Correr",
-    "Painéis",
+    "Portas Abrir 1",
+    "Portas Abrir 2",
+    "PainÃ©is",
     "Laterais Acabamento",
     "Tetos Acabamento",
     "Fundos Acabamento",
     "Costas Acabamento",
     "Prateleiras Acabamento",
-    "Painéis Acabamento",
+    "PainÃ©is Acabamento",
     "Remates Verticais",
     "Remates Horizontais",
-    "Guarnições Produzidas",
-    "Enchimentos Guarnições",
-    "Rodapé AGL",
+    "GuarniÃ§Ãµes Produzidas",
+    "Enchimentos GuarniÃ§Ãµes",
+    "RodapÃ© AGL",
     "Gaveta Frente",
     "Gaveta Caixa",
     "Gaveta Fundo",
@@ -63,41 +63,49 @@ MATERIAIS_GRUPOS: Sequence[str] = (
     "Vidro",
 )
 
-LEGACY_MATERIAIS_GRUPOS: Sequence[str] = (
-    "Mat_Costas",
-    "Mat_Laterais",
-    "Mat_Divisorias",
-    "Mat_Tetos",
-    "Mat_Fundos",
-    "Mat_Prat_Fixas",
-    "Mat_Prat_Amoviveis",
-    "Mat_Portas_Abrir",
-    "Mat_Laterais_Acabamento",
-    "Mat_Fundos_Acabamento",
-    "Mat_Costas_Acabamento",
-    "Mat_Tampos_Acabamento",
-    "Mat_Remates_Verticais",
-    "Mat_Remates_Horizontais",
-    "Mat_Guarnicoes_Verticais",
-    "Mat_Guarnicoes_Horizontais",
-    "Mat_Enchimentos_Guarnicao",
-    "Mat_Rodape_AGL",
-    "Mat_Gavetas_Frentes",
-    "Mat_Gavetas_Caixa",
-    "Mat_Gavetas_Fundo",
-    "Mat_Livre_1",
-    "Mat_Livre_2",
-    "Mat_Livre_3",
-    "Mat_Livre_4",
-    "Mat_Livre_5",
-    "Mat_Livre_6",
-    "Mat_Livre_7",
-    "Mat_Livre_8",
-    "Mat_Livre_9",
-    "Mat_Livre_10",
-)
-
-LEGACY_TO_NEW = {old: new for old, new in zip(LEGACY_MATERIAIS_GRUPOS, MATERIAIS_GRUPOS)}
+LEGACY_TO_NEW: Dict[str, str] = {
+    "Mat_Costas": "Costas",
+    "Mat_Laterais": "Laterais",
+    "Mat_Divisorias": "DivisÃ³rias",
+    "Mat_Tetos": "Tetos",
+    "Mat_Fundos": "Fundos",
+    "Mat_Prat_Fixas": "Prateleiras Fixas",
+    "Mat_Prat_Amoviveis": "Prateleiras AmovÃ­veis",
+    "Mat_Prat_Parede": "Prateleiras Parede",
+    "Mat_Prateleiras": "Prateleiras",
+    "Mat_Portas_Abrir": "Portas Abrir 1",
+    "Mat_Portas_Correr": "Portas Abrir 2",
+    "Mat_Paineis": "PainÃ©is",
+    "Mat_Laterais_Acabamento": "Laterais Acabamento",
+    "Mat_Tetos_Acabamento": "Tetos Acabamento",
+    "Mat_Fundos_Acabamento": "Fundos Acabamento",
+    "Mat_Costas_Acabamento": "Costas Acabamento",
+    "Mat_Prat_Acabamento": "Prateleiras Acabamento",
+    "Mat_Tampos_Acabamento": "PainÃ©is Acabamento",
+    "Mat_Remates_Verticais": "Remates Verticais",
+    "Mat_Remates_Horizontais": "Remates Horizontais",
+    "Mat_Guarnicoes_Verticais": "GuarniÃ§Ãµes Produzidas",
+    "Mat_Guarnicoes_Horizontais": "Enchimentos GuarniÃ§Ãµes",
+    "Mat_Enchimentos_Guarnicao": "Enchimentos GuarniÃ§Ãµes",
+    "Mat_Rodape_AGL": "RodapÃ© AGL",
+    "Mat_Gavetas_Frentes": "Gaveta Frente",
+    "Mat_Gavetas_Caixa": "Gaveta Caixa",
+    "Mat_Gavetas_Fundo": "Gaveta Fundo",
+    "Mat_Prumos": "Prumos",
+    "Mat_Travessas": "Travessas",
+    "Mat_Livre_1": "Material_Livre_1",
+    "Mat_Livre_2": "Material_Livre_2",
+    "Mat_Livre_3": "Material_Livre_3",
+    "Mat_Livre_4": "Material_Livre_4",
+    "Mat_Livre_5": "Material_Livre_5",
+    "Mat_Livre_6": "Material_Livre_6",
+    "Mat_Livre_7": "Material_Livre_7",
+    "Mat_Livre_8": "Material_Livre_8",
+    "Mat_Livre_9": "Material_Livre_9",
+    "Mat_Livre_10": "Material_Livre_10",
+    "Portas Abrir": "Portas Abrir 1",
+    "Portas Correr": "Portas Abrir 2",
+}
 
 MENU_MATERIAIS = "materiais"
 MENU_FERRAGENS = "ferragens"
@@ -268,7 +276,7 @@ def _ensure_decimal(value: Any) -> Optional[Decimal]:
     text_value = str(value).strip()
     if not text_value:
         return None
-    text_value = text_value.replace("%", "").replace("€", "").replace(" ", "")
+    text_value = text_value.replace("%", "").replace("â‚¬", "").replace(" ", "")
     text_value = text_value.replace(",", ".")
     try:
         dec = Decimal(text_value)
@@ -324,7 +332,7 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
             value = value.strip().lower()
             if value in ("true", "sim", "yes", "1"):
                 return True
-            if value in ("false", "nao", "não", "no", "0"):
+            if value in ("false", "nao", "nÃ£o", "no", "0"):
                 return False
         if isinstance(value, (int, float, Decimal)):
             try:
@@ -338,12 +346,12 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
 def carregar_contexto(db: Session, orcamento_id: int) -> DadosGeraisContext:
     orc = db.get(Orcamento, orcamento_id)
     if not orc:
-        raise ValueError("Orçamento não encontrado")
+        raise ValueError("OrÃ§amento nÃ£o encontrado")
     if not orc.client_id:
-        raise ValueError("Orçamento sem cliente associado")
+        raise ValueError("OrÃ§amento sem cliente associado")
     cliente = db.get(Client, orc.client_id)
     if not cliente:
-        raise ValueError("Cliente associado não encontrado")
+        raise ValueError("Cliente associado nÃ£o encontrado")
     user = db.get(User, orc.created_by) if orc.created_by else None
     versao = str(orc.versao or "")
     if versao.isdigit():
@@ -408,6 +416,49 @@ def _default_material_rows() -> List[Dict[str, Any]]:
     return rows
 
 
+def _ensure_material_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    existing: Dict[str, Dict[str, Any]] = {}
+    extras: List[Dict[str, Any]] = []
+    for row in rows or []:
+        row_dict = dict(row)
+        name = _normalize_grupo_material(row_dict.get("grupo_material"))
+        if not name:
+            continue
+        row_dict["grupo_material"] = name
+        if name not in MATERIAIS_GRUPOS and name not in existing:
+            extras.append(row_dict)
+        existing[name] = row_dict
+    defaults = {row["grupo_material"]: dict(row) for row in _default_material_rows()}
+    ensured: List[Dict[str, Any]] = []
+    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
+        base = defaults.get(nome, {"grupo_material": nome, "ordem": ordem})
+        merged = dict(base)
+        row = existing.get(nome)
+        if row:
+            merged.update(row)
+        merged["ordem"] = ordem
+        if row and "id" in row:
+            merged["id"] = row["id"]
+        else:
+            merged.setdefault("id", None)
+        if not merged.get("familia"):
+            merged["familia"] = "PLACAS"
+        merged["nao_stock"] = bool(merged.get("nao_stock", False))
+        for field in MENU_FIELDS[MENU_MATERIAIS]:
+            merged.setdefault(field, None)
+        ensured.append(merged)
+    for extra in extras:
+        extra_row = dict(extra)
+        extra_row.setdefault("id", extra_row.get("id"))
+        extra_row.setdefault("ordem", len(ensured))
+        if not extra_row.get("familia"):
+            extra_row["familia"] = "PLACAS"
+        extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
+        for field in MENU_FIELDS[MENU_MATERIAIS]:
+            extra_row.setdefault(field, None)
+        ensured.append(extra_row)
+    return ensured
+
 def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, List[Dict[str, Any]]]:
     data: Dict[str, List[Dict[str, Any]]] = {}
     for menu, model in MODEL_MAP.items():
@@ -423,8 +474,7 @@ def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, Lis
         )
         rows = db.execute(stmt).scalars().all()
         data[menu] = [_row_to_dict(menu, row) for row in rows]
-    if not data.get(MENU_MATERIAIS):
-        data[MENU_MATERIAIS] = _default_material_rows()
+    data[MENU_MATERIAIS] = _ensure_material_rows(data.get(MENU_MATERIAIS, []))
     return data
 
 
@@ -513,10 +563,10 @@ def guardar_modelo(
     replace_id: Optional[int] = None,
 ) -> DadosGeraisModelo:
     if tipo_menu not in MODEL_MAP:
-        raise ValueError("Tipo de menu inválido")
+        raise ValueError("Tipo de menu invÃ¡lido")
     nome_limpo = nome_modelo.strip()
     if not nome_limpo:
-        raise ValueError("Nome do modelo obrigatório")
+        raise ValueError("Nome do modelo obrigatÃ³rio")
     if replace_id:
         modelo = db.execute(
             select(DadosGeraisModelo).where(
@@ -525,7 +575,7 @@ def guardar_modelo(
             )
         ).scalar_one_or_none()
         if not modelo:
-            raise ValueError("Modelo não encontrado para substituir")
+            raise ValueError("Modelo nÃ£o encontrado para substituir")
         modelo.nome_modelo = nome_limpo
         modelo.tipo_menu = tipo_menu
         db.execute(delete(DadosGeraisModeloItem).where(DadosGeraisModeloItem.modelo_id == modelo.id))
@@ -565,7 +615,7 @@ def carregar_modelo(db: Session, modelo_id: int, user_id: Optional[int] = None) 
         stmt = stmt.where(DadosGeraisModelo.user_id == user_id)
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo não encontrado")
+        raise ValueError("Modelo nÃ£o encontrado")
     itens_stmt = (
         select(DadosGeraisModeloItem)
         .where(DadosGeraisModeloItem.modelo_id == modelo.id)
@@ -589,7 +639,7 @@ def eliminar_modelo(db: Session, *, modelo_id: int, user_id: int) -> None:
     )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo não encontrado")
+        raise ValueError("Modelo nÃ£o encontrado")
     db.delete(modelo)
     db.flush()
 
@@ -597,14 +647,14 @@ def eliminar_modelo(db: Session, *, modelo_id: int, user_id: int) -> None:
 def renomear_modelo(db: Session, *, modelo_id: int, user_id: int, novo_nome: str) -> DadosGeraisModelo:
     nome_limpo = novo_nome.strip()
     if not nome_limpo:
-        raise ValueError("Nome do modelo obrigatório")
+        raise ValueError("Nome do modelo obrigatÃ³rio")
     stmt = select(DadosGeraisModelo).where(
         DadosGeraisModelo.id == modelo_id,
         DadosGeraisModelo.user_id == user_id,
     )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo não encontrado")
+        raise ValueError("Modelo nÃ£o encontrado")
     modelo.nome_modelo = nome_limpo
     db.flush()
     return modelo

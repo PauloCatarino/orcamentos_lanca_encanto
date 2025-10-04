@@ -70,6 +70,8 @@ from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 
 from Martelo_Orcamentos_V2.app.services import materias_primas as svc_mp
 
+from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
+
 from ..models.qt_table import SimpleTableModel
 
 
@@ -221,6 +223,8 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
         editor.setEditable(False)
 
         self._refresh(editor, index.data(Qt.DisplayRole))
+
+        QtCore.QTimer.singleShot(0, editor.showPopup)
 
         return editor
 
@@ -438,7 +442,11 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
             base |= Qt.ItemIsUserCheckable
 
-        if not spec.readonly and spec.kind != "bool":
+            if not spec.readonly:
+
+                base |= Qt.ItemIsEditable
+
+        elif not spec.readonly:
 
             base |= Qt.ItemIsEditable
 
@@ -1200,6 +1208,18 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.setSortingEnabled(True)
 
+            table.setEditTriggers(
+
+                QAbstractItemView.EditTrigger.CurrentChanged
+
+                | QAbstractItemView.EditTrigger.SelectedClicked
+
+                | QAbstractItemView.EditTrigger.EditKeyPressed
+
+                | QAbstractItemView.EditTrigger.AnyKeyPressed
+
+            )
+
             layout.addWidget(table, 1)
 
 
@@ -1264,7 +1284,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
                 ColumnSpec("Und", "und", width=60),
 
-                ColumnSpec("Desp", "percent", width=90),
+                ColumnSpec("Desp", "desp", "percent", width=90),
 
                 ColumnSpec("ORL 0.4", "orl_0_4", width=110),
 
@@ -1337,6 +1357,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
         table = self.tables[key]
 
         model = self.models[key]
+
+        table.setItemDelegate(DadosGeraisDelegate(table))
 
         for idx, spec in enumerate(model.columns):
 
