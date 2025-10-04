@@ -1,0 +1,77 @@
+def _default_material_rows() -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
+        rows.append(
+            {
+                "id": None,
+                "ordem": ordem,
+                "grupo_material": nome,
+                "descricao": None,
+                "ref_le": None,
+                "descricao_material": None,
+                "preco_tab": None,
+                "preco_liq": None,
+                "margem": None,
+                "desconto": None,
+                "und": None,
+                "desp": None,
+                "orl_0_4": None,
+                "orl_1_0": None,
+                "tipo": None,
+                "familia": "PLACAS",
+                "comp_mp": None,
+                "larg_mp": None,
+                "esp_mp": None,
+                "id_mp": None,
+                "nao_stock": False,
+                "reserva_1": None,
+                "reserva_2": None,
+                "reserva_3": None,
+            }
+        )
+    return rows
+
+
+def _ensure_material_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    existing: Dict[str, Dict[str, Any]] = {}
+    extras: List[Dict[str, Any]] = []
+    for row in rows or []:
+        row_dict = dict(row)
+        name = _normalize_grupo_material(row_dict.get("grupo_material"))
+        if not name:
+            continue
+        row_dict["grupo_material"] = name
+        if name not in MATERIAIS_GRUPOS and name not in existing:
+            extras.append(row_dict)
+        existing[name] = row_dict
+    defaults = {row["grupo_material"]: dict(row) for row in _default_material_rows()}
+    ensured: List[Dict[str, Any]] = []
+    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
+        base = defaults.get(nome, {"grupo_material": nome, "ordem": ordem})
+        merged = dict(base)
+        row = existing.get(nome)
+        if row:
+            merged.update(row)
+        merged["ordem"] = ordem
+        if row and "id" in row:
+            merged["id"] = row["id"]
+        else:
+            merged.setdefault("id", None)
+        if not merged.get("familia"):
+            merged["familia"] = "PLACAS"
+        merged["nao_stock"] = bool(merged.get("nao_stock", False))
+        for field in MENU_FIELDS[MENU_MATERIAIS]:
+            merged.setdefault(field, None)
+        ensured.append(merged)
+    for extra in extras:
+        extra_row = dict(extra)
+        extra_row.setdefault("id", extra_row.get("id"))
+        extra_row.setdefault("ordem", len(ensured))
+        if not extra_row.get("familia"):
+            extra_row["familia"] = "PLACAS"
+        extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
+        for field in MENU_FIELDS[MENU_MATERIAIS]:
+            extra_row.setdefault(field, None)
+        ensured.append(extra_row)
+    return ensured
+

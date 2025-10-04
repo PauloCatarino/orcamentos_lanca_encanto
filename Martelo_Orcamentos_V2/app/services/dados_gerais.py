@@ -64,6 +64,252 @@ MATERIAIS_GRUPOS: Sequence[str] = (
     "Vidro",
 )
 
+FERRAGENS_GRUPOS: Sequence[str] = (
+    "Dobradica Reta",
+    "Dobradica Canto Sego",
+    "Dobradica Abertura Total",
+    "Dobradica 1",
+    "Dobradica 2",
+    "Suporte Prateleira 1",
+    "Suporte Prateleira 2",
+    "Suporte Parede",
+    "Suporte Terminal Varao",
+    "Suporte Central Varao",
+    "Varao SPP",
+    "Terminal Perfil Lava Louca",
+    "Perfil Lava Louca SPP",
+    "Rodape PVC SPP",
+    "Canto Rodape PVC",
+    "Grampas Rodape PVC",
+    "Pes 1",
+    "Pes 2",
+    "Pes 3",
+    "Corredica Invisivel",
+    "Corredica Lateral Metalica",
+    "Corredica 1",
+    "Corredica 2",
+    "Puxador Tic Tac",
+    "Puxador Fresado J",
+    "Puxador STD 1",
+    "Puxador STD 2",
+    "Puxador Perfil SPP 1",
+    "Puxador Perfil SPP 2",
+    "Puxador Perfil SPP 3",
+    "Sistema Basculante 1",
+    "Sistema Basculante 2",
+    "Aventos 1",
+    "Aventos 2",
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta Talheres",
+    "Porta Calcas",
+    "Tulha",
+    "Fundo Aluminio",
+    "Grelha Veludo",
+    "Acessorio Cozinha 1",
+    "Acessorio Cozinha 2",
+    "Acessorio Cozinha 3",
+    "Calha Led 1 SPP",
+    "Calha Led 2 SPP",
+    "Fita Led 1 SPP",
+    "Fita Led 2 SPP",
+    "Transformador 1",
+    "Transformador 2",
+    "Cabos Led 1",
+    "Cabos Led 2",
+    "Cabos Led 3",
+    "Sensor Led 1",
+    "Sensor Led 2",
+    "Sensor Led 3",
+    "Iluminacao 1",
+    "Iluminacao 2",
+    "Iluminacao 3",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+    "Ferragens Diversas 6 SPP",
+    "Ferragens Diversas 7 SPP",
+)
+
+SISTEMAS_CORRER_GRUPOS: Sequence[str] = (
+    "Puxador Vertical 1",
+    "Puxador Vertical 2",
+    "Calha Superior 1 SPP",
+    "Calha Superior 2 SPP",
+    "Calha Inferior 1 SPP",
+    "Calha Inferior 2 SPP",
+    "Perfil Horizontal H SPP",
+    "Perfil Horizontal U SPP",
+    "Perfil Horizontal L SPP",
+    "Painel Porta Correr 1",
+    "Painel Porta Correr 2",
+    "Painel Porta Correr 3",
+    "Painel Porta Correr 4",
+    "Painel Porta Correr 5",
+    "Painel Espelho Correr 1",
+    "Painel Espelho Correr 2",
+    "Painel Espelho Correr 3",
+    "Vidro",
+    "Rodizio Sup 1",
+    "Rodizio Sup 2",
+    "Rodizio Inf 1",
+    "Rodizio Inf 2",
+    "Acessorio 1",
+    "Acessorio 2",
+    "Acessorio 3",
+    "Acessorio 4",
+    "Acessorio 5",
+    "Acessorio 6",
+    "Acessorio 7 SPP",
+    "Acessorio 8 SPP",
+)
+
+ACABAMENTOS_GRUPOS: Sequence[str] = (
+    "Lacar Face Sup",
+    "Lacar Face Inf",
+    "Lacar 2 Faces",
+    "Verniz Face Sup",
+    "Verniz Face Inf",
+    "Verniz 2 Faces",
+    "Acabamento Face Sup 1",
+    "Acabamento Face Sup 2",
+    "Acabamento Face Inf 1",
+    "Acabamento Face Inf 2",
+)
+
+FERRAGENS_GRUPOS: Sequence[str] = (
+    "Dobradica Reta",
+    "Dobradica Canto Sego",
+    "Dobradica Abertura Total",
+    "Dobradica 1",
+    "Dobradica 2",
+    "Suporte Prateleira 1",
+    "Suporte Prateleira 2",
+    "Suporte Parede",
+    "Suporte Terminal Varao",
+    "Suporte Central Varao",
+    "Varao SPP",
+    "Terminal Perfil Lava Louca",
+    "Perfil Lava Louca SPP",
+    "Rodape PVC SPP",
+    "Canto Rodape PVC",
+    "Grampas Rodape PVC",
+    "Pes 1",
+    "Pes 2",
+    "Pes 3",
+    "Corredica Invisivel",
+    "Corredica Lateral Metalica",
+    "Corredica 1",
+    "Corredica 2",
+    "Puxador Tic Tac",
+    "Puxador Fresado J",
+    "Puxador STD 1",
+    "Puxador STD 2",
+    "Puxador Perfil SPP 1",
+    "Puxador Perfil SPP 2",
+    "Puxador Perfil SPP 3",
+    "Sistema Basculante 1",
+    "Sistema Basculante 2",
+    "Aventos 1",
+    "Aventos 2",
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta Talheres",
+    "Porta Calcas",
+    "Tulha",
+    "Fundo Aluminio",
+    "Grelha Veludo",
+    "Acessorio Cozinha 1",
+    "Acessorio Cozinha 2",
+    "Acessorio Cozinha 3",
+    "Calha Led 1 SPP",
+    "Calha Led 2 SPP",
+    "Fita Led 1 SPP",
+    "Fita Led 2 SPP",
+    "Transformador 1",
+    "Transformador 2",
+    "Cabos Led 1",
+    "Cabos Led 2",
+    "Cabos Led 3",
+    "Sensor Led 1",
+    "Sensor Led 2",
+    "Sensor Led 3",
+    "Iluminacao 1",
+    "Iluminacao 2",
+    "Iluminacao 3",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+    "Ferragens Diversas 6 SPP",
+    "Ferragens Diversas 7 SPP",
+)
+
+SISTEMAS_CORRER_GRUPOS: Sequence[str] = (
+    "Puxador Vertical 1",
+    "Puxador Vertical 2",
+    "Calha Superior 1 SPP",
+    "Calha Superior 2 SPP",
+    "Calha Inferior 1 SPP",
+    "Calha Inferior 2 SPP",
+    "Perfil Horizontal H SPP",
+    "Perfil Horizontal U SPP",
+    "Perfil Horizontal L SPP",
+    "Painel Porta Correr 1",
+    "Painel Porta Correr 2",
+    "Painel Porta Correr 3",
+    "Painel Porta Correr 4",
+    "Painel Porta Correr 5",
+    "Painel Espelho Correr 1",
+    "Painel Espelho Correr 2",
+    "Painel Espelho Correr 3",
+    "Vidro",
+    "Rodizio Sup 1",
+    "Rodizio Sup 2",
+    "Rodizio Inf 1",
+    "Rodizio Inf 2",
+    "Acessorio 1",
+    "Acessorio 2",
+    "Acessorio 3",
+    "Acessorio 4",
+    "Acessorio 5",
+    "Acessorio 6",
+    "Acessorio 7 SPP",
+    "Acessorio 8 SPP",
+)
+
+ACABAMENTOS_GRUPOS: Sequence[str] = (
+    "Lacar Face Sup",
+    "Lacar Face Inf",
+    "Lacar 2 Faces",
+    "Verniz Face Sup",
+    "Verniz Face Inf",
+    "Verniz 2 Faces",
+    "Acabamento Face Sup 1",
+    "Acabamento Face Sup 2",
+    "Acabamento Face Inf 1",
+    "Acabamento Face Inf 2",
+)
+
+MENU_FIXED_GROUPS = {
+    MENU_MATERIAIS: MATERIAIS_GRUPOS,
+    MENU_FERRAGENS: FERRAGENS_GRUPOS,
+    MENU_SIS_CORRER: SISTEMAS_CORRER_GRUPOS,
+    MENU_ACABAMENTOS: ACABAMENTOS_GRUPOS,
+}
+
+MENU_PRIMARY_FIELD = {
+    MENU_MATERIAIS: "grupo_material",
+    MENU_FERRAGENS: "grupo_ferragem",
+    MENU_SIS_CORRER: "grupo_sistema",
+    MENU_ACABAMENTOS: "grupo_acabamento",
+}
+
 LEGACY_TO_NEW: Dict[str, str] = {
     "Mat_Costas": "Costas",
     "Mat_Laterais": "Laterais",
@@ -140,48 +386,68 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
         "reserva_3",
     ),
     MENU_FERRAGENS: (
-        "categoria",
+        "grupo_ferragem",
         "descricao",
-        "referencia",
-        "fornecedor",
+        "ref_le",
+        "descricao_material",
         "preco_tab",
         "preco_liq",
         "margem",
         "desconto",
         "und",
-        "qt",
+        "desp",
+        "tipo",
+        "familia",
+        "comp_mp",
+        "larg_mp",
+        "esp_mp",
+        "id_mp",
         "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
     ),
     MENU_SIS_CORRER: (
-        "categoria",
+        "grupo_sistema",
         "descricao",
-        "referencia",
-        "fornecedor",
+        "ref_le",
+        "descricao_material",
         "preco_tab",
         "preco_liq",
         "margem",
         "desconto",
         "und",
-        "qt",
+        "desp",
+        "tipo",
+        "familia",
+        "comp_mp",
+        "larg_mp",
+        "esp_mp",
+        "orl_0_4",
+        "orl_1_0",
+        "id_mp",
         "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
     ),
     MENU_ACABAMENTOS: (
-        "categoria",
+        "grupo_acabamento",
         "descricao",
-        "referencia",
-        "fornecedor",
+        "ref_le",
+        "descricao_material",
         "preco_tab",
         "preco_liq",
         "margem",
         "desconto",
         "und",
-        "qt",
+        "desp",
+        "tipo",
+        "familia",
+        "comp_mp",
+        "larg_mp",
+        "esp_mp",
+        "id_mp",
         "nao_stock",
         "reserva_1",
         "reserva_2",
@@ -199,23 +465,23 @@ MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
     },
     MENU_FERRAGENS: {
         "money": ("preco_tab", "preco_liq"),
-        "percent": ("margem", "desconto"),
-        "integer": (),
-        "decimal": ("qt",),
+        "percent": ("margem", "desconto", "desp"),
+        "integer": ("comp_mp", "larg_mp", "esp_mp"),
+        "decimal": (),
         "bool": ("nao_stock",),
     },
     MENU_SIS_CORRER: {
         "money": ("preco_tab", "preco_liq"),
-        "percent": ("margem", "desconto"),
-        "integer": (),
-        "decimal": ("qt",),
+        "percent": ("margem", "desconto", "desp"),
+        "integer": ("comp_mp", "larg_mp", "esp_mp"),
+        "decimal": (),
         "bool": ("nao_stock",),
     },
     MENU_ACABAMENTOS: {
         "money": ("preco_tab", "preco_liq"),
-        "percent": ("margem", "desconto"),
-        "integer": (),
-        "decimal": ("qt",),
+        "percent": ("margem", "desconto", "desp"),
+        "integer": ("comp_mp", "larg_mp", "esp_mp"),
+        "decimal": (),
         "bool": ("nao_stock",),
     },
 }
@@ -385,87 +651,92 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
     for field in MENU_FIELDS[menu]:
         raw = _value(row, field)
         coerced = _coerce_field(menu, field, raw)
-        if menu == MENU_MATERIAIS and field == "grupo_material":
-            coerced = _normalize_grupo_material(coerced)
-        if menu == MENU_MATERIAIS and field == "familia":
+        primary = MENU_PRIMARY_FIELD.get(menu)
+        if field == primary:
+            if menu == MENU_MATERIAIS:
+                coerced = _normalize_grupo_material(coerced)
+            else:
+                coerced = _strip_accents(str(coerced)) if coerced else coerced
+        if field == "familia":
             coerced = coerced or "PLACAS"
         result[field] = coerced
     return result
 
 
-def _default_material_rows() -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
-        rows.append(
-            {
-                "id": None,
-                "ordem": ordem,
-                "grupo_material": nome,
-                "descricao": None,
-                "ref_le": None,
-                "descricao_material": None,
-                "preco_tab": None,
-                "preco_liq": None,
-                "margem": None,
-                "desconto": None,
-                "und": None,
-                "desp": None,
-                "orl_0_4": None,
-                "orl_1_0": None,
-                "tipo": None,
-                "familia": "PLACAS",
-                "comp_mp": None,
-                "larg_mp": None,
-                "esp_mp": None,
-                "id_mp": None,
-                "nao_stock": False,
-                "reserva_1": None,
-                "reserva_2": None,
-                "reserva_3": None,
-            }
-        )
-    return rows
+def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
+    defaults: List[Dict[str, Any]] = []
+    primary = MENU_PRIMARY_FIELD[menu]
+    fixed = MENU_FIXED_GROUPS[menu]
+    for ordem, name in enumerate(fixed):
+        row: Dict[str, Any] = {
+            "id": None,
+            "ordem": ordem,
+            primary: name,
+        }
+        for field in MENU_FIELDS[menu]:
+            if field not in row:
+                if field == "familia":
+                    row[field] = "PLACAS"
+                elif field == "nao_stock":
+                    row[field] = False
+                else:
+                    row[field] = None
+        defaults.append(row)
+    return defaults
 
 
-def _ensure_material_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+DEFAULT_ROWS_BY_MENU: Dict[str, List[Dict[str, Any]]] = {
+    menu: _default_rows_for_menu(menu) for menu in MENU_FIXED_GROUPS
+}
+
+
+def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    fixed = MENU_FIXED_GROUPS.get(menu)
+    if not fixed:
+        return [dict(row) for row in rows or []]
+    primary = MENU_PRIMARY_FIELD[menu]
     existing: Dict[str, Dict[str, Any]] = {}
     extras: List[Dict[str, Any]] = []
     for row in rows or []:
         row_dict = dict(row)
-        name = _normalize_grupo_material(row_dict.get("grupo_material"))
+        value = row_dict.get(primary)
+        name: Optional[str]
+        if menu == MENU_MATERIAIS:
+            name = _normalize_grupo_material(value)
+        else:
+            name = _strip_accents(str(value)).strip() if value else None
         if not name:
             continue
-        row_dict["grupo_material"] = name
-        if name not in MATERIAIS_GRUPOS and name not in existing:
+        row_dict[primary] = name
+        if name not in fixed and name not in existing:
             extras.append(row_dict)
         existing[name] = row_dict
-    defaults = {row["grupo_material"]: dict(row) for row in _default_material_rows()}
+    defaults = {row[primary]: dict(row) for row in DEFAULT_ROWS_BY_MENU[menu]}
     ensured: List[Dict[str, Any]] = []
-    for ordem, nome in enumerate(MATERIAIS_GRUPOS):
-        base = defaults.get(nome, {"grupo_material": nome, "ordem": ordem})
+    for ordem, name in enumerate(fixed):
+        base = defaults.get(name, {primary: name, "ordem": ordem})
         merged = dict(base)
-        row = existing.get(nome)
+        row = existing.get(name)
         if row:
             merged.update(row)
         merged["ordem"] = ordem
-        if row and "id" in row:
-            merged["id"] = row["id"]
-        else:
-            merged.setdefault("id", None)
-        if not merged.get("familia"):
+        merged.setdefault("id", row.get("id") if row else None)
+        if "familia" in merged and not merged.get("familia"):
             merged["familia"] = "PLACAS"
-        merged["nao_stock"] = bool(merged.get("nao_stock", False))
-        for field in MENU_FIELDS[MENU_MATERIAIS]:
+        if "nao_stock" in merged:
+            merged["nao_stock"] = bool(merged.get("nao_stock", False))
+        for field in MENU_FIELDS[menu]:
             merged.setdefault(field, None)
         ensured.append(merged)
     for extra in extras:
         extra_row = dict(extra)
         extra_row.setdefault("id", extra_row.get("id"))
         extra_row.setdefault("ordem", len(ensured))
-        if not extra_row.get("familia"):
+        if "familia" in extra_row and not extra_row.get("familia"):
             extra_row["familia"] = "PLACAS"
-        extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
-        for field in MENU_FIELDS[MENU_MATERIAIS]:
+        if "nao_stock" in extra_row:
+            extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
+        for field in MENU_FIELDS[menu]:
             extra_row.setdefault(field, None)
         ensured.append(extra_row)
     return ensured
@@ -484,8 +755,7 @@ def carregar_dados_gerais(db: Session, ctx: DadosGeraisContext) -> Dict[str, Lis
             .order_by(model.ordem, model.id)
         )
         rows = db.execute(stmt).scalars().all()
-        data[menu] = [_row_to_dict(menu, row) for row in rows]
-    data[MENU_MATERIAIS] = _ensure_material_rows(data.get(MENU_MATERIAIS, []))
+        data[menu] = _ensure_menu_rows(menu, [_row_to_dict(menu, row) for row in rows])
     return data
 
 
@@ -500,12 +770,16 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
     }
     for field in MENU_FIELDS[menu]:
         value = row.get(field)
-        if menu == MENU_MATERIAIS and field == "grupo_material":
-            value = _normalize_grupo_material(value)
-        if menu == MENU_MATERIAIS and field == "familia":
+        primary = MENU_PRIMARY_FIELD.get(menu)
+        if field == primary:
+            if menu == MENU_MATERIAIS:
+                value = _normalize_grupo_material(value)
+            else:
+                value = _strip_accents(str(value)) if value else value
+        if field == "familia":
             value = value or "PLACAS"
         coerced = _coerce_field(menu, field, value)
-        if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
+        if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
         payload[field] = coerced
     if menu != MENU_MATERIAIS:
@@ -539,12 +813,16 @@ def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[s
     sanitized: Dict[str, Any] = {"ordem": ordem}
     for field in MENU_FIELDS[menu]:
         value = row.get(field)
-        if menu == MENU_MATERIAIS and field == "grupo_material":
-            value = _normalize_grupo_material(value)
-        if menu == MENU_MATERIAIS and field == "familia":
+        primary = MENU_PRIMARY_FIELD.get(menu)
+        if field == primary:
+            if menu == MENU_MATERIAIS:
+                value = _normalize_grupo_material(value)
+            else:
+                value = _strip_accents(str(value)) if value else value
+        if field == "familia":
             value = value or "PLACAS"
         coerced = _coerce_field(menu, field, value)
-        if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
+        if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
         sanitized[field] = _json_ready(coerced)
     return sanitized

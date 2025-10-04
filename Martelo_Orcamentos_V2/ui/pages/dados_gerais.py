@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 
 
@@ -1698,6 +1698,44 @@ class MateriaisTableModel(DadosGeraisTableModel):
 
 
 
+class FerragensTableModel(MateriaisTableModel):
+
+
+
+    pass
+
+
+
+
+
+
+
+class SistemasCorrerTableModel(MateriaisTableModel):
+
+
+
+    pass
+
+
+
+
+
+
+
+class AcabamentosTableModel(MateriaisTableModel):
+
+
+
+    pass
+
+
+
+
+
+
+
+
+
 class MateriaPrimaPicker(QDialog):
 
 
@@ -2198,7 +2236,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        self._copied_material_rows: List[Dict[str, Any]] = []
+        self._copied_rows: Dict[str, List[Dict[str, Any]]] = {}
 
 
 
@@ -2458,19 +2496,15 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            if key == svc_dg.MENU_MATERIAIS:
+            btn_mp = QPushButton("Selecionar Materia-Prima")
 
 
 
-                btn_mp = QPushButton("Selecionar Materia-Prima")
+            btn_mp.clicked.connect(lambda _, k=key: self.on_selecionar_mp(k))
 
 
 
-                btn_mp.clicked.connect(self.on_selecionar_mp)
-
-
-
-                toolbar.addWidget(btn_mp)
+            toolbar.addWidget(btn_mp)
 
 
 
@@ -2494,19 +2528,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            if key == svc_dg.MENU_MATERIAIS:
-
-
-
-                table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-
-
-
-            else:
-
-
-
-                table.setSelectionMode(QAbstractItemView.SingleSelection)
+            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
 
 
@@ -2542,15 +2564,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            if key == svc_dg.MENU_MATERIAIS:
+            table.setContextMenuPolicy(Qt.CustomContextMenu)
 
 
 
-                table.setContextMenuPolicy(Qt.CustomContextMenu)
-
-
-
-                table.customContextMenuRequested.connect(lambda pos, k=key: self._on_materials_context_menu(pos, k))
+            table.customContextMenuRequested.connect(lambda pos, k=key: self._on_context_menu(pos, k))
 
 
 
@@ -2746,7 +2764,299 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+        if key == svc_dg.MENU_FERRAGENS:
 
+
+
+            columns = [
+
+
+
+                ColumnSpec("Ferragens", "grupo_ferragem", width=200, readonly=True),
+
+
+
+                ColumnSpec("Descricao", "descricao", width=240),
+
+
+
+                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
+
+
+
+                ColumnSpec("Descricao Material", "descricao_material", width=260),
+
+
+
+                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
+
+
+
+                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
+
+
+
+                ColumnSpec("Margem", "margem", "percent", width=90),
+
+
+
+                ColumnSpec("Desconto", "desconto", "percent", width=90),
+
+
+
+                ColumnSpec("Und", "und", width=60),
+
+
+
+                ColumnSpec("Desp", "desp", "percent", width=90),
+
+
+
+                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
+
+
+
+                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
+
+
+
+                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
+
+
+
+                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
+
+
+
+                ColumnSpec("Reserva 1", "reserva_1", visible=False),
+
+
+
+                ColumnSpec("Reserva 2", "reserva_2", visible=False),
+
+
+
+                ColumnSpec("Reserva 3", "reserva_3", visible=False),
+
+
+
+            ]
+
+
+
+            return FerragensTableModel(columns=columns, parent=self)
+
+
+
+        if key == svc_dg.MENU_SIS_CORRER:
+
+
+
+            columns = [
+
+
+
+                ColumnSpec("Sistemas Correr", "grupo_sistema", width=200, readonly=True),
+
+
+
+                ColumnSpec("Descricao", "descricao", width=240),
+
+
+
+                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
+
+
+
+                ColumnSpec("Descricao Material", "descricao_material", width=260),
+
+
+
+                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
+
+
+
+                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
+
+
+
+                ColumnSpec("Margem", "margem", "percent", width=90),
+
+
+
+                ColumnSpec("Desconto", "desconto", "percent", width=90),
+
+
+
+                ColumnSpec("Und", "und", width=60),
+
+
+
+                ColumnSpec("Desp", "desp", "percent", width=90),
+
+
+
+                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
+
+
+
+                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
+
+
+
+                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("ORL 0.4", "orl_0_4", width=110),
+
+
+
+                ColumnSpec("ORL 1.0", "orl_1_0", width=110),
+
+
+
+                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
+
+
+
+                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
+
+
+
+                ColumnSpec("Reserva 1", "reserva_1", visible=False),
+
+
+
+                ColumnSpec("Reserva 2", "reserva_2", visible=False),
+
+
+
+                ColumnSpec("Reserva 3", "reserva_3", visible=False),
+
+
+
+            ]
+
+
+
+            return SistemasCorrerTableModel(columns=columns, parent=self)
+
+
+
+        if key == svc_dg.MENU_ACABAMENTOS:
+
+
+
+            columns = [
+
+
+
+                ColumnSpec("Acabamentos", "grupo_acabamento", width=200, readonly=True),
+
+
+
+                ColumnSpec("Descricao", "descricao", width=240),
+
+
+
+                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
+
+
+
+                ColumnSpec("Descricao Material", "descricao_material", width=260),
+
+
+
+                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
+
+
+
+                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
+
+
+
+                ColumnSpec("Margem", "margem", "percent", width=90),
+
+
+
+                ColumnSpec("Desconto", "desconto", "percent", width=90),
+
+
+
+                ColumnSpec("Und", "und", width=60),
+
+
+
+                ColumnSpec("Desp", "desp", "percent", width=90),
+
+
+
+                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
+
+
+
+                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
+
+
+
+                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
+
+
+
+                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
+
+
+
+                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
+
+
+
+                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
+
+
+
+                ColumnSpec("Reserva 1", "reserva_1", visible=False),
+
+
+
+                ColumnSpec("Reserva 2", "reserva_2", visible=False),
+
+
+
+                ColumnSpec("Reserva 3", "reserva_3", visible=False),
+
+
+
+            ]
+
+
+
+            return AcabamentosTableModel(columns=columns, parent=self)
 
 
 
@@ -2762,7 +3072,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            ColumnSpec("Referencia", "referencia", width=120),
+            ColumnSpec("Referencia", "referencia", "text"),
 
 
 
@@ -2818,19 +3128,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-
-
-
-
-    def _on_materials_context_menu(self, pos, key: str) -> None:
-
-
-
-        if key != svc_dg.MENU_MATERIAIS:
-
-
-
-            return
+    def _on_context_menu(self, pos, key: str) -> None:
 
 
 
@@ -2867,65 +3165,66 @@ class DadosGeraisPage(QtWidgets.QWidget):
         style = table.style()
 
         act_clear = menu.addAction(
+
             style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogResetButton),
+
             "Limpar linhas selecionadas",
+
         )
-
-
 
         act_copy = menu.addAction(
+
             style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView),
+
             "Copiar linhas selecionadas",
+
         )
-
-
 
         act_paste = menu.addAction(
+
             style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogApplyButton),
+
             "Inserir linhas selecionadas",
+
         )
-
-
 
         action = menu.exec(table.viewport().mapToGlobal(pos))
 
-
-
         if action == act_clear:
 
-
-
-            self._materials_clear_rows(rows)
-
-
+            self._clear_rows(key, rows)
 
         elif action == act_copy:
 
-
-
-            self._materials_copy_rows(rows)
-
-
+            self._copy_rows(key, rows)
 
         elif action == act_paste:
 
-
-
-            self._materials_paste_rows(rows)
-
+            self._paste_rows(key, rows)
 
 
 
-
-    def _materials_clear_rows(self, rows: List[int]) -> None:
-
-
-
-        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+    def _clear_rows(self, key: str, rows: List[int]) -> None:
 
 
 
-        table = self.tables[svc_dg.MENU_MATERIAIS]
+        model = self.models[key]
+
+
+
+        table = self.tables[key]
+
+
+
+        spec_map = {spec.field: spec for spec in model.columns if spec.field in MATERIAL_CLIP_FIELDS}
+
+
+
+        if not spec_map:
+
+
+
+            return
 
 
 
@@ -2937,23 +3236,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            for field in MATERIAL_CLIP_FIELDS:
+            for field, spec in spec_map.items():
 
 
 
-                if field == "nao_stock":
-
-
-
-                    row[field] = False
-
-
-
-                else:
-
-
-
-                    row[field] = None
+                row[field] = False if spec.kind == "bool" else None
 
 
 
@@ -2973,17 +3260,19 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-
-
-    def _materials_copy_rows(self, rows: List[int]) -> None:
-
-
-
-        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+    def _copy_rows(self, key: str, rows: List[int]) -> None:
 
 
 
-        self._copied_material_rows = []
+        model = self.models[key]
+
+
+
+        fields = [spec.field for spec in model.columns if spec.field in MATERIAL_CLIP_FIELDS]
+
+
+
+        buffer: List[Dict[str, Any]] = []
 
 
 
@@ -2995,25 +3284,31 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            payload = {field: row.get(field) for field in MATERIAL_CLIP_FIELDS}
+            payload = {field: row.get(field) for field in fields}
 
 
 
-            self._copied_material_rows.append(payload)
+            buffer.append(payload)
 
 
 
-
-
-    def _materials_paste_rows(self, rows: List[int]) -> None:
-
-
-
-        if not self._copied_material_rows:
+        self._copied_rows[key] = buffer
 
 
 
-            QtWidgets.QMessageBox.information(self, "Materiais", "Nenhuma linha copiada.")
+    def _paste_rows(self, key: str, rows: List[int]) -> None:
+
+
+
+        buffer = self._copied_rows.get(key) or []
+
+
+
+        if not buffer:
+
+
+
+            QtWidgets.QMessageBox.information(self, self._tab_title(key), "Nenhuma linha copiada.")
 
 
 
@@ -3021,15 +3316,15 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        model: MateriaisTableModel = self.models[svc_dg.MENU_MATERIAIS]  # type: ignore[assignment]
+        model = self.models[key]
 
 
 
-        table = self.tables[svc_dg.MENU_MATERIAIS]
+        table = self.tables[key]
 
 
 
-        src_iter = itertools.cycle(self._copied_material_rows)
+        src_iter = itertools.cycle(buffer)
 
 
 
@@ -3062,8 +3357,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
         table.viewport().update()
-
-
 
 
 
@@ -3447,11 +3740,23 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_MATERIAIS:
+        primary_field = svc_dg.MENU_PRIMARY_FIELD.get(key)
 
 
 
-            defaults["grupo_material"] = next(iter(svc_dg.MATERIAIS_GRUPOS), None)
+        if primary_field:
+
+
+
+            groups = svc_dg.MENU_FIXED_GROUPS.get(key, ())
+
+
+
+            if groups:
+
+
+
+                defaults[primary_field] = groups[0]
 
 
 
@@ -3731,19 +4036,15 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_MATERIAIS:
+        if hasattr(model, "recalculate"):
 
 
 
-            if isinstance(model, MateriaisTableModel):
+            for idx in range(model.rowCount()):
 
 
 
-                for idx in range(model.rowCount()):
-
-
-
-                    model.recalculate(idx)
+                model.recalculate(idx)  # type: ignore[attr-defined]
 
 
 
@@ -3915,19 +4216,23 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-    def on_selecionar_mp(self):
+    def on_selecionar_mp(self, key: str) -> None:
 
 
 
-        key = svc_dg.MENU_MATERIAIS
+        table = self.tables.get(key)
 
 
 
-        table = self.tables[key]
+        model = self.models.get(key)
 
 
 
-        model: MateriaisTableModel = self.models[key]  # type: ignore[assignment]
+        if not table or not model:
+
+
+
+            return
 
 
 
@@ -4031,7 +4336,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        update_data = {
+        update_candidates = {
 
 
 
@@ -4067,11 +4372,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            "orl_0_4": materia.orl_0_4,
+            "orl_0_4": getattr(materia, "orl_0_4", None),
 
 
 
-            "orl_1_0": materia.orl_1_0,
+            "orl_1_0": getattr(materia, "orl_1_0", None),
 
 
 
@@ -4099,7 +4404,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            "nao_stock": bool(getattr(materia, 'stock', 0)),
+            "nao_stock": bool(getattr(materia, "stock", 0)),
 
 
 
@@ -4107,15 +4412,31 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+        allowed_fields = {spec.field for spec in model.columns}
+
+
+
+        update_data = {k: v for k, v in update_candidates.items() if k in allowed_fields}
+
+
+
+        if not update_data:
+
+
+
+            return
+
+
+
         model.update_row(idx.row(), update_data)
 
 
 
-        model.recalculate(idx.row())
+        if hasattr(model, "recalculate"):
 
 
 
-
+            model.recalculate(idx.row())
 
 
 
@@ -4219,15 +4540,15 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Categoria", "categoria", "text"),
+        ("Ferragens", "grupo_ferragem", "text"),
 
 
 
-        ("Descricao", "descricao", "text"),
+        ("Ref_LE", "ref_le", "text"),
 
 
 
-        ("Referencia", "referencia", "text"),
+        ("Descricao", "descricao_material", "text"),
 
 
 
@@ -4247,7 +4568,7 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Qt", "qt", "decimal"),
+        ("Und", "und", "text"),
 
 
 
@@ -4259,15 +4580,15 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Categoria", "categoria", "text"),
+        ("Sistemas Correr", "grupo_sistema", "text"),
 
 
 
-        ("Descricao", "descricao", "text"),
+        ("Ref_LE", "ref_le", "text"),
 
 
 
-        ("Referencia", "referencia", "text"),
+        ("Descricao", "descricao_material", "text"),
 
 
 
@@ -4287,7 +4608,7 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Qt", "qt", "decimal"),
+        ("Und", "und", "text"),
 
 
 
@@ -4299,15 +4620,15 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Categoria", "categoria", "text"),
+        ("Acabamentos", "grupo_acabamento", "text"),
 
 
 
-        ("Descricao", "descricao", "text"),
+        ("Ref_LE", "ref_le", "text"),
 
 
 
-        ("Referencia", "referencia", "text"),
+        ("Descricao", "descricao_material", "text"),
 
 
 
@@ -4327,7 +4648,7 @@ PREVIEW_COLUMNS = {
 
 
 
-        ("Qt", "qt", "decimal"),
+        ("Und", "und", "text"),
 
 
 
