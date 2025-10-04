@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
@@ -271,14 +272,25 @@ def _value(row: Any, attr: str):
     return getattr(row, attr, None)
 
 
+def _strip_accents(text: str) -> str:
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+def _normalize_number_text(value: Any, *, allow_percent: bool = False) -> str:
+    text = _strip_accents(str(value))
+    text = text.replace("\u20ac", "").replace("EUR", "").replace(" ", "")
+    if allow_percent:
+        text = text.replace("%", "")
+    text = text.replace(",", ".")
+    return text
+
+
 def _ensure_decimal(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
-    text_value = str(value).strip()
+    text_value = _normalize_number_text(value)
     if not text_value:
         return None
-    text_value = text_value.replace("%", "").replace("â‚¬", "").replace(" ", "")
-    text_value = text_value.replace(",", ".")
     try:
         dec = Decimal(text_value)
         return dec.quantize(Decimal("0.0001"))
@@ -289,11 +301,9 @@ def _ensure_decimal(value: Any) -> Optional[Decimal]:
 def _ensure_percent(value: Any) -> Optional[Decimal]:
     if value in (None, ""):
         return None
-    text_value = str(value).strip()
+    text_value = _normalize_number_text(value, allow_percent=True)
     if not text_value:
         return None
-    text_value = text_value.replace("%", "").replace(" ", "")
-    text_value = text_value.replace(",", ".")
     try:
         dec = Decimal(text_value)
     except Exception:
@@ -330,10 +340,10 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
         return _ensure_decimal(value)
     if field in types["bool"]:
         if isinstance(value, str):
-            value = value.strip().lower()
-            if value in ("true", "sim", "yes", "1"):
+            normalized = _strip_accents(value).strip().lower()
+            if normalized in ("true", "sim", "yes", "1"):
                 return True
-            if value in ("false", "nao", "nÃ£o", "no", "0"):
+            if normalized in ("false", "nao", "no", "0"):
                 return False
         if isinstance(value, (int, float, Decimal)):
             try:
@@ -347,12 +357,12 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
 def carregar_contexto(db: Session, orcamento_id: int) -> DadosGeraisContext:
     orc = db.get(Orcamento, orcamento_id)
     if not orc:
-        raise ValueError("OrÃ§amento nÃ£o encontrado")
+        raise ValueError("Orcamento nao encontrado")
     if not orc.client_id:
-        raise ValueError("OrÃ§amento sem cliente associado")
+        raise ValueError("Orcamento sem cliente associado")
     cliente = db.get(Client, orc.client_id)
     if not cliente:
-        raise ValueError("Cliente associado nÃ£o encontrado")
+        raise ValueError("Cliente associado nao encontrado")
     user = db.get(User, orc.created_by) if orc.created_by else None
     versao = str(orc.versao or "")
     if versao.isdigit():
@@ -564,10 +574,10 @@ def guardar_modelo(
     replace_id: Optional[int] = None,
 ) -> DadosGeraisModelo:
     if tipo_menu not in MODEL_MAP:
-        raise ValueError("Tipo de menu invÃ¡lido")
+        raise ValueError("Tipo de menu invalido")
     nome_limpo = nome_modelo.strip()
     if not nome_limpo:
-        raise ValueError("Nome do modelo obrigatÃ³rio")
+        raise ValueError("Nome do modelo obrigatorio")
     if replace_id:
         modelo = db.execute(
             select(DadosGeraisModelo).where(
@@ -576,7 +586,7 @@ def guardar_modelo(
             )
         ).scalar_one_or_none()
         if not modelo:
-            raise ValueError("Modelo nÃ£o encontrado para substituir")
+            raise ValueError("Modelo nao encontrado para substituir")
         modelo.nome_modelo = nome_limpo
         modelo.tipo_menu = tipo_menu
         db.execute(delete(DadosGeraisModeloItem).where(DadosGeraisModeloItem.modelo_id == modelo.id))
@@ -616,7 +626,7 @@ def carregar_modelo(db: Session, modelo_id: int, user_id: Optional[int] = None) 
         stmt = stmt.where(DadosGeraisModelo.user_id == user_id)
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo nÃ£o encontrado")
+        raise ValueError("Modelo nao encontrado")
     itens_stmt = (
         select(DadosGeraisModeloItem)
         .where(DadosGeraisModeloItem.modelo_id == modelo.id)
@@ -640,7 +650,7 @@ def eliminar_modelo(db: Session, *, modelo_id: int, user_id: int) -> None:
     )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo nÃ£o encontrado")
+        raise ValueError("Modelo nao encontrado")
     db.delete(modelo)
     db.flush()
 
@@ -648,14 +658,14 @@ def eliminar_modelo(db: Session, *, modelo_id: int, user_id: int) -> None:
 def renomear_modelo(db: Session, *, modelo_id: int, user_id: int, novo_nome: str) -> DadosGeraisModelo:
     nome_limpo = novo_nome.strip()
     if not nome_limpo:
-        raise ValueError("Nome do modelo obrigatÃ³rio")
+        raise ValueError("Nome do modelo obrigatorio")
     stmt = select(DadosGeraisModelo).where(
         DadosGeraisModelo.id == modelo_id,
         DadosGeraisModelo.user_id == user_id,
     )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
-        raise ValueError("Modelo nÃ£o encontrado")
+        raise ValueError("Modelo nao encontrado")
     modelo.nome_modelo = nome_limpo
     db.flush()
     return modelo
