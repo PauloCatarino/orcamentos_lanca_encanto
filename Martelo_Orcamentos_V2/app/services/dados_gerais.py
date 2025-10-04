@@ -296,7 +296,18 @@ ACABAMENTOS_GRUPOS: Sequence[str] = (
     "Acabamento Face Inf 2",
 )
 
+# --- CONSTANTES DE MENU (IDs estáveis) ---------------------------------------
+# IMPORTANTE: estas constantes têm de vir ANTES de QUALQUER mapeamento que as use.
+
+MENU_MATERIAIS = "materiais"
+MENU_FERRAGENS = "ferragens"
+MENU_SIS_CORRER = "sistemas_correr"
+MENU_ACABAMENTOS = "acabamentos"
+
+# --- MAPAS BÁSICOS (usam os IDs acima) ---------------------------------------
+
 MENU_FIXED_GROUPS = {
+    # garante a lista base (linhas "fixas") por cada menu
     MENU_MATERIAIS: MATERIAIS_GRUPOS,
     MENU_FERRAGENS: FERRAGENS_GRUPOS,
     MENU_SIS_CORRER: SISTEMAS_CORRER_GRUPOS,
@@ -304,6 +315,7 @@ MENU_FIXED_GROUPS = {
 }
 
 MENU_PRIMARY_FIELD = {
+    # identifica a "chave" primária de cada tabela do menu
     MENU_MATERIAIS: "grupo_material",
     MENU_FERRAGENS: "grupo_ferragem",
     MENU_SIS_CORRER: "grupo_sistema",
@@ -311,6 +323,7 @@ MENU_PRIMARY_FIELD = {
 }
 
 LEGACY_TO_NEW: Dict[str, str] = {
+    # normalização de nomes antigos -> novos
     "Mat_Costas": "Costas",
     "Mat_Laterais": "Laterais",
     "Mat_Divisorias": "Divisorias",
@@ -455,6 +468,7 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
     ),
 }
 
+# Tipagem por campo (para coercao/conversão de tipos)
 MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
     MENU_MATERIAIS: {
         "money": ("preco_tab", "preco_liq"),
@@ -486,6 +500,7 @@ MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
     },
 }
 
+# Mapa menu -> modelo ORM
 MODEL_MAP = {
     MENU_MATERIAIS: DadosGeraisMaterial,
     MENU_FERRAGENS: DadosGeraisFerragem,
