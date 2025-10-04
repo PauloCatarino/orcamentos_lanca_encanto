@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 
 
@@ -346,7 +346,7 @@ def _money(value: Optional[Decimal]) -> str:
 
 
 
-        return f"{str(amount).replace('.', ',')} €"
+        return f"{str(amount).replace('.', ',')} "
 
 
 
@@ -1230,7 +1230,7 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-            text = text.replace('€', '')
+            text = text.replace('', '')
 
 
 
@@ -1662,7 +1662,7 @@ class MateriaisTableModel(DadosGeraisTableModel):
 
 
 
-        pliq = svc_dg.calcular_preco_liq(preco_tab, margem, desconto)
+        pliq = self.svc.calcular_preco_liq(preco_tab, margem, desconto)
 
 
 
@@ -2180,27 +2180,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-    TAB_ORDER = [
-
-
-
-        svc_dg.MENU_MATERIAIS,
-
-
-
-        svc_dg.MENU_FERRAGENS,
-
-
-
-        svc_dg.MENU_SIS_CORRER,
-
-
-
-        svc_dg.MENU_ACABAMENTOS,
-
-
-
-    ]
 
 
 
@@ -2208,7 +2187,18 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-    def __init__(self, parent=None, current_user=None):
+
+    def __init__(
+        self,
+        parent=None,
+        current_user=None,
+        *,
+        svc_module=svc_dg,
+        page_title="Dados Gerais",
+        save_button_text="Guardar Modelo",
+        import_button_text="Importar Modelo",
+        import_multi_button_text="Importar Multi Modelos",
+    ):
 
 
 
@@ -2220,11 +2210,31 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+        self.svc = svc_module
+
+
+
+        self.page_title = page_title
+
+
+
+        self.save_button_text = save_button_text
+
+
+
+        self.import_button_text = import_button_text
+
+
+
+        self.import_multi_button_text = import_multi_button_text
+
+
+
         self.session = SessionLocal()
 
 
 
-        self.context: Optional[svc_dg.DadosGeraisContext] = None
+        self.context: Optional[Any] = None
 
 
 
@@ -2240,7 +2250,27 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+        self.tab_order = [
 
+
+
+            "materiais",
+
+
+
+            "ferragens",
+
+
+
+            "sistemas_correr",
+
+
+
+            "acabamentos",
+
+
+
+        ]
 
 
 
@@ -2324,43 +2354,43 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        grid.addWidget(QLabel("Cliente:"), 0, 0)
+        grid.addWidget(QLabel("Cliente:"), 1, 0)
 
 
 
-        grid.addWidget(self.lbl_cliente, 0, 1)
+        grid.addWidget(self.lbl_cliente, 1, 1)
 
 
 
-        grid.addWidget(QLabel("Utilizador:"), 0, 2)
+        grid.addWidget(QLabel("Utilizador:"), 1, 2)
 
 
 
-        grid.addWidget(self.lbl_utilizador, 0, 3)
+        grid.addWidget(self.lbl_utilizador, 1, 3)
 
 
 
-        grid.addWidget(QLabel("Ano:"), 1, 0)
+        grid.addWidget(QLabel("Ano:"), 2, 0)
 
 
 
-        grid.addWidget(self.lbl_ano, 1, 1)
+        grid.addWidget(self.lbl_ano, 2, 1)
 
 
 
-        grid.addWidget(QLabel("Nº Orcamento:"), 1, 2)
+        grid.addWidget(QLabel("N Orcamento:"), 2, 2)
 
 
 
-        grid.addWidget(self.lbl_num, 1, 3)
+        grid.addWidget(self.lbl_num, 2, 3)
 
 
 
-        grid.addWidget(QLabel("Versao:"), 1, 4)
+        grid.addWidget(QLabel("Versao:"), 2, 4)
 
 
 
-        grid.addWidget(self.lbl_ver, 1, 5)
+        grid.addWidget(self.lbl_ver, 2, 5)
 
 
 
@@ -2416,7 +2446,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        for key in self.TAB_ORDER:
+        for key in self.tab_order:
 
 
 
@@ -2448,7 +2478,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            btn_save_model = QPushButton("Guardar Modelo")
+            btn_save_model = QPushButton(self.save_button_text)
 
 
 
@@ -2456,7 +2486,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            btn_import_model = QPushButton("Importar Modelo")
+            btn_import_model = QPushButton(self.import_button_text)
 
 
 
@@ -2464,7 +2494,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            btn_import_multi = QPushButton("Importar Multi Modelos")
+            btn_import_multi = QPushButton(self.import_multi_button_text)
 
 
 
@@ -2628,19 +2658,19 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            svc_dg.MENU_MATERIAIS: "Materiais",
+            "materiais": "Materiais",
 
 
 
-            svc_dg.MENU_FERRAGENS: "Ferragens",
+            "ferragens": "Ferragens",
 
 
 
-            svc_dg.MENU_SIS_CORRER: "Sistemas Correr",
+            "sistemas_correr": "Sistemas Correr",
 
 
 
-            svc_dg.MENU_ACABAMENTOS: "Acabamentos",
+            "acabamentos": "Acabamentos",
 
 
 
@@ -2660,7 +2690,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_MATERIAIS:
+        if key == "materiais":
 
 
 
@@ -2764,7 +2794,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_FERRAGENS:
+        if key == "ferragens":
 
 
 
@@ -2860,7 +2890,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_SIS_CORRER:
+        if key == "sistemas_correr":
 
 
 
@@ -2964,7 +2994,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        if key == svc_dg.MENU_ACABAMENTOS:
+        if key == "acabamentos":
 
 
 
@@ -3468,7 +3498,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            ctx = svc_dg.carregar_contexto(self.session, orcamento_id)
+            ctx = self.svc.carregar_contexto(self.session, orcamento_id)
 
 
 
@@ -3500,7 +3530,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            data = svc_dg.carregar_dados_gerais(self.session, ctx)
+            data = self.svc.carregar_dados_gerais(self.session, ctx)
 
 
 
@@ -3512,7 +3542,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            data = {key: [] for key in self.TAB_ORDER}
+            data = {key: [] for key in self.tab_order}
 
 
 
@@ -3700,7 +3730,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            svc_dg.guardar_dados_gerais(self.session, self.context, payload)
+            self.svc.guardar_dados_gerais(self.session, self.context, payload)
 
 
 
@@ -3740,7 +3770,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        primary_field = svc_dg.MENU_PRIMARY_FIELD.get(key)
+        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
 
 
 
@@ -3748,7 +3778,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            groups = svc_dg.MENU_FIXED_GROUPS.get(key, ())
+            groups = self.svc.MENU_FIXED_GROUPS.get(key, ())
 
 
 
@@ -3860,7 +3890,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        dialog = GuardarModeloDialog(self.session, user_id=user_id, tipo_menu=key, linhas=linhas, parent=self)
+        dialog = GuardarModeloDialog(self.session, user_id=user_id, tipo_menu=key, linhas=linhas, parent=self, svc_module=self.svc, window_title=self.save_button_text)
 
 
 
@@ -3876,7 +3906,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            svc_dg.guardar_modelo(
+            self.svc.guardar_modelo(
 
 
 
@@ -3956,7 +3986,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        modelos_existentes = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=key)
+        modelos_existentes = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=key)
 
 
 
@@ -3972,7 +4002,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        dialog = ImportarModeloDialog(self.session, user_id=user_id, tipo_menu=key, parent=self)
+        dialog = ImportarModeloDialog(self.session, user_id=user_id, tipo_menu=key, parent=self, svc_module=self.svc, window_title=self.import_button_text)
 
 
 
@@ -4096,7 +4126,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            preco_liq = svc_dg.calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
+            preco_liq = self.svc.calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
 
 
 
@@ -4140,7 +4170,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        dialog = ImportarMultiModelosDialog(self.session, user_id=user_id, parent=self)
+        dialog = ImportarMultiModelosDialog(self.session, user_id=user_id, parent=self, svc_module=self.svc, window_title=self.import_multi_button_text)
 
 
 
@@ -4180,7 +4210,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-                data = svc_dg.carregar_modelo(self.session, modelo_id, user_id=user_id)
+                data = self.svc.carregar_modelo(self.session, modelo_id, user_id=user_id)
 
 
 
@@ -4332,7 +4362,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         if preco_liq in (None, ""):
 
-            preco_liq = svc_dg.calcular_preco_liq(materia.preco_tabela, margem, desconto)
+            preco_liq = self.svc.calcular_preco_liq(materia.preco_tabela, margem, desconto)
 
 
 
@@ -4496,7 +4526,7 @@ PREVIEW_COLUMNS = {
 
 
 
-    svc_dg.MENU_MATERIAIS: [
+    "materiais": [
 
 
 
@@ -4536,7 +4566,7 @@ PREVIEW_COLUMNS = {
 
 
 
-    svc_dg.MENU_FERRAGENS: [
+    "ferragens": [
 
 
 
@@ -4576,7 +4606,7 @@ PREVIEW_COLUMNS = {
 
 
 
-    svc_dg.MENU_SIS_CORRER: [
+    "sistemas_correr": [
 
 
 
@@ -4616,7 +4646,7 @@ PREVIEW_COLUMNS = {
 
 
 
-    svc_dg.MENU_ACABAMENTOS: [
+    "acabamentos": [
 
 
 
@@ -4764,7 +4794,7 @@ class GuardarModeloDialog(QDialog):
 
 
 
-        self.models = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
 
 
 
@@ -4912,7 +4942,7 @@ class GuardarModeloDialog(QDialog):
 
 
 
-        fields = svc_dg.MENU_FIELDS.get(self.tipo_menu, ())
+        fields = self.svc.MENU_FIELDS.get(self.tipo_menu, ())
 
 
 
@@ -5000,7 +5030,7 @@ class GuardarModeloDialog(QDialog):
 
 
 
-        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS[svc_dg.MENU_FERRAGENS])
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
 
 
 
@@ -5204,7 +5234,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        self.models = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
 
 
 
@@ -5476,7 +5506,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        fields = svc_dg.MENU_FIELDS.get(self.tipo_menu, ())
+        fields = self.svc.MENU_FIELDS.get(self.tipo_menu, ())
 
 
 
@@ -5632,7 +5662,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-            data = svc_dg.carregar_modelo(self.session, model_id, user_id=self.user_id)
+            data = self.svc.carregar_modelo(self.session, model_id, user_id=self.user_id)
 
 
 
@@ -5672,7 +5702,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS[svc_dg.MENU_FERRAGENS])
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
 
 
 
@@ -5800,7 +5830,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-            svc_dg.eliminar_modelo(self.session, modelo_id=model_id, user_id=self.user_id)
+            self.svc.eliminar_modelo(self.session, modelo_id=model_id, user_id=self.user_id)
 
 
 
@@ -5880,7 +5910,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-            svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=self.user_id, novo_nome=new_name.strip())
+            self.svc.renomear_modelo(self.session, modelo_id=model_id, user_id=self.user_id, novo_nome=new_name.strip())
 
 
 
@@ -5904,7 +5934,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        self.models = svc_dg.listar_modelos(self.session, user_id=self.user_id, tipo_menu=self.tipo_menu)
+        self.models = self.svc.listar_modelos(self.session, user_id=self.user_id, tipo_menu=self.tipo_menu)
 
 
 
@@ -6052,19 +6082,19 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
-            (svc_dg.MENU_MATERIAIS, "Materiais"),
+            ("materiais", "Materiais"),
 
 
 
-            (svc_dg.MENU_FERRAGENS, "Ferragens"),
+            ("ferragens", "Ferragens"),
 
 
 
-            (svc_dg.MENU_SIS_CORRER, "Sistemas Correr"),
+            ("sistemas_correr", "Sistemas Correr"),
 
 
 
-            (svc_dg.MENU_ACABAMENTOS, "Acabamentos"),
+            ("acabamentos", "Acabamentos"),
 
 
 
@@ -6088,7 +6118,7 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
-            modelos = svc_dg.listar_modelos(self.session, user_id=self.user_id, tipo_menu=menu)
+            modelos = self.svc.listar_modelos(self.session, user_id=self.user_id, tipo_menu=menu)
 
 
 

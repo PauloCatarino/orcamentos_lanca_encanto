@@ -1,8 +1,8 @@
-﻿# Martelo_Orcamentos_V2/ui/pages/itens.py
+# Martelo_Orcamentos_V2/ui/pages/itens.py
 # -----------------------------------------------------------------------------
-# Página de Itens (V2) – carrega layout do Qt Designer (.ui) com QUiLoader
+# P?gina de Itens (V2) ? carrega layout do Qt Designer (.ui) com QUiLoader
 # - O .ui fica em: Martelo_Orcamentos_V2/ui/forms/itens_form.ui
-# - Mantém toda a lógica de BD, validação e operações
+# - Mant?m toda a l?gica de BD, valida??o e opera??es
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
@@ -11,8 +11,8 @@ from pathlib import Path
 
 # PySide6
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtUiTools import QUiLoader           # ← para carregar .ui em runtime
-from PySide6.QtCore import QFile, Qt, QItemSelectionModel
+from PySide6.QtUiTools import QUiLoader           # ? para carregar .ui em runtime
+from PySide6.QtCore import QFile, Qt, QItemSelectionModel, Signal
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtWidgets import QHeaderView, QMessageBox
 
@@ -37,13 +37,13 @@ from ..models.qt_table import SimpleTableModel
 def _load_ui_into(widget: QtWidgets.QWidget, ui_path: str) -> QtWidgets.QWidget:
     """
     Carrega um .ui para dentro de 'widget' usando QUiLoader e
-    expõe todos os filhos (por objectName) como atributos de 'widget'.
-    Ex.: no .ui existe QLineEdit com objectName 'edit_codigo' → podes usar self.edit_codigo.
+    exp?e todos os filhos (por objectName) como atributos de 'widget'.
+    Ex.: no .ui existe QLineEdit com objectName 'edit_codigo' ? podes usar self.edit_codigo.
     """
     loader = QUiLoader()
     f = QFile(ui_path)
     if not f.open(QFile.ReadOnly):
-        raise FileNotFoundError(f"Não consegui abrir UI: {ui_path}")
+        raise FileNotFoundError(f"N?o consegui abrir UI: {ui_path}")
     try:
         loaded = loader.load(f, widget)
     finally:
@@ -57,7 +57,7 @@ def _load_ui_into(widget: QtWidgets.QWidget, ui_path: str) -> QtWidgets.QWidget:
     lay.setContentsMargins(0, 0, 0, 0)
     lay.addWidget(loaded)
 
-    # Expõe os filhos por objectName em 'self'
+    # Exp?e os filhos por objectName em 'self'
     for child in loaded.findChildren(QtCore.QObject):
         name = child.objectName()
         if name:
@@ -66,7 +66,7 @@ def _load_ui_into(widget: QtWidgets.QWidget, ui_path: str) -> QtWidgets.QWidget:
     return loaded
 
 
-# ---------- util tabela: formatação inteira (sem casas decimais) ----------
+# ---------- util tabela: formata??o inteira (sem casas decimais) ----------
 def _fmt_int(value):
     if value in (None, ""):
         return ""
@@ -91,23 +91,23 @@ class ItensPage(QtWidgets.QWidget):
         _load_ui_into(self, str(ui_path))
 
         # ------------------------------------------------------------------
-        # 2) Preparar widgets do formulário
+        # 2) Preparar widgets do formul?rio
         # ------------------------------------------------------------------
         v = QDoubleValidator(0.0, 9_999_999.0, 3, self)
         v.setNotation(QDoubleValidator.StandardNotation)
         v.setLocale(QtCore.QLocale.system())
 
-        # Validadores + alinhamento à direita nos campos numéricos
+        # Validadores + alinhamento ? direita nos campos num?ricos
         for w in (self.edit_altura, self.edit_largura, self.edit_profundidade, self.edit_qt):
             w.setValidator(v)
             w.setAlignment(Qt.AlignRight)
 
-        # Código em maiúsculas (mantém cursor)
+        # C?digo em mai?sculas (mant?m cursor)
         self.edit_codigo.textEdited.connect(
             lambda t: self._force_uppercase(self.edit_codigo, t)
         )
 
-        # Enter avança o foco pelos campos
+        # Enter avan?a o foco pelos campos
         self._input_sequence = [
             self.edit_codigo,
             self.edit_altura,
@@ -119,16 +119,16 @@ class ItensPage(QtWidgets.QWidget):
         for i, w in enumerate(self._input_sequence):
             w.returnPressed.connect(lambda _=False, idx=i: self._focus_next_field(idx))
 
-        # Campo "Item" é sempre automático
+        # Campo "Item" ? sempre autom?tico
         self.edit_item.setReadOnly(True)
         if not self.edit_und.text().strip():
             self.edit_und.setText("und")
 
-        # Só a TABELA cresce (tudo acima fica compacto)
+        # S? a TABELA cresce (tudo acima fica compacto)
         if hasattr(self, "verticalLayoutMain"):
             self.verticalLayoutMain.setStretch(0, 0)  # header
             self.verticalLayoutMain.setStretch(1, 0)  # form
-            self.verticalLayoutMain.setStretch(2, 0)  # botões
+            self.verticalLayoutMain.setStretch(2, 0)  # bot?es
             self.verticalLayoutMain.setStretch(3, 1)  # tabela
 
         # ------------------------------------------------------------------
@@ -148,20 +148,20 @@ class ItensPage(QtWidgets.QWidget):
             ("Preco_Total", "preco_total", _fmt_int),
             ("Custo Produzido", "custo_produzido", _fmt_int),
             ("Ajuste", "ajuste", _fmt_int),
-            ("Custo Total Orlas (€)", "custo_total_orlas", _fmt_int),
-            ("Custo Total Mão de Obra (€)", "custo_total_mao_obra", _fmt_int),
-            ("Custo Total Matéria Prima (€)", "custo_total_materia_prima", _fmt_int),
-            ("Custo Total Acabamentos (€)", "custo_total_acabamentos", _fmt_int),
+            ("Custo Total Orlas (?)", "custo_total_orlas", _fmt_int),
+            ("Custo Total M?o de Obra (?)", "custo_total_mao_obra", _fmt_int),
+            ("Custo Total Mat?ria Prima (?)", "custo_total_materia_prima", _fmt_int),
+            ("Custo Total Acabamentos (?)", "custo_total_acabamentos", _fmt_int),
             ("Margem de Lucro (%)", "margem_lucro_perc", _fmt_int),
-            ("Valor da Margem (€)", "valor_margem", _fmt_int),
+            ("Valor da Margem (?)", "valor_margem", _fmt_int),
             ("Custos Administrativos (%)", "custos_admin_perc", _fmt_int),
-            ("Valor Custos Admin. (€)", "valor_custos_admin", _fmt_int),
+            ("Valor Custos Admin. (?)", "valor_custos_admin", _fmt_int),
             ("Margem_Acabamentos(%)", "margem_acabamentos_perc", _fmt_int),
-            ("Valor Margem_Acabamentos (€)", "valor_acabamentos", _fmt_int),
+            ("Valor Margem_Acabamentos (?)", "valor_acabamentos", _fmt_int),
             ("Margem MP_Orlas (%)", "margem_mp_orlas_perc", _fmt_int),
-            ("Valor Margem MP_Orlas (€)", "valor_mp_orlas", _fmt_int),
+            ("Valor Margem MP_Orlas (?)", "valor_mp_orlas", _fmt_int),
             ("Margem Mao_Obra (%)", "margem_mao_obra_perc", _fmt_int),
-            ("Valor Margem Mao_Obra (€)", "valor_mao_obra", _fmt_int),
+            ("Valor Margem Mao_Obra (?)", "valor_mao_obra", _fmt_int),
             ("reservado_1", "reservado_1"),
             ("reservado_2", "reservado_2"),
             ("reservado_3", "reservado_3"),
@@ -188,13 +188,13 @@ class ItensPage(QtWidgets.QWidget):
             "ID": 50, "Item": 60, "Codigo": 110, "Descricao": 320,
             "Altura": 80, "Largura": 80, "Profundidade": 100, "Und": 60, "QT": 60,
             "Preco_Unit": 110, "Preco_Total": 120, "Custo Produzido": 130, "Ajuste": 110,
-            "Custo Total Orlas (€)": 150, "Custo Total Mão de Obra (€)": 170,
-            "Custo Total Matéria Prima (€)": 190, "Custo Total Acabamentos (€)": 180,
-            "Margem de Lucro (%)": 150, "Valor da Margem (€)": 150,
-            "Custos Administrativos (%)": 160, "Valor Custos Admin. (€)": 170,
-            "Margem_Acabamentos(%)": 160, "Valor Margem_Acabamentos (€)": 190,
-            "Margem MP_Orlas (%)": 160, "Valor Margem MP_Orlas (€)": 190,
-            "Margem Mao_Obra (%)": 160, "Valor Margem Mao_Obra (€)": 190,
+            "Custo Total Orlas (?)": 150, "Custo Total M?o de Obra (?)": 170,
+            "Custo Total Mat?ria Prima (?)": 190, "Custo Total Acabamentos (?)": 180,
+            "Margem de Lucro (%)": 150, "Valor da Margem (?)": 150,
+            "Custos Administrativos (%)": 160, "Valor Custos Admin. (?)": 170,
+            "Margem_Acabamentos(%)": 160, "Valor Margem_Acabamentos (?)": 190,
+            "Margem MP_Orlas (%)": 160, "Valor Margem MP_Orlas (?)": 190,
+            "Margem Mao_Obra (%)": 160, "Valor Margem Mao_Obra (?)": 190,
             "reservado_1": 120, "reservado_2": 120, "reservado_3": 120,
         }
         for i, col_def in enumerate(table_columns):
@@ -202,7 +202,7 @@ class ItensPage(QtWidgets.QWidget):
             if w:
                 header.resizeSection(i, w)
 
-        # Altura das linhas (como combinámos: 26px colapsado)
+        # Altura das linhas (como combin?mos: 26px colapsado)
         self._row_height_collapsed = 26
         self._row_height_expanded = 70
         self._rows_expanded = False
@@ -210,13 +210,13 @@ class ItensPage(QtWidgets.QWidget):
         vh.setDefaultSectionSize(self._row_height_collapsed)
         vh.setSectionResizeMode(QHeaderView.Fixed)
 
-        # Seleção -> preencher formulário
+        # Sele??o -> preencher formul?rio
         if self.table.selectionModel():
             self.table.selectionModel().selectionChanged.connect(self.on_selection_changed)
         self._apply_row_height()
 
         # ------------------------------------------------------------------
-        # 4) Ligar botões aos handlers existentes
+        # 4) Ligar bot?es aos handlers existentes
         # ------------------------------------------------------------------
         self.btn_add.clicked.connect(self.on_new_item)
         self.btn_save.clicked.connect(self.on_save_item)
@@ -230,10 +230,10 @@ class ItensPage(QtWidgets.QWidget):
         self._clear_form()
 
     # ==========================================================================
-    # Carregamento do orçamento + refresh
+    # Carregamento do or?amento + refresh
     # ==========================================================================
     def load_orcamento(self, orc_id: int):
-        """Carrega dados do orçamento e preenche cabeçalho."""
+        """Carrega dados do or?amento e preenche cabe?alho."""
         def _txt(v) -> str:
             return "" if v is None else str(v)
 
@@ -269,7 +269,7 @@ class ItensPage(QtWidgets.QWidget):
         self.refresh()
 
     def refresh(self, select_row: Optional[int] = None, select_last: bool = False):
-        """Atualiza a tabela; se vazia, prepara próximo item."""
+        """Atualiza a tabela; se vazia, prepara pr?ximo item."""
         if not self._orc_id:
             self.model.set_rows([])
             self._clear_form()
@@ -291,7 +291,7 @@ class ItensPage(QtWidgets.QWidget):
             self._prepare_next_item(focus_codigo=False)
 
     # ==========================================================================
-    # Helpers de seleção / user / parsing
+    # Helpers de sele??o / user / parsing
     # ==========================================================================
     def selected_id(self) -> Optional[int]:
         idx = self.table.currentIndex()
@@ -335,10 +335,10 @@ class ItensPage(QtWidgets.QWidget):
         try:
             return self._parse_decimal(widget.text(), default=default)
         except ValueError:
-            raise ValueError(f"Valor inválido para {label}.")
+            raise ValueError(f"Valor inv?lido para {label}.")
 
     # ==========================================================================
-    # Formulário: ler/preencher/limpar
+    # Formul?rio: ler/preencher/limpar
     # ==========================================================================
     def _collect_form_data(self) -> dict:
         return {
@@ -412,7 +412,7 @@ class ItensPage(QtWidgets.QWidget):
         sm.setCurrentIndex(QtCore.QModelIndex(), QItemSelectionModel.Clear)
 
     # ==========================================================================
-    # Fluxo: novo/selecção/guardar/eliminar/mover
+    # Fluxo: novo/selec??o/guardar/eliminar/mover
     # ==========================================================================
     def _prepare_next_item(self, *, focus_codigo: bool = True):
         self._clear_table_selection()
@@ -433,13 +433,17 @@ class ItensPage(QtWidgets.QWidget):
         idx = self.table.currentIndex()
         if not idx.isValid():
             self._prepare_next_item()
+            self.item_selected.emit(None)
             return
         try:
             row = self.model.get_row(idx.row())
         except Exception:
             self._prepare_next_item()
+            self.item_selected.emit(None)
             return
         self._populate_form(row)
+        item_id = getattr(row, "id_item", None) or getattr(row, "id_item_fk", None)
+        self.item_selected.emit(item_id)
 
     def _next_item_number(self, orc_id: int, versao: str) -> int:
         total = self.db.execute(
@@ -452,20 +456,20 @@ class ItensPage(QtWidgets.QWidget):
 
     def on_new_item(self):
         if not self._orc_id:
-            QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
+            QMessageBox.warning(self, "Aviso", "Nenhum or?amento selecionado.")
             return
         if not (self.lbl_ver_val.text() or "").strip():
-            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
+            QMessageBox.warning(self, "Aviso", "Nenhuma vers?o definida.")
             return
         self._prepare_next_item()
 
     def on_save_item(self):
         if not self._orc_id:
-            QMessageBox.warning(self, "Aviso", "Nenhum orçamento selecionado.")
+            QMessageBox.warning(self, "Aviso", "Nenhum or?amento selecionado.")
             return
         versao_atual = (self.lbl_ver_val.text() or "").strip()
         if not versao_atual:
-            QMessageBox.warning(self, "Aviso", "Nenhuma versão definida.")
+            QMessageBox.warning(self, "Aviso", "Nenhuma vers?o definida.")
             return
         versao_norm = versao_atual.zfill(2)
 
