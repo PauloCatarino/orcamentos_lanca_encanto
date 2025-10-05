@@ -2358,8 +2358,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         model_cls = MateriaisTableModel if key == self.svc.MENU_MATERIAIS else DadosGeraisTableModel
         return model_cls(columns=columns, parent=self)
 
-    def _setup_ui(self) -> None
-(self) -> None:
+    def _setup_ui(self) -> None:
 
         root = QVBoxLayout(self)
 
