@@ -2284,7 +2284,21 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
     # ------------------------------------------------------------------ UI
 
+    # --- opções das combos ("Tipo" e "Familia") -------------------------------
+    def _tipos_options(self) -> list[str]:
+        """
+        Devolve a lista de TIPOS para alimentar a combo da coluna 'tipo'.
+        Usa o cache preenchido em _carregar_tipos_familias().
+        """
+        return list(getattr(self, "_tipos_cache", []) or [])
 
+    def _familias_options(self) -> list[str]:
+        """
+        Devolve a lista de FAMÍLIAS para alimentar a combo da coluna 'familia'.
+        Garante que 'PLACAS' existe como fallback.
+        """
+        cache = list(getattr(self, "_familias_cache", []) or [])
+        return cache or ["PLACAS"]
 
     def _tab_title(self, key: str) -> str:
         mapping = {
@@ -2456,6 +2470,25 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             self._configure_delegates(key)
 
+    # --- delegates por coluna (combos, etc.) ----------------------------------
+    def _configure_delegates(self, key: str) -> None:
+        """
+        Atribui delegates às colunas que precisam de editor customizado.
+        Neste momento, apenas 'choice' usa um QComboBox (ChoiceDelegate).
+        """
+        table = self.tables.get(key)
+        model = self.models.get(key)
+        if not table or not model:
+            return
+
+        # Limpa delegates antigos (opcional; o Qt troca automaticamente)
+        # for col in range(table.model().columnCount()):
+        #     table.setItemDelegateForColumn(col, None)
+
+        for col_idx, spec in enumerate(model.columns):
+            if spec.kind == "choice" and callable(spec.options):
+                table.setItemDelegateForColumn(col_idx, ChoiceDelegate(spec.options, table))
+            # 'bool' já é tratado pelo CheckStateRole no modelo; não precisa de delegate.
     # ------------------------------------------------------------------ Data flow
 
 
