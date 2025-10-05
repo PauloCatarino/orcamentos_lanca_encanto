@@ -2286,1286 +2286,210 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-    def _setup_ui(self) -> None:
+    def _tab_title(self, key: str) -> str:
+        mapping = {
+            self.svc.MENU_MATERIAIS: "Materiais",
+            self.svc.MENU_FERRAGENS: "Ferragens",
+            self.svc.MENU_SIS_CORRER: "Sistemas Correr",
+            self.svc.MENU_ACABAMENTOS: "Acabamentos",
+        }
+        return mapping.get(key, key.title())
 
+    def _create_model(self, key: str) -> DadosGeraisTableModel:
+        header_map = {
+            'grupo_material': 'Materiais',
+            'grupo_ferragem': 'Ferragens',
+            'grupo_sistema': 'Sistemas Correr',
+            'grupo_acabamento': 'Acabamentos',
+            'ref_le': 'Ref_LE',
+            'descricao_material': 'Descrição Material',
+            'preco_tab': 'Preço Tabela',
+            'preco_liq': 'Preço Líquido',
+            'margem': 'Margem',
+            'desconto': 'Desconto',
+            'und': 'Und',
+            'desp': 'Desp',
+            'tipo': 'Tipo',
+            'familia': 'Família',
+            'comp_mp': 'Comp MP',
+            'larg_mp': 'Larg MP',
+            'esp_mp': 'Esp MP',
+            'orl_0_4': 'ORL 0.4',
+            'orl_1_0': 'ORL 1.0',
+            'linha': 'Linha',
+            'custo_mp_und': 'Custo MP Und',
+            'custo_mp_total': 'Custo MP Total',
+            'spp_ml_und': 'SPP ML Und',
+            'custo_acb_und': 'Custo ACB Und',
+            'custo_acb_total': 'Custo ACB Total',
+        }
 
+        fields = self.svc.MENU_FIELDS.get(key, ())
+        field_types = self.svc.MENU_FIELD_TYPES.get(key, {})
+        kind_map = {kind: set(values) for kind, values in field_types.items()}
+        primary = self.svc.MENU_PRIMARY_FIELD.get(key)
+
+        columns: List[ColumnSpec] = []
+        for field in fields:
+            header = header_map.get(field, field.replace('_', ' ').title())
+            kind = 'text'
+            if field in kind_map.get('money', ()):
+                kind = 'money'
+            elif field in kind_map.get('percent', ()):
+                kind = 'percent'
+            elif field in kind_map.get('integer', ()):
+                kind = 'integer'
+            elif field in kind_map.get('decimal', ()):
+                kind = 'decimal'
+            elif field in kind_map.get('bool', ()):
+                kind = 'bool'
+
+            options = None
+            if field == 'tipo':
+                kind = 'choice'
+                options = self._tipos_options
+            elif field == 'familia':
+                kind = 'choice'
+                options = self._familias_options
+
+            readonly = field in {primary, 'id', 'id_mp', 'preco_liq', 'ref_le'}
+            columns.append(ColumnSpec(header, field, kind, readonly=readonly, options=options))
+
+        model_cls = MateriaisTableModel if key == self.svc.MENU_MATERIAIS else DadosGeraisTableModel
+        return model_cls(columns=columns, parent=self)
+
+    def _setup_ui(self) -> None
+(self) -> None:
 
         root = QVBoxLayout(self)
 
-
-
         root.setContentsMargins(8, 8, 8, 8)
-
-
-
         root.setSpacing(8)
 
-
-
-
-
-
-
         header = QtWidgets.QWidget(self)
-
-
-
         grid = QGridLayout(header)
-
-
-
         grid.setContentsMargins(0, 0, 0, 0)
-
-
-
         grid.setHorizontalSpacing(12)
-
-
-
         grid.setVerticalSpacing(4)
 
-
-
-
-
-
+        self.lbl_title = QLabel(self.page_title)
+        title_font = self.lbl_title.font()
+        title_font.setBold(True)
+        title_font.setPointSize(title_font.pointSize() + 2)
+        self.lbl_title.setFont(title_font)
 
         self.lbl_cliente = QLabel("-")
-
-
-
         self.lbl_utilizador = QLabel("-")
-
-
-
         self.lbl_ano = QLabel("-")
-
-
-
         self.lbl_num = QLabel("-")
-
-
-
         self.lbl_ver = QLabel("-")
 
-
-
-
-
-
-
+        grid.addWidget(self.lbl_title, 0, 0, 1, 5)
         grid.addWidget(QLabel("Cliente:"), 1, 0)
-
-
-
         grid.addWidget(self.lbl_cliente, 1, 1)
-
-
-
         grid.addWidget(QLabel("Utilizador:"), 1, 2)
-
-
-
         grid.addWidget(self.lbl_utilizador, 1, 3)
-
-
-
         grid.addWidget(QLabel("Ano:"), 2, 0)
-
-
-
         grid.addWidget(self.lbl_ano, 2, 1)
-
-
-
-        grid.addWidget(QLabel("N Orcamento:"), 2, 2)
-
-
-
+        grid.addWidget(QLabel("Nº Orçamento:"), 2, 2)
         grid.addWidget(self.lbl_num, 2, 3)
-
-
-
-        grid.addWidget(QLabel("Versao:"), 2, 4)
-
-
-
+        grid.addWidget(QLabel("Versão:"), 2, 4)
         grid.addWidget(self.lbl_ver, 2, 5)
 
-
-
-
-
-
-
-        self.btn_guardar = QPushButton("Guardar")
-
-
-
+        self.btn_guardar = QPushButton(self.save_button_text)
         self.btn_guardar.clicked.connect(self.on_guardar)
-
-
-
         grid.addWidget(self.btn_guardar, 0, 5)
-
-
-
-
-
-
 
         root.addWidget(header)
 
-
-
-
-
-
-
         self.tabs = QTabWidget(self)
-
-
-
         root.addWidget(self.tabs, 1)
 
-
-
-
-
-
-
         self.models: Dict[str, DadosGeraisTableModel] = {}
-
-
-
         self.tables: Dict[str, QTableView] = {}
 
-
-
-
-
-
-
         for key in self.tab_order:
-
-
-
             widget = QtWidgets.QWidget()
-
-
-
             layout = QVBoxLayout(widget)
-
-
-
             layout.setContentsMargins(0, 0, 0, 0)
-
-
-
             layout.setSpacing(4)
 
-
-
-
-
-
-
             toolbar = QHBoxLayout()
-
-
-
             toolbar.setSpacing(6)
 
-
-
             btn_save_model = QPushButton(self.save_button_text)
-
-
-
             btn_save_model.clicked.connect(lambda _, k=key: self.on_guardar_modelo(k))
 
-
-
             btn_import_model = QPushButton(self.import_button_text)
-
-
-
             btn_import_model.clicked.connect(lambda _, k=key: self.on_importar_modelo(k))
 
-
-
             btn_import_multi = QPushButton(self.import_multi_button_text)
-
-
-
             btn_import_multi.clicked.connect(self.on_importar_multi_modelos)
 
-
-
-
-
-
-
             toolbar.addWidget(btn_save_model)
-
-
-
             toolbar.addWidget(btn_import_model)
-
-
-
             toolbar.addWidget(btn_import_multi)
-
-
-
             toolbar.addStretch(1)
-
-
-
-
-
-
-
-            btn_mp = QPushButton("Selecionar Materia-Prima")
-
-
-
-            btn_mp.clicked.connect(lambda _, k=key: self.on_selecionar_mp(k))
-
-
-
-            toolbar.addWidget(btn_mp)
-
-
-
-
-
-
 
             layout.addLayout(toolbar)
 
-
-
-
-
-
-
             table = QTableView(self)
-
-
-
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
-
-
-
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-
-
-
             table.horizontalHeader().setStretchLastSection(False)
-
-
-
             table.setSortingEnabled(True)
-
-
-
             table.setEditTriggers(
-
-
-
                 QAbstractItemView.EditTrigger.CurrentChanged
-
-
-
                 | QAbstractItemView.EditTrigger.SelectedClicked
-
-
-
                 | QAbstractItemView.EditTrigger.EditKeyPressed
-
-
-
                 | QAbstractItemView.EditTrigger.AnyKeyPressed
-
-
-
             )
-
-
-
             table.setContextMenuPolicy(Qt.CustomContextMenu)
-
-
-
             table.customContextMenuRequested.connect(lambda pos, k=key: self._on_context_menu(pos, k))
-
-
-
             layout.addWidget(table, 1)
-
-
-
-
-
-
 
             self.tabs.addTab(widget, self._tab_title(key))
 
-
-
-
-
-
-
             model = self._create_model(key)
-
-
-
             self.models[key] = model
-
-
-
             self.tables[key] = table
-
-
-
             table.setModel(model)
 
-
-
-
-
-
-
-
-
-
-
             self._configure_delegates(key)
-
-
-
-
-
-
-
-    def _tab_title(self, key: str) -> str:
-
-
-
-        mapping = {
-
-
-
-            "materiais": "Materiais",
-
-
-
-            "ferragens": "Ferragens",
-
-
-
-            "sistemas_correr": "Sistemas Correr",
-
-
-
-            "acabamentos": "Acabamentos",
-
-
-
-        }
-
-
-
-        return mapping.get(key, key.title())
-
-
-
-
-
-
-
-    def _create_model(self, key: str) -> DadosGeraisTableModel:
-
-
-
-        if key == "materiais":
-
-
-
-            columns = [
-
-
-
-                ColumnSpec("Materiais", "grupo_material", width=200, readonly=True),
-
-
-
-                ColumnSpec("Descricao", "descricao", width=240),
-
-
-
-                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
-
-
-
-                ColumnSpec("Descricao Material", "descricao_material", width=260),
-
-
-
-                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
-
-
-
-                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
-
-
-
-                ColumnSpec("Margem", "margem", "percent", width=90),
-
-
-
-                ColumnSpec("Desconto", "desconto", "percent", width=90),
-
-
-
-                ColumnSpec("Und", "und", width=60),
-
-
-
-                ColumnSpec("Desp", "desp", "percent", width=90),
-
-
-
-                ColumnSpec("ORL 0.4", "orl_0_4", width=110),
-
-
-
-                ColumnSpec("ORL 1.0", "orl_1_0", width=110),
-
-
-
-                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
-
-
-
-                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
-
-
-
-                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("ID MP", "id_mp", width=110, readonly=True),
-
-
-
-                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70),
-
-
-
-                ColumnSpec("Reserva 1", "reserva_1", visible=False),
-
-
-
-                ColumnSpec("Reserva 2", "reserva_2", visible=False),
-
-
-
-                ColumnSpec("Reserva 3", "reserva_3", visible=False),
-
-
-
-            ]
-
-
-
-            return MateriaisTableModel(columns=columns, parent=self)
-
-
-
-        if key == "ferragens":
-
-
-
-            columns = [
-
-
-
-                ColumnSpec("Ferragens", "grupo_ferragem", width=200, readonly=True),
-
-
-
-                ColumnSpec("Descricao", "descricao", width=240),
-
-
-
-                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
-
-
-
-                ColumnSpec("Descricao Material", "descricao_material", width=260),
-
-
-
-                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
-
-
-
-                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
-
-
-
-                ColumnSpec("Margem", "margem", "percent", width=90),
-
-
-
-                ColumnSpec("Desconto", "desconto", "percent", width=90),
-
-
-
-                ColumnSpec("Und", "und", width=60),
-
-
-
-                ColumnSpec("Desp", "desp", "percent", width=90),
-
-
-
-                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
-
-
-
-                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
-
-
-
-                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
-
-
-
-                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
-
-
-
-                ColumnSpec("Reserva 1", "reserva_1", visible=False),
-
-
-
-                ColumnSpec("Reserva 2", "reserva_2", visible=False),
-
-
-
-                ColumnSpec("Reserva 3", "reserva_3", visible=False),
-
-
-
-            ]
-
-
-
-            return FerragensTableModel(columns=columns, parent=self)
-
-
-
-        if key == "sistemas_correr":
-
-
-
-            columns = [
-
-
-
-                ColumnSpec("Sistemas Correr", "grupo_sistema", width=200, readonly=True),
-
-
-
-                ColumnSpec("Descricao", "descricao", width=240),
-
-
-
-                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
-
-
-
-                ColumnSpec("Descricao Material", "descricao_material", width=260),
-
-
-
-                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
-
-
-
-                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
-
-
-
-                ColumnSpec("Margem", "margem", "percent", width=90),
-
-
-
-                ColumnSpec("Desconto", "desconto", "percent", width=90),
-
-
-
-                ColumnSpec("Und", "und", width=60),
-
-
-
-                ColumnSpec("Desp", "desp", "percent", width=90),
-
-
-
-                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
-
-
-
-                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
-
-
-
-                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("ORL 0.4", "orl_0_4", width=110),
-
-
-
-                ColumnSpec("ORL 1.0", "orl_1_0", width=110),
-
-
-
-                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
-
-
-
-                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
-
-
-
-                ColumnSpec("Reserva 1", "reserva_1", visible=False),
-
-
-
-                ColumnSpec("Reserva 2", "reserva_2", visible=False),
-
-
-
-                ColumnSpec("Reserva 3", "reserva_3", visible=False),
-
-
-
-            ]
-
-
-
-            return SistemasCorrerTableModel(columns=columns, parent=self)
-
-
-
-        if key == "acabamentos":
-
-
-
-            columns = [
-
-
-
-                ColumnSpec("Acabamentos", "grupo_acabamento", width=200, readonly=True),
-
-
-
-                ColumnSpec("Descricao", "descricao", width=240),
-
-
-
-                ColumnSpec("Ref_LE", "ref_le", width=110, readonly=True),
-
-
-
-                ColumnSpec("Descricao Material", "descricao_material", width=260),
-
-
-
-                ColumnSpec("Preco Tab", "preco_tab", "money", width=110),
-
-
-
-                ColumnSpec("Preco Liq", "preco_liq", "money", width=110, readonly=True),
-
-
-
-                ColumnSpec("Margem", "margem", "percent", width=90),
-
-
-
-                ColumnSpec("Desconto", "desconto", "percent", width=90),
-
-
-
-                ColumnSpec("Und", "und", width=60),
-
-
-
-                ColumnSpec("Desp", "desp", "percent", width=90),
-
-
-
-                ColumnSpec("Tipo", "tipo", "choice", width=140, options=self._tipos_options),
-
-
-
-                ColumnSpec("Familia", "familia", "choice", width=120, options=self._familias_options),
-
-
-
-                ColumnSpec("Comp MP", "comp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Larg MP", "larg_mp", "integer", width=95),
-
-
-
-                ColumnSpec("Esp MP", "esp_mp", "integer", width=95),
-
-
-
-                ColumnSpec("ID MP", "id_mp", width=110, readonly=True, visible=False),
-
-
-
-                ColumnSpec("Nao Stock", "nao_stock", "bool", width=70, visible=False),
-
-
-
-                ColumnSpec("Reserva 1", "reserva_1", visible=False),
-
-
-
-                ColumnSpec("Reserva 2", "reserva_2", visible=False),
-
-
-
-                ColumnSpec("Reserva 3", "reserva_3", visible=False),
-
-
-
-            ]
-
-
-
-            return AcabamentosTableModel(columns=columns, parent=self)
-
-
-
-        columns = [
-
-
-
-            ColumnSpec("Categoria", "categoria", width=160),
-
-
-
-            ColumnSpec("Descricao", "descricao", width=220),
-
-
-
-            ColumnSpec("Referencia", "referencia", "text"),
-
-
-
-            ColumnSpec("Fornecedor", "fornecedor", width=160),
-
-
-
-            ColumnSpec("Preco Tab", "preco_tab", "money", width=100),
-
-
-
-            ColumnSpec("Preco Liq", "preco_liq", "money", width=100, readonly=True),
-
-
-
-            ColumnSpec("Margem", "margem", "percent", width=90),
-
-
-
-            ColumnSpec("Desconto", "desconto", "percent", width=90),
-
-
-
-            ColumnSpec("Und", "und", width=60),
-
-
-
-            ColumnSpec("Qt", "qt", "decimal", width=80),
-
-
-
-            ColumnSpec("Nao Stock", "nao_stock", "bool", width=80),
-
-
-
-            ColumnSpec("Reserva 1", "reserva_1", width=140),
-
-
-
-            ColumnSpec("Reserva 2", "reserva_2", width=140),
-
-
-
-            ColumnSpec("Reserva 3", "reserva_3", width=140),
-
-
-
-        ]
-
-
-
-        return DadosGeraisTableModel(columns=columns, parent=self)
-
-
-
-    def _on_context_menu(self, pos, key: str) -> None:
-
-
-
-        table = self.tables[key]
-
-
-
-        selection = table.selectionModel()
-
-
-
-        if not selection:
-
-
-
-            return
-
-
-
-        rows = sorted({index.row() for index in selection.selectedRows()})
-
-
-
-        if not rows:
-
-
-
-            return
-
-
-
-        menu = QtWidgets.QMenu(table)
-
-        style = table.style()
-
-        act_clear = menu.addAction(
-
-            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogResetButton),
-
-            "Limpar linhas selecionadas",
-
-        )
-
-        act_copy = menu.addAction(
-
-            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView),
-
-            "Copiar linhas selecionadas",
-
-        )
-
-        act_paste = menu.addAction(
-
-            style.standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogApplyButton),
-
-            "Inserir linhas selecionadas",
-
-        )
-
-        action = menu.exec(table.viewport().mapToGlobal(pos))
-
-        if action == act_clear:
-
-            self._clear_rows(key, rows)
-
-        elif action == act_copy:
-
-            self._copy_rows(key, rows)
-
-        elif action == act_paste:
-
-            self._paste_rows(key, rows)
-
-
-
-    def _clear_rows(self, key: str, rows: List[int]) -> None:
-
-
-
-        model = self.models[key]
-
-
-
-        table = self.tables[key]
-
-
-
-        spec_map = {spec.field: spec for spec in model.columns if spec.field in MATERIAL_CLIP_FIELDS}
-
-
-
-        if not spec_map:
-
-
-
-            return
-
-
-
-        for row_idx in rows:
-
-
-
-            row = dict(model.row_at(row_idx))
-
-
-
-            for field, spec in spec_map.items():
-
-
-
-                row[field] = False if spec.kind == "bool" else None
-
-
-
-            model.update_row(row_idx, row)
-
-
-
-            if hasattr(model, "recalculate"):
-
-
-
-                model.recalculate(row_idx)  # type: ignore[attr-defined]
-
-
-
-        table.viewport().update()
-
-
-
-    def _copy_rows(self, key: str, rows: List[int]) -> None:
-
-
-
-        model = self.models[key]
-
-
-
-        fields = [spec.field for spec in model.columns if spec.field in MATERIAL_CLIP_FIELDS]
-
-
-
-        buffer: List[Dict[str, Any]] = []
-
-
-
-        for row_idx in rows:
-
-
-
-            row = model.row_at(row_idx)
-
-
-
-            payload = {field: row.get(field) for field in fields}
-
-
-
-            buffer.append(payload)
-
-
-
-        self._copied_rows[key] = buffer
-
-
-
-    def _paste_rows(self, key: str, rows: List[int]) -> None:
-
-
-
-        buffer = self._copied_rows.get(key) or []
-
-
-
-        if not buffer:
-
-
-
-            QtWidgets.QMessageBox.information(self, self._tab_title(key), "Nenhuma linha copiada.")
-
-
-
-            return
-
-
-
-        model = self.models[key]
-
-
-
-        table = self.tables[key]
-
-
-
-        src_iter = itertools.cycle(buffer)
-
-
-
-        for dest_idx in rows:
-
-
-
-            src = next(src_iter)
-
-
-
-            row = dict(model.row_at(dest_idx))
-
-
-
-            row.update(src)
-
-
-
-            model.update_row(dest_idx, row)
-
-
-
-            if hasattr(model, "recalculate"):
-
-
-
-                model.recalculate(dest_idx)  # type: ignore[attr-defined]
-
-
-
-        table.viewport().update()
-
-
-
-    def _configure_delegates(self, key: str) -> None:
-
-
-
-        table = self.tables[key]
-
-
-
-        model = self.models[key]
-
-
-
-        table.setItemDelegate(DadosGeraisDelegate(table))
-
-
-
-        for idx, spec in enumerate(model.columns):
-
-
-
-            if not spec.visible:
-
-
-
-                table.setColumnHidden(idx, True)
-
-
-
-                continue
-
-
-
-            if spec.options:
-
-
-
-                delegate = ChoiceDelegate(spec.options, parent=table)
-
-
-
-                table.setItemDelegateForColumn(idx, delegate)
-
-
-
-            if spec.kind == "money":
-
-
-
-                table.horizontalHeader().setSectionResizeMode(idx, QtWidgets.QHeaderView.ResizeToContents)
-
-
-
-            elif spec.kind == "bool":
-
-
-
-                table.horizontalHeader().setSectionResizeMode(idx, QtWidgets.QHeaderView.ResizeToContents)
-
-
-
-            elif spec.width:
-
-
-
-                table.setColumnWidth(idx, spec.width)
-
-
-
-
-
-
-
-    def _tipos_options(self) -> Sequence[str]:
-
-
-
-        return self._tipos_cache or []
-
-
-
-
-
-
-
-    def _familias_options(self) -> Sequence[str]:
-
-
-
-        return self._familias_cache or ["PLACAS"]
-
-
-
-
-
-
 
     # ------------------------------------------------------------------ Data flow
 
 
 
-    def load_orcamento(self, orcamento_id: int) -> None:
-
-
+    def load_orcamento(self, orcamento_id: int, *, item_id: Optional[int] = None) -> None:
 
         try:
-
-
-
+            if item_id is None:
+                ctx = self.svc.carregar_contexto(self.session, orcamento_id)
+            else:
+                ctx = self.svc.carregar_contexto(self.session, orcamento_id, item_id=item_id)
+        except TypeError:
             ctx = self.svc.carregar_contexto(self.session, orcamento_id)
-
-
-
         except Exception as exc:
-
-
-
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar contexto: {exc}")
-
-
-
             return
 
-
-
         self.context = ctx
-
-
+        self.lbl_title.setText(self.page_title)
 
         self._carregar_topo(orcamento_id)
-
-
-
         self._carregar_tipos_familias()
 
-
-
         try:
-
-
-
             data = self.svc.carregar_dados_gerais(self.session, ctx)
-
-
-
         except Exception as exc:
-
-
-
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar dados: {exc}")
-
-
-
             data = {key: [] for key in self.tab_order}
 
-
-
         for key, model in self.models.items():
-
-
-
             rows = data.get(key, [])
-
-
-
             model.load_rows(rows)
-
-
-
             model._reindex()
-
-
-
-
-
-
-
     def _carregar_topo(self, orcamento_id: int) -> None:
 
 

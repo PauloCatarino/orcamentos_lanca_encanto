@@ -1,4 +1,4 @@
-from typing import Optional
+﻿from typing import Optional
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
@@ -16,20 +16,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, current_user):
         super().__init__()
         self.current_user = current_user
-        self.setWindowTitle("Martelo Or?amentos V2")
+        self.setWindowTitle("Martelo Orçamentos V2")
         self.resize(1200, 800)
 
         self.current_orcamento_id: Optional[int] = None
+        self.current_item_id: Optional[int] = None
 
         self.list = QtWidgets.QListWidget()
         self.list.addItems([
-            "Or?amentos",
+            "Orçamentos",
             "Itens",
-            "Mat?rias Primas",
+            "Matérias Primas",
             "Clientes",
             "Dados Gerais",
-            "Relat?rios",
-            "Configura??es",
+            "Dados Items",
+            "Relatórios",
+            "Configurações",
         ])
         self.list.setFixedWidth(220)
 
@@ -41,13 +43,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_materias = MateriasPrimasPage(current_user=self.current_user)
         self.pg_clientes = ClientesPage()
         self.pg_dados = DadosGeraisPage(current_user=self.current_user)
+        self.pg_dados_items = DadosItemsPage(current_user=self.current_user)
 
         self.stack.addWidget(self.pg_orc)
         self.stack.addWidget(self.pg_itens)
         self.stack.addWidget(self.pg_materias)
         self.stack.addWidget(self.pg_clientes)
         self.stack.addWidget(self.pg_dados)
-        self.stack.addWidget(QtWidgets.QLabel("P?gina Relat?rios (em constru??o)", alignment=Qt.AlignCenter))
+        self.stack.addWidget(self.pg_dados_items)
+        self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
         self.stack.addWidget(SettingsPage())
 
         self.list.currentRowChanged.connect(self.on_menu_changed)
@@ -60,7 +64,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(central)
 
         assert self.list.count() == self.stack.count(), (
-            f"Lista({self.list.count()}) e Stack({self.stack.count()}) t?m tamanhos diferentes!"
+            f"Lista({self.list.count()}) e Stack({self.stack.count()}) têm tamanhos diferentes!"
         )
 
     def on_abrir_orcamento(self, orcamento_id: int):
@@ -85,12 +89,6 @@ class MainWindow(QtWidgets.QMainWindow):
         elif index == 5 and self.current_orcamento_id:
             self.pg_dados_items.load_item(self.current_orcamento_id, self.current_item_id)
 
-    def on_item_selected(self, item_id: Optional[int]):
-        self.current_item_id = item_id
-        if not self.current_orcamento_id:
-            return
-        self.pg_dados_items.load_item(self.current_orcamento_id, item_id)
-        self.stack.setCurrentIndex(index)
     def on_item_selected(self, item_id: Optional[int]):
         self.current_item_id = item_id
         if not self.current_orcamento_id:

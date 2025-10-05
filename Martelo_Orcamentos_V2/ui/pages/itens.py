@@ -1,4 +1,4 @@
-# Martelo_Orcamentos_V2/ui/pages/itens.py
+﻿# Martelo_Orcamentos_V2/ui/pages/itens.py
 # -----------------------------------------------------------------------------
 # P?gina de Itens (V2) ? carrega layout do Qt Designer (.ui) com QUiLoader
 # - O .ui fica em: Martelo_Orcamentos_V2/ui/forms/itens_form.ui
@@ -77,6 +77,7 @@ def _fmt_int(value):
 
 
 class ItensPage(QtWidgets.QWidget):
+    item_selected = Signal(object)
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
         self.current_user = current_user

@@ -4,10 +4,6 @@ from .orcamento import Orcamento, OrcamentoItem
 from .item_children import (
     DadosModuloMedidas,
     DadosDefPecas,
-    DadosItemsMateriais,
-    DadosItemsFerragens,
-    DadosItemsSistemasCorrer,
-    DadosItemsAcabamentos,
 )
 from .materia_prima import MateriaPrima, MateriaPrimaPreference
 from .dados_gerais import (
@@ -17,4 +13,10 @@ from .dados_gerais import (
     DadosGeraisAcabamento,
     DadosGeraisModelo,
     DadosGeraisModeloItem,
+    DadosItemsMaterial,
+    DadosItemsFerragem,
+    DadosItemsSistemaCorrer,
+    DadosItemsAcabamento,
+    DadosItemsModelo,
+    DadosItemsModeloItem,
 )
