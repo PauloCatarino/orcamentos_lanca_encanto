@@ -2184,27 +2184,30 @@ class DadosGeraisPage(QtWidgets.QWidget):
     # para reutilizar igual em outros ficheiros (ex.: dados_items.py).
     # Podes acrescentar novas chaves conforme precisares.
     _ICON_MAP = {
-        "save":        QtWidgets.QStyle.SP_DialogSaveButton,
-        "open":        QtWidgets.QStyle.SP_DirOpenIcon,
-        "import":      QtWidgets.QStyle.SP_ArrowDown,
-        "export":      QtWidgets.QStyle.SP_ArrowUp,
-        "delete":      QtWidgets.QStyle.SP_TrashIcon,
-        "copy":        QtWidgets.QStyle.SP_FileDialogDetailedView,
-        "paste":       QtWidgets.QStyle.SP_DialogApplyButton,
-        "clear":       QtWidgets.QStyle.SP_DialogResetButton,
-        "add":         QtWidgets.QStyle.SP_FileDialogNewFolder,
-        "edit":        QtWidgets.QStyle.SP_FileDialogContentsView,
-        "refresh":     QtWidgets.QStyle.SP_BrowserReload,
-        "search":      QtWidgets.QStyle.SP_FileDialogContentsView,
-        "print":       QtWidgets.QStyle.SP_DialogPrintButton,
+        "save":         QtWidgets.QStyle.SP_DialogSaveButton,
+        "open":         QtWidgets.QStyle.SP_DirOpenIcon,
+        "import":       QtWidgets.QStyle.SP_ArrowDown,
+        "import_multi": QtWidgets.QStyle.SP_ArrowDown,
+        "export":       QtWidgets.QStyle.SP_ArrowUp,
+        "delete":       QtWidgets.QStyle.SP_TrashIcon,
+        "copy":         QtWidgets.QStyle.SP_FileDialogDetailedView,
+        "paste":        QtWidgets.QStyle.SP_DialogApplyButton,
+        "clear":        QtWidgets.QStyle.SP_DialogResetButton,
+        "add":          QtWidgets.QStyle.SP_FileDialogNewFolder,
+        "edit":         QtWidgets.QStyle.SP_FileDialogContentsView,
+        "refresh":      QtWidgets.QStyle.SP_BrowserReload,
+        "search":       QtWidgets.QStyle.SP_FileDialogContentsView,
+        "select_mp":    QtWidgets.QStyle.SP_DirOpenIcon,
+        # PySide6 não possui SP_DialogPrintButton; usar ícone de ficheiro.
+        "print":        QtWidgets.QStyle.SP_FileIcon,
         # fallback comum
-        "file":        QtWidgets.QStyle.SP_FileIcon,
+        "file":         QtWidgets.QStyle.SP_FileIcon,
     }
 
     def _standard_icon(self, key: str):
 
         style = self.style() or QtWidgets.QApplication.style()
-        return style.standardIcon(self._ICON_MAP.get(key, QStyle.SP_FileIcon))
+        return style.standardIcon(self._ICON_MAP.get(key, QtWidgets.QStyle.SP_FileIcon))
 
 
 
@@ -2389,7 +2392,9 @@ class DadosGeraisPage(QtWidgets.QWidget):
             columns.append(ColumnSpec(header, field, kind, readonly=readonly, options=options))
 
         model_cls = MateriaisTableModel if key == self.svc.MENU_MATERIAIS else DadosGeraisTableModel
-        return model_cls(columns=columns, parent=self)
+        model = model_cls(columns=columns, parent=self)
+        setattr(model, "svc", self.svc)
+        return model
 
     def _setup_ui(self) -> None:
 
@@ -2672,11 +2677,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             if spec.kind == "choice" and callable(spec.options):
                 table.setItemDelegateForColumn(col_idx, ChoiceDelegate(spec.options, table))
             # 'bool' já é tratado pelo CheckStateRole no modelo; não precisa de delegate.
-    def _standard_icon(self, key: str):
-
-        style = self.style() or QtWidgets.QApplication.style()
-
-        return style.standardIcon(self._ICON_MAP.get(key, QStyle.SP_FileIcon))
+    
 
 
 
