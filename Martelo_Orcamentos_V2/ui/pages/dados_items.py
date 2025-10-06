@@ -35,6 +35,7 @@ class DadosItemsPage(DadosGeraisPage):
             self.context = None
             self._reset_tables()
             self.lbl_title.setText(self.page_title)
+                self._update_dimensions_labels(visible=False)
             return
 
         try:
@@ -42,6 +43,7 @@ class DadosItemsPage(DadosGeraisPage):
         except Exception as exc:  # pragma: no cover - UI feedback
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar Dados Items: {exc}")
             self._reset_tables()
+            self._update_dimensions_labels(visible=False)
             return
 
         self._update_item_header(item_id)
@@ -51,17 +53,42 @@ class DadosItemsPage(DadosGeraisPage):
             model.load_rows([])
             model._reindex()
 
-    def _update_item_header(self, item_id: int) -> None:
-        item: Optional[OrcamentoItem] = self.session.get(OrcamentoItem, item_id)
-        if not item:
-            self.lbl_title.setText(self.page_title)
-            return
-        numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or item_id
-        descricao = (item.descricao or "").strip()
-        if descricao:
-            self.lbl_title.setText(f"{self.page_title} - Item {numero}: {descricao}")
-        else:
-            self.lbl_title.setText(f"{self.page_title} - Item {numero}")
+        self._update_dimensions_labels(visible=False)
+
+
+
+
+def _update_item_header(self, item_id: int) -> None:
+    item: Optional[OrcamentoItem] = self.session.get(OrcamentoItem, item_id)
+    if not item:
+        self.lbl_title.setText(self.page_title)
+        self._update_dimensions_labels(visible=False)
+        return
+    numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or item_id
+    descricao = (item.descricao or "").strip()
+    if descricao:
+        self.lbl_title.setText(f"{self.page_title} - Item {numero}: {descricao}")
+    else:
+        self.lbl_title.setText(f"{self.page_title} - Item {numero}")
+    self._update_dimensions_labels(
+        altura=getattr(item, "altura", None),
+        largura=getattr(item, "largura", None),
+        profundidade=getattr(item, "profundidade", None),
+        visible=True,
+    )
+
+def _post_table_setup(self, key: str) -> None:  # type: ignore[override]
+    super()._post_table_setup(key)
+    table = self.tables.get(key)
+    model = self.models.get(key)
+    if not table or not model:
+        return
+    for col_idx, spec in enumerate(model.columns):
+        field = getattr(spec, "field", "") or ""
+        if field.lower().startswith("reserva"):
+            table.setColumnHidden(col_idx, True)
+
+# ------------------------------------------------------------------ Local models
 
     # ------------------------------------------------------------------ Local models
     def on_guardar_modelo(self, key: str) -> None:  # type: ignore[override]
@@ -135,18 +162,32 @@ class DadosItemsPage(DadosGeraisPage):
         origin, model_id = source
         replace = dialog.replace_existing()
 
-        try:
-            if origin == "local":
-                linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
-            else:
-                user_id = getattr(self.current_user, "id", None)
-                linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
-        except Exception as exc:  # pragma: no cover
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
-            return
 
-        linhas = linhas_por_menu.get(key, [])
-        self._apply_imported_rows(key, linhas, replace=replace)
+
+try:
+
+    if origin == "local":
+
+        linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
+
+    else:
+
+        user_id = getattr(self.current_user, "id", None)
+
+        linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+
+except Exception as exc:  # pragma: no cover
+
+    QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
+
+    return
+
+
+
+linhas = self._extract_rows_for_import(origin, linhas_por_menu, key)
+
+self._apply_imported_rows(key, linhas, replace=replace)
+
 
     def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
         if not self.context:
@@ -169,16 +210,28 @@ class DadosItemsPage(DadosGeraisPage):
         user_id = getattr(self.current_user, "id", None)
         for menu, info in selections.items():
             origin, model_id, replace = info
-            try:
-                if origin == "local":
-                    linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
-                else:
-                    linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
-            except Exception as exc:  # pragma: no cover
-                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
-                continue
-            linhas = linhas_por_menu.get(menu, [])
-            self._apply_imported_rows(menu, linhas, replace=replace)
+
+
+try:
+
+    if origin == "local":
+
+        linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
+
+    else:
+
+        linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+
+except Exception as exc:  # pragma: no cover
+
+    QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
+
+    continue
+
+linhas = self._extract_rows_for_import(origin, linhas_por_menu, menu)
+
+self._apply_imported_rows(menu, linhas, replace=replace)
+
 
 
 class ImportarDadosItemsDialog(QtWidgets.QDialog):

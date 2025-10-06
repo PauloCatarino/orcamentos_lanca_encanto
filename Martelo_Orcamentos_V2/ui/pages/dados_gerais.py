@@ -2374,101 +2374,265 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
     def _setup_ui(self) -> None:
 
+
+
         root = QVBoxLayout(self)
 
+
+
         root.setContentsMargins(8, 8, 8, 8)
+
         root.setSpacing(8)
 
+
+
         header = QtWidgets.QWidget(self)
+
         grid = QGridLayout(header)
+
         grid.setContentsMargins(0, 0, 0, 0)
+
         grid.setHorizontalSpacing(12)
+
         grid.setVerticalSpacing(4)
 
+
+
         self.lbl_title = QLabel(self.page_title)
+
         title_font = self.lbl_title.font()
+
         title_font.setBold(True)
+
         title_font.setPointSize(title_font.pointSize() + 2)
+
         self.lbl_title.setFont(title_font)
 
+
+
         self.lbl_cliente = QLabel("-")
+
         self.lbl_utilizador = QLabel("-")
+
         self.lbl_ano = QLabel("-")
+
         self.lbl_num = QLabel("-")
+
         self.lbl_ver = QLabel("-")
 
+
+
         grid.addWidget(self.lbl_title, 0, 0, 1, 5)
+
         grid.addWidget(QLabel("Cliente:"), 1, 0)
+
         grid.addWidget(self.lbl_cliente, 1, 1)
+
         grid.addWidget(QLabel("Utilizador:"), 1, 2)
+
         grid.addWidget(self.lbl_utilizador, 1, 3)
+
         grid.addWidget(QLabel("Ano:"), 2, 0)
+
         grid.addWidget(self.lbl_ano, 2, 1)
+
         grid.addWidget(QLabel("Nº Orçamento:"), 2, 2)
+
         grid.addWidget(self.lbl_num, 2, 3)
+
         grid.addWidget(QLabel("Versão:"), 2, 4)
+
         grid.addWidget(self.lbl_ver, 2, 5)
 
+
+
+        lbl_altura_caption = QLabel("Altura:")
+
+        lbl_largura_caption = QLabel("Largura:")
+
+        lbl_profundidade_caption = QLabel("Profundidade:")
+
+        self.lbl_altura = QLabel("-")
+
+        self.lbl_largura = QLabel("-")
+
+        self.lbl_profundidade = QLabel("-")
+
+
+
+        self._dimension_labels = {
+
+            "captions": [lbl_altura_caption, lbl_largura_caption, lbl_profundidade_caption],
+
+            "values": [self.lbl_altura, self.lbl_largura, self.lbl_profundidade],
+
+        }
+
+
+
+        grid.addWidget(lbl_altura_caption, 3, 0)
+
+        grid.addWidget(self.lbl_altura, 3, 1)
+
+        grid.addWidget(lbl_largura_caption, 3, 2)
+
+        grid.addWidget(self.lbl_largura, 3, 3)
+
+        grid.addWidget(lbl_profundidade_caption, 3, 4)
+
+        grid.addWidget(self.lbl_profundidade, 3, 5)
+
+
+
         self.btn_guardar = QPushButton(self.save_button_text)
+
+        self.btn_guardar.setIcon(self._standard_icon("save"))
+
         self.btn_guardar.clicked.connect(self.on_guardar)
+
         grid.addWidget(self.btn_guardar, 0, 5)
+
+
 
         root.addWidget(header)
 
+
+
+        self._update_dimensions_labels(visible=False)
+
+
+
         self.tabs = QTabWidget(self)
+
         root.addWidget(self.tabs, 1)
 
+
+
         self.models: Dict[str, DadosGeraisTableModel] = {}
+
         self.tables: Dict[str, QTableView] = {}
 
+
+
         for key in self.tab_order:
+
             widget = QtWidgets.QWidget()
+
             layout = QVBoxLayout(widget)
+
             layout.setContentsMargins(0, 0, 0, 0)
+
             layout.setSpacing(4)
 
+
+
             toolbar = QHBoxLayout()
+
             toolbar.setSpacing(6)
 
+
+
             btn_save_model = QPushButton(self.save_button_text)
+
+            btn_save_model.setIcon(self._standard_icon("save"))
+
             btn_save_model.clicked.connect(lambda _, k=key: self.on_guardar_modelo(k))
 
+
+
             btn_import_model = QPushButton(self.import_button_text)
+
+            btn_import_model.setIcon(self._standard_icon("import"))
+
             btn_import_model.clicked.connect(lambda _, k=key: self.on_importar_modelo(k))
 
+
+
             btn_import_multi = QPushButton(self.import_multi_button_text)
+
+            btn_import_multi.setIcon(self._standard_icon("import_multi"))
+
             btn_import_multi.clicked.connect(self.on_importar_multi_modelos)
 
+
+
             toolbar.addWidget(btn_save_model)
+
             toolbar.addWidget(btn_import_model)
+
             toolbar.addWidget(btn_import_multi)
+
+
+
+            btn_select_mp = QPushButton("Selecionar Materia-Prima")
+
+            btn_select_mp.setIcon(self._standard_icon("select_mp"))
+
+            btn_select_mp.clicked.connect(lambda _, k=key: self.on_selecionar_mp(k))
+
+            btn_select_mp.setVisible(key == self.svc.MENU_MATERIAIS)
+
+            toolbar.addWidget(btn_select_mp)
+
+
+
             toolbar.addStretch(1)
+
+
 
             layout.addLayout(toolbar)
 
+
+
             table = QTableView(self)
+
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
+
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
             table.horizontalHeader().setStretchLastSection(False)
+
             table.setSortingEnabled(True)
+
             table.setEditTriggers(
+
                 QAbstractItemView.EditTrigger.CurrentChanged
+
                 | QAbstractItemView.EditTrigger.SelectedClicked
+
                 | QAbstractItemView.EditTrigger.EditKeyPressed
+
                 | QAbstractItemView.EditTrigger.AnyKeyPressed
+
             )
+
             table.setContextMenuPolicy(Qt.CustomContextMenu)
+
             table.customContextMenuRequested.connect(lambda pos, k=key: self._on_context_menu(pos, k))
+
             layout.addWidget(table, 1)
+
+
 
             self.tabs.addTab(widget, self._tab_title(key))
 
+
+
             model = self._create_model(key)
+
             self.models[key] = model
+
             self.tables[key] = table
+
             table.setModel(model)
 
+
+
+            self._post_table_setup(key)
+
             self._configure_delegates(key)
+
+
 
     # --- delegates por coluna (combos, etc.) ----------------------------------
     def _configure_delegates(self, key: str) -> None:
@@ -2489,6 +2653,384 @@ class DadosGeraisPage(QtWidgets.QWidget):
             if spec.kind == "choice" and callable(spec.options):
                 table.setItemDelegateForColumn(col_idx, ChoiceDelegate(spec.options, table))
             # 'bool' já é tratado pelo CheckStateRole no modelo; não precisa de delegate.
+    def _standard_icon(self, key: str):
+
+        style = self.style() or QtWidgets.QApplication.style()
+
+        return style.standardIcon(self._ICON_MAP.get(key, QStyle.SP_FileIcon))
+
+
+
+    def _clipboard_data(self) -> Dict[str, Any]:
+
+        data = getattr(type(self), "_shared_clipboard", None)
+
+        if not isinstance(data, dict):
+
+            data = {"menu": None, "rows": []}
+
+            type(self)._shared_clipboard = data
+
+        data.setdefault("menu", None)
+
+        data.setdefault("rows", [])
+
+        return data
+
+
+
+    def _format_dimension_value(self, value: Any) -> str:
+
+        if value in (None, "", 0, 0.0):
+
+            return "-"
+
+        try:
+
+            return _decimal(Decimal(str(value)))
+
+        except Exception:
+
+            return str(value)
+
+
+
+    def _update_dimensions_labels(self, *, altura=None, largura=None, profundidade=None, visible: bool = False) -> None:
+
+        widgets = getattr(self, "_dimension_labels", None)
+
+        if not widgets:
+
+            return
+
+        captions = widgets.get("captions", [])
+
+        values = widgets.get("values", [])
+
+        formatted = [
+
+            self._format_dimension_value(altura),
+
+            self._format_dimension_value(largura),
+
+            self._format_dimension_value(profundidade),
+
+        ]
+
+        for label, value in zip(values, formatted):
+
+            label.setText(value)
+
+        for widget in itertools.chain(captions, values):
+
+            widget.setVisible(visible)
+
+
+
+    def _post_table_setup(self, key: str) -> None:
+
+        """Hook for subclasses to tweak table configuration."""
+
+        return
+
+
+
+    def _selected_rows_from_table(self, table: QTableView) -> List[int]:
+
+        selection = table.selectionModel()
+
+        if not selection:
+
+            return []
+
+        rows = {index.row() for index in selection.selectedRows()}
+
+        if not rows:
+
+            current = table.currentIndex()
+
+            if current.isValid():
+
+                rows.add(current.row())
+
+        return sorted(rows)
+
+
+
+    def _copy_rows(self, key: str, row_indices: Sequence[int]) -> None:
+
+        model = self.models.get(key)
+
+        if not model or not row_indices:
+
+            return
+
+        rows_data: List[Dict[str, Any]] = []
+
+        for row_index in row_indices:
+
+            try:
+
+                row = dict(model.row_at(row_index))
+
+            except Exception:
+
+                continue
+
+            row.pop("id", None)
+
+            rows_data.append(row)
+
+        if not rows_data:
+
+            return
+
+        clipboard = self._clipboard_data()
+
+        clipboard["menu"] = key
+
+        clipboard["rows"] = rows_data
+
+        try:
+
+            QtWidgets.QApplication.clipboard().setText(json.dumps(rows_data, ensure_ascii=False))
+
+        except Exception:
+
+            pass
+
+
+
+    def _paste_rows(self, key: str, table: QTableView, row_indices: Sequence[int]) -> None:
+
+        model = self.models.get(key)
+
+        if not model:
+
+            return
+
+        clipboard = self._clipboard_data()
+
+        if clipboard.get("menu") != key:
+
+            return
+
+        rows = clipboard.get("rows") or []
+
+        if not rows:
+
+            return
+
+        target_rows = list(row_indices)
+
+        allowed_fields = {spec.field for spec in model.columns}
+
+        for idx, row_data in enumerate(rows):
+
+            if not isinstance(row_data, dict):
+
+                continue
+
+            if idx < len(target_rows):
+
+                target_row = target_rows[idx]
+
+            else:
+
+                target_row = model.append_row({})
+
+                target_rows.append(target_row)
+
+            payload = {}
+
+            for field, value in row_data.items():
+
+                if field == "id":
+
+                    continue
+
+                if field in allowed_fields:
+
+                    payload[field] = value
+
+            if not payload:
+
+                continue
+
+            model.update_row(target_row, payload)
+
+            if hasattr(model, "recalculate"):
+
+                try:
+
+                    model.recalculate(target_row)  # type: ignore[attr-defined]
+
+                except Exception:
+
+                    pass
+
+        model._reindex()
+
+        if not hasattr(model, "recalculate"):
+
+            self._recalculate_menu_rows(key)
+
+        for row in target_rows:
+
+            table.selectRow(row)
+
+
+
+    def _clear_rows(self, key: str, row_indices: Sequence[int]) -> None:
+
+        model = self.models.get(key)
+
+        if not model or not row_indices:
+
+            return
+
+        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
+
+        for row_index in row_indices:
+
+            clear_data: Dict[str, Any] = {}
+
+            for spec in model.columns:
+
+                field = spec.field
+
+                if field in {"id", "ordem"}:
+
+                    continue
+
+                if field == primary_field:
+
+                    continue
+
+                if spec.kind == "bool":
+
+                    clear_data[field] = False
+
+                else:
+
+                    clear_data[field] = None
+
+            model.update_row(row_index, clear_data)
+
+            if hasattr(model, "recalculate"):
+
+                try:
+
+                    model.recalculate(row_index)  # type: ignore[attr-defined]
+
+                except Exception:
+
+                    pass
+
+        if not hasattr(model, "recalculate"):
+
+            self._recalculate_menu_rows(key)
+
+
+
+    def _on_context_menu(self, pos: QtCore.QPoint, key: str) -> None:
+
+        table = self.tables.get(key)
+
+        if not table:
+
+            return
+
+
+
+        index = table.indexAt(pos)
+
+        if index.isValid():
+
+            table.selectRow(index.row())
+
+
+
+        selected_rows = self._selected_rows_from_table(table)
+
+        clipboard = self._clipboard_data()
+
+
+
+        menu = QMenu(table)
+
+        action_copy = menu.addAction(self._standard_icon("copy"), "Copiar dados da(s) linha(s)")
+
+        action_copy.setEnabled(bool(selected_rows))
+
+
+
+        action_paste = menu.addAction(self._standard_icon("paste"), "Colar dados da(s) linha(s)")
+
+        action_paste.setEnabled(bool(clipboard.get("rows")) and clipboard.get("menu") == key)
+
+
+
+        action_clear = menu.addAction(self._standard_icon("clear"), "Eliminar dados da(s) linha(s)")
+
+        action_clear.setEnabled(bool(selected_rows))
+
+
+
+        menu.addSeparator()
+
+
+
+        action_add = menu.addAction(self._standard_icon("add"), "Adicionar linha")
+
+        action_delete = menu.addAction(self._standard_icon("delete"), "Remover linha(s)")
+
+        action_delete.setEnabled(bool(selected_rows))
+
+
+
+        action_select_mp = None
+
+        if key == self.svc.MENU_MATERIAIS:
+
+            menu.addSeparator()
+
+            action_select_mp = menu.addAction(self._standard_icon("select_mp"), "Selecionar Materia-Prima")
+
+
+
+        selected_action = menu.exec(table.viewport().mapToGlobal(pos))
+
+        if selected_action is None:
+
+            return
+
+        if selected_action == action_copy:
+
+            self._copy_rows(key, selected_rows)
+
+        elif selected_action == action_paste:
+
+            self._paste_rows(key, table, selected_rows)
+
+        elif selected_action == action_clear:
+
+            self._clear_rows(key, selected_rows)
+
+        elif selected_action == action_add:
+
+            self.on_add_row(key)
+
+        elif selected_action == action_delete:
+
+            self.on_del_row(key)
+
+        elif action_select_mp and selected_action == action_select_mp:
+
+            self.on_selecionar_mp(key)
+
+
+
     # ------------------------------------------------------------------ Data flow
 
 
@@ -2507,6 +3049,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             return
 
         self.context = ctx
+        self._update_dimensions_labels(visible=False)
         self.lbl_title.setText(self.page_title)
 
         self._carregar_topo(orcamento_id)
@@ -3726,7 +4269,11 @@ class GuardarModeloDialog(QDialog):
 
 
 
-    def __init__(self, session, user_id: int, tipo_menu: str, linhas: Sequence[Mapping[str, Any]], parent=None):
+    def __init__(self, session, user_id: int, tipo_menu: str, linhas: Sequence[Mapping[str, Any]], parent=None, *, svc_module, window_title: Optional[str] = None):
+
+
+
+
 
 
 
@@ -3734,7 +4281,15 @@ class GuardarModeloDialog(QDialog):
 
 
 
+
+
+
+
         self.session = session
+
+
+
+
 
 
 
@@ -3742,7 +4297,55 @@ class GuardarModeloDialog(QDialog):
 
 
 
+
+
+
+
         self.tipo_menu = tipo_menu
+
+
+
+
+
+
+
+        if svc_module is None:
+
+
+
+
+
+
+
+            raise ValueError("GuardarModeloDialog requires svc_module")
+
+
+
+
+
+
+
+        self.svc = svc_module
+
+
+
+
+
+
+
+        self.window_title = window_title or "Guardar Modelo"
+
+
+
+
+
+
+
+        self.setWindowTitle(self.window_title)
+
+
+
+
 
 
 
@@ -4170,7 +4773,11 @@ class ImportarModeloDialog(QDialog):
 
 
 
-    def __init__(self, session, user_id: int, tipo_menu: str, parent=None):
+    def __init__(self, session, user_id: int, tipo_menu: str, parent=None, *, svc_module, window_title: Optional[str] = None):
+
+
+
+
 
 
 
@@ -4178,7 +4785,15 @@ class ImportarModeloDialog(QDialog):
 
 
 
+
+
+
+
         self.session = session
+
+
+
+
 
 
 
@@ -4186,7 +4801,55 @@ class ImportarModeloDialog(QDialog):
 
 
 
+
+
+
+
         self.tipo_menu = tipo_menu
+
+
+
+
+
+
+
+        if svc_module is None:
+
+
+
+
+
+
+
+            raise ValueError("ImportarModeloDialog requires svc_module")
+
+
+
+
+
+
+
+        self.svc = svc_module
+
+
+
+
+
+
+
+        self.window_title = window_title or "Importar Modelo"
+
+
+
+
+
+
+
+        self.setWindowTitle(self.window_title)
+
+
+
+
 
 
 
@@ -4990,7 +5653,11 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
-    def __init__(self, session, user_id: int, parent=None):
+    def __init__(self, session, user_id: int, parent=None, *, svc_module, window_title: Optional[str] = None):
+
+
+
+
 
 
 
@@ -4998,11 +5665,63 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
+
+
+
+
         self.session = session
 
 
 
+
+
+
+
         self.user_id = user_id
+
+
+
+
+
+
+
+        if svc_module is None:
+
+
+
+
+
+
+
+            raise ValueError("ImportarMultiModelosDialog requires svc_module")
+
+
+
+
+
+
+
+        self.svc = svc_module
+
+
+
+
+
+
+
+        self.window_title = window_title or "Importar Multi Modelos"
+
+
+
+
+
+
+
+        self.setWindowTitle(self.window_title)
+
+
+
+
 
 
 
