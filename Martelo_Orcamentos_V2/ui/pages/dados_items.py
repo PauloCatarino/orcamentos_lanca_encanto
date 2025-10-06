@@ -162,77 +162,73 @@ class DadosItemsPage(DadosGeraisPage):
         origin, model_id = source
         replace = dialog.replace_existing()
 
-
-
         try:
-
             if origin == "local":
-
                 linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
-
             else:
-
                 user_id = getattr(self.current_user, "id", None)
-
                 linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
-
         except Exception as exc:  # pragma: no cover
-
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
-
             return
 
-
-
         linhas = self._extract_rows_for_import(origin, linhas_por_menu, key)
-
         self._apply_imported_rows(key, linhas, replace=replace)
 
-
-            def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
-                if not self.context:
-                    QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
-                    return
-
-                dialog = ImportarMultiDadosItemsDialog(
-                    session=self.session,
-                    context=self.context,
-                    current_user=self.current_user,
-                    parent=self,
-                )
-                if dialog.exec() != QtWidgets.QDialog.Accepted:
-                    return
-
-                selections = dialog.selected_models()
-                if not selections:
-                    return
-
-                user_id = getattr(self.current_user, "id", None)
-                for menu, info in selections.items():
-                    origin, model_id, replace = info
-
-
-        try:
-
-            if origin == "local":
-
-                linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
-
+    def _extract_rows_for_import(
+        self,
+        origin: str,
+        linhas_por_menu: Mapping[str, Sequence[Mapping[str, Any]]],
+        menu: str,
+    ) -> List[Dict[str, Any]]:
+        rows: Sequence[Mapping[str, Any]] = []
+        if origin == "global":
+            candidate = linhas_por_menu.get("linhas")
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                rows = [row for row in candidate if isinstance(row, Mapping)]
             else:
+                candidate = linhas_por_menu.get(menu)
+                if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                    rows = [row for row in candidate if isinstance(row, Mapping)]
+        else:
+            candidate = linhas_por_menu.get(menu, [])
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                rows = [row for row in candidate if isinstance(row, Mapping)]
+        return [dict(row) for row in rows]
 
-                linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+    def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
+        if not self.context:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
+            return
 
-        except Exception as exc:  # pragma: no cover
+        dialog = ImportarMultiDadosItemsDialog(
+            session=self.session,
+            context=self.context,
+            current_user=self.current_user,
+            parent=self,
+        )
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
 
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
+        selections = dialog.selected_models()
+        if not selections:
+            return
 
-            continue
+        user_id = getattr(self.current_user, "id", None)
+        for menu, info in selections.items():
+            origin, model_id, replace = info
 
-        linhas = self._extract_rows_for_import(origin, linhas_por_menu, menu)
+            try:
+                if origin == "local":
+                    linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
+                else:
+                    linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+            except Exception as exc:  # pragma: no cover
+                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
+                continue
 
-        self._apply_imported_rows(menu, linhas, replace=replace)
-
-
+            linhas = self._extract_rows_for_import(origin, linhas_por_menu, menu)
+            self._apply_imported_rows(menu, linhas, replace=replace)
 
 class ImportarDadosItemsDialog(QtWidgets.QDialog):
     def __init__(
