@@ -35,7 +35,7 @@ class DadosItemsPage(DadosGeraisPage):
             self.context = None
             self._reset_tables()
             self.lbl_title.setText(self.page_title)
-                self._update_dimensions_labels(visible=False)
+            self._update_dimensions_labels(visible=False)
             return
 
         try:
@@ -58,37 +58,37 @@ class DadosItemsPage(DadosGeraisPage):
 
 
 
-def _update_item_header(self, item_id: int) -> None:
-    item: Optional[OrcamentoItem] = self.session.get(OrcamentoItem, item_id)
-    if not item:
-        self.lbl_title.setText(self.page_title)
-        self._update_dimensions_labels(visible=False)
-        return
-    numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or item_id
-    descricao = (item.descricao or "").strip()
-    if descricao:
-        self.lbl_title.setText(f"{self.page_title} - Item {numero}: {descricao}")
-    else:
-        self.lbl_title.setText(f"{self.page_title} - Item {numero}")
-    self._update_dimensions_labels(
-        altura=getattr(item, "altura", None),
-        largura=getattr(item, "largura", None),
-        profundidade=getattr(item, "profundidade", None),
-        visible=True,
-    )
+    def _update_item_header(self, item_id: int) -> None:
+        item: Optional[OrcamentoItem] = self.session.get(OrcamentoItem, item_id)
+        if not item:
+            self.lbl_title.setText(self.page_title)
+            self._update_dimensions_labels(visible=False)
+            return
+        numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or item_id
+        descricao = (item.descricao or "").strip()
+        if descricao:
+            self.lbl_title.setText(f"{self.page_title} - Item {numero}: {descricao}")
+        else:
+            self.lbl_title.setText(f"{self.page_title} - Item {numero}")
+        self._update_dimensions_labels(
+            altura=getattr(item, "altura", None),
+            largura=getattr(item, "largura", None),
+            profundidade=getattr(item, "profundidade", None),
+            visible=True,
+        )
 
-def _post_table_setup(self, key: str) -> None:  # type: ignore[override]
-    super()._post_table_setup(key)
-    table = self.tables.get(key)
-    model = self.models.get(key)
-    if not table or not model:
-        return
-    for col_idx, spec in enumerate(model.columns):
-        field = getattr(spec, "field", "") or ""
-        if field.lower().startswith("reserva"):
-            table.setColumnHidden(col_idx, True)
+    def _post_table_setup(self, key: str) -> None:  # type: ignore[override]
+        super()._post_table_setup(key)
+        table = self.tables.get(key)
+        model = self.models.get(key)
+        if not table or not model:
+            return
+        for col_idx, spec in enumerate(model.columns):
+            field = getattr(spec, "field", "") or ""
+            if field.lower().startswith("reserva"):
+                table.setColumnHidden(col_idx, True)
 
-# ------------------------------------------------------------------ Local models
+    # ------------------------------------------------------------------ Local models
 
     # ------------------------------------------------------------------ Local models
     def on_guardar_modelo(self, key: str) -> None:  # type: ignore[override]
@@ -164,73 +164,73 @@ def _post_table_setup(self, key: str) -> None:  # type: ignore[override]
 
 
 
-try:
+        try:
 
-    if origin == "local":
+            if origin == "local":
 
-        linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
+                linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
 
-    else:
+            else:
 
-        user_id = getattr(self.current_user, "id", None)
+                user_id = getattr(self.current_user, "id", None)
 
-        linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+                linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
 
-except Exception as exc:  # pragma: no cover
+        except Exception as exc:  # pragma: no cover
 
-    QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
 
-    return
-
-
-
-linhas = self._extract_rows_for_import(origin, linhas_por_menu, key)
-
-self._apply_imported_rows(key, linhas, replace=replace)
-
-
-    def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
-        if not self.context:
-            QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
             return
 
-        dialog = ImportarMultiDadosItemsDialog(
-            session=self.session,
-            context=self.context,
-            current_user=self.current_user,
-            parent=self,
-        )
-        if dialog.exec() != QtWidgets.QDialog.Accepted:
-            return
-
-        selections = dialog.selected_models()
-        if not selections:
-            return
-
-        user_id = getattr(self.current_user, "id", None)
-        for menu, info in selections.items():
-            origin, model_id, replace = info
 
 
-try:
+        linhas = self._extract_rows_for_import(origin, linhas_por_menu, key)
 
-    if origin == "local":
+        self._apply_imported_rows(key, linhas, replace=replace)
 
-        linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
 
-    else:
+            def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
+                if not self.context:
+                    QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
+                    return
 
-        linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+                dialog = ImportarMultiDadosItemsDialog(
+                    session=self.session,
+                    context=self.context,
+                    current_user=self.current_user,
+                    parent=self,
+                )
+                if dialog.exec() != QtWidgets.QDialog.Accepted:
+                    return
 
-except Exception as exc:  # pragma: no cover
+                selections = dialog.selected_models()
+                if not selections:
+                    return
 
-    QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
+                user_id = getattr(self.current_user, "id", None)
+                for menu, info in selections.items():
+                    origin, model_id, replace = info
 
-    continue
 
-linhas = self._extract_rows_for_import(origin, linhas_por_menu, menu)
+        try:
 
-self._apply_imported_rows(menu, linhas, replace=replace)
+            if origin == "local":
+
+                linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
+
+            else:
+
+                linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+
+        except Exception as exc:  # pragma: no cover
+
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar {menu}: {exc}")
+
+            continue
+
+        linhas = self._extract_rows_for_import(origin, linhas_por_menu, menu)
+
+        self._apply_imported_rows(menu, linhas, replace=replace)
 
 
 
