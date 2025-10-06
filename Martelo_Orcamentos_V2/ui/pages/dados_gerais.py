@@ -7,6 +7,7 @@
 
 
 from dataclasses import dataclass
+import json  # usado em _copy_rows
 
 
 
@@ -2178,7 +2179,32 @@ class MateriaPrimaPicker(QDialog):
 
 class DadosGeraisPage(QtWidgets.QWidget):
 
+    # --- ÍCONES PADRÃO (classe) -------------------------------------------------
+    # Mapa de chaves -> StandardPixmap. Mantém as chaves simples (em inglês)
+    # para reutilizar igual em outros ficheiros (ex.: dados_items.py).
+    # Podes acrescentar novas chaves conforme precisares.
+    _ICON_MAP = {
+        "save":        QtWidgets.QStyle.SP_DialogSaveButton,
+        "open":        QtWidgets.QStyle.SP_DirOpenIcon,
+        "import":      QtWidgets.QStyle.SP_ArrowDown,
+        "export":      QtWidgets.QStyle.SP_ArrowUp,
+        "delete":      QtWidgets.QStyle.SP_TrashIcon,
+        "copy":        QtWidgets.QStyle.SP_FileDialogDetailedView,
+        "paste":       QtWidgets.QStyle.SP_DialogApplyButton,
+        "clear":       QtWidgets.QStyle.SP_DialogResetButton,
+        "add":         QtWidgets.QStyle.SP_FileDialogNewFolder,
+        "edit":        QtWidgets.QStyle.SP_FileDialogContentsView,
+        "refresh":     QtWidgets.QStyle.SP_BrowserReload,
+        "search":      QtWidgets.QStyle.SP_FileDialogContentsView,
+        "print":       QtWidgets.QStyle.SP_DialogPrintButton,
+        # fallback comum
+        "file":        QtWidgets.QStyle.SP_FileIcon,
+    }
 
+    def _standard_icon(self, key: str):
+
+        style = self.style() or QtWidgets.QApplication.style()
+        return style.standardIcon(self._ICON_MAP.get(key, QStyle.SP_FileIcon))
 
 
 
@@ -2272,15 +2298,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         ]
 
-
-
+   
         self._setup_ui()
-
-
-
-
-
-
 
     # ------------------------------------------------------------------ UI
 
