@@ -1,12 +1,13 @@
 ﻿from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import datetime
-from decimal import Decimal
-from pathlib import Path
-from difflib import SequenceMatcher
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
+from pathlib import Path
+from difflib import SequenceMatcher
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from openpyxl import load_workbook
 from sqlalchemy import cast, select, or_, String
@@ -339,11 +340,29 @@ def listar_tipos(db: Session) -> List[str]:
     return [row[0] for row in db.execute(stmt).all() if row[0]]
 
 
-def listar_familias(db: Session) -> List[str]:
-    stmt = select(MateriaPrima.familia).where(MateriaPrima.familia.isnot(None)).distinct().order_by(MateriaPrima.familia)
-    return [row[0] for row in db.execute(stmt).all() if row[0]]
-
-
+def listar_familias(db: Session) -> List[str]:
+    stmt = select(MateriaPrima.familia).where(MateriaPrima.familia.isnot(None)).distinct().order_by(MateriaPrima.familia)
+    return [row[0] for row in db.execute(stmt).all() if row[0]]
+
+
+def mapear_tipos_por_familia(db: Session) -> Dict[str, List[str]]:
+    """
+    Devolve um dicionário {familia: [tipos]} com base nas matérias primas registadas.
+    Garante listas ordenadas e únicas para alimentar as combos dependentes.
+    """
+    stmt = (
+        select(MateriaPrima.familia, MateriaPrima.tipo)
+        .where(MateriaPrima.familia.isnot(None), MateriaPrima.tipo.isnot(None))
+        .order_by(MateriaPrima.familia, MateriaPrima.tipo)
+    )
+    mapping: Dict[str, set[str]] = defaultdict(set)
+    for familia, tipo in db.execute(stmt):
+        if not familia or not tipo:
+            continue
+        mapping[str(familia).strip().upper()].add(str(tipo).strip().upper())
+    return {familia: sorted(tipos) for familia, tipos in mapping.items() if tipos}
+
+
 
 
 

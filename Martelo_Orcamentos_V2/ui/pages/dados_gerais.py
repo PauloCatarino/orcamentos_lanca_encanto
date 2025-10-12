@@ -19,7 +19,7 @@ import itertools
 
 
 
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 
@@ -148,6 +148,7 @@ from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 
 
 from Martelo_Orcamentos_V2.app.services import materias_primas as svc_mp
+from Martelo_Orcamentos_V2.app.services import user_layouts
 
 
 
@@ -287,7 +288,7 @@ MATERIAL_CLIP_FIELDS = [
 
 
 
-def _decimal(value: Optional[Decimal]) -> str:
+def _decimal(value: Optional[Decimal], *, places: int = 4) -> str:
 
 
 
@@ -303,11 +304,15 @@ def _decimal(value: Optional[Decimal]) -> str:
 
 
 
-        dec = Decimal(str(value))
+        quant = Decimal("1").scaleb(-places)
 
 
 
-        return str(dec.quantize(Decimal('0.0001'))).replace('.', ',')
+        dec = Decimal(str(value)).quantize(quant)
+
+
+
+        return str(dec).replace('.', ',')
 
 
 
@@ -343,11 +348,15 @@ def _money(value: Optional[Decimal]) -> str:
 
 
 
-        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+        amount = Decimal(str(value)).quantize(Decimal("0.01"))
 
 
 
-        return f"{str(amount).replace('.', ',')} "
+        text = f"{amount:.2f}".replace('.', ',')
+
+
+
+        return f"{text} €"
 
 
 
@@ -799,7 +808,15 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-            if spec.kind in {"money", "decimal"}:
+            if spec.kind == "money":
+
+
+
+                return _decimal(value, places=2)
+
+
+
+            if spec.kind == "decimal":
 
 
 
@@ -1957,6 +1974,9 @@ class MateriaPrimaPicker(QDialog):
 
 
 
+
+
+
         self.model = SimpleTableModel(columns=columns)
 
 
@@ -2204,6 +2224,33 @@ class DadosGeraisPage(QtWidgets.QWidget):
         "file":         QtWidgets.QStyle.SP_FileIcon,
     }
 
+    COLUMN_DEFAULT_WIDTHS: Dict[str, int] = {
+        "grupo_material": 180,
+        "grupo_ferragem": 180,
+        "grupo_sistema": 200,
+        "grupo_acabamento": 200,
+        "descricao": 200,
+        "ref_le": 120,
+        "descricao_material": 320,
+        "preco_tab": 110,
+        "preco_liq": 120,
+        "margem": 90,
+        "desconto": 90,
+        "und": 70,
+        "desp": 90,
+        "tipo": 140,
+        "familia": 150,
+        "comp_mp": 110,
+        "larg_mp": 110,
+        "esp_mp": 110,
+        "orl_0_4": 100,
+        "orl_1_0": 100,
+        "id_mp": 90,
+        "nao_stock": 95,
+    }
+
+    HIDDEN_FIELDS = {"reserva_1", "reserva_2", "reserva_3"}
+
     def _standard_icon(self, key: str):
 
         style = self.style() or QtWidgets.QApplication.style()
@@ -2301,6 +2348,27 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         ]
 
+        self.layout_namespace = getattr(self.svc, "LAYOUT_NAMESPACE", svc_dg.LAYOUT_NAMESPACE)
+
+        self._layout_user_id = getattr(self.current_user, "id", None)
+
+        self._column_layout_cache: Dict[str, Dict[str, int]] = user_layouts.load_table_layout(
+            self.session,
+            self._layout_user_id,
+            self.layout_namespace,
+        )
+
+        self._layout_save_timer = QtCore.QTimer(self)
+
+        self._layout_save_timer.setSingleShot(True)
+
+        self._layout_save_timer.timeout.connect(self._persist_column_layouts)
+
+        self._layout_blocking_keys: set[str] = set()
+
+
+
+
    
         self._setup_ui()
 
@@ -2330,6 +2398,113 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.svc.MENU_ACABAMENTOS: "Acabamentos",
         }
         return mapping.get(key, key.title())
+
+    def _column_width_spec(self, key: str) -> Dict[str, int]:
+        return dict(self.COLUMN_DEFAULT_WIDTHS)
+
+    def _default_info_pairs(self) -> List[Tuple[str, QtWidgets.QLabel]]:
+
+        return [
+
+            ("Cliente:", self.lbl_cliente),
+
+            ("Utilizador:", self.lbl_utilizador),
+
+            ("Ano:", self.lbl_ano),
+
+            ("N.º Orçamento:", self.lbl_num),
+
+            ("Versão:", self.lbl_ver),
+
+        ]
+
+
+
+    def _clear_layout(self, layout: QtWidgets.QLayout) -> None:
+
+        while layout.count():
+
+            item = layout.takeAt(0)
+
+            widget = item.widget()
+
+            if widget is not None:
+
+                widget.setParent(None)
+
+                continue
+
+            child = item.layout()
+
+            if child is not None:
+
+                self._clear_layout(child)
+
+
+
+    def _populate_info_pairs(self, pairs: Sequence[Tuple[str, QtWidgets.QLabel]]) -> None:
+
+        self._clear_layout(self._info_pairs_layout)
+
+        for caption_text, value_label in pairs:
+
+            caption = QLabel(caption_text)
+
+            self._info_pairs_layout.addWidget(caption)
+
+            self._info_pairs_layout.addWidget(value_label)
+
+            self._info_pairs_layout.addSpacing(16)
+
+        self._info_pairs_layout.addStretch(1)
+
+    def _apply_column_layout(self, key: str) -> None:
+        table = self.tables.get(key)
+        model = self.models.get(key)
+        if not table or not model:
+            return
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        saved_widths = self._column_layout_cache.get(key, {})
+        self._layout_blocking_keys.add(key)
+        try:
+            for idx, spec in enumerate(model.columns):
+                table.setColumnHidden(idx, not spec.visible)
+                if not spec.visible:
+                    continue
+                width = saved_widths.get(spec.field) or spec.width
+                if width:
+                    table.setColumnWidth(idx, int(width))
+        finally:
+            self._layout_blocking_keys.discard(key)
+        header.sectionResized.connect(
+            lambda logical, _old, new, menu_key=key: self._on_column_resized(menu_key, logical, new)
+        )
+
+    def _on_column_resized(self, key: str, logical: int, new_size: int) -> None:
+        if key in self._layout_blocking_keys:
+            return
+        model = self.models.get(key)
+        if not model or not (0 <= logical < len(model.columns)):
+            return
+        field = model.columns[logical].field
+        widths = self._column_layout_cache.setdefault(key, {})
+        widths[field] = max(40, int(new_size))
+        self._layout_save_timer.start(800)
+
+    def _persist_column_layouts(self) -> None:
+        if not self._layout_user_id:
+            return
+        try:
+            user_layouts.save_table_layout(
+                self.session,
+                self._layout_user_id,
+                self.layout_namespace,
+                self._column_layout_cache,
+            )
+            self.session.flush()
+        except Exception:
+            pass
 
     def _create_model(self, key: str) -> DadosGeraisTableModel:
         header_map = {
@@ -2365,6 +2540,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         kind_map = {kind: set(values) for kind, values in field_types.items()}
         primary = self.svc.MENU_PRIMARY_FIELD.get(key)
 
+        width_spec = self._column_width_spec(key)
         columns: List[ColumnSpec] = []
         for field in fields:
             header = header_map.get(field, field.replace('_', ' ').title())
@@ -2389,7 +2565,19 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 options = self._familias_options
 
             readonly = field in {primary, 'id', 'id_mp', 'preco_liq', 'ref_le'}
-            columns.append(ColumnSpec(header, field, kind, readonly=readonly, options=options))
+            width = width_spec.get(field)
+            visible = field not in self.HIDDEN_FIELDS
+            columns.append(
+                ColumnSpec(
+                    header,
+                    field,
+                    kind,
+                    width=width,
+                    readonly=readonly,
+                    options=options,
+                    visible=visible,
+                )
+            )
 
         model_cls = MateriaisTableModel if key == self.svc.MENU_MATERIAIS else DadosGeraisTableModel
         model = model_cls(columns=columns, parent=self)
@@ -2446,27 +2634,81 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        grid.addWidget(self.lbl_title, 0, 0, 1, 5)
+        grid.addWidget(self.lbl_title, 0, 0, 1, 4)
 
-        grid.addWidget(QLabel("Cliente:"), 1, 0)
 
-        grid.addWidget(self.lbl_cliente, 1, 1)
 
-        grid.addWidget(QLabel("Utilizador:"), 1, 2)
 
-        grid.addWidget(self.lbl_utilizador, 1, 3)
 
-        grid.addWidget(QLabel("Ano:"), 2, 0)
+        self._header_grid = grid
 
-        grid.addWidget(self.lbl_ano, 2, 1)
 
-        grid.addWidget(QLabel("Nº Orçamento:"), 2, 2)
 
-        grid.addWidget(self.lbl_num, 2, 3)
 
-        grid.addWidget(QLabel("Versão:"), 2, 4)
 
-        grid.addWidget(self.lbl_ver, 2, 5)
+        grid.setColumnStretch(0, 0)
+
+
+
+
+
+        grid.setColumnStretch(1, 0)
+
+
+
+
+
+        grid.setColumnStretch(2, 0)
+
+
+
+
+
+        grid.setColumnStretch(3, 1)
+
+
+
+
+
+        grid.setColumnStretch(4, 0)
+
+
+
+
+
+        grid.setColumnStretch(5, 0)
+
+
+
+
+
+        self._info_pairs_layout = QHBoxLayout()
+
+
+
+
+
+        self._info_pairs_layout.setContentsMargins(0, 0, 0, 0)
+
+
+
+
+
+        self._info_pairs_layout.setSpacing(16)
+
+
+
+
+
+        grid.addLayout(self._info_pairs_layout, 1, 0, 1, 6)
+
+
+
+
+
+        self._populate_info_pairs(self._default_info_pairs())
+
+
 
 
 
@@ -2494,17 +2736,79 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        grid.addWidget(lbl_altura_caption, 3, 0)
 
-        grid.addWidget(self.lbl_altura, 3, 1)
 
-        grid.addWidget(lbl_largura_caption, 3, 2)
 
-        grid.addWidget(self.lbl_largura, 3, 3)
 
-        grid.addWidget(lbl_profundidade_caption, 3, 4)
+        self._dimensions_layout = QHBoxLayout()
 
-        grid.addWidget(self.lbl_profundidade, 3, 5)
+
+
+
+
+        self._dimensions_layout.setContentsMargins(0, 0, 0, 0)
+
+
+
+
+
+        self._dimensions_layout.setSpacing(16)
+
+
+
+
+
+        grid.addLayout(self._dimensions_layout, 2, 0, 1, 6)
+
+
+
+
+
+        for caption, value in zip(
+
+
+
+
+
+            self._dimension_labels["captions"],
+
+
+
+
+
+            self._dimension_labels["values"],
+
+
+
+
+
+        ):
+
+
+
+
+
+            self._dimensions_layout.addWidget(caption)
+
+
+
+
+
+            self._dimensions_layout.addWidget(value)
+
+
+
+
+
+            self._dimensions_layout.addSpacing(16)
+
+
+
+
+
+        self._dimensions_layout.addStretch(1)
+
+
 
 
 
@@ -2514,7 +2818,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         self.btn_guardar.clicked.connect(self.on_guardar)
 
-        grid.addWidget(self.btn_guardar, 0, 5)
+        grid.addWidget(self.btn_guardar, 0, 4, 1, 2, alignment=Qt.AlignRight)
 
 
 
@@ -2614,20 +2918,16 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
+            table.setItemDelegate(DadosGeraisDelegate(table))
+
             table.horizontalHeader().setStretchLastSection(False)
 
             table.setSortingEnabled(True)
 
             table.setEditTriggers(
-
-                QAbstractItemView.EditTrigger.CurrentChanged
-
-                | QAbstractItemView.EditTrigger.SelectedClicked
-
+                QAbstractItemView.EditTrigger.DoubleClicked
                 | QAbstractItemView.EditTrigger.EditKeyPressed
-
                 | QAbstractItemView.EditTrigger.AnyKeyPressed
-
             )
 
             table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -2649,6 +2949,9 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.tables[key] = table
 
             table.setModel(model)
+
+            self._apply_column_layout(key)
+
 
 
 
@@ -2707,7 +3010,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         try:
 
-            return _decimal(Decimal(str(value)))
+            return _decimal(Decimal(str(value)), places=1)
 
         except Exception:
 
@@ -2768,7 +3071,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
         if not rows:
 
             current = table.currentIndex()
-
             if current.isValid():
 
                 rows.add(current.row())
@@ -2798,6 +3100,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 continue
 
             row.pop("id", None)
+
+            primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
+            if primary_field:
+                row.pop(primary_field, None)
+
 
             rows_data.append(row)
 
@@ -2841,6 +3148,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             return
 
+        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
+
         target_rows = list(row_indices)
 
         allowed_fields = {spec.field for spec in model.columns}
@@ -2865,7 +3174,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             for field, value in row_data.items():
 
-                if field == "id":
+                if field == "id" or field == primary_field:
 
                     continue
 
@@ -2923,7 +3232,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
                     continue
 
-                if field == primary_field:
+                if field == primary_field or field in {"familia", "tipo"}:
 
                     continue
 
@@ -2991,21 +3300,14 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        action_clear = menu.addAction(self._standard_icon("clear"), "Eliminar dados da(s) linha(s)")
+        action_clear = menu.addAction(self._standard_icon("clear"), "Limpar dados da(s) linha(s)")
 
         action_clear.setEnabled(bool(selected_rows))
 
 
 
-        menu.addSeparator()
 
 
-
-        action_add = menu.addAction(self._standard_icon("add"), "Adicionar linha")
-
-        action_delete = menu.addAction(self._standard_icon("delete"), "Remover linha(s)")
-
-        action_delete.setEnabled(bool(selected_rows))
 
 
 
@@ -3037,13 +3339,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             self._clear_rows(key, selected_rows)
 
-        elif selected_action == action_add:
-
-            self.on_add_row(key)
-
-        elif selected_action == action_delete:
-
-            self.on_del_row(key)
 
         elif action_select_mp and selected_action == action_select_mp:
 
@@ -5958,13 +6253,6 @@ class ImportarMultiModelosDialog(QDialog):
 
 
         super().accept()
-
-
-
-
-
-
-
 
 
 

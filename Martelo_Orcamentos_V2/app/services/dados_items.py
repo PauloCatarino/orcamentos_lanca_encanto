@@ -29,6 +29,7 @@ MENU_ACABAMENTOS = svc_dg.MENU_ACABAMENTOS
 
 MENU_FIXED_GROUPS = svc_dg.MENU_FIXED_GROUPS
 MENU_PRIMARY_FIELD = svc_dg.MENU_PRIMARY_FIELD
+MENU_DEFAULT_FAMILIA = svc_dg.MENU_DEFAULT_FAMILIA
 
 MENU_FIELDS_BASE = svc_dg.MENU_FIELDS
 MENU_FIELD_TYPES_BASE = svc_dg.MENU_FIELD_TYPES
@@ -71,6 +72,8 @@ MODEL_MAP = {
 }
 
 MENU_KEYS = (MENU_MATERIAIS, MENU_FERRAGENS, MENU_SIS_CORRER, MENU_ACABAMENTOS)
+
+LAYOUT_NAMESPACE = "dados_items"
 
 
 @dataclass
@@ -126,7 +129,7 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
     for field in fields:
         data[field] = getattr(row, field, None)
     if "familia" in data and not data.get("familia"):
-        data["familia"] = "PLACAS"
+        data["familia"] = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     if "nao_stock" in data:
         data["nao_stock"] = bool(data.get("nao_stock"))
     return data

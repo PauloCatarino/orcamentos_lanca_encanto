@@ -322,6 +322,15 @@ MENU_PRIMARY_FIELD = {
     MENU_ACABAMENTOS: "grupo_acabamento",
 }
 
+MENU_DEFAULT_FAMILIA = {
+    MENU_MATERIAIS: "PLACAS",
+    MENU_FERRAGENS: "FERRAGENS",
+    MENU_SIS_CORRER: "FERRAGENS",
+    MENU_ACABAMENTOS: "ACABAMENTOS",
+}
+
+LAYOUT_NAMESPACE = "dados_gerais"
+
 LEGACY_TO_NEW: Dict[str, str] = {
     # normalização de nomes antigos -> novos
     "Mat_Costas": "Costas",
@@ -673,7 +682,7 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
             else:
                 coerced = _strip_accents(str(coerced)) if coerced else coerced
         if field == "familia":
-            coerced = coerced or "PLACAS"
+            coerced = coerced or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
         result[field] = coerced
     return result
 
@@ -682,6 +691,7 @@ def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
     defaults: List[Dict[str, Any]] = []
     primary = MENU_PRIMARY_FIELD[menu]
     fixed = MENU_FIXED_GROUPS[menu]
+    default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     for ordem, name in enumerate(fixed):
         row: Dict[str, Any] = {
             "id": None,
@@ -691,7 +701,7 @@ def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
         for field in MENU_FIELDS[menu]:
             if field not in row:
                 if field == "familia":
-                    row[field] = "PLACAS"
+                    row[field] = default_familia
                 elif field == "nao_stock":
                     row[field] = False
                 else:
@@ -737,7 +747,7 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
         merged["ordem"] = ordem
         merged.setdefault("id", row.get("id") if row else None)
         if "familia" in merged and not merged.get("familia"):
-            merged["familia"] = "PLACAS"
+            merged["familia"] = default_familia
         if "nao_stock" in merged:
             merged["nao_stock"] = bool(merged.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
@@ -748,7 +758,7 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
         extra_row.setdefault("id", extra_row.get("id"))
         extra_row.setdefault("ordem", len(ensured))
         if "familia" in extra_row and not extra_row.get("familia"):
-            extra_row["familia"] = "PLACAS"
+            extra_row["familia"] = default_familia
         if "nao_stock" in extra_row:
             extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
@@ -792,7 +802,7 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
             else:
                 value = _strip_accents(str(value)) if value else value
         if field == "familia":
-            value = value or "PLACAS"
+            value = value or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
         coerced = _coerce_field(menu, field, value)
         if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
@@ -835,7 +845,7 @@ def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[s
             else:
                 value = _strip_accents(str(value)) if value else value
         if field == "familia":
-            value = value or "PLACAS"
+            value = value or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
         coerced = _coerce_field(menu, field, value)
         if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
@@ -853,7 +863,8 @@ def _deserialize_model_line(menu: str, payload: Mapping[str, Any]) -> Dict[str, 
         row[field] = coerced
     if menu == MENU_MATERIAIS:
         row["grupo_material"] = _normalize_grupo_material(row.get("grupo_material"))
-        row["familia"] = row.get("familia") or "PLACAS"
+    if "familia" in row:
+        row["familia"] = row.get("familia") or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     return row
 
 

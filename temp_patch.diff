@@ -1,0 +1,110 @@
+*** Update File: Martelo_Orcamentos_V2/ui/pages/dados_gerais.py
+@@
+     def _populate_info_pairs(self, pairs: Sequence[Tuple[str, QtWidgets.QLabel]]) -> None:
+ 
+         self._clear_layout(self._info_pairs_layout)
+ 
+         for caption_text, value_label in pairs:
+ 
+             caption = QLabel(caption_text)
+ 
+             self._info_pairs_layout.addWidget(caption)
+ 
+             self._info_pairs_layout.addWidget(value_label)
+ 
+             self._info_pairs_layout.addSpacing(16)
+ 
+         self._info_pairs_layout.addStretch(1)
++
++
++
++    def _apply_column_layout(self, key: str) -> None:
++
++        table = self.tables.get(key)
++
++        model = self.models.get(key)
++
++        if not table or not model:
++
++            return
++
++        header = table.horizontalHeader()
++
++        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
++
++        saved_widths = self._column_layout_cache.get(key, {})
++
++        self._layout_blocking_keys.add(key)
++
++        try:
++
++            for idx, spec in enumerate(model.columns):
++
++                table.setColumnHidden(idx, not spec.visible)
++
++                if not spec.visible:
++
++                    continue
++
++                width = saved_widths.get(spec.field) or spec.width
++
++                if width:
++
++                    table.setColumnWidth(idx, int(width))
++
++        finally:
++
++            self._layout_blocking_keys.discard(key)
++
++        header.sectionResized.connect(lambda logical, _old, new, menu_key=key: self._on_column_resized(menu_key, logical, new))
++
++
++
++    def _on_column_resized(self, key: str, logical: int, new_size: int) -> None:
++
++        if key in self._layout_blocking_keys:
++
++            return
++
++        model = self.models.get(key)
++
++        if not model or not (0 <= logical < len(model.columns)):
++
++            return
++
++        field = model.columns[logical].field
++
++        widths = self._column_layout_cache.setdefault(key, {})
++
++        widths[field] = max(40, int(new_size))
++
++        self._layout_save_timer.start(800)
++
++
++
++    def _persist_column_layouts(self) -> None:
++
++        if not self._layout_user_id:
++
++            return
++
++        try:
++
++            user_layouts.save_table_layout(
++
++                self.session,
++
++                self._layout_user_id,
++
++                self.layout_namespace,
++
++                self._column_layout_cache,
++
++            )
++
++            self.session.flush()
++
++        except Exception:
++
++            pass
+*** End Patch
