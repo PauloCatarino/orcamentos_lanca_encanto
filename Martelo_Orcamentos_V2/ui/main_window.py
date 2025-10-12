@@ -9,6 +9,7 @@ from .pages.materias_primas import MateriasPrimasPage
 from .pages.clientes import ClientesPage
 from .pages.dados_gerais import DadosGeraisPage
 from .pages.dados_items import DadosItemsPage
+from .pages.custeio_items import CusteioItemsPage
 from .pages.settings import SettingsPage
 
 
@@ -23,16 +24,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_item_id: Optional[int] = None
 
         self.list = QtWidgets.QListWidget()
-        self.list.addItems([
-            "Orçamentos",
-            "Itens",
-            "Matérias Primas",
-            "Clientes",
-            "Dados Gerais",
-            "Dados Items",
-            "Relatórios",
-            "Configurações",
-        ])
+        self.list.addItems(
+            [
+                "Orçamentos",
+                "Itens",
+                "Matérias Primas",
+                "Clientes",
+                "Dados Gerais",
+                "Dados Items",
+                "Custeio dos Items",
+                "Relatórios",
+                "Configurações",
+            ]
+        )
         self.list.setFixedWidth(220)
 
         self.stack = QtWidgets.QStackedWidget()
@@ -44,6 +48,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_clientes = ClientesPage()
         self.pg_dados = DadosGeraisPage(current_user=self.current_user)
         self.pg_dados_items = DadosItemsPage(current_user=self.current_user)
+        self.pg_custeio = CusteioItemsPage(current_user=self.current_user)
 
         self.stack.addWidget(self.pg_orc)
         self.stack.addWidget(self.pg_itens)
@@ -51,6 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.addWidget(self.pg_clientes)
         self.stack.addWidget(self.pg_dados)
         self.stack.addWidget(self.pg_dados_items)
+        self.stack.addWidget(self.pg_custeio)
         self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
         self.stack.addWidget(SettingsPage())
 
@@ -73,6 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_itens.load_orcamento(orcamento_id)
         self.pg_dados.load_orcamento(orcamento_id)
         self.pg_dados_items.load_item(orcamento_id, None)
+        self.pg_custeio.load_item(orcamento_id, None)
 
         if self.list.currentRow() != 1:
             self.list.blockSignals(True)
@@ -88,9 +95,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pg_dados.load_orcamento(self.current_orcamento_id)
         elif index == 5 and self.current_orcamento_id:
             self.pg_dados_items.load_item(self.current_orcamento_id, self.current_item_id)
+        elif index == 6 and self.current_orcamento_id:
+            self.pg_custeio.load_item(self.current_orcamento_id, self.current_item_id)
 
     def on_item_selected(self, item_id: Optional[int]):
         self.current_item_id = item_id
         if not self.current_orcamento_id:
             return
         self.pg_dados_items.load_item(self.current_orcamento_id, item_id)
+        self.pg_custeio.load_item(self.current_orcamento_id, item_id)
