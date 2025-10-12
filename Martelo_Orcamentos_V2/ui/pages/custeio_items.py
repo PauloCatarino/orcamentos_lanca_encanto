@@ -6,14 +6,19 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from Martelo_Orcamentos_V2.app.models import OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
-from Martelo_Orcamentos_V2.app.db import SessionLocal 
+from Martelo_Orcamentos_V2.app.db import SessionLocal
 
 
 class CusteioTreeFilterProxy(QtCore.QSortFilterProxyModel):
+    """
+    Proxy de filtro que:
+      - casa texto no nó OU em qualquer descendente (expansão automática);
+      - opcionalmente mostra só itens marcados.
+    """
     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
         self._only_checked = False
-        self.setRecursiveFilteringEnabled(False)
+        self.setRecursiveFilteringEnabled(False)  # mantemos False, pois filtramos manualmente descendentes
         self.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self.setFilterKeyColumn(0)
 
@@ -44,7 +49,7 @@ class CusteioTreeFilterProxy(QtCore.QSortFilterProxyModel):
 
         return False
 
-    # ------------------------------------------------------------------
+    # ----------------- helpers de filtro -----------------
     def _filter_pattern(self) -> Optional[QtCore.QRegularExpression]:
         pattern = self.filterRegularExpression()
         return pattern if pattern and pattern.pattern() else None
@@ -54,7 +59,7 @@ class CusteioTreeFilterProxy(QtCore.QSortFilterProxyModel):
         if regex is None:
             return True
         text = index.data(QtCore.Qt.DisplayRole) or ""
-        return bool(regex.match(str(text)))
+        return bool(regex.match(str(text)).hasMatch())
 
     def _has_descendant_matching(self, index: QtCore.QModelIndex) -> bool:
         model = self.sourceModel()
@@ -87,10 +92,10 @@ class CusteioTreeFilterProxy(QtCore.QSortFilterProxyModel):
     def _item_from_index(self, index: QtCore.QModelIndex) -> Optional[QtGui.QStandardItem]:
         if not index.isValid():
             return None
-        source_index = index
+        # Já estamos a trabalhar sobre sourceModel(), por isso o index é do modelo base
         if isinstance(self.sourceModel(), QtGui.QStandardItemModel):
             model: QtGui.QStandardItemModel = self.sourceModel()  # type: ignore[assignment]
-            return model.itemFromIndex(source_index)
+            return model.itemFromIndex(index)
         return None
 
 
@@ -103,7 +108,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.session = SessionLocal()
         self.context = None
 
-        self._updating_checks = False
+        self._updating_checks = False  # guarda contra reentrância ao propagar check
 
         self._setup_ui()
         self._populate_tree()
@@ -228,6 +233,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         controls_layout.addStretch(1)
         panel_layout.addLayout(controls_layout)
 
+        # Modelo/Proxy da Árvore
         self.tree_model = QtGui.QStandardItemModel()
         self.tree_model.setHorizontalHeaderLabels(["Peças"])
         self.tree_model.itemChanged.connect(self._on_tree_item_changed)
@@ -286,6 +292,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     # ------------------------------------------------------------------ Tree creation
     def _populate_tree(self) -> None:
+        """Constrói a árvore a partir do dicionário retornado pelo serviço."""
         self.tree_model.blockSignals(True)
         self.tree_model.removeRows(0, self.tree_model.rowCount())
 
@@ -299,6 +306,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.tree.expandToDepth(0)
 
     def _create_item(self, node: Dict[str, Any], parent_path: Sequence[str]) -> Optional[QtGui.QStandardItem]:
+        """
+        Cria um QStandardItem:
+          - pais: checkable + flags de tri-state; ícone de pasta;
+          - folhas: checkable; ícone de ficheiro.
+        """
         label = str(node.get("label", "")).strip()
         if not label:
             return None
@@ -308,12 +320,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
         item.setCheckable(True)
         item.setCheckState(QtCore.Qt.Unchecked)
 
+        # guarda caminho amigável (usado na recolha de seleção)
         path = tuple(parent_path) + (label,)
         item.setData(" > ".join(path), self.CATEGORY_ROLE)
 
         children = node.get("children") or []
         if children:
-            item.setTristate(True)
+            # *** TRI-STATE EM QStandardItem: usar flags (não existe setTristate) ***
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsTristate | QtCore.Qt.ItemIsUserCheckable)  # ***
             icon = self.style().standardIcon(QtWidgets.QStyle.SP_DirIcon)
             item.setIcon(icon)
             for child in children:
@@ -380,30 +394,37 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.tree.expandToDepth(0)
 
     def _on_search_changed(self, text: str) -> None:
-        expression = QtCore.QRegularExpression(QtCore.QRegularExpression.escape(text), QtCore.QRegularExpression.CaseInsensitiveOption)
+        expression = QtCore.QRegularExpression(
+            QtCore.QRegularExpression.escape(text),
+            QtCore.QRegularExpression.CaseInsensitiveOption
+        )
         self.proxy_model.setFilterRegularExpression(expression)
         self.tree.expandAll()
         if not text:
             self.tree.expandToDepth(0)
 
     def _on_clear_filters(self) -> None:
+        """Limpa busca + seleção (todas as folhas e pais)."""
         self.edit_search.clear()
         self.chk_selected_only.setChecked(False)
-        self._clear_all_checks()
+        self._clear_all_checks()   # agora limpa recursivamente
         self.tree.expandToDepth(0)
 
     def _clear_all_checks(self) -> None:
+        """Desmarca tudo recursivamente (raiz -> folhas)."""
         self._updating_checks = True
         try:
             for row in range(self.tree_model.rowCount()):
                 item = self.tree_model.item(row, 0)
                 if item is not None:
-                    item.setCheckState(QtCore.Qt.Unchecked)
+                    self._propagate_to_children(item, QtCore.Qt.Unchecked)  # ***
+                    item.setCheckState(QtCore.Qt.Unchecked)                 # mantém pai coerente
         finally:
             self._updating_checks = False
         self._update_summary()
 
     def _on_tree_item_changed(self, item: QtGui.QStandardItem) -> None:
+        """Propaga estado aos filhos e recalcula estado dos pais (tri-state)."""
         if self._updating_checks:
             return
 
@@ -443,16 +464,18 @@ class CusteioItemsPage(QtWidgets.QWidget):
             elif state == QtCore.Qt.Checked:
                 checked += 1
 
-        if partial:
+        if partial or (0 < checked < total):
             parent.setCheckState(QtCore.Qt.PartiallyChecked)
+        elif checked == total:
+            parent.setCheckState(QtCore.Qt.Checked)
         else:
-            if checked == 0:
-                parent.setCheckState(QtCore.Qt.Unchecked)
-            elif checked == total:
-                parent.setCheckState(QtCore.Qt.Checked)
-            else:
-                parent.setCheckState(QtCore.Qt.PartiallyChecked)
+            parent.setCheckState(QtCore.Qt.Unchecked)
 
+        # garante flags corretas nos pais (tri-state + checkable)
+        parent.setCheckable(True)
+        parent.setFlags(parent.flags() | QtCore.Qt.ItemIsTristate | QtCore.Qt.ItemIsUserCheckable)  # ***
+
+        # sobe na árvore
         self._update_parent_state(parent)
 
     def _on_add_selected(self) -> None:
@@ -524,4 +547,3 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.context = None
         self._reset_header()
         self._clear_all_checks()
-
