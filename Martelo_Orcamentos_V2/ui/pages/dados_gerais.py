@@ -8,15 +8,13 @@
 
 from dataclasses import dataclass
 import json  # usado em _copy_rows
-
+from collections import deque
 
 
 from decimal import Decimal
 
 
-
 import itertools
-
 
 
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -464,7 +462,7 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-    def __init__(self, options_cb: Callable[[], Sequence[str]], parent=None):
+    def __init__(self, options_cb: Callable[..., Sequence[str]], parent=None):
 
 
 
@@ -540,7 +538,27 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-        self._refresh(editor, index.data(Qt.DisplayRole))
+        def _refresh(index_obj, current_value):
+            options = self._options_for_index(index_obj)
+            cleaned = list(dict.fromkeys(options))
+            current = (current_value or "").strip()
+            if current and current not in cleaned:
+                cleaned.insert(0, current)
+            editor.blockSignals(True)
+            editor.clear()
+            if cleaned:
+                editor.addItems(cleaned)
+            editor.blockSignals(False)
+            if current:
+                pos = editor.findText(current)
+                if pos >= 0:
+                    editor.setCurrentIndex(pos)
+                elif cleaned:
+                    editor.setCurrentIndex(0)
+            elif cleaned:
+                editor.setCurrentIndex(0)
+
+        editor._refresh_options = _refresh  # type: ignore[attr-defined]
 
 
 
@@ -564,7 +582,8 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-        self._refresh(editor, value)
+        if hasattr(editor, "_refresh_options"):
+            editor._refresh_options(index, value)  # type: ignore[attr-defined]
 
 
 
@@ -620,51 +639,13 @@ class ChoiceDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-    def _refresh(self, editor: QtWidgets.QComboBox, current_value: Optional[str]) -> None:
-
-
-
-        options = list(dict.fromkeys(self._options_cb() or []))
-
-
-
-        current = (current_value or "").strip()
-
-
-
-        if current and current not in options:
-
-
-
-            options.insert(0, current)
-
-
-
-        editor.blockSignals(True)
-
-
-
-        editor.clear()
-
-
-
-        editor.addItems(options)
-
-
-
-        idx = editor.findText(current) if current else -1
-
-
-
-        if idx >= 0:
-
-
-
-            editor.setCurrentIndex(idx)
-
-
-
-        editor.blockSignals(False)
+    def _options_for_index(self, index) -> Sequence[str]:
+        if not callable(self._options_cb):
+            return []
+        try:
+            return self._options_cb(index)
+        except TypeError:
+            return self._options_cb()
 
 
 
@@ -2271,7 +2252,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
         *,
         svc_module=svc_dg,
         page_title="Dados Gerais",
-        save_button_text="Guardar Modelo",
+        save_button_text="Guardar Dados Gerais",
+        menu_save_button_text="Guardar Modelo",
         import_button_text="Importar Modelo",
         import_multi_button_text="Importar Multi Modelos",
     ):
@@ -2298,11 +2280,43 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+        self.menu_save_button_text = menu_save_button_text
+
+
+
         self.import_button_text = import_button_text
 
 
 
         self.import_multi_button_text = import_multi_button_text
+
+
+
+        self._menus_select_mp = {
+
+
+
+            getattr(self.svc, "MENU_MATERIAIS", None),
+
+
+
+            getattr(self.svc, "MENU_FERRAGENS", None),
+
+
+
+            getattr(self.svc, "MENU_SIS_CORRER", None),
+
+
+
+            getattr(self.svc, "MENU_ACABAMENTOS", None),
+
+
+
+        }
+
+
+
+        self._menus_select_mp = {menu for menu in self._menus_select_mp if menu}
 
 
 
@@ -2315,7 +2329,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
         self._tipos_cache: List[str] = []
-
+        self._tipos_por_familia: Dict[str, Sequence[str]] = {}
 
 
         self._familias_cache: List[str] = []
@@ -2376,19 +2390,57 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
     # --- opções das combos ("Tipo" e "Familia") -------------------------------
     def _tipos_options(self) -> list[str]:
-        """
-        Devolve a lista de TIPOS para alimentar a combo da coluna 'tipo'.
-        Usa o cache preenchido em _carregar_tipos_familias().
-        """
-        return list(getattr(self, "_tipos_cache", []) or [])
+        """Mantido para compatibilidade: devolve família padrão dos Materiais."""
+        return self._familia_options_for_menu(self.svc.MENU_MATERIAIS)
 
-    def _familias_options(self) -> list[str]:
-        """
-        Devolve a lista de FAMÍLIAS para alimentar a combo da coluna 'familia'.
-        Garante que 'PLACAS' existe como fallback.
-        """
-        cache = list(getattr(self, "_familias_cache", []) or [])
-        return cache or ["PLACAS"]
+    def _tipo_options_for_menu(
+        self,
+        menu: str,
+        index: Optional[QtCore.QModelIndex] = None,
+    ) -> list[str]:
+        familia = self._familia_value_for_menu(menu, index)
+        mapping: Dict[str, Sequence[str]] = getattr(self, "_tipos_por_familia", {})
+        options = list(mapping.get(familia.upper(), []))
+        if options:
+            return options
+        if any(mapping.values()):
+            return []
+        cache = list(getattr(self, "_tipos_cache", []) or [])
+        return cache
+
+    def _familia_options_for_menu(
+        self,
+        menu: str,
+        index: Optional[QtCore.QModelIndex] = None,
+    ) -> list[str]:
+        default = self.svc.MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+        value = self._familia_value_for_menu(menu, index)
+        if not value:
+            value = default
+        normalized = str(value).strip().upper() or default
+        return [normalized]
+
+    def _familia_value_for_menu(
+        self,
+        menu: str,
+        index: Optional[QtCore.QModelIndex] = None,
+    ) -> str:
+        default = self.svc.MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+        value: Optional[str] = None
+        if index is not None:
+            model = index.model()
+            if hasattr(model, "row_at"):
+                try:
+                    row = model.row_at(index.row())
+                except Exception:
+                    row = None
+                if isinstance(row, Mapping):
+                    value = row.get("familia")
+                elif row is not None:
+                    value = getattr(row, "familia", None)
+        if not value:
+            value = default
+        return str(value or default).strip().upper()
 
     def _tab_title(self, key: str) -> str:
         mapping = {
@@ -2559,10 +2611,10 @@ class DadosGeraisPage(QtWidgets.QWidget):
             options = None
             if field == 'tipo':
                 kind = 'choice'
-                options = self._tipos_options
+                options = lambda idx, menu=key: self._tipo_options_for_menu(menu, idx)
             elif field == 'familia':
                 kind = 'choice'
-                options = self._familias_options
+                options = lambda idx, menu=key: self._familia_options_for_menu(menu, idx)
 
             readonly = field in {primary, 'id', 'id_mp', 'preco_liq', 'ref_le'}
             width = width_spec.get(field)
@@ -2860,7 +2912,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            btn_save_model = QPushButton(self.save_button_text)
+            btn_save_model = QPushButton(self.menu_save_button_text)
 
             btn_save_model.setIcon(self._standard_icon("save"))
 
@@ -2898,7 +2950,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             btn_select_mp.clicked.connect(lambda _, k=key: self.on_selecionar_mp(k))
 
-            btn_select_mp.setVisible(key == self.svc.MENU_MATERIAIS)
+            btn_select_mp.setVisible(key in self._menus_select_mp)
 
             toolbar.addWidget(btn_select_mp)
 
@@ -2917,7 +2969,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
 
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-
+            table.setAlternatingRowColors(True)
             table.setItemDelegate(DadosGeraisDelegate(table))
 
             table.horizontalHeader().setStretchLastSection(False)
@@ -2926,6 +2978,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.setEditTriggers(
                 QAbstractItemView.EditTrigger.DoubleClicked
+                | QAbstractItemView.EditTrigger.SelectedClicked
                 | QAbstractItemView.EditTrigger.EditKeyPressed
                 | QAbstractItemView.EditTrigger.AnyKeyPressed
             )
@@ -3219,6 +3272,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
             return
 
         primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
+        first_column_field = model.columns[0].field if model.columns else None
+        protected_fields = {"id", "ordem", "familia", "tipo"}
+        if primary_field:
+            protected_fields.add(primary_field)
+        if first_column_field:
+            protected_fields.add(first_column_field)
 
         for row_index in row_indices:
 
@@ -3228,11 +3287,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
                 field = spec.field
 
-                if field in {"id", "ordem"}:
-
-                    continue
-
-                if field == primary_field or field in {"familia", "tipo"}:
+                if field in protected_fields:
 
                     continue
 
@@ -3313,7 +3368,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         action_select_mp = None
 
-        if key == self.svc.MENU_MATERIAIS:
+        if key in self._menus_select_mp:
 
             menu.addSeparator()
 
@@ -3460,7 +3515,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            self._tipos_cache = svc_mp.listar_tipos(self.session)
+            tipos = svc_mp.listar_tipos(self.session)
 
 
 
@@ -3468,47 +3523,57 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-            self._tipos_cache = []
-
+            tipos = []
+        self._tipos_cache = sorted(dict.fromkeys(tipos or []))
 
 
         try:
 
 
 
-            familias = svc_mp.listar_familias(self.session)
+            mapping = svc_mp.mapear_tipos_por_familia(self.session)
 
 
 
         except Exception:
+            mapping = {}
+        normalised: Dict[str, Sequence[str]] = {}
+
+        for familia, tipos_lista in mapping.items():
+
+            key = str(familia or "").strip().upper()
+
+            if not key:
+
+                continue
+
+
+            clean_tipos = [str(t).strip().upper() for t in tipos_lista if t]
+
+            normalised[key] = clean_tipos
+        defaults = [
+
+                str(self.svc.MENU_DEFAULT_FAMILIA.get(menu, "PLACAS") or "").strip().upper()
+
+               for menu in self.svc.MENU_FIXED_GROUPS
+
+        ]
 
 
 
-            familias = []
+        for familia in defaults:
 
+            if familia:
 
+                normalised.setdefault(familia, tuple())
 
-        self._familias_cache = ["PLACAS"]
+            self._tipos_por_familia = normalised
 
+            familias_cache = [fam for fam in normalised.keys() if fam]
 
+            familias_cache.extend(f for f in defaults if f)
 
-        if familias:
-
-
-
-            if "PLACAS" in familias:
-
-
-
-                self._familias_cache = ["PLACAS"]
-
-
-
-            else:
-
-
-
-                self._familias_cache = ["PLACAS"]
+            self._familias_cache = sorted(dict.fromkeys(familias_cache)) or ["PLACAS"]
 
 
 
@@ -3704,7 +3769,15 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        dialog = GuardarModeloDialog(self.session, user_id=user_id, tipo_menu=key, linhas=linhas, parent=self, svc_module=self.svc, window_title=self.save_button_text)
+        dialog = GuardarModeloDialog(
+            self.session,
+            user_id=user_id,
+            tipo_menu=key,
+            linhas=linhas,
+            parent=self,
+            svc_module=self.svc,
+            window_title=self.menu_save_button_text,
+        )
 
 
 
@@ -3850,58 +3923,183 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
     def _apply_imported_rows(self, key: str, rows: Sequence[Mapping[str, Any]], *, replace: bool) -> None:
 
-
-
         model = self.models[key]
 
+        table = self.tables.get(key)
 
+        selected_rows = self._selected_rows_from_table(table) if table else []
+
+        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
+
+        prepared_rows = [dict(r) for r in rows if isinstance(r, Mapping)]
+
+        if not prepared_rows:
+
+            return
+
+        def _normalize(value: Any) -> str:
+
+            if value is None:
+
+                return ""
+
+            return str(value).strip().upper()
+
+        existing_rows = model.export_rows()
+
+        total_rows = len(existing_rows)
+
+        selected_rows = [idx for idx in selected_rows if 0 <= idx < total_rows]
+
+        candidate_indices = selected_rows or list(range(total_rows))
+
+        key_to_index: Dict[str, int] = {}
+
+        if primary_field:
+
+            for idx in candidate_indices:
+
+                try:
+
+                    current_row = existing_rows[idx]
+
+                except Exception:
+
+                    continue
+
+                marker = _normalize(current_row.get(primary_field))
+
+                if marker and marker not in key_to_index:
+
+                    key_to_index[marker] = idx
+
+        selected_queue = deque(candidate_indices)
+
+        used_indices: set = set()
+
+        pending_rows: List[Dict[str, Any]] = []
+
+        updated_any = False
+
+        for incoming in prepared_rows:
+
+            target_idx = None
+
+            marker = _normalize(incoming.get(primary_field)) if primary_field else ""
+
+            if primary_field and marker and marker in key_to_index:
+
+                target_idx = key_to_index.pop(marker)
+
+            else:
+
+                while selected_queue:
+
+                    candidate = selected_queue[0]
+
+                    if candidate in used_indices:
+
+                        selected_queue.popleft()
+
+                        continue
+
+                    target_idx = selected_queue.popleft()
+
+                    break
+
+            if target_idx is None:
+
+                pending_rows.append(incoming)
+
+                continue
+
+            payload = {k: v for k, v in incoming.items() if k not in {"id", "ordem"}}
+
+            if primary_field:
+
+                payload.pop(primary_field, None)
+
+            model.update_row(target_idx, payload)
+
+            if hasattr(model, "recalculate"):
+
+                try:
+
+                    model.recalculate(target_idx)  # type: ignore[attr-defined]
+
+                except Exception:
+
+                    pass
+
+            updated_any = True
+
+            used_indices.add(target_idx)
+
+        if updated_any:
+
+            if pending_rows:
+
+                combined_rows = model.export_rows()
+
+                combined_rows.extend(pending_rows)
+
+                model.load_rows(combined_rows)
+
+                model._reindex()
+
+                if hasattr(model, "recalculate"):
+
+                    for idx in range(model.rowCount()):
+
+                        try:
+
+                            model.recalculate(idx)  # type: ignore[attr-defined]
+
+                        except Exception:
+
+                            continue
+
+                else:
+
+                    self._recalculate_menu_rows(key)
+
+                return
+
+            if not hasattr(model, "recalculate"):
+
+                self._recalculate_menu_rows(key)
+
+            return
 
         if replace:
 
-
-
-            model.load_rows(rows)
-
-
+            model.load_rows(prepared_rows)
 
         else:
 
+            combined_rows = model.export_rows()
 
+            combined_rows.extend(prepared_rows)
 
-            combined = model.export_rows() + [dict(r) for r in rows]
-
-
-
-            model.load_rows(combined)
-
-
+            model.load_rows(combined_rows)
 
         model._reindex()
 
-
-
         if hasattr(model, "recalculate"):
-
-
 
             for idx in range(model.rowCount()):
 
+                try:
 
+                    model.recalculate(idx)  # type: ignore[attr-defined]
 
-                model.recalculate(idx)  # type: ignore[attr-defined]
+                except Exception:
 
-
+                    continue
 
         else:
 
-
-
             self._recalculate_menu_rows(key)
-
-
-
-
-
 
 
     def _recalculate_menu_rows(self, key: str) -> None:

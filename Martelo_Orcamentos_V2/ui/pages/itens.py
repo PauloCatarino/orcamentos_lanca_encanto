@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 # PySide6
@@ -67,6 +67,13 @@ def _load_ui_into(widget: QtWidgets.QWidget, ui_path: str) -> QtWidgets.QWidget:
 
 
 # ---------- util tabela: formata??o inteira (sem casas decimais) ----------
+DIMENSION_LIMITS = {
+    'altura': (Decimal('50'), Decimal('2800')),
+    'largura': (Decimal('50'), Decimal('4000')),
+    'profundidade': (Decimal('50'), Decimal('1000')),
+}
+
+
 def _fmt_int(value):
     if value in (None, ""):
         return ""
@@ -337,12 +344,39 @@ class ItensPage(QtWidgets.QWidget):
             return self._parse_decimal(widget.text(), default=default)
         except ValueError:
             raise ValueError(f"Valor inv?lido para {label}.")
+        
+    def _validate_dimensions(self, data: dict) -> None:
+        labels = {"altura": "Altura", "largura": "Comprimento", "profundidade": "Profundidade"}
+        warnings: List[str] = []
+        for field, (min_v, max_v) in DIMENSION_LIMITS.items():
+            value = data.get(field)
+            if value is None:
+                continue
+            if value <= 0:
+                warnings.append(f"{labels[field]} deve ser superior a 0.")
+                continue
+            if value < min_v or value > max_v:
+                warnings.append(
+                    f"{labels[field]} {value} mm está fora do intervalo recomendado ({min_v} - {max_v} mm)."
+                )
+        if not warnings:
+            return
+        message = "\n".join(warnings + ["Pretende manter estes valores?"])
+        resp = QMessageBox.question(
+            self,
+            "Confirmar dimensões",
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            raise ValueError("Valores de dimensão fora dos limites padrão.")
 
     # ==========================================================================
-    # Formul?rio: ler/preencher/limpar
+    # Formulário: ler/preencher/limpar
     # ==========================================================================
     def _collect_form_data(self) -> dict:
-        return {
+        data = {
             "item": self.edit_item.text().strip() or None,
             "codigo": (self.edit_codigo.text().strip().upper() or None),
             "descricao": (self.edit_descricao.toPlainText().strip() or None),
@@ -352,6 +386,8 @@ class ItensPage(QtWidgets.QWidget):
             "und": self.edit_und.text().strip() or None,
             "qt": self._decimal_from_input(self.edit_qt, "QT", default=Decimal("1")),
         }
+        self._validate_dimensions(data)
+        return data
 
     def _format_decimal(self, value) -> str:
         if value in (None, ""):

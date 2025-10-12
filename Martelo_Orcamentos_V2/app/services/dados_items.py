@@ -135,6 +135,19 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
     return data
 
 
+def _json_ready_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    prepared: List[Dict[str, Any]] = []
+    for row in rows:
+        clean = {}
+        for key, value in dict(row).items():
+            if isinstance(value, Decimal):
+                clean[key] = float(value)
+            else:
+                clean[key] = value
+        prepared.append(clean)
+    return prepared
+
+
 def carregar_dados_gerais(db: Session, ctx: DadosItemsContext) -> Dict[str, List[Dict[str, Any]]]:
     data: Dict[str, List[Dict[str, Any]]] = {}
     for menu, model in MODEL_MAP.items():
@@ -250,7 +263,7 @@ def guardar_modelo(
 
     for menu in MENU_KEYS:
         rows = linhas.get(menu, [])
-        payload = json.dumps([dict(row) for row in rows])
+        payload = json.dumps(_json_ready_rows(rows))
         db.add(
             DadosItemsModeloItem(
                 modelo_id=modelo.id,

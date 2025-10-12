@@ -42,6 +42,8 @@ class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
             value = index.model().data(index, Qt.EditRole)
             if value is None:
                 return
+            if hasattr(editor, "_refresh_options"):
+                editor._refresh_options(index, value)  # type: ignore[attr-defined]
             pos = editor.findText(str(value))
             if pos >= 0:
                 editor.setCurrentIndex(pos)

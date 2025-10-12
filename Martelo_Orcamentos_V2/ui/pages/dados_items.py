@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from functools import partial
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtWidgets
@@ -9,7 +10,33 @@ from sqlalchemy.orm import Session
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_di
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 
-from .dados_gerais import DadosGeraisPage
+from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
+
+
+def _extract_rows_from_payload(
+    origin: str,
+    payload: Optional[Mapping[str, Any]],
+    menu: str,
+) -> List[Dict[str, Any]]:
+    rows: Sequence[Mapping[str, Any]] = []
+
+    if not payload:
+        return []
+
+    if origin == "global":
+        candidate = payload.get("linhas")
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            rows = [row for row in candidate if isinstance(row, Mapping)]
+        else:
+            candidate = payload.get(menu)
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                rows = [row for row in candidate if isinstance(row, Mapping)]
+    else:
+        candidate = payload.get(menu, [])
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            rows = [row for row in candidate if isinstance(row, Mapping)]
+
+    return [dict(row) for row in rows]
 
 
 class DadosItemsPage(DadosGeraisPage):
@@ -156,24 +183,13 @@ class DadosItemsPage(DadosGeraisPage):
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
 
-        source = dialog.selected_source()
-        if not source:
+        rows = dialog.selected_rows()
+        if not rows:
             return
-        origin, model_id = source
+
         replace = dialog.replace_existing()
 
-        try:
-            if origin == "local":
-                linhas_por_menu = svc_di.carregar_modelo(self.session, model_id)
-            else:
-                user_id = getattr(self.current_user, "id", None)
-                linhas_por_menu = svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
-        except Exception as exc:  # pragma: no cover
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao importar: {exc}")
-            return
-
-        linhas = self._extract_rows_for_import(origin, linhas_por_menu, key)
-        self._apply_imported_rows(key, linhas, replace=replace)
+        self._apply_imported_rows(key, rows, replace=replace)
 
     def _extract_rows_for_import(
         self,
@@ -181,20 +197,7 @@ class DadosItemsPage(DadosGeraisPage):
         linhas_por_menu: Mapping[str, Sequence[Mapping[str, Any]]],
         menu: str,
     ) -> List[Dict[str, Any]]:
-        rows: Sequence[Mapping[str, Any]] = []
-        if origin == "global":
-            candidate = linhas_por_menu.get("linhas")
-            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
-                rows = [row for row in candidate if isinstance(row, Mapping)]
-            else:
-                candidate = linhas_por_menu.get(menu)
-                if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
-                    rows = [row for row in candidate if isinstance(row, Mapping)]
-        else:
-            candidate = linhas_por_menu.get(menu, [])
-            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
-                rows = [row for row in candidate if isinstance(row, Mapping)]
-        return [dict(row) for row in rows]
+        return _extract_rows_from_payload(origin, linhas_por_menu, menu)
 
     def on_importar_multi_modelos(self) -> None:  # type: ignore[override]
         if not self.context:
@@ -231,6 +234,8 @@ class DadosItemsPage(DadosGeraisPage):
             self._apply_imported_rows(menu, linhas, replace=replace)
 
 class ImportarDadosItemsDialog(QtWidgets.QDialog):
+    ORIGINS: Tuple[str, str] = ("local", "global")
+
     def __init__(
         self,
         session: Session,
@@ -244,68 +249,280 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         self.context = context
         self.tipo_menu = tipo_menu
         self.current_user = current_user
-        self._selected: Optional[Tuple[str, int]] = None
+
+        self._selected_source: Optional[Tuple[str, int]] = None
+        self._selected_rows: List[Dict[str, Any]] = []
 
         self.setWindowTitle("Importar Dados Items")
-        self.resize(700, 500)
+        self.resize(1100, 650)
 
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
-        tabs = QtWidgets.QTabWidget(self)
-        layout.addWidget(tabs, 1)
+        self.tabs = QtWidgets.QTabWidget(self)
+        layout.addWidget(self.tabs, 1)
 
-        self.list_local = QtWidgets.QListWidget()
-        self.list_global = QtWidgets.QListWidget()
+        self.models: Dict[str, List[Any]] = {origin: [] for origin in self.ORIGINS}
+        self.models_list: Dict[str, QtWidgets.QListWidget] = {}
+        self.tables: Dict[str, QtWidgets.QTableWidget] = {}
+        self.display_lines: Dict[str, List[Dict[str, Any]]] = {origin: [] for origin in self.ORIGINS}
+        self.current_model_id: Dict[str, Optional[int]] = {origin: None for origin in self.ORIGINS}
 
-        tabs.addTab(self.list_local, "Dados Items")
-        tabs.addTab(self.list_global, "Dados Gerais")
+        titles = {
+            "local": "Dados Items",
+            "global": "Dados Gerais",
+        }
 
-        self.replace_check = QtWidgets.QCheckBox("Substituir linhas atuais", checked=True)
-        layout.addWidget(self.replace_check)
+        for origin in self.ORIGINS:
+            page = QtWidgets.QWidget()
+            page_layout = QtWidgets.QVBoxLayout(page)
+            page_layout.setContentsMargins(0, 0, 0, 0)
+            page_layout.setSpacing(6)
 
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self._on_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, page)
+            splitter.setChildrenCollapsible(False)
 
-        self._populate_lists()
+            list_widget = QtWidgets.QListWidget()
+            list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+            list_container = QtWidgets.QWidget()
+            list_layout = QtWidgets.QVBoxLayout(list_container)
+            list_layout.setContentsMargins(0, 0, 0, 0)
+            list_layout.addWidget(list_widget)
+            splitter.addWidget(list_container)
 
-    def _populate_lists(self) -> None:
-        local_models = svc_di.listar_modelos(
-            self.session,
-            orcamento_id=self.context.orcamento_id,
-            item_id=self.context.item_id,
-        )
-        for model in local_models:
-            item = QtWidgets.QListWidgetItem(model.nome_modelo)
-            item.setData(QtCore.Qt.UserRole, ("local", model.id))
-            self.list_local.addItem(item)
+            table = QtWidgets.QTableWidget()
+            table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+            table.setAlternatingRowColors(True)
+            splitter.addWidget(table)
 
-        user_id = getattr(self.current_user, "id", None)
-        global_models = svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=self.tipo_menu)
-        for model in global_models:
-            item = QtWidgets.QListWidgetItem(model.nome_modelo)
-            item.setData(QtCore.Qt.UserRole, ("global", model.id))
-            self.list_global.addItem(item)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 2)
 
-    def _on_accept(self) -> None:
-        widget = None
-        if self.list_local.currentItem():
-            widget = self.list_local.currentItem()
-        elif self.list_global.currentItem():
-            widget = self.list_global.currentItem()
-        if not widget:
-            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione um modelo para importar.")
+            page_layout.addWidget(splitter, 1)
+            self.tabs.addTab(page, titles[origin])
+
+            list_widget.itemSelectionChanged.connect(partial(self._on_model_selected, origin))
+
+            self.models_list[origin] = list_widget
+            self.tables[origin] = table
+
+        controls_layout = QtWidgets.QHBoxLayout()
+        self.btn_select_all = QtWidgets.QPushButton("Selecionar Tudo")
+        self.btn_clear_selection = QtWidgets.QPushButton("Limpar Selecao")
+        self.btn_select_all.clicked.connect(self._select_all_current)
+        self.btn_clear_selection.clicked.connect(self._clear_selection_current)
+        controls_layout.addWidget(self.btn_select_all)
+        controls_layout.addWidget(self.btn_clear_selection)
+        controls_layout.addStretch()
+        layout.addLayout(controls_layout)
+
+        options_layout = QtWidgets.QHBoxLayout()
+        self.radio_replace = QtWidgets.QRadioButton("Substituir linhas atuais")
+        self.radio_replace.setChecked(True)
+        self.radio_append = QtWidgets.QRadioButton("Adicionar / mesclar")
+        options_layout.addWidget(self.radio_replace)
+        options_layout.addWidget(self.radio_append)
+        options_layout.addStretch()
+        layout.addLayout(options_layout)
+
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self.tabs.currentChanged.connect(lambda _: self._update_controls_state())
+
+        self._populate_models("local")
+        self._populate_models("global")
+
+        if self.models_list["local"].count():
+            self.models_list["local"].setCurrentRow(0)
+        elif self.models_list["global"].count():
+            self.tabs.setCurrentIndex(1)
+            self.models_list["global"].setCurrentRow(0)
+
+        self._update_controls_state()
+
+    def _populate_models(self, origin: str) -> None:
+        list_widget = self.models_list[origin]
+        list_widget.blockSignals(True)
+        list_widget.clear()
+        try:
+            if origin == "local":
+                models = svc_di.listar_modelos(
+                    self.session,
+                    orcamento_id=self.context.orcamento_id,
+                    item_id=self.context.item_id,
+                )
+            else:
+                user_id = getattr(self.current_user, "id", None)
+                models = (
+                    svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=self.tipo_menu)
+                    if user_id
+                    else []
+                )
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelos: {exc}")
+            models = []
+        finally:
+            list_widget.blockSignals(False)
+
+        self.models[origin] = models
+
+        list_widget.blockSignals(True)
+        for model in models:
+            item = QtWidgets.QListWidgetItem(self._model_display(model))
+            item.setData(QtCore.Qt.UserRole, getattr(model, "id", None))
+            list_widget.addItem(item)
+        list_widget.blockSignals(False)
+
+        self.display_lines[origin] = []
+        self.current_model_id[origin] = None
+
+        table = self.tables[origin]
+        table.setRowCount(0)
+        table.setColumnCount(0)
+
+    def _model_display(self, model: Any) -> str:
+        display = getattr(model, "nome_modelo", str(model))
+        created = getattr(model, "created_at", None)
+        if created:
+            try:
+                display += f" ({created})"
+            except Exception:
+                pass
+        return display
+
+    def _on_model_selected(self, origin: str) -> None:
+        list_widget = self.models_list[origin]
+        item = list_widget.currentItem()
+        if not item:
+            self.display_lines[origin] = []
+            self.current_model_id[origin] = None
+            table = self.tables[origin]
+            table.setRowCount(0)
+            table.setColumnCount(0)
+            self._update_controls_state()
             return
-        data = widget.data(QtCore.Qt.UserRole)
-        self._selected = data
-        self.accept()
+
+        model_id = item.data(QtCore.Qt.UserRole)
+        payload = self._load_model_payload(origin, model_id)
+
+        rows = _extract_rows_from_payload(origin, payload, self.tipo_menu)
+        self.display_lines[origin] = self._filtered_lines(rows)
+        self.current_model_id[origin] = model_id
+        self._populate_table(origin)
+        self._update_controls_state()
+
+    def _load_model_payload(self, origin: str, model_id: Optional[int]) -> Optional[Mapping[str, Any]]:
+        if model_id is None:
+            return None
+        try:
+            if origin == "local":
+                return svc_di.carregar_modelo(self.session, model_id)
+            user_id = getattr(self.current_user, "id", None)
+            return svc_dg.carregar_modelo(self.session, model_id, user_id=user_id)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelo: {exc}")
+            return None
+
+    def _filtered_lines(self, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+        return [dict(row) for row in rows if isinstance(row, Mapping)]
+
+    def _populate_table(self, origin: str) -> None:
+        table = self.tables[origin]
+        rows = self.display_lines.get(origin, [])
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
+
+        table.clear()
+        table.setColumnCount(len(columns) + 1)
+        table.setRowCount(len(rows))
+        table.setHorizontalHeaderLabels(["Importar"] + [col[0] for col in columns])
+
+        for row_idx, row_data in enumerate(rows):
+            check_item = QtWidgets.QTableWidgetItem()
+            check_item.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            check_item.setCheckState(QtCore.Qt.Checked)
+            table.setItem(row_idx, 0, check_item)
+
+            for col_idx, (_, key, kind) in enumerate(columns, start=1):
+                value = _format_preview_value(kind, row_data.get(key))
+                item = QtWidgets.QTableWidgetItem(value)
+                item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+                table.setItem(row_idx, col_idx, item)
+
+        if rows:
+            table.resizeColumnsToContents()
+
+    def _current_origin(self) -> str:
+        index = self.tabs.currentIndex()
+        if 0 <= index < len(self.ORIGINS):
+            return self.ORIGINS[index]
+        return self.ORIGINS[0]
+
+    def _set_all_checks(self, origin: str, state: QtCore.Qt.CheckState) -> None:
+        table = self.tables.get(origin)
+        if not table:
+            return
+        for row_idx in range(table.rowCount()):
+            item = table.item(row_idx, 0)
+            if item:
+                item.setCheckState(state)
+
+    def _select_all_current(self) -> None:
+        self._set_all_checks(self._current_origin(), QtCore.Qt.Checked)
+
+    def _clear_selection_current(self) -> None:
+        self._set_all_checks(self._current_origin(), QtCore.Qt.Unchecked)
+
+    def _collect_selected_rows(self, origin: str) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        table = self.tables.get(origin)
+        display = self.display_lines.get(origin, [])
+        if not table or not display:
+            return rows
+        for row_idx in range(table.rowCount()):
+            item = table.item(row_idx, 0)
+            if item and item.checkState() == QtCore.Qt.Checked:
+                try:
+                    rows.append(dict(display[row_idx]))
+                except IndexError:
+                    continue
+        return rows
+
+    def _update_controls_state(self) -> None:
+        origin = self._current_origin()
+        table = self.tables.get(origin)
+        has_rows = bool(table and table.rowCount())
+        self.btn_select_all.setEnabled(has_rows)
+        self.btn_clear_selection.setEnabled(has_rows)
 
     def selected_source(self) -> Optional[Tuple[str, int]]:
-        return self._selected
+        return self._selected_source
+
+    def selected_rows(self) -> List[Dict[str, Any]]:
+        return [dict(row) for row in self._selected_rows]
 
     def replace_existing(self) -> bool:
-        return self.replace_check.isChecked()
+        return self.radio_replace.isChecked()
+
+    def accept(self) -> None:
+        origin = self._current_origin()
+        model_id = self.current_model_id.get(origin)
+        if not model_id:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione um modelo para importar.")
+            return
+
+        rows = self._collect_selected_rows(origin)
+        if not rows:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione pelo menos uma linha para importar.")
+            return
+
+        self._selected_source = (origin, model_id)
+        self._selected_rows = rows
+        super().accept()
 
 
 class ImportarMultiDadosItemsDialog(QtWidgets.QDialog):
