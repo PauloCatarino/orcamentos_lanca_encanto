@@ -6,7 +6,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from Martelo_Orcamentos_V2.app.models import OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
-from Martelo_Orcamentos_V2.db import SessionLocal
+from Martelo_Orcamentos_V2.app.db import SessionLocal 
 
 
 class CusteioTreeFilterProxy(QtCore.QSortFilterProxyModel):
