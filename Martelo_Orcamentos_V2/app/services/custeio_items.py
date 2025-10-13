@@ -537,21 +537,22 @@ def _obter_material(session: Session, ctx: svc_dados_items.DadosItemsContext, gr
     return session.execute(stmt).scalar_one_or_none()
 
 
-def _preencher_linha_com_material(linha: Dict[str, Any], material: DadosItemsMaterial) -> None:
-    linha["descricao"] = material.descricao
-    linha["ref_le"] = material.ref_le
-    linha["descricao_no_orcamento"] = material.descricao_material
-    linha["pliq"] = _decimal_to_float(material.preco_liq)
-    linha["und"] = material.und
-    linha["desp"] = _decimal_to_float(material.desp)
-    linha["orl_0_4"] = material.orl_0_4
-    linha["orl_1_0"] = material.orl_1_0
-    linha["tipo"] = material.tipo
-    linha["familia"] = material.familia
-    linha["comp_mp"] = _decimal_to_float(material.comp_mp)
-    linha["larg_mp"] = _decimal_to_float(material.larg_mp)
-    linha["esp_mp"] = _decimal_to_float(material.esp_mp)
-    linha["mat_default"] = material.familia or material.grupo_material
+def _preencher_linha_com_material(linha: Dict[str, Any], material: Any) -> None:
+    descricao = getattr(material, "descricao", None) or getattr(material, "descricao_phc", None) or getattr(material, "descricao_orcamento", None)
+    linha["descricao"] = descricao
+    linha["ref_le"] = getattr(material, "ref_le", None) or getattr(material, "ref_fornecedor", None)
+    linha["descricao_no_orcamento"] = getattr(material, "descricao_material", None) or getattr(material, "descricao_orcamento", None)
+    linha["pliq"] = _decimal_to_float(getattr(material, "preco_liq", None) or getattr(material, "pliq", None))
+    linha["und"] = getattr(material, "und", None)
+    linha["desp"] = _decimal_to_float(getattr(material, "desp", None))
+    linha["orl_0_4"] = getattr(material, "orl_0_4", None)
+    linha["orl_1_0"] = getattr(material, "orl_1_0", None)
+    linha["tipo"] = getattr(material, "tipo", None)
+    linha["familia"] = getattr(material, "familia", None)
+    linha["comp_mp"] = _decimal_to_float(getattr(material, "comp_mp", None))
+    linha["larg_mp"] = _decimal_to_float(getattr(material, "larg_mp", None))
+    linha["esp_mp"] = _decimal_to_float(getattr(material, "esp_mp", None))
+    linha["mat_default"] = getattr(material, "familia", None) or getattr(material, "grupo_material", None)
     linha["spp_ml_und"] = _decimal_to_float(getattr(material, "spp_ml_und", None))
     linha["custo_mp_und"] = _decimal_to_float(getattr(material, "custo_mp_und", None))
     linha["custo_mp_total"] = _decimal_to_float(getattr(material, "custo_mp_total", None))
