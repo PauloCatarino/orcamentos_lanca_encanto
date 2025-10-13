@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from Martelo_Orcamentos_V2.app.models.client import Client
 from Martelo_Orcamentos_V2.app.models.custeio import CusteioItem
 from Martelo_Orcamentos_V2.app.models.dados_gerais import DadosItemsMaterial
+from Martelo_Orcamentos_V2.app.models.materia_prima import MateriaPrima
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
@@ -587,7 +588,7 @@ def obter_material_por_grupo(session: Session, ctx: svc_dados_items.DadosItemsCo
     return _obter_material(session, ctx, grupo)
 
 
-def dados_material(material: DadosItemsMaterial) -> Dict[str, Any]:
+def dados_material(material: Any) -> Dict[str, Any]:
     linha: Dict[str, Any] = {}
     _preencher_linha_com_material(linha, material)
     return linha

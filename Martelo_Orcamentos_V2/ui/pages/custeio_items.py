@@ -19,6 +19,7 @@ from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
+from .dados_gerais import MateriaPrimaPicker
 
 
 
@@ -456,7 +457,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self.beginResetModel()
 
-        self.rows = [self._coerce_row(row) for row in rows]
+        self.rows = [self._coerce_row_impl(row) for row in rows]
 
         self.endResetModel()
 
@@ -476,7 +477,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         for row in rows:
 
-            self.rows.append(self._coerce_row(row))
+            self.rows.append(self._coerce_row_impl(row))
 
         self.endInsertRows()
 
@@ -493,7 +494,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         for offset, row in enumerate(rows):
 
-            self.rows.insert(position + offset, self._coerce_row(row))
+            self.rows.insert(position + offset, self._coerce_row_impl(row))
 
         self.endInsertRows()
 
@@ -513,6 +514,49 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 del self.rows[row]
 
                 self.endRemoveRows()
+
+
+    def _coerce_row_impl(self, row: Mapping[str, Any]) -> Dict[str, Any]:
+
+        coerced: Dict[str, Any] = {}
+
+        for spec in self.columns:
+
+            key = spec["key"]
+
+            value = row.get(key) if isinstance(row, Mapping) else None
+
+
+            if spec["type"] == "bool":
+
+                coerced[key] = bool(value)
+
+            elif spec["type"] == "numeric":
+
+                if value in (None, "", False):
+
+                    coerced[key] = None
+
+                else:
+
+                    try:
+
+                        coerced[key] = float(value)
+
+                    except (TypeError, ValueError):
+
+                        coerced[key] = None
+
+            else:
+
+                coerced[key] = value
+
+        return coerced
+
+
+    def _coerce_row(self, row: Mapping[str, Any]) -> Dict[str, Any]:
+
+        return self._coerce_row_impl(row)
 
 
 
@@ -661,7 +705,7 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
     # ------------------------------------------------------------------
 
-    def _coerce_row(self, row: Mapping[str, Any]) -> Dict[str, Any]:
+    def _coerce_row_impl(self, row: Mapping[str, Any]) -> Dict[str, Any]:
 
         coerced: Dict[str, Any] = {}
 
