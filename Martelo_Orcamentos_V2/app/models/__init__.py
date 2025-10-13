@@ -20,3 +20,4 @@ from .dados_gerais import (
     DadosItemsModelo,
     DadosItemsModeloItem,
 )
+from .custeio import CusteioItem

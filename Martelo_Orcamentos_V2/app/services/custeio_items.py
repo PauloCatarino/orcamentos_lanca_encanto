@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from Martelo_Orcamentos_V2.app.models.client import Client
+from Martelo_Orcamentos_V2.app.models.custeio import CusteioItem
+from Martelo_Orcamentos_V2.app.models.dados_gerais import DadosItemsMaterial
+from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
+from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 
 
@@ -275,17 +282,348 @@ TREE_DEFINITION: List[TreeNode] = [
 ]
 
 
+CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
+    {"key": "id", "label": "id", "type": "int", "editable": False},
+    {"key": "descricao_livre", "label": "Descricao_Livre", "type": "text", "editable": True},
+    {"key": "def_peca", "label": "Def_Peca", "type": "text", "editable": False},
+    {"key": "descricao", "label": "Descricao", "type": "text", "editable": False},
+    {"key": "qt_mod", "label": "QT_mod", "type": "numeric", "editable": True},
+    {"key": "qt_und", "label": "QT_und", "type": "numeric", "editable": True},
+    {"key": "comp", "label": "Comp", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "larg", "label": "Larg", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "esp", "label": "Esp", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "mps", "label": "MPs", "type": "bool", "editable": True},
+    {"key": "mo", "label": "MO", "type": "bool", "editable": True},
+    {"key": "orla", "label": "Orla", "type": "bool", "editable": True},
+    {"key": "blk", "label": "BLK", "type": "bool", "editable": True},
+    {"key": "mat_default", "label": "Mat_Default", "type": "text", "editable": True},
+    {"key": "qt_total", "label": "Qt_Total", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "comp_res", "label": "comp_res", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "larg_res", "label": "larg_res", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "esp_res", "label": "esp_res", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "ref_le", "label": "ref_le", "type": "text", "editable": False},
+    {"key": "descricao_no_orcamento", "label": "descricao_no_orcamento", "type": "text", "editable": False},
+    {"key": "pliq", "label": "pliq", "type": "numeric", "editable": False, "format": "money"},
+    {"key": "und", "label": "und", "type": "text", "editable": False},
+    {"key": "desp", "label": "desp", "type": "numeric", "editable": False, "format": "percent"},
+    {"key": "orl_0_4", "label": "ORL 0.4", "type": "text", "editable": False},
+    {"key": "orl_1_0", "label": "ORL 1.0", "type": "text", "editable": False},
+    {"key": "tipo", "label": "tipo", "type": "text", "editable": False},
+    {"key": "familia", "label": "familia", "type": "text", "editable": False},
+    {"key": "comp_mp", "label": "comp_mp", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "larg_mp", "label": "larg_mp", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "esp_mp", "label": "esp_mp", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "orl_c1", "label": "ORL_C1", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "orl_c2", "label": "ORL_C2", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "orl_l1", "label": "ORL_L1", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "orl_l2", "label": "ORL_L2", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "ml_orl_c1", "label": "ML_ORL_C1", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "ml_orl_c2", "label": "ML_ORL_C2", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "ml_orl_l1", "label": "ML_ORL_L1", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "ml_orl_l2", "label": "ML_ORL_L2", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "custo_orl_c1", "label": "CUSTO_ORL_C1", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "custo_orl_c2", "label": "CUSTO_ORL_C2", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "custo_orl_l1", "label": "CUSTO_ORL_L1", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "custo_orl_l2", "label": "CUSTO_ORL_L2", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "gravar_modulo", "label": "GRAVAR_MODULO", "type": "bool", "editable": True},
+    {"key": "custo_total_orla", "label": "CUSTO_TOTAL_ORLA", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_total_ml_orla", "label": "SOMA_TOTAL_ML_ORLA", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "area_m2_und", "label": "AREA_M2_und", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "spp_ml_und", "label": "SPP_ML_und", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "cp01_sec", "label": "CP01_SEC", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp01_sec_und", "label": "CP01_SEC_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp02_orl", "label": "CP02_ORL", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp02_orl_und", "label": "CP02_ORL_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp03_cnc", "label": "CP03_CNC", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp03_cnc_und", "label": "CP03_CNC_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp04_abd", "label": "CP04_ABD", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp04_abd_und", "label": "CP04_ABD_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp05_prensa", "label": "CP05_PRENSA", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp05_prensa_und", "label": "CP05_PRENSA_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp06_esquad", "label": "CP06_ESQUAD", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp06_esquad_und", "label": "CP06_ESQUAD_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp07_embalagem", "label": "CP07_EMBALAGEM", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp07_embalagem_und", "label": "CP07_EMBALAGEM_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp08_mao_de_obra", "label": "CP08_MAO_DE_OBRA", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp08_mao_de_obra_und", "label": "CP08_MAO_DE_OBRA_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "custo_mp_und", "label": "CUSTO_MP_und", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "custo_mp_total", "label": "CUSTO_MP_Total", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_custo_orla_total", "label": "Soma_Custo_Orla_Total", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_custo_und", "label": "Soma_Custo_und", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_custo_total", "label": "Soma_Custo_Total", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_custo_acb", "label": "Soma_Custo_ACB", "type": "numeric", "editable": False, "format": "two"},
+]
+
+
+MATERIAL_GROUP_LOOKUP = {
+    name.upper(): name
+    for name in svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_MATERIAIS, ())
+}
+
+
+def _build_leaf_lookup() -> Dict[str, str]:
+    mapping: Dict[str, str] = {}
+
+    def _walk(node: Dict[str, Any], parent: Optional[str] = None) -> None:
+        label = str(node.get("label", "")).strip()
+        if not label:
+            return
+        children = node.get("children") or []
+        if not parent:
+            parent_label = label
+        else:
+            parent_label = parent
+        if children:
+            for child in children:
+                _walk(child, parent_label)
+        else:
+            mapping[label.upper()] = parent_label
+
+    for entry in TREE_DEFINITION:
+        _walk(entry, None)
+    return mapping
+
+
+LEAF_TO_GROUP = _build_leaf_lookup()
+
+
+def _empty_row() -> Dict[str, Any]:
+    row: Dict[str, Any] = {}
+    for spec in CUSTEIO_COLUMN_SPECS:
+        key = spec["key"]
+        if key == "id":
+            row[key] = None
+        elif spec["type"] == "bool":
+            row[key] = False
+        else:
+            row[key] = None
+    return row
+
+
+def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _to_decimal(value: Any) -> Optional[Decimal]:
+    if value in (None, "", False):
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _normalise_string(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = str(value).strip()
+    return stripped or None
+
+
+def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[int]) -> List[Dict[str, Any]]:
+    if not item_id:
+        return []
+
+    stmt = (
+        select(CusteioItem)
+        .where(
+            CusteioItem.orcamento_id == orcamento_id,
+            CusteioItem.item_id == item_id,
+        )
+        .order_by(CusteioItem.ordem, CusteioItem.id)
+    )
+    registros = session.execute(stmt).scalars().all()
+
+    linhas: List[Dict[str, Any]] = []
+    for registro in registros:
+        linha = _empty_row()
+        linha["id"] = registro.id
+        for spec in CUSTEIO_COLUMN_SPECS:
+            key = spec["key"]
+            if key == "id":
+                continue
+            valor = getattr(registro, key, None)
+            if spec["type"] == "numeric":
+                linha[key] = _decimal_to_float(valor)
+            elif spec["type"] == "bool":
+                linha[key] = bool(valor)
+            else:
+                linha[key] = valor
+        linhas.append(linha)
+
+    return linhas
+
+
+def salvar_custeio_items(session: Session, ctx: svc_dados_items.DadosItemsContext, linhas: Sequence[Mapping[str, Any]]) -> None:
+    # Remove registros antigos
+    session.execute(
+        delete(CusteioItem).where(
+            CusteioItem.orcamento_id == ctx.orcamento_id,
+            CusteioItem.item_id == ctx.item_id,
+        )
+    )
+    session.flush()
+
+    for ordem, linha in enumerate(linhas):
+        registro = CusteioItem(
+            orcamento_id=ctx.orcamento_id,
+            item_id=ctx.item_id,
+            cliente_id=ctx.cliente_id,
+            user_id=ctx.user_id,
+            ano=ctx.ano,
+            num_orcamento=ctx.num_orcamento,
+            versao=ctx.versao,
+            ordem=ordem,
+        )
+        for spec in CUSTEIO_COLUMN_SPECS:
+            key = spec["key"]
+            if key == "id":
+                continue
+            valor = linha.get(key)
+            if spec["type"] == "numeric":
+                setattr(registro, key, _to_decimal(valor))
+            elif spec["type"] == "bool":
+                setattr(registro, key, bool(valor))
+            else:
+                setattr(registro, key, _normalise_string(valor))
+        session.add(registro)
+
+    session.commit()
+
+
+def gerar_linhas_para_selecoes(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    selecoes: Sequence[str],
+) -> List[Dict[str, Any]]:
+    linhas: List[Dict[str, Any]] = []
+    for selecao in selecoes:
+        parts = [p.strip() for p in selecao.split(">") if p.strip()]
+        if not parts:
+            continue
+
+        linha = _empty_row()
+        linha["descricao_livre"] = ""
+        linha["def_peca"] = parts[-1]
+
+        topo = parts[0].upper()
+        grupo = MATERIAL_GROUP_LOOKUP.get(topo)
+        if grupo:
+            material = _obter_material(session, ctx, grupo)
+        else:
+            material = None
+
+        if material:
+            _preencher_linha_com_material(linha, material)
+        else:
+            linha["descricao"] = linha["def_peca"]
+        linhas.append(linha)
+
+    return linhas
+
+
+def _obter_material(session: Session, ctx: svc_dados_items.DadosItemsContext, grupo: str) -> Optional[DadosItemsMaterial]:
+    stmt = (
+        select(DadosItemsMaterial)
+        .where(
+            DadosItemsMaterial.orcamento_id == ctx.orcamento_id,
+            DadosItemsMaterial.item_id == ctx.item_id,
+            DadosItemsMaterial.grupo_material.ilike(grupo),
+        )
+        .limit(1)
+    )
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def _preencher_linha_com_material(linha: Dict[str, Any], material: DadosItemsMaterial) -> None:
+    linha["descricao"] = material.descricao
+    linha["ref_le"] = material.ref_le
+    linha["descricao_no_orcamento"] = material.descricao_material
+    linha["pliq"] = _decimal_to_float(material.preco_liq)
+    linha["und"] = material.und
+    linha["desp"] = _decimal_to_float(material.desp)
+    linha["orl_0_4"] = material.orl_0_4
+    linha["orl_1_0"] = material.orl_1_0
+    linha["tipo"] = material.tipo
+    linha["familia"] = material.familia
+    linha["comp_mp"] = _decimal_to_float(material.comp_mp)
+    linha["larg_mp"] = _decimal_to_float(material.larg_mp)
+    linha["esp_mp"] = _decimal_to_float(material.esp_mp)
+    linha["mat_default"] = material.familia or material.grupo_material
+    linha["spp_ml_und"] = _decimal_to_float(getattr(material, "spp_ml_und", None))
+    linha["custo_mp_und"] = _decimal_to_float(getattr(material, "custo_mp_und", None))
+    linha["custo_mp_total"] = _decimal_to_float(getattr(material, "custo_mp_total", None))
+
 def carregar_contexto(
     session: Session,
     orcamento_id: int,
     *,
     item_id: Optional[int] = None,
 ) -> svc_dados_items.DadosItemsContext:
-    """Delegates to dados_items context loader to ensure consistent metadata."""
+    """Delegates to dados_items context loader; requires item_id."""
+
+    if item_id is None:
+        raise ValueError("item_id e obrigatorio para carregar contexto de Dados Items")
 
     return svc_dados_items.carregar_contexto(session, orcamento_id, item_id=item_id)
+
+
+
+
+def linha_vazia() -> Dict[str, Any]:
+    return _empty_row()
+
+
+def lista_mat_default() -> List[str]:
+    return sorted(set(MATERIAL_GROUP_LOOKUP.values()))
+
+
+def obter_material_por_grupo(session: Session, ctx: svc_dados_items.DadosItemsContext, grupo: str):
+    if not grupo:
+        return None
+    return _obter_material(session, ctx, grupo)
+
+
+def dados_material(material: DadosItemsMaterial) -> Dict[str, Any]:
+    linha: Dict[str, Any] = {}
+    _preencher_linha_com_material(linha, material)
+    return linha
+
+
+def grupo_por_def_peca(def_peca: str) -> Optional[str]:
+    if not def_peca:
+        return None
+    chave = LEAF_TO_GROUP.get(def_peca.strip().upper())
+    if not chave:
+        return None
+    return MATERIAL_GROUP_LOOKUP.get(chave.upper(), chave)
+
+
 
 
 def obter_arvore() -> Sequence[TreeNode]:
     return TREE_DEFINITION
 
+
+def carregar_orcamento(session: Session, orcamento_id: int) -> Optional[Orcamento]:
+    return session.get(Orcamento, orcamento_id)
+
+
+def carregar_item(session: Session, item_id: int) -> Optional[OrcamentoItem]:
+    return session.get(OrcamentoItem, item_id)
+
+
+def obter_cliente_nome(session: Session, client_id: Optional[int]) -> str:
+    if not client_id:
+        return "-"
+    client = session.get(Client, client_id)
+    return (client.nome if client else "-") or "-"
+
+
+def obter_user_nome(session: Session, user_id: Optional[int]) -> str:
+    if not user_id:
+        return "-"
+    user = session.get(User, user_id)
+    return (user.username if user else "-") or "-"
