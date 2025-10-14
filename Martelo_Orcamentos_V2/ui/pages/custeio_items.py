@@ -70,6 +70,52 @@ HEADER_TOOLTIPS = {
 CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
 
 
+class CusteioTableView(QtWidgets.QTableView):
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+            if self.state() == QtWidgets.QAbstractItemView.EditingState:
+                editor = self.focusWidget()
+                if editor:
+                    self.commitData(editor)
+                    self.closeEditor(editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+            next_index = self.moveCursor(QtWidgets.QAbstractItemView.MoveRight, QtCore.Qt.NoModifier)
+            if next_index.isValid():
+                self.setCurrentIndex(next_index)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class NumericLineEditDelegate(QtWidgets.QStyledItemDelegate):
+    def __init__(self, parent: Optional[QtCore.QObject], spec: Mapping[str, Any]):
+        super().__init__(parent)
+        self._format = spec.get("format")
+
+    def createEditor(self, parent, option, index):
+        editor = QtWidgets.QLineEdit(parent)
+        editor.setFrame(False)
+        editor.setAlignment(QtCore.Qt.AlignRight)
+        if self._format == "int":
+            validator: QtGui.QValidator = QtGui.QIntValidator(editor)
+        else:
+            validator = QtGui.QDoubleValidator(editor)
+            validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
+            validator.setDecimals(6)
+        editor.setValidator(validator)
+        return editor
+
+    def setEditorData(self, editor, index):
+        value = index.data(QtCore.Qt.EditRole)
+        if value in (None, ""):
+            editor.setText("")
+            return
+        editor.setText(str(value))
+
+    def setModelData(self, editor, model, index):
+        text = editor.text().strip()
+        model.setData(index, text, QtCore.Qt.EditRole)
+
+
 
 
 
@@ -1436,7 +1482,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
-        self.table_view = QtWidgets.QTableView()
+        self.table_view = CusteioTableView()
 
         self.table_view.setModel(self.table_model)
 
@@ -1445,6 +1491,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_view.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
         self.table_view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+
+        self.table_view.setEditTriggers(
+            QtWidgets.QAbstractItemView.SelectedClicked
+            | QtWidgets.QAbstractItemView.EditKeyPressed
+            | QtWidgets.QAbstractItemView.AnyKeyPressed
+        )
 
         self.table_view.setStyleSheet(
             "QTableView::item:selected { background-color: #d9d9d9; color: #000000; }\n"
@@ -1456,6 +1508,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_view.horizontalHeader().setStretchLastSection(False)
 
         self.table_view.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
+        for col_index, spec in enumerate(self.table_model.columns):
+            if spec["type"] == "numeric":
+                self.table_view.setItemDelegateForColumn(col_index, NumericLineEditDelegate(self.table_view, spec))
 
         try:
 
