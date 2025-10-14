@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+import unicodedata
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -297,23 +298,24 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "mo", "label": "MO", "type": "bool", "editable": True},
     {"key": "orla", "label": "Orla", "type": "bool", "editable": True},
     {"key": "blk", "label": "BLK", "type": "bool", "editable": True},
+    {"key": "nst", "label": "NST", "type": "bool", "editable": True},
     {"key": "mat_default", "label": "Mat_Default", "type": "text", "editable": True},
     {"key": "qt_total", "label": "Qt_Total", "type": "numeric", "editable": False, "format": "two"},
     {"key": "comp_res", "label": "comp_res", "type": "numeric", "editable": False, "format": "int"},
     {"key": "larg_res", "label": "larg_res", "type": "numeric", "editable": False, "format": "int"},
     {"key": "esp_res", "label": "esp_res", "type": "numeric", "editable": False, "format": "int"},
-    {"key": "ref_le", "label": "ref_le", "type": "text", "editable": False},
-    {"key": "descricao_no_orcamento", "label": "descricao_no_orcamento", "type": "text", "editable": False},
-    {"key": "pliq", "label": "pliq", "type": "numeric", "editable": False, "format": "money"},
-    {"key": "und", "label": "und", "type": "text", "editable": False},
-    {"key": "desp", "label": "desp", "type": "numeric", "editable": False, "format": "percent"},
-    {"key": "orl_0_4", "label": "ORL 0.4", "type": "text", "editable": False},
-    {"key": "orl_1_0", "label": "ORL 1.0", "type": "text", "editable": False},
-    {"key": "tipo", "label": "tipo", "type": "text", "editable": False},
-    {"key": "familia", "label": "familia", "type": "text", "editable": False},
-    {"key": "comp_mp", "label": "comp_mp", "type": "numeric", "editable": False, "format": "int"},
-    {"key": "larg_mp", "label": "larg_mp", "type": "numeric", "editable": False, "format": "int"},
-    {"key": "esp_mp", "label": "esp_mp", "type": "numeric", "editable": False, "format": "int"},
+    {"key": "ref_le", "label": "ref_le", "type": "text", "editable": True},
+    {"key": "descricao_no_orcamento", "label": "descricao_no_orcamento", "type": "text", "editable": True},
+    {"key": "pliq", "label": "pliq", "type": "numeric", "editable": True, "format": "money"},
+    {"key": "und", "label": "und", "type": "text", "editable": True},
+    {"key": "desp", "label": "desp", "type": "numeric", "editable": True, "format": "percent"},
+    {"key": "orl_0_4", "label": "ORL 0.4", "type": "text", "editable": True},
+    {"key": "orl_1_0", "label": "ORL 1.0", "type": "text", "editable": True},
+    {"key": "tipo", "label": "tipo", "type": "text", "editable": True},
+    {"key": "familia", "label": "familia", "type": "text", "editable": True},
+    {"key": "comp_mp", "label": "comp_mp", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "larg_mp", "label": "larg_mp", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "esp_mp", "label": "esp_mp", "type": "numeric", "editable": True, "format": "int"},
     {"key": "orl_c1", "label": "ORL_C1", "type": "numeric", "editable": True, "format": "two"},
     {"key": "orl_c2", "label": "ORL_C2", "type": "numeric", "editable": True, "format": "two"},
     {"key": "orl_l1", "label": "ORL_L1", "type": "numeric", "editable": True, "format": "two"},
@@ -362,6 +364,36 @@ MATERIAL_GROUP_LOOKUP = {
 }
 
 
+def _normalize_token(value: Optional[str]) -> str:
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFKD", str(value).strip())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.casefold()
+
+
+_FAMILIA_MENU_ALIASES_RAW = {
+    "PLACAS": svc_dados_items.MENU_MATERIAIS,
+    "PLACA": svc_dados_items.MENU_MATERIAIS,
+    "FERRAGENS": svc_dados_items.MENU_FERRAGENS,
+    "FERRAGEM": svc_dados_items.MENU_FERRAGENS,
+    "SISTEMAS CORRER": svc_dados_items.MENU_SIS_CORRER,
+    "SISTEMA CORRER": svc_dados_items.MENU_SIS_CORRER,
+    "SIST CORRER": svc_dados_items.MENU_SIS_CORRER,
+    "ACABAMENTOS": svc_dados_items.MENU_ACABAMENTOS,
+    "ACABAMENTO": svc_dados_items.MENU_ACABAMENTOS,
+}
+
+FAMILIA_MENU_ALIASES = {_normalize_token(key): value for key, value in _FAMILIA_MENU_ALIASES_RAW.items()}
+
+
+def _menu_for_familia(familia: Optional[str]) -> Optional[str]:
+    token = _normalize_token(familia)
+    if not token:
+        return None
+    return FAMILIA_MENU_ALIASES.get(token)
+
+
 def _build_leaf_lookup() -> Dict[str, str]:
     mapping: Dict[str, str] = {}
 
@@ -386,6 +418,109 @@ def _build_leaf_lookup() -> Dict[str, str]:
 
 
 LEAF_TO_GROUP = _build_leaf_lookup()
+
+
+def _grupo_label_from_material(material: Any) -> Optional[str]:
+    if material is None:
+        return None
+    for attr in ("grupo_material", "grupo_ferragem", "grupo_sistema", "grupo_acabamento", "familia"):
+        value = getattr(material, attr, None)
+        if value:
+            return str(value)
+    return None
+
+
+def _collect_mat_default_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:
+    model = svc_dados_items.MODEL_MAP.get(menu)
+    if not model:
+        return []
+    primary_field = svc_dados_items.MENU_PRIMARY_FIELD.get(menu)
+    if not primary_field:
+        return []
+
+    column = getattr(model, primary_field)
+    stmt = select(column).where(
+        model.orcamento_id == ctx.orcamento_id,
+        model.item_id == ctx.item_id,
+    )
+
+    ordem_column = getattr(model, "ordem", None)
+    if ordem_column is not None:
+        stmt = stmt.order_by(ordem_column, column)
+    else:
+        stmt = stmt.order_by(column)
+
+    values = session.execute(stmt).scalars().all()
+    seen: Set[str] = set()
+    resultado: List[str] = []
+    for value in values:
+        if not value:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        token = _normalize_token(text)
+        if token in seen:
+            continue
+        seen.add(token)
+        resultado.append(text)
+
+    if not resultado:
+        defaults = svc_dados_items.MENU_FIXED_GROUPS.get(menu, ())
+        for value in defaults:
+            text = str(value).strip()
+            if not text:
+                continue
+            token = _normalize_token(text)
+            if token in seen:
+                continue
+            seen.add(token)
+            resultado.append(text)
+
+    return resultado
+
+
+def _buscar_material_por_menu(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    menu: str,
+    grupo: Optional[str],
+) -> Optional[Any]:
+    if not grupo:
+        return None
+
+    model = svc_dados_items.MODEL_MAP.get(menu)
+    if not model:
+        return None
+
+    primary_field = svc_dados_items.MENU_PRIMARY_FIELD.get(menu)
+    if not primary_field:
+        return None
+
+    stmt = select(model).where(
+        model.orcamento_id == ctx.orcamento_id,
+        model.item_id == ctx.item_id,
+    )
+
+    ordem_column = getattr(model, "ordem", None)
+    id_column = getattr(model, "id", None)
+    order_columns = []
+    if ordem_column is not None:
+        order_columns.append(ordem_column)
+    if id_column is not None:
+        order_columns.append(id_column)
+    if order_columns:
+        stmt = stmt.order_by(*order_columns)
+
+    rows = session.execute(stmt).scalars().all()
+    alvo = _normalize_token(grupo)
+
+    for row in rows:
+        valor = getattr(row, primary_field, None)
+        if _normalize_token(valor) == alvo:
+            return row
+
+    return None
 
 
 def _empty_row() -> Dict[str, Any]:
@@ -517,7 +652,7 @@ def gerar_linhas_para_selecoes(
             material = None
 
         if material:
-            _preencher_linha_com_material(linha, material)
+            _preencher_linha_com_material(linha, material, grupo)
         else:
             linha["descricao"] = linha["def_peca"]
         linhas.append(linha)
@@ -538,7 +673,11 @@ def _obter_material(session: Session, ctx: svc_dados_items.DadosItemsContext, gr
     return session.execute(stmt).scalar_one_or_none()
 
 
-def _preencher_linha_com_material(linha: Dict[str, Any], material: Any) -> None:
+def _preencher_linha_com_material(
+    linha: Dict[str, Any],
+    material: Any,
+    grupo_hint: Optional[str] = None,
+) -> None:
     descricao = getattr(material, "descricao", None) or getattr(material, "descricao_phc", None) or getattr(material, "descricao_orcamento", None)
     linha["descricao"] = descricao
     linha["ref_le"] = getattr(material, "ref_le", None) or getattr(material, "ref_fornecedor", None)
@@ -553,7 +692,10 @@ def _preencher_linha_com_material(linha: Dict[str, Any], material: Any) -> None:
     linha["comp_mp"] = _decimal_to_float(getattr(material, "comp_mp", None))
     linha["larg_mp"] = _decimal_to_float(getattr(material, "larg_mp", None))
     linha["esp_mp"] = _decimal_to_float(getattr(material, "esp_mp", None))
-    linha["mat_default"] = getattr(material, "familia", None) or getattr(material, "grupo_material", None)
+    linha["nst"] = bool(getattr(material, "nao_stock", False))
+    grupo = _grupo_label_from_material(material) or grupo_hint
+    if grupo:
+        linha["mat_default"] = grupo
     linha["spp_ml_und"] = _decimal_to_float(getattr(material, "spp_ml_und", None))
     linha["custo_mp_und"] = _decimal_to_float(getattr(material, "custo_mp_und", None))
     linha["custo_mp_total"] = _decimal_to_float(getattr(material, "custo_mp_total", None))
@@ -578,14 +720,68 @@ def linha_vazia() -> Dict[str, Any]:
     return _empty_row()
 
 
-def lista_mat_default() -> List[str]:
+def lista_mat_default(
+    session: Optional[Session] = None,
+    ctx: Optional[svc_dados_items.DadosItemsContext] = None,
+    familia: Optional[str] = None,
+) -> List[str]:
+    if session and ctx:
+        menu = _menu_for_familia(familia)
+        if menu:
+            return _collect_mat_default_options(session, ctx, menu)
+
+        agregado: List[str] = []
+        vistos: Set[str] = set()
+        for menu_key in set(FAMILIA_MENU_ALIASES.values()):
+            opcoes = _collect_mat_default_options(session, ctx, menu_key)
+            for opcao in opcoes:
+                token = _normalize_token(opcao)
+                if token in vistos:
+                    continue
+                vistos.add(token)
+                agregado.append(opcao)
+        if agregado:
+            return agregado
+
     return sorted(set(MATERIAL_GROUP_LOOKUP.values()))
 
 
-def obter_material_por_grupo(session: Session, ctx: svc_dados_items.DadosItemsContext, grupo: str):
+def obter_material_por_grupo(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    grupo: Optional[str],
+    familia: Optional[str] = None,
+):
     if not grupo:
         return None
-    return _obter_material(session, ctx, grupo)
+
+    if familia:
+        material = obter_material_por_familia(session, ctx, familia, grupo)
+        if material:
+            return material
+
+    material = _obter_material(session, ctx, grupo)
+    if material:
+        return material
+
+    for menu_key in set(FAMILIA_MENU_ALIASES.values()):
+        material = _buscar_material_por_menu(session, ctx, menu_key, grupo)
+        if material:
+            return material
+
+    return None
+
+
+def obter_material_por_familia(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    familia: Optional[str],
+    grupo: Optional[str],
+):
+    menu = _menu_for_familia(familia)
+    if not menu:
+        return _obter_material(session, ctx, grupo) if grupo else None
+    return _buscar_material_por_menu(session, ctx, menu, grupo)
 
 
 def dados_material(material: Any) -> Dict[str, Any]:

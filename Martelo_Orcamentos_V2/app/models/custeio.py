@@ -50,6 +50,7 @@ class CusteioItem(CusteioContextMixin, Base):
     mo = Column(Boolean, nullable=False, default=False)
     orla = Column(Boolean, nullable=False, default=False)
     blk = Column(Boolean, nullable=False, default=False)
+    nst = Column(Boolean, nullable=False, default=False)
     mat_default = Column(String(128), nullable=True)
     qt_total = Column(Numeric(18, 4), nullable=True)
     comp_res = Column(Numeric(18, 4), nullable=True)

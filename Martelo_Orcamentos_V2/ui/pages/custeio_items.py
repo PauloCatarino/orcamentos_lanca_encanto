@@ -27,6 +27,48 @@ from .dados_gerais import MateriaPrimaPicker
 
 TRISTATE_FLAG = getattr(QtCore.Qt, "ItemIsTristate", 0) or getattr(QtCore.Qt, "ItemIsAutoTristate", 0)
 
+ITALIC_ON_BLK_KEYS = {
+    "ref_le",
+    "descricao_no_orcamento",
+    "pliq",
+    "und",
+    "desp",
+    "orl_0_4",
+    "orl_1_0",
+    "tipo",
+    "familia",
+    "comp_mp",
+    "larg_mp",
+    "esp_mp",
+}
+
+MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS | {"mat_default"}
+
+HEADER_TOOLTIPS = {
+    "descricao_livre": "Texto livre editavel para identificar a linha no custeio.",
+    "def_peca": "Codigo da peca selecionada na arvore de definicoes.",
+    "descricao": "Descricao base importada do material associado.",
+    "qt_mod": "Quantidade de modulos a produzir com esta linha.",
+    "qt_und": "Quantidade de unidades por modulo.",
+    "blk": "Quando ativo bloqueia atualizacoes vindas da tabela Dados Items.",
+    "nst": "Indica que o material foi marcado como Nao-Stock nos Dados Items.",
+    "mat_default": "Grupo de material usado como origem das informacoes desta linha.",
+    "ref_le": "Referencia LE selecionada no material mapeado.",
+    "descricao_no_orcamento": "Descricao utilizada na impressao do orcamento.",
+    "pliq": "Preco liquido do material, conforme Dados Items.",
+    "und": "Unidade de medida associada ao material.",
+    "desp": "Percentual de desperdicio aplicado ao material.",
+    "orl_0_4": "Codigo da orla de 0.4 mm configurada para o material.",
+    "orl_1_0": "Codigo da orla de 1.0 mm configurada para o material.",
+    "tipo": "Tipo de material selecionado.",
+    "familia": "Familia principal do material selecionado.",
+    "comp_mp": "Comprimento em mm da materia-prima.",
+    "larg_mp": "Largura em mm da materia-prima.",
+    "esp_mp": "Espessura em mm da materia-prima.",
+}
+
+CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
+
 
 
 
@@ -225,6 +267,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self._column_index = {col["key"]: idx for idx, col in enumerate(self.columns)}
 
+        self._blk_column = self._column_index.get("blk")
+
+        self._italic_columns_idx = [self._column_index[key] for key in ITALIC_ON_BLK_KEYS if key in self._column_index]
+
+        self._tooltip_columns_idx = [self._column_index[key] for key in CELL_TOOLTIP_KEYS if key in self._column_index]
+
+        self._italic_font = QtGui.QFont()
+
+        self._italic_font.setItalic(True)
+
         self.rows: List[Dict[str, Any]] = []
 
 
@@ -245,11 +297,27 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
     def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: int = QtCore.Qt.DisplayRole):
 
-        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+        if orientation == QtCore.Qt.Horizontal:
 
-            if 0 <= section < len(self.columns):
+            if role == QtCore.Qt.DisplayRole:
 
-                return self.columns[section]["label"]
+                if 0 <= section < len(self.columns):
+
+                    return self.columns[section]["label"]
+
+            if role == QtCore.Qt.ToolTipRole:
+
+                if 0 <= section < len(self.columns):
+
+                    key = self.columns[section]["key"]
+
+                    tooltip = HEADER_TOOLTIPS.get(key)
+
+                    if tooltip:
+
+                        return tooltip
+
+                return None
 
         return super().headerData(section, orientation, role)
 
@@ -276,6 +344,34 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         key = spec["key"]
 
         value = self.rows[row].get(key)
+
+        if role == QtCore.Qt.FontRole:
+
+            if self.rows[row].get("blk") and key in ITALIC_ON_BLK_KEYS:
+
+                return self._italic_font
+
+            return None
+
+        if role == QtCore.Qt.ToolTipRole:
+
+            if key in CELL_TOOLTIP_KEYS:
+
+                if spec["type"] == "bool":
+
+                    return "Ativo" if bool(value) else "Inativo"
+
+                display_value = self.data(index, QtCore.Qt.DisplayRole)
+
+                if isinstance(display_value, str) and display_value:
+
+                    return display_value
+
+                if display_value not in (None, ""):
+
+                    return str(display_value)
+
+            return None
 
 
 
@@ -399,9 +495,23 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         if spec["type"] == "bool" and role == QtCore.Qt.CheckStateRole:
 
-            self.rows[row][key] = bool(value == QtCore.Qt.Checked)
+            new_state = bool(value == QtCore.Qt.Checked)
 
-            self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole])
+            if self.rows[row].get(key) == new_state:
+
+                return True
+
+            self.rows[row][key] = new_state
+
+            roles = [QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole]
+
+            if key == "blk":
+
+                roles.append(QtCore.Qt.FontRole)
+
+                self._emit_font_updates(row)
+
+            self.dataChanged.emit(index, index, roles)
 
             return True
 
@@ -410,6 +520,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if role != QtCore.Qt.EditRole or not spec.get("editable", False):
 
             return False
+
+
+
+        manual_lock = spec["key"] in MANUAL_LOCK_KEYS
 
 
 
@@ -435,7 +549,21 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
-        self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole])
+        self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.FontRole, QtCore.Qt.ToolTipRole])
+
+
+
+        if manual_lock:
+
+            self.set_blk(row, True)
+
+        else:
+
+            if key in ITALIC_ON_BLK_KEYS:
+
+                self._emit_font_updates(row)
+
+
 
         return True
 
@@ -661,27 +789,125 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         bottom_right = self.index(row_index, len(self.columns) - 1)
 
-        self.dataChanged.emit(top_left, bottom_right, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.CheckStateRole])
+        self.dataChanged.emit(top_left, bottom_right, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.CheckStateRole, QtCore.Qt.FontRole, QtCore.Qt.ToolTipRole])
+
+
+    def _emit_font_updates(self, row_index: int) -> None:
+
+        if not (0 <= row_index < len(self.rows)):
+
+            return
+
+        for col in self._italic_columns_idx:
+
+            idx = self.index(row_index, col)
+
+            self.dataChanged.emit(idx, idx, [QtCore.Qt.FontRole, QtCore.Qt.DisplayRole, QtCore.Qt.ToolTipRole])
+
+
+    def set_blk(self, row_index: int, value: bool) -> None:
+
+        if not (0 <= row_index < len(self.rows)):
+
+            return
+
+        target = bool(value)
+
+        current = bool(self.rows[row_index].get("blk"))
+
+        if current == target:
+
+            return
+
+        self.rows[row_index]["blk"] = target
+
+        if self._blk_column is not None:
+
+            blk_index = self.index(row_index, self._blk_column)
+
+            self.dataChanged.emit(blk_index, blk_index, [QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole, QtCore.Qt.FontRole])
+
+        self._emit_font_updates(row_index)
+
 
 
 class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, page: Optional["CusteioItemsPage"] = None):
 
         super().__init__(parent)
 
-        self._options = svc_custeio.lista_mat_default()
+        self._page = page
+
+
+    def _options_for_index(self, index: QtCore.QModelIndex) -> List[str]:
+
+        page = self._page
+
+        if page is None or not getattr(page, "context", None):
+
+            return svc_custeio.lista_mat_default()
+
+        session = getattr(page, "session", None)
+
+        context = page.context
+
+        if not session or not context:
+
+            return svc_custeio.lista_mat_default()
+
+        familia: Optional[str] = None
+
+        try:
+
+            row = page.table_model.rows[index.row()]
+
+            familia = row.get("familia") or row.get("mat_default")
+
+        except Exception:
+
+            familia = None
+
+        options = svc_custeio.lista_mat_default(session, context, familia)
+
+        return options or svc_custeio.lista_mat_default()
 
 
     def createEditor(self, parent, option, index):
 
         editor = QtWidgets.QComboBox(parent)
 
+        editor.setEditable(False)
+
+        editor.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+
+        editor.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
+
+        seen = set()
+
         editor.addItem("")
 
-        editor.addItems(self._options)
+        seen.add("")
 
-        editor.setEditable(False)
+        current_value = (index.data(QtCore.Qt.EditRole) or "").strip()
+
+        if current_value and current_value not in seen:
+
+            editor.addItem(current_value)
+
+            seen.add(current_value)
+
+        for option_text in self._options_for_index(index):
+
+            text = (option_text or "").strip()
+
+            if not text or text in seen:
+
+                continue
+
+            editor.addItem(text)
+
+            seen.add(text)
 
         return editor
 
@@ -699,7 +925,13 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
 
-        model.setData(index, editor.currentText(), QtCore.Qt.EditRole)
+        text = editor.currentText().strip()
+
+        model.setData(index, text, QtCore.Qt.EditRole)
+
+        if self._page is not None:
+
+            self._page._apply_mat_default_selection(index.row(), text)
 
 
 
@@ -1214,6 +1446,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
+        self.table_view.setStyleSheet(
+            "QTableView::item:selected { background-color: #d9d9d9; color: #000000; }\n"
+            "QTableView::item:selected:!active { background-color: #d9d9d9; color: #000000; }"
+        )
+
+        self.table_view.setMouseTracking(True)
+
         self.table_view.horizontalHeader().setStretchLastSection(False)
 
         self.table_view.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
@@ -1222,7 +1461,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             mat_col = self.table_model.column_keys.index("mat_default")
 
-            self.table_view.setItemDelegateForColumn(mat_col, MatDefaultDelegate(self.table_view))
+            self.table_view.setItemDelegateForColumn(mat_col, MatDefaultDelegate(self.table_view, self))
 
         except ValueError:
 
@@ -1741,34 +1980,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nao foi possivel gerar dados para as selecoes.")
 
             return
-
-
-
-        inseridas: List[Dict[str, Any]] = []
-
-        for linha in novas_linhas:
-
-            def_peca = (linha.get("def_peca") or "").strip()
-
-            if def_peca and self.table_model.contains_def_peca(def_peca):
-
-                continue
-
-            inseridas.append(linha)
-
-
-
-        if not inseridas:
-
-            QtWidgets.QMessageBox.information(self, "Informacao", "As selecoes ja foram adicionadas ao custeio.")
-
-            self._clear_all_checks()
-
-            return
-
-
-
-        self.table_model.append_rows(inseridas)
+        self.table_model.append_rows(novas_linhas)
 
         self.table_model.recalculate_all()
 
@@ -1782,6 +1994,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if not self.context:
             QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
             return
+        if hasattr(self.session, "expire_all"):
+            self.session.expire_all()
         self._apply_updates_from_items()
         self.table_model.recalculate_all()
         self._update_table_placeholder_visibility()
@@ -2084,11 +2298,51 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model.update_row_fields(row_index, updates, skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp"))
 
-        self.table_model.rows[row_index]["blk"] = True
+        self.table_model.set_blk(row_index, True)
 
         self.table_model.recalculate_all()
 
         self._update_table_placeholder_visibility()
+
+
+    def _apply_mat_default_selection(self, row_index: int, selection: str) -> None:
+
+        if not self.context:
+
+            return
+
+        if not (0 <= row_index < self.table_model.rowCount()):
+
+            return
+
+        selection = (selection or "").strip()
+
+        if not selection:
+
+            return
+
+        row = self.table_model.rows[row_index]
+
+        familia = row.get("familia") or row.get("mat_default")
+
+        material = svc_custeio.obter_material_por_familia(self.session, self.context, familia, selection)
+
+        if not material:
+
+            QtWidgets.QMessageBox.warning(self, "Aviso", f"Nao foi possivel localizar dados para '{selection}'.")
+
+            return
+
+        updates = svc_custeio.dados_material(material)
+
+        self.table_model.update_row_fields(row_index, updates, skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp"))
+
+        self.table_model.set_blk(row_index, True)
+
+        self.table_model.recalculate_all()
+
+        self._update_table_placeholder_visibility()
+
 
 
     def _apply_updates_from_items(self) -> None:
@@ -2115,7 +2369,17 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             if grupo not in cache:
 
-                cache[grupo] = svc_custeio.obter_material_por_grupo(self.session, self.context, grupo)
+                cache[grupo] = svc_custeio.obter_material_por_grupo(
+
+                    self.session,
+
+                    self.context,
+
+                    grupo,
+
+                    row.get("familia"),
+
+                )
 
             material = cache[grupo]
 
@@ -2131,13 +2395,21 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                 updates,
 
-                skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp", "mps", "mo", "orla", "blk", "mat_default"),
+                skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp", "mps", "mo", "orla", "blk", "mat_default", "nst"),
 
             )
 
-            if not row.get("mat_default") and updates.get("mat_default"):
+            novo_default = updates.get("mat_default")
 
-                row["mat_default"] = updates.get("mat_default")
+            if novo_default:
+
+                atual_default = (row.get("mat_default") or "").strip().casefold()
+
+                familia_atual = (row.get("familia") or "").strip().casefold()
+
+                if not atual_default or atual_default == familia_atual:
+
+                    row["mat_default"] = novo_default
 
         self.table_model.recalculate_all()
 
