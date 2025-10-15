@@ -69,7 +69,7 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
-        "label": "PRATELEIRA AMOVIVEL",
+        "label": "PRATELEIRAS AMOVIVEIS",
         "children": [
             {"label": "PRATELEIRA AMOVIVEL [2000]"},
             {"label": "PRATELEIRA AMOVIVEL [2111]"},
@@ -81,7 +81,7 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
-        "label": "PRATELEIRA FIXA",
+        "label": "PRATELEIRAS FIXAS",
         "children": [
             {"label": "PRATELEIRA FIXA [0000]"},
             {"label": "PRATELEIRA FIXA [2000]"},
@@ -91,18 +91,28 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
-        "label": "GAVETAS",
+        "label": "GAVETA FRENTE",
         "children": [
             {"label": "FRENTE GAVETA [2222]"},
             {"label": "FRENTE GAVETA [2222] + PUXADOR"},
+        ],
+    },
+    {
+        "label": "GAVETA CAIXA",
+        "children": [
             {"label": "LATERAL GAVETA [2202]"},
             {"label": "TRASEIRA GAVETA [2000]"},
+        ],
+    },
+    {
+        "label": "GAVETA FUNDO",
+        "children": [
             {"label": "FUNDO GAVETA [0022]"},
             {"label": "FUNDO GAVETA [0000]"},
         ],
     },
     {
-        "label": "PORTAS ABRIR",
+        "label": "PORTAS ABRIR 1",
         "children": [
             {"label": "PORTA ABRIR [2222]"},
             {"label": "PORTA ABRIR [2222] + DOBRADICA"},
@@ -110,7 +120,7 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
-        "label": "PORTAS CORRER",
+        "label": "PAINEIS",
         "children": [
             {"label": "PAINEL CORRER [0000]"},
             {"label": "PAINEL CORRER [2222]"},
@@ -144,6 +154,8 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "VARAO {SPP}"},
                     {"label": "PERFIL LAVA LOUCA {SPP}"},
                     {"label": "RODAPE PVC {SPP}"},
+                    {"label": "PUXADOR GOLA C {SPP}"},
+                    {"label": "PUXADOR GOLA J {SPP}"},
                     {"label": "PUXADOR PERFIL {SPP} 1"},
                     {"label": "PUXADOR PERFIL {SPP} 2"},
                     {"label": "PUXADOR PERFIL {SPP} 3"},
@@ -151,18 +163,18 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "CALHA LED {SPP} 2"},
                     {"label": "FITA LED {SPP} 1"},
                     {"label": "FITA LED {SPP} 2"},
-                    {"label": "FERRAGENS DIVERSAS {SPP} 1"},
-                    {"label": "FERRAGENS DIVERSAS {SPP} 2"},
+                    {"label": "FERRAGENS DIVERSAS {SPP} 6"},
+                    {"label": "FERRAGENS DIVERSAS {SPP} 7"},
                     {"label": "CALHA SUPERIOR {SPP} 1 CORRER"},
                     {"label": "CALHA SUPERIOR {SPP} 2 CORRER"},
                     {"label": "CALHA INFERIOR {SPP} 1 CORRER"},
                     {"label": "CALHA INFERIOR {SPP} 2 CORRER"},
                     {"label": "PERFIL HORIZONTAL H {SPP}"},
-                    {"label": "PERFIL HORIZONTAL U {SPP}"},
-                    {"label": "PERFIL HORIZONTAL L {SPP}"},
-                    {"label": "ACESSORIO {SPP} 7 CORRER"},
-                    {"label": "ACESSORIO {SPP} 8 CORRER"},
-                ],
+            {"label": "PERFIL HORIZONTAL U {SPP}"},
+            {"label": "PERFIL HORIZONTAL L {SPP}"},
+            {"label": "ACESSORIO {SPP} 7 CORRER"},
+            {"label": "ACESSORIO {SPP} 8 CORRER"},
+        ],
             },
             {
                 "label": "PUXADORES",
@@ -195,6 +207,7 @@ TREE_DEFINITION: List[TreeNode] = [
                 "children": [
                     {"label": "AVENTOS 1"},
                     {"label": "AVENTOS 2"},
+                    {"label": "AMORTECEDOR"},
                     {"label": "SISTEMA BASCULANTE 1"},
                     {"label": "SISTEMA BASCULANTE 2"},
                 ],
@@ -219,22 +232,30 @@ TREE_DEFINITION: List[TreeNode] = [
                 "label": "COZINHAS",
                 "children": [
                     {"label": "BALDE LIXO"},
-                    {"label": "CANTO COZINHA 1"},
-                    {"label": "CANTO COZINHA 2"},
+                    {"label": "CESTO CANTO FEIJAO"},
+                    {"label": "CESTO CANTO 1"},
+                    {"label": "CESTO CANTO 2"},
                     {"label": "PORTA TALHERES"},
-                    {"label": "TULHA"},
+                    {"label": "PORTA GARRAFAS"},
+                    {"label": "TULHA 1"},
+                    {"label": "TULHA 2"},
                     {"label": "FUNDO ALUMINIO 1"},
                     {"label": "FUNDO ALUMINIO 2"},
                     {"label": "FUNDO PLASTICO FIGORIFICO"},
                     {"label": "SALVA SIFAO"},
+                    {"label": "ACESSORIO COZINHA 1"},
+                    {"label": "ACESSORIO COZINHA 2"},
+                    {"label": "ACESSORIO COZINHA 3"},
                 ],
             },
             {
                 "label": "ROUPEIROS",
                 "children": [
                     {"label": "PORTA CALCAS"},
+                    {"label": "VARAO TROMBONE"},
                     {"label": "VARAO EXTENSIVEL"},
                     {"label": "GRELHA VELUDO"},
+                    {"label": "SAPATEIRA"},
                 ],
             },
             {

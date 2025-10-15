@@ -56,9 +56,23 @@ class DadosItemsPage(DadosGeraisPage):
     # ------------------------------------------------------------------ Integration
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
         self.current_orcamento_id = orcamento_id
-        self.current_item_id = item_id
+        normalized_item_id = item_id
+        if item_id is not None:
+            try:
+                normalized_item_id = int(item_id)
+            except (TypeError, ValueError):
+                normalized_item_id = item_id
+            try:
+                self.session.flush()
+            except Exception:
+                pass
+            try:
+                self.session.expire_all()
+            except Exception:
+                pass
+        self.current_item_id = normalized_item_id
 
-        if not item_id:
+        if not normalized_item_id:
             self.context = None
             self._reset_tables()
             self.lbl_title.setText(self.page_title)
@@ -66,7 +80,7 @@ class DadosItemsPage(DadosGeraisPage):
             return
 
         try:
-            super().load_orcamento(orcamento_id, item_id=item_id)
+            super().load_orcamento(orcamento_id, item_id=normalized_item_id)
         except Exception as exc:  # pragma: no cover - UI feedback
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar Dados Items: {exc}")
             self._reset_tables()

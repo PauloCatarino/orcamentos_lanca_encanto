@@ -76,6 +76,8 @@ FERRAGENS_GRUPOS: Sequence[str] = (
     "Suporte Terminal Varao",
     "Suporte Central Varao",
     "Varao SPP",
+    "Varao Trombone",
+    "Varao Extensivel",
     "Terminal Perfil Lava Louca",
     "Perfil Lava Louca SPP",
     "Rodape PVC SPP",
@@ -92,6 +94,8 @@ FERRAGENS_GRUPOS: Sequence[str] = (
     "Puxador Fresado J",
     "Puxador STD 1",
     "Puxador STD 2",
+    "Puxador Gola C SPP",
+    "Puxador Gola J SPP",
     "Puxador Perfil SPP 1",
     "Puxador Perfil SPP 2",
     "Puxador Perfil SPP 3",
@@ -99,14 +103,22 @@ FERRAGENS_GRUPOS: Sequence[str] = (
     "Sistema Basculante 2",
     "Aventos 1",
     "Aventos 2",
+    "Amortecedor",
     "Balde Lixo",
-    "Canto Cozinha 1",
-    "Canto Cozinha 2",
+    "Cesto Canto Feijao",
+    "Cesto Canto 1",
+    "Cesto Canto 2",
     "Porta Talheres",
     "Porta Calcas",
-    "Tulha",
-    "Fundo Aluminio",
+    "Porta Garrafas",
+    "Tulha 1",
+    "Tulha 2",
+    "Fundo Aluminio 1",
+    "Fundo Aluminio 2",
+    "Fundo Plastico Frigorifico",
     "Grelha Veludo",
+    "Salva Sifao",
+    "Sapateira",
     "Acessorio Cozinha 1",
     "Acessorio Cozinha 2",
     "Acessorio Cozinha 3",
@@ -166,6 +178,20 @@ SISTEMAS_CORRER_GRUPOS: Sequence[str] = (
     "Acessorio 7 SPP",
     "Acessorio 8 SPP",
 )
+
+SISTEMAS_CORRER_PLACAS: Sequence[str] = (
+    "Painel Porta Correr 1",
+    "Painel Porta Correr 2",
+    "Painel Porta Correr 3",
+    "Painel Porta Correr 4",
+    "Painel Porta Correr 5",
+    "Painel Espelho Correr 1",
+    "Painel Espelho Correr 2",
+    "Painel Espelho Correr 3",
+    "Vidro",
+)
+
+SISTEMAS_CORRER_PLACAS_KEYS = {name.strip().casefold() for name in SISTEMAS_CORRER_PLACAS}
 
 ACABAMENTOS_GRUPOS: Sequence[str] = (
     "Lacar Face Sup",
@@ -330,6 +356,18 @@ MENU_DEFAULT_FAMILIA = {
 }
 
 LAYOUT_NAMESPACE = "dados_gerais"
+
+
+def _familia_for_grupo(menu: str, grupo: Optional[str], default: Optional[str] = None) -> str:
+    base = default or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+    if not grupo:
+        return base
+    if menu == MENU_SIS_CORRER:
+        key = str(grupo).strip().casefold()
+        if key in SISTEMAS_CORRER_PLACAS_KEYS:
+            return "PLACAS"
+        return "FERRAGENS"
+    return base
 
 LEGACY_TO_NEW: Dict[str, str] = {
     # normalização de nomes antigos -> novos
@@ -693,6 +731,7 @@ def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
     fixed = MENU_FIXED_GROUPS[menu]
     default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     for ordem, name in enumerate(fixed):
+        familia_padrao = _familia_for_grupo(menu, name, default_familia)
         row: Dict[str, Any] = {
             "id": None,
             "ordem": ordem,
@@ -701,7 +740,7 @@ def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
         for field in MENU_FIELDS[menu]:
             if field not in row:
                 if field == "familia":
-                    row[field] = default_familia
+                    row[field] = familia_padrao
                 elif field == "nao_stock":
                     row[field] = False
                 else:
@@ -720,6 +759,7 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
     if not fixed:
         return [dict(row) for row in rows or []]
     primary = MENU_PRIMARY_FIELD[menu]
+    default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     existing: Dict[str, Dict[str, Any]] = {}
     extras: List[Dict[str, Any]] = []
     for row in rows or []:
@@ -741,13 +781,14 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
     for ordem, name in enumerate(fixed):
         base = defaults.get(name, {primary: name, "ordem": ordem})
         merged = dict(base)
+        familia_padrao = _familia_for_grupo(menu, name, default_familia)
         row = existing.get(name)
         if row:
             merged.update(row)
         merged["ordem"] = ordem
         merged.setdefault("id", row.get("id") if row else None)
         if "familia" in merged and not merged.get("familia"):
-            merged["familia"] = default_familia
+            merged["familia"] = familia_padrao
         if "nao_stock" in merged:
             merged["nao_stock"] = bool(merged.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
@@ -758,7 +799,7 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
         extra_row.setdefault("id", extra_row.get("id"))
         extra_row.setdefault("ordem", len(ensured))
         if "familia" in extra_row and not extra_row.get("familia"):
-            extra_row["familia"] = default_familia
+            extra_row["familia"] = _familia_for_grupo(menu, extra_row.get(primary), default_familia)
         if "nao_stock" in extra_row:
             extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
@@ -793,16 +834,19 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
         "versao": ctx.versao,
         "ordem": ordem,
     }
+    primary = MENU_PRIMARY_FIELD.get(menu)
+    default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+    grupo_valor = row.get(primary) if primary else None
     for field in MENU_FIELDS[menu]:
         value = row.get(field)
-        primary = MENU_PRIMARY_FIELD.get(menu)
         if field == primary:
             if menu == MENU_MATERIAIS:
                 value = _normalize_grupo_material(value)
             else:
                 value = _strip_accents(str(value)) if value else value
+            grupo_valor = value
         if field == "familia":
-            value = value or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+            value = value or _familia_for_grupo(menu, grupo_valor, default_familia)
         coerced = _coerce_field(menu, field, value)
         if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
@@ -836,16 +880,19 @@ def guardar_dados_gerais(db: Session, ctx: DadosGeraisContext, data: Mapping[str
 
 def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[str, Any]:
     sanitized: Dict[str, Any] = {"ordem": ordem}
+    primary = MENU_PRIMARY_FIELD.get(menu)
+    default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+    grupo_valor = row.get(primary) if primary else None
     for field in MENU_FIELDS[menu]:
         value = row.get(field)
-        primary = MENU_PRIMARY_FIELD.get(menu)
         if field == primary:
             if menu == MENU_MATERIAIS:
                 value = _normalize_grupo_material(value)
             else:
                 value = _strip_accents(str(value)) if value else value
+            grupo_valor = value
         if field == "familia":
-            value = value or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+            value = value or _familia_for_grupo(menu, grupo_valor, default_familia)
         coerced = _coerce_field(menu, field, value)
         if field == "preco_liq" and coerced is None:
             coerced = calcular_preco_liq(row.get("preco_tab"), row.get("margem"), row.get("desconto"))
@@ -855,6 +902,8 @@ def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[s
 
 def _deserialize_model_line(menu: str, payload: Mapping[str, Any]) -> Dict[str, Any]:
     row: Dict[str, Any] = {"ordem": int(payload.get("ordem", 0))}
+    primary = MENU_PRIMARY_FIELD.get(menu)
+    default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     for field in MENU_FIELDS[menu]:
         value = payload.get(field)
         coerced = _coerce_field(menu, field, value)
@@ -864,7 +913,7 @@ def _deserialize_model_line(menu: str, payload: Mapping[str, Any]) -> Dict[str, 
     if menu == MENU_MATERIAIS:
         row["grupo_material"] = _normalize_grupo_material(row.get("grupo_material"))
     if "familia" in row:
-        row["familia"] = row.get("familia") or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+        row["familia"] = row.get("familia") or _familia_for_grupo(menu, row.get(primary), default_familia)
     return row
 
 

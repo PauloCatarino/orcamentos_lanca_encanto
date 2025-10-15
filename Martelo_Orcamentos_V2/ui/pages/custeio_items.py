@@ -42,7 +42,7 @@ ITALIC_ON_BLK_KEYS = {
     "esp_mp",
 }
 
-MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS | {"mat_default"}
+MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS
 
 HEADER_TOOLTIPS = {
     "descricao_livre": "Texto livre editavel para identificar a linha no custeio.",
@@ -73,11 +73,10 @@ CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
 class CusteioTableView(QtWidgets.QTableView):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
-            if self.state() == QtWidgets.QAbstractItemView.EditingState:
-                editor = self.focusWidget()
-                if editor:
-                    self.commitData(editor)
-                    self.closeEditor(editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+            editor = self.focusWidget()
+            if editor and editor.parent() is self.viewport():
+                self.commitData(editor)
+                self.closeEditor(editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
             next_index = self.moveCursor(QtWidgets.QAbstractItemView.MoveRight, QtCore.Qt.NoModifier)
             if next_index.isValid():
                 self.setCurrentIndex(next_index)
@@ -95,6 +94,7 @@ class NumericLineEditDelegate(QtWidgets.QStyledItemDelegate):
         editor = QtWidgets.QLineEdit(parent)
         editor.setFrame(False)
         editor.setAlignment(QtCore.Qt.AlignRight)
+        editor.setProperty("_custeio_editor", True)
         if self._format == "int":
             validator: QtGui.QValidator = QtGui.QIntValidator(editor)
         else:
@@ -954,6 +954,10 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
             editor.addItem(text)
 
             seen.add(text)
+
+        editor.setProperty("_custeio_editor", True)
+
+        QtCore.QTimer.singleShot(0, editor.showPopup)
 
         return editor
 
@@ -2367,6 +2371,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        try:
+
+            self.session.expire_all()
+
+        except Exception:
+
+            pass
+
         if not (0 <= row_index < self.table_model.rowCount()):
 
             return
@@ -2393,7 +2405,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model.update_row_fields(row_index, updates, skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp"))
 
-        self.table_model.set_blk(row_index, True)
+        row["mat_default"] = selection
 
         self.table_model.recalculate_all()
 
@@ -2407,6 +2419,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        try:
+
+            self.session.expire_all()
+
+        except Exception:
+
+            pass
+
         cache: Dict[str, Any] = {}
 
         for idx, row in enumerate(self.table_model.rows):
@@ -2415,17 +2435,28 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                 continue
 
-            def_peca = (row.get("def_peca") or "").strip()
+            familia_hint = row.get("familia")
+            mat_default = (row.get("mat_default") or "").strip()
 
-            grupo = svc_custeio.grupo_por_def_peca(def_peca)
+            if mat_default:
+
+                grupo = mat_default
+
+            else:
+
+                def_peca = (row.get("def_peca") or "").strip()
+
+                grupo = svc_custeio.grupo_por_def_peca(def_peca)
 
             if not grupo:
 
                 continue
 
-            if grupo not in cache:
+            cache_key = (grupo, familia_hint)
 
-                cache[grupo] = svc_custeio.obter_material_por_grupo(
+            if cache_key not in cache:
+
+                cache[cache_key] = svc_custeio.obter_material_por_grupo(
 
                     self.session,
 
@@ -2433,11 +2464,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                     grupo,
 
-                    row.get("familia"),
+                    familia_hint,
 
                 )
 
-            material = cache[grupo]
+            material = cache[cache_key]
 
             if not material:
 
@@ -2531,7 +2562,23 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.current_orcamento_id = orcamento_id
 
-        self.current_item_id = item_id
+        normalized_item_id = item_id
+
+        if item_id is not None:
+            try:
+                normalized_item_id = int(item_id)
+            except (TypeError, ValueError):
+                normalized_item_id = item_id
+            try:
+                self.session.flush()
+            except Exception:
+                pass
+            try:
+                self.session.expire_all()
+            except Exception:
+                pass
+
+        self.current_item_id = normalized_item_id
 
 
 
@@ -2571,9 +2618,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         item_obj: Optional[OrcamentoItem] = None
 
-        if item_id:
+        if normalized_item_id:
 
-            item_obj = svc_custeio.carregar_item(self.session, item_id)
+            item_obj = svc_custeio.carregar_item(self.session, normalized_item_id)
 
             if item_obj is None:
 
@@ -2591,7 +2638,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                 self.context = svc_custeio.carregar_contexto(
 
-                    self.session, orcamento_id, item_id=getattr(item_obj, "id_item", item_id)
+                    self.session, orcamento_id, item_id=getattr(item_obj, "id_item", normalized_item_id)
 
                 )
 
