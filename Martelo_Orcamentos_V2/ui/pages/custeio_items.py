@@ -75,9 +75,22 @@ class CusteioTableView(QtWidgets.QTableView):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
             editor = self.focusWidget()
-            if editor and editor.parent() is self.viewport():
-                self.commitData(editor)
-                self.closeEditor(editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+            # focusWidget() may return a child widget inside the actual editor
+            # (for example the internal QLineEdit of a QComboBox). We must
+            # find the top-level editor whose parent is the view's viewport
+            # before calling commitData/closeEditor, otherwise Qt warns that
+            # the editor does not belong to this view.
+            top_editor = editor
+            while top_editor is not None and top_editor.parent() is not self.viewport():
+                # Stop climbing if we reached a top-level widget (no parent)
+                parent = top_editor.parent()
+                if parent is None:
+                    break
+                top_editor = parent
+
+            if top_editor and top_editor.parent() is self.viewport():
+                self.commitData(top_editor)
+                self.closeEditor(top_editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
             next_index = self.moveCursor(QtWidgets.QAbstractItemView.MoveRight, QtCore.Qt.NoModifier)
             if next_index.isValid():
                 self.setCurrentIndex(next_index)
@@ -1027,6 +1040,62 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
         return coerced
 
 
+class AcabamentoDelegate(QtWidgets.QStyledItemDelegate):
+    """Delegate para coluna 'acabamento' que preenche um QComboBox com as
+    opções de acabamentos disponíveis para o item em contexto."""
+
+    def __init__(self, parent: Optional[QtCore.QObject] = None, page: Optional["CusteioItemsPage"] = None):
+        super().__init__(parent)
+        self._page = page
+
+    def createEditor(self, parent, option, index):
+        editor = QtWidgets.QComboBox(parent)
+        editor.setEditable(False)
+        editor.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+        editor.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
+
+        # Preencher opções: tenta obter via serviço com session+context, senão usa defaults
+        options: List[str] = []
+        if self._page is not None:
+            session = getattr(self._page, "session", None)
+            ctx = getattr(self._page, "context", None)
+            try:
+                options = svc_custeio.lista_acabamento(session, ctx)
+            except Exception:
+                options = []
+
+        # Sempre incluir uma opção vazia
+        seen = set()
+        editor.addItem("")
+        seen.add("")
+
+        current_value = (index.data(QtCore.Qt.EditRole) or "").strip()
+        if current_value and current_value not in seen:
+            editor.addItem(current_value)
+            seen.add(current_value)
+
+        for opt in options:
+            text = (opt or "").strip()
+            if not text or text in seen:
+                continue
+            editor.addItem(text)
+            seen.add(text)
+
+        editor.setProperty("_custeio_editor", True)
+        QtCore.QTimer.singleShot(0, editor.showPopup)
+        return editor
+
+    def setEditorData(self, editor, index):
+        value = index.data(QtCore.Qt.EditRole) or ""
+        pos = editor.findText(value)
+        if pos >= 0:
+            editor.setCurrentIndex(pos)
+
+    def setModelData(self, editor, model, index):
+        text = editor.currentText().strip()
+        model.setData(index, text, QtCore.Qt.EditRole)
+
+
 
 
 
@@ -1526,6 +1595,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         except ValueError:
 
+            pass
+
+        # Registar delegate para a coluna 'acabamento' (drop-down de acabamentos)
+        try:
+            acb_col = self.table_model.column_keys.index("acabamento")
+            self.table_view.setItemDelegateForColumn(acb_col, AcabamentoDelegate(self.table_view, self))
+        except ValueError:
             pass
 
         self.table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
