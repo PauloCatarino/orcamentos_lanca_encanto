@@ -308,6 +308,7 @@ class ItensPage(QtWidgets.QWidget):
                 else:
                     row_to_select = 0
             if row_to_select is not None:
+                print(f"[Itens.refresh] selecting row {row_to_select} for select_id={select_id}")
                 self.table.selectRow(row_to_select)
         else:
             self._prepare_next_item(focus_codigo=False)
@@ -545,6 +546,7 @@ class ItensPage(QtWidgets.QWidget):
 
         new_row = None
         try:
+            print(f"[Itens.on_save_item] id_item before save: {id_item}")
             if id_item:
                 update_item(
                     self.db,
@@ -580,9 +582,11 @@ class ItensPage(QtWidgets.QWidget):
 
             self.db.commit()
             target_id = getattr(new_row, "id_item", None) or id_item
+            print(f"[Itens.on_save_item] target_id after save: {target_id}")
             self.refresh(select_id=target_id, select_last=target_id is None)
             QMessageBox.information(self, "Sucesso", msg)
             if target_id:
+                print(f"[Itens.on_save_item] emit target_id={target_id}")
                 self.item_selected.emit(target_id)
             self._prepare_next_item()
 

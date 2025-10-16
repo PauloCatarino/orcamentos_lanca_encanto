@@ -19,9 +19,38 @@ from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 TreeNode = Dict[str, Any]
 
 
+ACABAMENTO_DEFAULTS = [
+    "Lacar Face Sup",
+    "Lacar Face Inf",
+    "Lacar 2 Faces",
+    "Verniz Face Sup",
+    "Verniz Face Inf",
+    "Verniz 2 faces",
+    "Acabamento Face Sup 1",
+    "Acabamento Face Sup 2",
+    "Acabamento Face Inf 1",
+    "Acabamento Face Inf 2",
+]
+
+
+def _normalize_token(value: Optional[str]) -> str:
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFKD", str(value).strip())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.casefold()
+
+
+GROUP_LOOKUP: Dict[str, Dict[str, str]] = {}
+for _menu, _groups in svc_dados_items.MENU_FIXED_GROUPS.items():
+    for _name in _groups:
+        GROUP_LOOKUP[_normalize_token(_name)] = {"menu": _menu, "name": _name}
+
+
 TREE_DEFINITION: List[TreeNode] = [
     {
         "label": "COSTAS",
+        "group": "Costas",
         "children": [
             {"label": "COSTA CHAPAR [0000]"},
             {"label": "COSTA CHAPAR [0022]"},
@@ -33,6 +62,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "LATERAIS",
+        "group": "Laterais",
         "children": [
             {"label": "LATERAL [0000]"},
             {"label": "LATERAL [2000]"},
@@ -46,6 +76,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "TETOS",
+        "group": "Tetos",
         "children": [
             {"label": "TETO [0000]"},
             {"label": "TETO [2000]"},
@@ -57,6 +88,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "FUNDOS",
+        "group": "Fundos",
         "children": [
             {"label": "FUNDO [0000]"},
             {"label": "FUNDO [2000]"},
@@ -70,6 +102,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "PRATELEIRAS AMOVIVEIS",
+        "group": "Prateleiras Amoviveis",
         "children": [
             {"label": "PRATELEIRA AMOVIVEL [2000]"},
             {"label": "PRATELEIRA AMOVIVEL [2111]"},
@@ -82,6 +115,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "PRATELEIRAS FIXAS",
+        "group": "Prateleiras Fixas",
         "children": [
             {"label": "PRATELEIRA FIXA [0000]"},
             {"label": "PRATELEIRA FIXA [2000]"},
@@ -92,6 +126,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "GAVETA FRENTE",
+        "group": "Gaveta Frente",
         "children": [
             {"label": "FRENTE GAVETA [2222]"},
             {"label": "FRENTE GAVETA [2222] + PUXADOR"},
@@ -99,6 +134,7 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "GAVETA CAIXA",
+        "group": "Gaveta Caixa",
         "children": [
             {"label": "LATERAL GAVETA [2202]"},
             {"label": "TRASEIRA GAVETA [2000]"},
@@ -106,25 +142,84 @@ TREE_DEFINITION: List[TreeNode] = [
     },
     {
         "label": "GAVETA FUNDO",
+        "group": "Gaveta Fundo",
         "children": [
             {"label": "FUNDO GAVETA [0022]"},
             {"label": "FUNDO GAVETA [0000]"},
         ],
     },
     {
-        "label": "PORTAS ABRIR 1",
+        "label": "REMATES/GUARNICOES",
         "children": [
-            {"label": "PORTA ABRIR [2222]"},
-            {"label": "PORTA ABRIR [2222] + DOBRADICA"},
-            {"label": "PORTA ABRIR [2222] + DOBRADICA + PUXADOR"},
+            {
+                "label": "REMATES VERTICAIS",
+                "group": "Remates Verticais",
+                "children": [
+                    {"label": "REMATE VERTICAL [2200]"},
+                ],
+            },
+            {
+                "label": "RODATETO",
+                "group": "Remates Horizontais",
+                "children": [
+                    {"label": "RODATETO [0000]"},
+                    {"label": "RODATETO [2200]"},
+                    {"label": "RODATETO [2222]"},
+                ],
+            },
+            {
+                "label": "RODAPE AGL",
+                "group": "Rodape AGL",
+                "children": [
+                    {"label": "RODAPE AGL [0000]"},
+                    {"label": "RODAPE AGL [2200]"},
+                    {"label": "RODAPE AGL [2222]"},
+                ],
+            },
+            {
+                "label": "RODAPE PVC/ALUMINIO",
+                "group": "Rodape PVC/Aluminio",
+                "children": [
+                    {"label": "RODAPE PVC/ALUMINIO"},
+                ],
+            },
+            {
+                "label": "ENCHIMENTO GUARNICAO",
+                "group": "Enchimentos Guarnicoes",
+                "children": [
+                    {"label": "ENCHIMENTO GUARNICAO [2000]"},
+                ],
+            },
+            {
+                "label": "GUARNICOES PRODUZIDAS",
+                "group": "Guarnicoes Produzidas",
+                "children": [
+                    {"label": "GUARNICAO PRODUZIDA [2222]"},
+                ],
+            },
+            {
+                "label": "GUARNICOES COMPRA",
+                "group": "Guarnicoes Compra",
+                "children": [
+                    {"label": "GUARNICAO COMPRA L"},
+                ],
+            },
         ],
     },
     {
-        "label": "PAINEIS",
+        "label": "PORTAS ABRIR",
         "children": [
-            {"label": "PAINEL CORRER [0000]"},
-            {"label": "PAINEL CORRER [2222]"},
-            {"label": "PAINEL ESPELHO [2222]"},
+            {"label": "PORTA ABRIR [2222]", "group": "Portas Abrir 1"},
+            {"label": "PORTA ABRIR [2222] + DOBRADICA", "group": "Portas Abrir 1"},
+            {"label": "PORTA ABRIR [2222] + DOBRADICA + PUXADOR", "group": "Portas Abrir 2"},
+        ],
+    },
+    {
+        "label": "PORTAS CORRER",
+        "children": [
+            {"label": "PAINEL CORRER [0000]", "group": "Paineis"},
+            {"label": "PAINEL CORRER [2222]", "group": "Paineis"},
+            {"label": "PAINEL ESPELHO [2222]", "group": "Paineis"},
         ],
     },
     {
@@ -133,177 +228,173 @@ TREE_DEFINITION: List[TreeNode] = [
             {
                 "label": "DOBRADICAS",
                 "children": [
-                    {"label": "DOBRADICA RETA"},
-                    {"label": "DOBRADICA CANTO SEGO"},
-                    {"label": "DOBRADICA ABERTURA TOTAL"},
-                    {"label": "DOBRADICA 1"},
-                    {"label": "DOBRADICA 2"},
+                    {"label": "DOBRADICA RETA", "group": "Dobradica Reta"},
+                    {"label": "DOBRADICA CANTO SEGO", "group": "Dobradica Canto Sego"},
+                    {"label": "DOBRADICA ABERTURA TOTAL", "group": "Dobradica Abertura Total"},
+                    {"label": "DOBRADICA 1", "group": "Dobradica 1"},
+                    {"label": "DOBRADICA 2", "group": "Dobradica 2"},
                 ],
             },
             {
                 "label": "SUPORTES PRATELEIRA",
                 "children": [
-                    {"label": "SUPORTE PRATELEIRA 1"},
-                    {"label": "SUPORTE PRATELEIRA 2"},
-                    {"label": "SUPORTE PAREDE"},
+                    {"label": "SUPORTE PRATELEIRA 1", "group": "Suporte Prateleira 1"},
+                    {"label": "SUPORTE PRATELEIRA 2", "group": "Suporte Prateleira 2"},
+                    {"label": "SUPORTE PAREDE", "group": "Suporte Parede"},
                 ],
             },
             {
                 "label": "SPP (ACESSORIOS AJUSTAVEIS)",
                 "children": [
-                    {"label": "VARAO {SPP}"},
-                    {"label": "PERFIL LAVA LOUCA {SPP}"},
-                    {"label": "RODAPE PVC {SPP}"},
-                    {"label": "PUXADOR GOLA C {SPP}"},
-                    {"label": "PUXADOR GOLA J {SPP}"},
-                    {"label": "PUXADOR PERFIL {SPP} 1"},
-                    {"label": "PUXADOR PERFIL {SPP} 2"},
-                    {"label": "PUXADOR PERFIL {SPP} 3"},
-                    {"label": "CALHA LED {SPP} 1"},
-                    {"label": "CALHA LED {SPP} 2"},
-                    {"label": "FITA LED {SPP} 1"},
-                    {"label": "FITA LED {SPP} 2"},
-                    {"label": "FERRAGENS DIVERSAS {SPP} 6"},
-                    {"label": "FERRAGENS DIVERSAS {SPP} 7"},
-                    {"label": "CALHA SUPERIOR {SPP} 1 CORRER"},
-                    {"label": "CALHA SUPERIOR {SPP} 2 CORRER"},
-                    {"label": "CALHA INFERIOR {SPP} 1 CORRER"},
-                    {"label": "CALHA INFERIOR {SPP} 2 CORRER"},
-                    {"label": "PERFIL HORIZONTAL H {SPP}"},
-            {"label": "PERFIL HORIZONTAL U {SPP}"},
-            {"label": "PERFIL HORIZONTAL L {SPP}"},
-            {"label": "ACESSORIO {SPP} 7 CORRER"},
-            {"label": "ACESSORIO {SPP} 8 CORRER"},
-        ],
+                    {"label": "VARAO {SPP}", "group": "Varao SPP"},
+                    {"label": "PERFIL LAVA LOUCA {SPP}", "group": "Perfil Lava Louca SPP"},
+                    {"label": "RODAPE PVC {SPP}", "group": "Rodape PVC SPP"},
+                    {"label": "PUXADOR GOLA C {SPP}", "group": "Puxador Gola C SPP"},
+                    {"label": "PUXADOR GOLA J {SPP}", "group": "Puxador Gola J SPP"},
+                    {"label": "PUXADOR PERFIL {SPP} 1", "group": "Puxador Perfil SPP 1"},
+                    {"label": "PUXADOR PERFIL {SPP} 2", "group": "Puxador Perfil SPP 2"},
+                    {"label": "PUXADOR PERFIL {SPP} 3", "group": "Puxador Perfil SPP 3"},
+                    {"label": "CALHA LED {SPP} 1", "group": "Calha Led 1 SPP"},
+                    {"label": "CALHA LED {SPP} 2", "group": "Calha Led 2 SPP"},
+                    {"label": "FITA LED {SPP} 1", "group": "Fita Led 1 SPP"},
+                    {"label": "FITA LED {SPP} 2", "group": "Fita Led 2 SPP"},
+                    {"label": "FERRAGENS DIVERSAS {SPP} 6", "group": "Ferragens Diversas 6 SPP"},
+                    {"label": "FERRAGENS DIVERSAS {SPP} 7", "group": "Ferragens Diversas 7 SPP"},
+                    {"label": "CALHA SUPERIOR {SPP} 1 CORRER", "group": "Calha Superior 1 SPP"},
+                    {"label": "CALHA SUPERIOR {SPP} 2 CORRER", "group": "Calha Superior 2 SPP"},
+                    {"label": "CALHA INFERIOR {SPP} 1 CORRER", "group": "Calha Inferior 1 SPP"},
+                    {"label": "CALHA INFERIOR {SPP} 2 CORRER", "group": "Calha Inferior 2 SPP"},
+                    {"label": "PERFIL HORIZONTAL H {SPP}", "group": "Perfil Horizontal H SPP"},
+                    {"label": "PERFIL HORIZONTAL U {SPP}", "group": "Perfil Horizontal U SPP"},
+                    {"label": "PERFIL HORIZONTAL L {SPP}", "group": "Perfil Horizontal L SPP"},
+                    {"label": "ACESSORIO {SPP} 7 CORRER", "group": "Acessorio 7 SPP"},
+                    {"label": "ACESSORIO {SPP} 8 CORRER", "group": "Acessorio 8 SPP"},
+                ],
             },
             {
                 "label": "PUXADORES",
                 "children": [
-                    {"label": "PUXADOR TIC-TAC"},
-                    {"label": "PUXADOR FRESADO J"},
-                    {"label": "PUXADOR STD 1"},
-                    {"label": "PUXADOR STD 2"},
+                    {"label": "PUXADOR TIC-TAC", "group": "Puxador Tic Tac"},
+                    {"label": "PUXADOR FRESADO J", "group": "Puxador Fresado J"},
+                    {"label": "PUXADOR STD 1", "group": "Puxador STD 1"},
+                    {"label": "PUXADOR STD 2", "group": "Puxador STD 2"},
                 ],
             },
             {
                 "label": "CORREDICAS GAVETAS",
                 "children": [
-                    {"label": "CORREDICA INVISIVEL"},
-                    {"label": "CORREDICA LATERAL METALICA"},
-                    {"label": "CORREDICA 1"},
-                    {"label": "CORREDICA 2"},
+                    {"label": "CORREDICA INVISIVEL", "group": "Corredica Invisivel"},
+                    {"label": "CORREDICA LATERAL METALICA", "group": "Corredica Lateral Metalica"},
+                    {"label": "CORREDICA 1", "group": "Corredica 1"},
+                    {"label": "CORREDICA 2", "group": "Corredica 2"},
                 ],
             },
             {
                 "label": "PES",
                 "children": [
-                    {"label": "PES 1"},
-                    {"label": "PES 2"},
-                    {"label": "PES 3"},
+                    {"label": "PES 1", "group": "Pes 1"},
+                    {"label": "PES 2", "group": "Pes 2"},
+                    {"label": "PES 3", "group": "Pes 3"},
                 ],
             },
             {
                 "label": "SISTEMAS ELEVATORIOS",
                 "children": [
-                    {"label": "AVENTOS 1"},
-                    {"label": "AVENTOS 2"},
-                    {"label": "AMORTECEDOR"},
-                    {"label": "SISTEMA BASCULANTE 1"},
-                    {"label": "SISTEMA BASCULANTE 2"},
+                    {"label": "AVENTOS 1", "group": "Aventos 1"},
+                    {"label": "AVENTOS 2", "group": "Aventos 2"},
+                    {"label": "AMORTECEDOR", "group": "Amortecedor"},
+                    {"label": "SISTEMA BASCULANTE 1", "group": "Sistema Basculante 1"},
+                    {"label": "SISTEMA BASCULANTE 2", "group": "Sistema Basculante 2"},
                 ],
             },
             {
                 "label": "ILUMINACAO",
                 "children": [
-                    {"label": "TRANSFORMADOR 1"},
-                    {"label": "TRANSFORMADOR 2"},
-                    {"label": "SENSOR LED 1"},
-                    {"label": "SENSOR LED 2"},
-                    {"label": "SENSOR LED 3"},
-                    {"label": "ILUMINACAO 1"},
-                    {"label": "ILUMINACAO 2"},
-                    {"label": "ILUMINACAO 3"},
-                    {"label": "CABOS LED 1"},
-                    {"label": "CABOS LED 2"},
-                    {"label": "CABOS LED 3"},
+                    {"label": "TRANSFORMADOR 1", "group": "Transformador 1"},
+                    {"label": "TRANSFORMADOR 2", "group": "Transformador 2"},
+                    {"label": "SENSOR LED 1", "group": "Sensor LED 1"},
+                    {"label": "SENSOR LED 2", "group": "Sensor LED 2"},
+                    {"label": "SENSOR LED 3", "group": "Sensor LED 3"},
+                    {"label": "ILUMINACAO 1", "group": "Iluminacao 1"},
+                    {"label": "ILUMINACAO 2", "group": "Iluminacao 2"},
+                    {"label": "ILUMINACAO 3", "group": "Iluminacao 3"},
+                    {"label": "CABOS LED 1", "group": "Cabos Led 1"},
+                    {"label": "CABOS LED 2", "group": "Cabos Led 2"},
+                    {"label": "CABOS LED 3", "group": "Cabos Led 3"},
                 ],
             },
             {
                 "label": "COZINHAS",
                 "children": [
-                    {"label": "BALDE LIXO"},
-                    {"label": "CESTO CANTO FEIJAO"},
-                    {"label": "CESTO CANTO 1"},
-                    {"label": "CESTO CANTO 2"},
-                    {"label": "PORTA TALHERES"},
-                    {"label": "PORTA GARRAFAS"},
-                    {"label": "TULHA 1"},
-                    {"label": "TULHA 2"},
-                    {"label": "FUNDO ALUMINIO 1"},
-                    {"label": "FUNDO ALUMINIO 2"},
-                    {"label": "FUNDO PLASTICO FIGORIFICO"},
-                    {"label": "SALVA SIFAO"},
-                    {"label": "ACESSORIO COZINHA 1"},
-                    {"label": "ACESSORIO COZINHA 2"},
-                    {"label": "ACESSORIO COZINHA 3"},
+                    {"label": "BALDE LIXO", "group": "Balde Lixo"},
+                    {"label": "CESTO CANTO FEIJAO 1", "group": "Cesto Canto Feijao"},
+                    {"label": "CANTO COZINHA 1", "group": "Canto Cozinha 1"},
+                    {"label": "CANTO COZINHA 2", "group": "Canto Cozinha 2"},
+                    {"label": "PORTA TALHERES", "group": "Porta Talheres"},
+                    {"label": "TULHA 1", "group": "Tulha 1"},
+                    {"label": "TULHA 2", "group": "Tulha 2"},
+                    {"label": "FUNDO ALUMINIO 1", "group": "Fundo Aluminio 1"},
+                    {"label": "FUNDO ALUMINIO 2", "group": "Fundo Aluminio 2"},
+                    {"label": "FUNDO PLASTICO FRIGORIFICO", "group": "Fundo Plastico Frigorifico"},
+                    {"label": "SALVA SIFAO", "group": "Salva Sifao"},
                 ],
             },
             {
                 "label": "ROUPEIROS",
                 "children": [
-                    {"label": "PORTA CALCAS"},
-                    {"label": "VARAO TROMBONE"},
-                    {"label": "VARAO EXTENSIVEL"},
-                    {"label": "GRELHA VELUDO"},
-                    {"label": "SAPATEIRA"},
+                    {"label": "PORTA CALCAS", "group": "Porta Calcas"},
+                    {"label": "VARAO TROMBONE", "group": "Varao Trombone"},
+                    {"label": "VARAO EXTENSIVEL", "group": "Varao Extensivel"},
+                    {"label": "GRELHA VELUDO", "group": "Grelha Veludo"},
                 ],
             },
             {
                 "label": "FERRAGENS DIVERSAS {FERRAGENS}",
                 "children": [
-                    {"label": "FERRAGENS DIVERSAS 1"},
-                    {"label": "FERRAGENS DIVERSAS 2"},
-                    {"label": "FERRAGENS DIVERSAS 3"},
-                    {"label": "FERRAGENS DIVERSAS 4"},
-                    {"label": "FERRAGENS DIVERSAS 5"},
+                    {"label": "FERRAGENS DIVERSAS 1", "group": "Ferragens Diversas 1"},
+                    {"label": "FERRAGENS DIVERSAS 2", "group": "Ferragens Diversas 2"},
+                    {"label": "FERRAGENS DIVERSAS 3", "group": "Ferragens Diversas 3"},
+                    {"label": "FERRAGENS DIVERSAS 4", "group": "Ferragens Diversas 4"},
+                    {"label": "FERRAGENS DIVERSAS 5", "group": "Ferragens Diversas 5"},
                 ],
             },
             {
                 "label": "UNIOES CANTO SPP",
                 "children": [
-                    {"label": "SUPORTE TERMINAL VARAO"},
-                    {"label": "SUPORTE CENTRAL VARAO"},
-                    {"label": "TERMINAL PERFIL LAVA LOUCA"},
-                    {"label": "CANTO RODAPE PVC"},
-                    {"label": "GRAMPAS RODAPE PVC"},
+                    {"label": "SUPORTE TERMINAL VARAO", "group": "Suporte Terminal Varao"},
+                    {"label": "SUPORTE CENTRAL VARAO", "group": "Suporte Central Varao"},
+                    {"label": "TERMINAL PERFIL LAVA LOUCA", "group": "Terminal Perfil Lava Louca"},
+                    {"label": "CANTO RODAPE PVC", "group": "Canto Rodape PVC"},
+                    {"label": "GRAMPAS RODAPE PVC", "group": "Grampas Rodape PVC"},
                 ],
             },
             {
                 "label": "SISTEMAS CORRER",
                 "children": [
-                    {"label": "PUXADOR VERTICAL 1"},
-                    {"label": "PUXADOR VERTICAL 2"},
-                    {"label": "RODIZIO SUPERIOR 1"},
-                    {"label": "RODIZIO SUPERIOR 2"},
-                    {"label": "RODIZIO INFERIOR 1"},
-                    {"label": "RODIZIO INFERIOR 2"},
+                    {"label": "PUXADOR VERTICAL 1", "group": "Puxador Vertical 1"},
+                    {"label": "PUXADOR VERTICAL 2", "group": "Puxador Vertical 2"},
+                    {"label": "RODIZIO SUP 1", "group": "Rodizio Sup 1"},
+                    {"label": "RODIZIO SUP 2", "group": "Rodizio Sup 2"},
+                    {"label": "RODIZIO INF 1", "group": "Rodizio Inf 1"},
+                    {"label": "RODIZIO INF 2", "group": "Rodizio Inf 2"},
+                    {"label": "ACESSORIO 1 CORRER", "group": "Acessorio 1"},
+                    {"label": "ACESSORIO 2 CORRER", "group": "Acessorio 2"},
+                    {"label": "ACESSORIO 3 CORRER", "group": "Acessorio 3"},
+                    {"label": "ACESSORIO 4 CORRER", "group": "Acessorio 4"},
+                    {"label": "ACESSORIO 5 CORRER", "group": "Acessorio 5"},
+                    {"label": "ACESSORIO 6 CORRER", "group": "Acessorio 6"},
                 ],
             },
             {
                 "label": "FERRAGENS DIVERSAS {SISTEMAS CORRER}",
                 "children": [
-                    {"label": "ACESSORIO 1 CORRER"},
-                    {"label": "ACESSORIO 2 CORRER"},
-                    {"label": "ACESSORIO 3 CORRER"},
-                    {"label": "ACESSORIO 4 CORRER"},
-                    {"label": "ACESSORIO 5 CORRER"},
-                    {"label": "ACESSORIO 6 CORRER"},
+                    {"label": "ACESSORIO 7 SPP", "group": "Acessorio 7 SPP"},
+                    {"label": "ACESSORIO 8 SPP", "group": "Acessorio 8 SPP"},
                 ],
             },
         ],
     },
 ]
-
 
 CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "id", "label": "id", "type": "int", "editable": False},
@@ -321,6 +412,7 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "blk", "label": "BLK", "type": "bool", "editable": True},
     {"key": "nst", "label": "NST", "type": "bool", "editable": True},
     {"key": "mat_default", "label": "Mat_Default", "type": "text", "editable": True},
+    {"key": "acabamento", "label": "Acabamento", "type": "text", "editable": True},
     {"key": "qt_total", "label": "Qt_Total", "type": "numeric", "editable": False, "format": "two"},
     {"key": "comp_res", "label": "comp_res", "type": "numeric", "editable": False, "format": "int"},
     {"key": "larg_res", "label": "larg_res", "type": "numeric", "editable": False, "format": "int"},
@@ -379,10 +471,7 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
 ]
 
 
-MATERIAL_GROUP_LOOKUP = {
-    name.upper(): name
-    for name in svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_MATERIAIS, ())
-}
+
 
 
 def _normalize_token(value: Optional[str]) -> str:
@@ -418,23 +507,24 @@ def _menu_for_familia(familia: Optional[str]) -> Optional[str]:
 def _build_leaf_lookup() -> Dict[str, str]:
     mapping: Dict[str, str] = {}
 
-    def _walk(node: Dict[str, Any], parent: Optional[str] = None) -> None:
+    def _walk(node: Dict[str, Any], inherited_group: Optional[str]) -> None:
         label = str(node.get("label", "")).strip()
         if not label:
             return
+        group = node.get("group") or inherited_group
         children = node.get("children") or []
-        if not parent:
-            parent_label = label
-        else:
-            parent_label = parent
         if children:
             for child in children:
-                _walk(child, parent_label)
+                _walk(child, group)
         else:
-            mapping[label.upper()] = parent_label
+            if group:
+                mapping[label.upper()] = group
+            else:
+                mapping[label.upper()] = label
 
     for entry in TREE_DEFINITION:
-        _walk(entry, None)
+        initial_group = entry.get("group") or entry.get("label")
+        _walk(entry, initial_group)
     return mapping
 
 
@@ -451,7 +541,7 @@ def _grupo_label_from_material(material: Any) -> Optional[str]:
     return None
 
 
-def _collect_mat_default_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:
+def _collect_group_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:
     model = svc_dados_items.MODEL_MAP.get(menu)
     if not model:
         return []
@@ -665,12 +755,8 @@ def gerar_linhas_para_selecoes(
         linha["descricao_livre"] = ""
         linha["def_peca"] = parts[-1]
 
-        topo = parts[0].upper()
-        grupo = MATERIAL_GROUP_LOOKUP.get(topo)
-        if grupo:
-            material = _obter_material(session, ctx, grupo)
-        else:
-            material = None
+        grupo = grupo_por_def_peca(linha["def_peca"])
+        material = obter_material_por_grupo(session, ctx, grupo)
 
         if material:
             _preencher_linha_com_material(linha, material, grupo)
@@ -749,22 +835,26 @@ def lista_mat_default(
     if session and ctx:
         menu = _menu_for_familia(familia)
         if menu:
-            return _collect_mat_default_options(session, ctx, menu)
+            valores = _collect_group_options(session, ctx, menu)
+            if valores:
+                return valores
 
-        agregado: List[str] = []
-        vistos: Set[str] = set()
-        for menu_key in set(FAMILIA_MENU_ALIASES.values()):
-            opcoes = _collect_mat_default_options(session, ctx, menu_key)
-            for opcao in opcoes:
-                token = _normalize_token(opcao)
-                if token in vistos:
-                    continue
-                vistos.add(token)
-                agregado.append(opcao)
-        if agregado:
-            return agregado
+    menu = _menu_for_familia(familia)
+    if menu:
+        return list(svc_dados_items.MENU_FIXED_GROUPS.get(menu, ()))
 
-    return sorted(set(MATERIAL_GROUP_LOOKUP.values()))
+    return list(svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_MATERIAIS, ()))
+
+
+def lista_acabamento(
+    session: Optional[Session] = None,
+    ctx: Optional[svc_dados_items.DadosItemsContext] = None,
+) -> List[str]:
+    if session and ctx:
+        valores = _collect_group_options(session, ctx, svc_dados_items.MENU_ACABAMENTOS)
+        if valores:
+            return valores
+    return list(ACABAMENTO_DEFAULTS)
 
 
 def obter_material_por_grupo(
@@ -811,13 +901,23 @@ def dados_material(material: Any) -> Dict[str, Any]:
     return linha
 
 
+def _group_info(grupo: Optional[str]) -> Optional[Dict[str, str]]:
+    if not grupo:
+        return None
+    return GROUP_LOOKUP.get(_normalize_token(grupo))
+
+
+
 def grupo_por_def_peca(def_peca: str) -> Optional[str]:
     if not def_peca:
         return None
     chave = LEAF_TO_GROUP.get(def_peca.strip().upper())
     if not chave:
         return None
-    return MATERIAL_GROUP_LOOKUP.get(chave.upper(), chave)
+    info = _group_info(chave)
+    if info:
+        return info["name"]
+    return chave
 
 
 

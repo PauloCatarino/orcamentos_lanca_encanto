@@ -19,6 +19,7 @@ from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
+from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 
 
@@ -2564,6 +2565,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         normalized_item_id = item_id
 
+        try:
+            self.session.rollback()
+        except Exception:
+            pass
+
         if item_id is not None:
             try:
                 normalized_item_id = int(item_id)
@@ -2582,6 +2588,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+        print(f"[Custeio.load_item] orcamento_id={orcamento_id} item_id={item_id}")
         if not orcamento_id:
 
             self.context = None
@@ -2621,10 +2628,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if normalized_item_id:
 
             item_obj = svc_custeio.carregar_item(self.session, normalized_item_id)
-
+            print(f"[Custeio.load_item] fetched item_obj id={getattr(item_obj, 'id_item', None) if item_obj else None}")
             if item_obj is None:
 
                 QtWidgets.QMessageBox.warning(self, "Aviso", "Item nao encontrado para o orcamento selecionado.")
+                ids = self.session.execute(select(OrcamentoItem.id_item).where(OrcamentoItem.id_orcamento == orcamento_id)).scalars().all()
+                print(f'[Custeio.load_item] available ids={ids}')
 
 
 

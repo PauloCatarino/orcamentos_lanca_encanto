@@ -52,6 +52,7 @@ class CusteioItem(CusteioContextMixin, Base):
     blk = Column(Boolean, nullable=False, default=False)
     nst = Column(Boolean, nullable=False, default=False)
     mat_default = Column(String(128), nullable=True)
+    acabamento = Column(String(128), nullable=True)
     qt_total = Column(Numeric(18, 4), nullable=True)
     comp_res = Column(Numeric(18, 4), nullable=True)
     larg_res = Column(Numeric(18, 4), nullable=True)
