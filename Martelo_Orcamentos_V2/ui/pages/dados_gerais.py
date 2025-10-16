@@ -3417,11 +3417,23 @@ class DadosGeraisPage(QtWidgets.QWidget):
         except Exception:
             pass
 
-        try:
-            ctx = self.svc.carregar_contexto(self.session, orcamento_id)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar contexto: {exc}")
-            return
+        ctx = None
+
+        if item_id is not None:
+            try:
+                ctx = self.svc.carregar_contexto(self.session, orcamento_id, item_id=item_id)
+            except TypeError:
+                ctx = None
+            except Exception as exc:
+                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar contexto: {exc}")
+                return
+
+        if ctx is None:
+            try:
+                ctx = self.svc.carregar_contexto(self.session, orcamento_id)
+            except Exception as exc:
+                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar contexto: {exc}")
+                return
 
         self.context = ctx
         self._update_dimensions_labels(visible=False)
