@@ -3408,11 +3408,16 @@ class DadosGeraisPage(QtWidgets.QWidget):
     def load_orcamento(self, orcamento_id: int, *, item_id: Optional[int] = None) -> None:
 
         try:
-            if item_id is None:
-                ctx = self.svc.carregar_contexto(self.session, orcamento_id)
-            else:
-                ctx = self.svc.carregar_contexto(self.session, orcamento_id, item_id=item_id)
-        except TypeError:
+            self.session.flush()
+        except Exception:
+            pass
+
+        try:
+            self.session.expire_all()
+        except Exception:
+            pass
+
+        try:
             ctx = self.svc.carregar_contexto(self.session, orcamento_id)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar contexto: {exc}")
