@@ -276,7 +276,12 @@ class ItensPage(QtWidgets.QWidget):
 
         self.refresh()
 
-    def refresh(self, select_row: Optional[int] = None, select_last: bool = False):
+    def refresh(
+        self,
+        select_row: Optional[int] = None,
+        select_last: bool = False,
+        select_id: Optional[int] = None,
+    ):
         """Atualiza a tabela; se vazia, prepara pr?ximo item."""
         if not self._orc_id:
             self.model.set_rows([])
@@ -288,13 +293,22 @@ class ItensPage(QtWidgets.QWidget):
         self._apply_row_height()
 
         if rows:
-            if select_row is not None:
-                row_to_select = max(0, min(select_row, len(rows) - 1))
-            elif select_last:
-                row_to_select = len(rows) - 1
-            else:
-                row_to_select = 0
-            self.table.selectRow(row_to_select)
+            row_to_select: Optional[int] = None
+            if select_id is not None:
+                for idx, row in enumerate(rows):
+                    rid = getattr(row, "id_item", None)
+                    if rid == select_id:
+                        row_to_select = idx
+                        break
+            if row_to_select is None:
+                if select_row is not None:
+                    row_to_select = max(0, min(select_row, len(rows) - 1))
+                elif select_last:
+                    row_to_select = len(rows) - 1
+                else:
+                    row_to_select = 0
+            if row_to_select is not None:
+                self.table.selectRow(row_to_select)
         else:
             self._prepare_next_item(focus_codigo=False)
 
@@ -529,6 +543,7 @@ class ItensPage(QtWidgets.QWidget):
             QMessageBox.critical(self, "Erro", str(e))
             return
 
+        new_row = None
         try:
             if id_item:
                 update_item(
@@ -547,7 +562,7 @@ class ItensPage(QtWidgets.QWidget):
                 )
                 msg = "Item atualizado com sucesso."
             else:
-                create_item(
+                new_row = create_item(
                     self.db,
                     self._orc_id,
                     versao=versao_norm,
@@ -564,8 +579,11 @@ class ItensPage(QtWidgets.QWidget):
                 msg = "Item gravado com sucesso."
 
             self.db.commit()
-            self.refresh(select_last=True)
+            target_id = getattr(new_row, "id_item", None) or id_item
+            self.refresh(select_id=target_id, select_last=target_id is None)
             QMessageBox.information(self, "Sucesso", msg)
+            if target_id:
+                self.item_selected.emit(target_id)
             self._prepare_next_item()
 
         except Exception as e:
