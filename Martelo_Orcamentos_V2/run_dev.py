@@ -30,7 +30,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "352"
+git commit -m "353"
 git push origin main
 
 '''
@@ -47,7 +47,7 @@ def main():
     login = LoginDialog()
     if login.exec() == QtWidgets.QDialog.Accepted:
         mw = MainWindow(current_user=login.current_user)
-        mw.show()
+        mw.showMaximized()
         sys.exit(app.exec())
 
 

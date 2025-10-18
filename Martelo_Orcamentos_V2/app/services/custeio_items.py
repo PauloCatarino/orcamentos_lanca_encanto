@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 import unicodedata
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
 
@@ -151,59 +152,17 @@ TREE_DEFINITION: List[TreeNode] = [
     {
         "label": "REMATES/GUARNICOES",
         "children": [
-            {
-                "label": "REMATES VERTICAIS",
-                "group": "Remates Verticais",
-                "children": [
-                    {"label": "REMATE VERTICAL [2200]"},
-                ],
-            },
-            {
-                "label": "RODATETO",
-                "group": "Remates Horizontais",
-                "children": [
-                    {"label": "RODATETO [0000]"},
-                    {"label": "RODATETO [2200]"},
-                    {"label": "RODATETO [2222]"},
-                ],
-            },
-            {
-                "label": "RODAPE AGL",
-                "group": "Rodape AGL",
-                "children": [
-                    {"label": "RODAPE AGL [0000]"},
-                    {"label": "RODAPE AGL [2200]"},
-                    {"label": "RODAPE AGL [2222]"},
-                ],
-            },
-            {
-                "label": "RODAPE PVC/ALUMINIO",
-                "group": "Rodape PVC/Aluminio",
-                "children": [
-                    {"label": "RODAPE PVC/ALUMINIO"},
-                ],
-            },
-            {
-                "label": "ENCHIMENTO GUARNICAO",
-                "group": "Enchimentos Guarnicoes",
-                "children": [
-                    {"label": "ENCHIMENTO GUARNICAO [2000]"},
-                ],
-            },
-            {
-                "label": "GUARNICOES PRODUZIDAS",
-                "group": "Guarnicoes Produzidas",
-                "children": [
-                    {"label": "GUARNICAO PRODUZIDA [2222]"},
-                ],
-            },
-            {
-                "label": "GUARNICOES COMPRA",
-                "group": "Guarnicoes Compra",
-                "children": [
-                    {"label": "GUARNICAO COMPRA L"},
-                ],
-            },
+            {"label": "REMATE VERTICAL [2200]", "group": "Remates Verticais"},
+            {"label": "RODATETO [0000]", "group": "Remates Horizontais"},
+            {"label": "RODATETO [2200]", "group": "Remates Horizontais"},
+            {"label": "RODATETO [2222]", "group": "Remates Horizontais"},
+            {"label": "RODAPE AGL [0000]", "group": "Rodape AGL"},
+            {"label": "RODAPE AGL [2200]", "group": "Rodape AGL"},
+            {"label": "RODAPE AGL [2222]", "group": "Rodape AGL"},
+            {"label": "RODAPE PVC/ALUMINIO", "group": "Rodape PVC/Aluminio"},
+            {"label": "ENCHIMENTO GUARNICAO [2000]", "group": "Enchimentos Guarnicoes"},
+            {"label": "GUARNICAO PRODUZIDA [2222]", "group": "Guarnicoes Produzidas"},
+            {"label": "GUARNICAO COMPRA L", "group": "Guarnicoes Compra"},
         ],
     },
     {
@@ -429,10 +388,10 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "comp_mp", "label": "comp_mp", "type": "numeric", "editable": True, "format": "int"},
     {"key": "larg_mp", "label": "larg_mp", "type": "numeric", "editable": True, "format": "int"},
     {"key": "esp_mp", "label": "esp_mp", "type": "numeric", "editable": True, "format": "int"},
-    {"key": "orl_c1", "label": "ORL_C1", "type": "numeric", "editable": True, "format": "two"},
-    {"key": "orl_c2", "label": "ORL_C2", "type": "numeric", "editable": True, "format": "two"},
-    {"key": "orl_l1", "label": "ORL_L1", "type": "numeric", "editable": True, "format": "two"},
-    {"key": "orl_l2", "label": "ORL_L2", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "orl_c1", "label": "ORL_C1", "type": "numeric", "editable": True, "format": "one"},
+    {"key": "orl_c2", "label": "ORL_C2", "type": "numeric", "editable": True, "format": "one"},
+    {"key": "orl_l1", "label": "ORL_L1", "type": "numeric", "editable": True, "format": "one"},
+    {"key": "orl_l2", "label": "ORL_L2", "type": "numeric", "editable": True, "format": "one"},
     {"key": "ml_orl_c1", "label": "ML_ORL_C1", "type": "numeric", "editable": False, "format": "two"},
     {"key": "ml_orl_c2", "label": "ML_ORL_C2", "type": "numeric", "editable": False, "format": "two"},
     {"key": "ml_orl_l1", "label": "ML_ORL_L1", "type": "numeric", "editable": False, "format": "two"},
@@ -669,6 +628,114 @@ def _normalise_string(value: Optional[str]) -> Optional[str]:
     return stripped or None
 
 
+_ORLA_PATTERN = re.compile(r"\[(\d{4})]")
+
+
+def _format_orla_value(valor: Any) -> Optional[str]:
+    if valor in (None, "", False):
+        return None
+    try:
+        if isinstance(valor, Decimal):
+            dec = valor
+        else:
+            dec = Decimal(str(valor).replace(",", "."))
+        dec = dec.quantize(Decimal("0.1"))
+    except Exception:
+        return None
+    return f"{dec:.1f}"
+
+
+def _build_orla_lookup(session: Session) -> Dict[str, str]:
+    stmt = select(
+        MateriaPrima.descricao_orcamento,
+        MateriaPrima.esp_mp,
+        MateriaPrima.familia,
+    )
+    mapping: Dict[str, str] = {}
+    for descricao, espessura, familia in session.execute(stmt):
+        familia_norm = (str(familia).strip().casefold() if familia else "")
+        if familia_norm != "orlas":
+            continue
+        chave = (descricao or "").strip().casefold()
+        if not chave:
+            continue
+        formato = _format_orla_value(espessura)
+        if formato:
+            mapping[chave] = formato
+    return mapping
+
+
+def obter_mapa_orlas(session: Session) -> Dict[str, str]:
+    return _build_orla_lookup(session)
+
+
+def _resolver_espessura_orla(
+    codigo: str,
+    linha: Mapping[str, Any],
+    lookup: Mapping[str, str],
+) -> Optional[float]:
+    codigo = (codigo or "0").strip()
+    if not codigo or codigo == "0":
+        return None
+    if codigo == "1":
+        descricao = linha.get("orl_0_4")
+        fallback = "0.4"
+    elif codigo == "2":
+        descricao = linha.get("orl_1_0")
+        fallback = "1.0"
+    else:
+        return None
+    chave = (descricao or "").strip().casefold()
+    valor = lookup.get(chave)
+    if not valor:
+        valor = fallback
+    try:
+        return float(str(valor).replace(",", "."))
+    except Exception:
+        try:
+            return float(fallback)
+        except Exception:
+            return None
+
+
+def _aplicar_orla_espessuras(
+    linha: Dict[str, Any],
+    lookup: Mapping[str, str],
+) -> Dict[str, Optional[float]]:
+    resultado: Dict[str, Optional[float]] = {
+        "orl_c1": None,
+        "orl_c2": None,
+        "orl_l1": None,
+        "orl_l2": None,
+    }
+    def_peca = (linha.get("def_peca") or "")
+    match = _ORLA_PATTERN.search(def_peca)
+    if not match:
+        linha.update(resultado)
+        return resultado
+    codigo = match.group(1)
+    posicoes = [
+        ("orl_c1", 0),
+        ("orl_c2", 1),
+        ("orl_l1", 2),
+        ("orl_l2", 3),
+    ]
+    for chave, idx in posicoes:
+        digito = codigo[idx] if idx < len(codigo) else "0"
+        resultado[chave] = _resolver_espessura_orla(digito, linha, lookup)
+    linha.update(resultado)
+    return resultado
+
+
+def calcular_espessuras_orla(session: Session, linha: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    lookup = _build_orla_lookup(session)
+    return _aplicar_orla_espessuras(linha, lookup)
+
+
+def aplicar_espessuras_orla(linha: Dict[str, Any], lookup: Mapping[str, str]) -> Dict[str, Optional[float]]:
+    return _aplicar_orla_espessuras(linha, lookup)
+
+
 def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[int]) -> List[Dict[str, Any]]:
     if not item_id:
         return []
@@ -684,6 +751,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
     registros = session.execute(stmt).scalars().all()
 
     linhas: List[Dict[str, Any]] = []
+    orla_lookup = _build_orla_lookup(session)
     for registro in registros:
         linha = _empty_row()
         linha["id"] = registro.id
@@ -698,6 +766,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
                 linha[key] = bool(valor)
             else:
                 linha[key] = valor
+        _aplicar_orla_espessuras(linha, orla_lookup)
         linhas.append(linha)
 
     return linhas
@@ -746,6 +815,7 @@ def gerar_linhas_para_selecoes(
     selecoes: Sequence[str],
 ) -> List[Dict[str, Any]]:
     linhas: List[Dict[str, Any]] = []
+    orla_lookup = _build_orla_lookup(session)
     for selecao in selecoes:
         parts = [p.strip() for p in selecao.split(">") if p.strip()]
         if not parts:
@@ -762,6 +832,11 @@ def gerar_linhas_para_selecoes(
             _preencher_linha_com_material(linha, material, grupo)
         else:
             linha["descricao"] = linha["def_peca"]
+        if linha.get("qt_mod") in (None, 0):
+            linha["qt_mod"] = 1
+        if linha.get("qt_und") in (None, 0):
+            linha["qt_und"] = 1
+        _aplicar_orla_espessuras(linha, orla_lookup)
         linhas.append(linha)
 
     return linhas

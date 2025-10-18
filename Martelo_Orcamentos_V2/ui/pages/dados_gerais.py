@@ -1763,7 +1763,7 @@ class MateriaPrimaPicker(QDialog):
 
 
 
-        self.resize(1200, 700)
+        self.resize(1400, 700)
 
 
 
@@ -1811,14 +1811,6 @@ class MateriaPrimaPicker(QDialog):
 
 
 
-        search_layout.addWidget(btn_search)
-
-
-
-        search_layout.addWidget(btn_clear)
-
-
-
 
 
 
@@ -1827,7 +1819,7 @@ class MateriaPrimaPicker(QDialog):
 
 
 
-        self.lbl_filters.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_filters.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
 
 
@@ -1966,7 +1958,29 @@ class MateriaPrimaPicker(QDialog):
 
 
 
+        header = self.table.horizontalHeader()
 
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+
+        header.setStretchLastSection(False)
+
+        self.table.setColumnWidth(0, 120)
+
+        self.table.setColumnWidth(1, 420)
+
+        controls_row = QHBoxLayout()
+
+        controls_row.setContentsMargins(0, 0, 0, 0)
+
+        controls_row.setSpacing(6)
+
+        controls_row.addWidget(btn_search)
+
+        controls_row.addWidget(btn_clear)
+
+        controls_row.addSpacing(12)
+
+        controls_row.addWidget(self.lbl_filters, 1)
 
 
 
@@ -1974,7 +1988,7 @@ class MateriaPrimaPicker(QDialog):
 
 
 
-        layout.addWidget(self.lbl_filters)
+        layout.addLayout(controls_row)
 
 
 
@@ -2864,13 +2878,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        self.btn_guardar = QPushButton(self.save_button_text)
-
-        self.btn_guardar.setIcon(self._standard_icon("save"))
-
-        self.btn_guardar.clicked.connect(self.on_guardar)
-
-        grid.addWidget(self.btn_guardar, 0, 4, 1, 2, alignment=Qt.AlignRight)
+        # Botão global de guardar movido para a barra de ferramentas de cada separador.
 
 
 
@@ -2891,6 +2899,10 @@ class DadosGeraisPage(QtWidgets.QWidget):
         self.models: Dict[str, DadosGeraisTableModel] = {}
 
         self.tables: Dict[str, QTableView] = {}
+
+        self._save_buttons: List[QtWidgets.QPushButton] = []
+
+        self.btn_guardar: Optional[QtWidgets.QPushButton] = None
 
 
 
@@ -2956,6 +2968,22 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+            btn_guardar_tab = QPushButton(self.save_button_text)
+
+            btn_guardar_tab.setIcon(self._standard_icon("save"))
+
+            btn_guardar_tab.clicked.connect(self.on_guardar)
+
+            toolbar.addWidget(btn_guardar_tab)
+
+            self._save_buttons.append(btn_guardar_tab)
+
+            if self.btn_guardar is None:
+
+                self.btn_guardar = btn_guardar_tab
+
+
+
             toolbar.addStretch(1)
 
 
@@ -2973,6 +3001,14 @@ class DadosGeraisPage(QtWidgets.QWidget):
             table.setItemDelegate(DadosGeraisDelegate(table))
 
             table.horizontalHeader().setStretchLastSection(False)
+
+            table.setStyleSheet(
+
+                "QTableView::item:selected{background-color:#d0d0d0;color:#000000;}"
+
+                "QTableView::item:selected:!active{background-color:#d0d0d0;color:#000000;}"
+
+            )
 
             table.setSortingEnabled(True)
 

@@ -63,6 +63,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.list.currentRowChanged.connect(self.on_menu_changed)
         self.pg_orc.orcamento_aberto.connect(self.on_abrir_orcamento)
 
+        self.list.setCurrentRow(0)
+        self.stack.setCurrentIndex(0)
+
         central = QtWidgets.QWidget()
         layout = QtWidgets.QHBoxLayout(central)
         layout.addWidget(self.list)

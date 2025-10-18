@@ -60,6 +60,9 @@ class ClientesPage(QtWidgets.QWidget):
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setStretchLastSection(False)
         self.table.selectionModel().selectionChanged.connect(self.load_selected)
 
         # Formulário de edição
@@ -91,6 +94,10 @@ class ClientesPage(QtWidgets.QWidget):
         btn_new = QtWidgets.QPushButton("Inserir novo Cliente")
         btn_save = QtWidgets.QPushButton("Gravar Cliente")
         btn_del = QtWidgets.QPushButton("Eliminar Cliente")
+        style = self.style()
+        btn_new.setIcon(style.standardIcon(QStyle.SP_FileIcon))
+        btn_save.setIcon(style.standardIcon(QStyle.SP_DialogSaveButton))
+        btn_del.setIcon(style.standardIcon(QStyle.SP_TrashIcon))
         btn_new.clicked.connect(self.on_new)
         btn_save.clicked.connect(self.on_save)
         btn_del.clicked.connect(self.on_delete)
@@ -115,8 +122,10 @@ class ClientesPage(QtWidgets.QWidget):
         splitter = QtWidgets.QSplitter()
         splitter.addWidget(left)
         splitter.addWidget(right)
-        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(0, 8)
         splitter.setStretchFactor(1, 3)
+        splitter.setSizes([1100, 420])
+        right.setMaximumWidth(520)
 
         lay = QtWidgets.QVBoxLayout(self)
         lay.addWidget(splitter)

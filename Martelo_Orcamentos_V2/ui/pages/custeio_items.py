@@ -70,6 +70,53 @@ HEADER_TOOLTIPS = {
 
 CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
 
+COLUMN_WIDTH_DEFAULTS = {
+    "id": 55,
+    "descricao_livre": 170,
+    "def_peca": 170,
+    "descricao": 200,
+    "qt_mod": 110,
+    "qt_und": 90,
+    "comp": 70,
+    "larg": 70,
+    "esp": 70,
+    "mps": 55,
+    "mo": 55,
+    "orla": 55,
+    "blk": 50,
+    "nst": 55,
+    "mat_default": 150,
+    "acabamento": 150,
+    "qt_total": 90,
+    "comp_res": 80,
+    "larg_res": 80,
+    "esp_res": 80,
+    "ref_le": 120,
+    "descricao_no_orcamento": 200,
+    "pliq": 90,
+    "und": 70,
+    "desp": 80,
+    "orl_0_4": 130,
+    "orl_1_0": 130,
+    "tipo": 120,
+    "familia": 120,
+    "comp_mp": 90,
+    "larg_mp": 90,
+    "esp_mp": 90,
+    "orl_c1": 70,
+    "orl_c2": 70,
+    "orl_l1": 70,
+    "orl_l2": 70,
+    "ml_orl_c1": 100,
+    "ml_orl_c2": 100,
+    "ml_orl_l1": 100,
+    "ml_orl_l2": 100,
+    "custo_orl_c1": 110,
+    "custo_orl_c2": 110,
+    "custo_orl_l1": 110,
+    "custo_orl_l2": 110,
+}
+
 
 class CusteioTableView(QtWidgets.QTableView):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
@@ -339,6 +386,56 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self.rows: List[Dict[str, Any]] = []
 
+    # --- Helpers ------------------------------------------------------
+
+    @staticmethod
+    def _normalize_def_peca(value: Optional[str]) -> str:
+        return (value or "").strip().upper()
+
+    def _is_division_row(self, row: Mapping[str, Any]) -> bool:
+        return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
+
+    @staticmethod
+    def _format_factor(value: Optional[float]) -> Optional[str]:
+        if value in (None, ""):
+            return None
+        try:
+            num = float(value)
+        except Exception:
+            return None
+        if abs(num) < 1e-9:
+            return "0"
+        if abs(num - round(num)) < 1e-9:
+            return str(int(round(num)))
+        return f"{num:.2f}".rstrip("0").rstrip(".")
+
+    def _format_qt_mod_display(self, row_index: int) -> str:
+        if not (0 <= row_index < len(self.rows)):
+            return ""
+        row = self.rows[row_index]
+        if self._is_division_row(row):
+            return self._format_factor(row.get("qt_mod")) or ""
+
+        factors: List[str] = []
+        divisor = row.get("_qt_divisor")
+        formatted_div = self._format_factor(divisor)
+        if formatted_div:
+            factors.append(formatted_div)
+
+        parent_factor = row.get("_qt_parent_factor")
+        formatted_parent = self._format_factor(parent_factor)
+        if formatted_parent and formatted_parent != "1":
+            factors.append(formatted_parent)
+
+        child_factor = row.get("_qt_child_factor")
+        formatted_child = self._format_factor(child_factor)
+        if formatted_child and formatted_child != "1":
+            factors.append(formatted_child)
+
+        if not factors:
+            return ""
+        return " x ".join(factors)
+
 
 
     # --- Qt API ---------------------------------------------------------
@@ -435,6 +532,18 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
+        if key == "qt_mod":
+
+            if role == QtCore.Qt.DisplayRole:
+
+                return self._format_qt_mod_display(row)
+
+            if role == QtCore.Qt.ToolTipRole:
+
+                formatted = self._format_qt_mod_display(row)
+
+                return formatted or None
+
         if spec["type"] == "bool":
 
             if role == QtCore.Qt.CheckStateRole:
@@ -485,6 +594,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                     return f"{display:.2f}%"
 
+                if fmt == "one":
+
+                    return f"{num:.1f}"
+
                 if fmt == "int":
 
                     return f"{int(round(num))}"
@@ -528,6 +641,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             flags |= QtCore.Qt.ItemIsUserCheckable
 
         elif spec.get("editable", False):
+
+            row_data = self.rows[index.row()]
+
+            if key == "qt_und" and self._is_division_row(row_data):
+
+                return flags
 
             flags |= QtCore.Qt.ItemIsEditable
 
@@ -587,21 +706,59 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
+        requires_recalc = False
+
         if spec["type"] == "numeric":
 
-            if value in (None, ""):
+            if key == "qt_mod" and self._is_division_row(self.rows[row]):
 
-                self.rows[row][key] = None
+                if value in (None, ""):
+
+                    numeric_value = 1
+
+                else:
+
+                    try:
+
+                        numeric_raw = float(value)
+
+                    except (TypeError, ValueError):
+
+                        return False
+
+                    if abs(numeric_raw - round(numeric_raw)) > 1e-9:
+
+                        return False
+
+                    numeric_value = int(round(numeric_raw))
+
+                if numeric_value < 1 or numeric_value > 8:
+
+                    return False
+
+                self.rows[row][key] = float(numeric_value)
+
+                requires_recalc = True
 
             else:
 
-                try:
+                if value in (None, ""):
 
-                    self.rows[row][key] = float(value)
+                    self.rows[row][key] = None
 
-                except (TypeError, ValueError):
+                else:
 
-                    return False
+                    try:
+
+                        self.rows[row][key] = float(value)
+
+                    except (TypeError, ValueError):
+
+                        return False
+
+                if key in {"qt_mod", "qt_und"}:
+
+                    requires_recalc = True
 
         else:
 
@@ -609,7 +766,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
-        self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.FontRole, QtCore.Qt.ToolTipRole])
+        if requires_recalc:
+
+            self.recalculate_all()
+
+        else:
+
+            self.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.FontRole, QtCore.Qt.ToolTipRole])
 
 
 
@@ -770,21 +933,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             return
 
+        divisor = 1.0
+
         for row in self.rows:
-
-            qt_mod = row.get("qt_mod") or 0
-
-            qt_und = row.get("qt_und") or 0
-
-            try:
-
-                total = float(qt_mod) * float(qt_und)
-
-            except Exception:
-
-                total = 0.0
-
-            row["qt_total"] = total if total else None
 
             row["comp_res"] = row.get("comp")
 
@@ -792,13 +943,87 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["esp_res"] = row.get("esp")
 
+            if self._is_division_row(row):
 
+                valor_divisor = row.get("qt_mod")
 
-        top_left = self.index(0, 0)
+                try:
 
-        bottom_right = self.index(len(self.rows) - 1, len(self.columns) - 1)
+                    divisor = float(valor_divisor) if valor_divisor not in (None, "") else 1.0
 
-        self.dataChanged.emit(top_left, bottom_right, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole])
+                except Exception:
+
+                    divisor = 1.0
+
+                divisor = max(divisor, 1.0)
+
+                row["_qt_divisor"] = divisor
+
+                row["_qt_parent_factor"] = None
+
+                row["_qt_child_factor"] = None
+
+                row["qt_total"] = divisor
+
+                continue
+
+            row["_qt_divisor"] = divisor
+
+            parent_factor = row.get("qt_mod")
+
+            child_factor = row.get("qt_und")
+
+            try:
+
+                parent = float(parent_factor) if parent_factor not in (None, "") else 1.0
+
+            except Exception:
+
+                parent = 1.0
+
+            try:
+
+                child = float(child_factor) if child_factor not in (None, "") else 1.0
+
+            except Exception:
+
+                child = 1.0
+
+            row["_qt_parent_factor"] = parent
+
+            row["_qt_child_factor"] = child
+
+            total = divisor * parent * child
+
+            row["qt_total"] = total if total else None
+
+        if not self.rows:
+
+            return
+
+        left = self._column_index.get("qt_mod")
+
+        right = self._column_index.get("qt_total")
+
+        if left is None or right is None:
+
+            return
+
+        top_left = self.index(0, left)
+
+        bottom_right = self.index(len(self.rows) - 1, right)
+
+        self.dataChanged.emit(
+            top_left,
+            bottom_right,
+            [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.ToolTipRole],
+        )
+
+        top_left_all = self.index(0, 0)
+
+        bottom_right_all = self.index(len(self.rows) - 1, len(self.columns) - 1)
+
+        self.dataChanged.emit(top_left_all, bottom_right_all, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole])
 
 
     def update_row_fields(self, row_index: int, updates: Mapping[str, Any], skip_keys: Optional[Sequence[str]] = None) -> None:
@@ -1105,23 +1330,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
     ICON_MAP = {
-
         "insert_above": QtWidgets.QStyle.SP_ArrowUp,
-
         "insert_below": QtWidgets.QStyle.SP_ArrowDown,
-
         "delete": QtWidgets.QStyle.SP_TrashIcon,
-
         "copy": QtWidgets.QStyle.SP_FileDialogDetailedView,
-
         "paste": QtWidgets.QStyle.SP_DialogOpenButton,
-
         "select_mp": QtWidgets.QStyle.SP_DirOpenIcon,
-
         "refresh": QtWidgets.QStyle.SP_BrowserReload,
-
         "save": QtWidgets.QStyle.SP_DialogSaveButton,
-
+        "division": QtWidgets.QStyle.SP_FileDialogNewFolder,
     }
 
 
@@ -1172,15 +1389,17 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         # Header ---------------------------------------------------------
 
-        header_layout = QtWidgets.QHBoxLayout()
+        header_layout = QtWidgets.QVBoxLayout()
 
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        header_layout.setSpacing(20)
+        header_layout.setSpacing(6)
 
 
 
-        self.lbl_title = QtWidgets.QLabel("Custeio dos Items")
+        self._base_title_text = "Custeio dos Items"
+
+        self.lbl_title = QtWidgets.QLabel(f"{self._base_title_text} - Item: -")
 
         title_font = self.lbl_title.font()
 
@@ -1190,53 +1409,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.lbl_title.setFont(title_font)
 
-
-
-        title_box = QtWidgets.QVBoxLayout()
-
-        title_box.setContentsMargins(0, 0, 0, 0)
-
-        title_box.setSpacing(6)
-
-        title_box.addWidget(self.lbl_title)
-
-
-
-        item_box = QtWidgets.QVBoxLayout()
-
-        item_box.setContentsMargins(0, 0, 0, 0)
-
-        item_box.setSpacing(2)
-
-
-
-        lbl_item_caption = QtWidgets.QLabel("Item")
-
-        lbl_item_caption.setStyleSheet("color: #666666;")
-
-        item_box.addWidget(lbl_item_caption)
-
-
-
-        self.lbl_item = QtWidgets.QLabel("-")
-
-        self.lbl_item.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-
-        item_font = self.lbl_item.font()
-
-        item_font.setBold(True)
-
-        self.lbl_item.setFont(item_font)
-
-        item_box.addWidget(self.lbl_item)
-
-
-
-        lbl_descr_caption = QtWidgets.QLabel("Descricao")
-
-        lbl_descr_caption.setStyleSheet("color: #666666;")
-
-        item_box.addWidget(lbl_descr_caption)
+        header_layout.addWidget(self.lbl_title)
 
 
 
@@ -1246,23 +1419,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.lbl_descr.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
 
-        item_box.addWidget(self.lbl_descr)
-
-
-
-        title_box.addLayout(item_box)
-
-
-
-        header_layout.addLayout(title_box, 1)
-
-
-
-        meta_box = QtWidgets.QVBoxLayout()
-
-        meta_box.setContentsMargins(0, 0, 0, 0)
-
-        meta_box.setSpacing(6)
+        header_layout.addWidget(self.lbl_descr)
 
 
 
@@ -1284,49 +1441,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
-        captions = [
-
-            ("Cliente:", self.lbl_cliente),
-
-            ("Utilizador:", self.lbl_utilizador),
-
-            ("Ano:", self.lbl_ano),
-
-            ("N.º Orçamento:", self.lbl_num),
-
-            ("VersÃ£o:", self.lbl_ver),
-
-        ]
-
-
-
-        meta_row = QtWidgets.QHBoxLayout()
-
-        meta_row.setSpacing(16)
-
-        for caption, widget in captions:
-
-            label = QtWidgets.QLabel(caption)
-
-            meta_row.addWidget(label)
-
-            meta_row.addWidget(widget)
-
-            meta_row.addSpacing(8)
-
-        meta_row.addStretch(1)
-
-
-
-        meta_box.addLayout(meta_row)
-
-
-
         dims_layout = QtWidgets.QHBoxLayout()
 
-        dims_layout.setSpacing(12)
+        dims_layout.setSpacing(16)
 
-        dims_layout.addWidget(QtWidgets.QLabel("Altura:"))
+        dims_layout.addWidget(QtWidgets.QLabel("Comp:"))
 
         dims_layout.addWidget(self.lbl_altura)
 
@@ -1344,19 +1463,44 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         dims_layout.addStretch(1)
 
-
-
-        meta_box.addLayout(dims_layout)
+        header_layout.addLayout(dims_layout)
 
 
 
-        header_layout.addLayout(meta_box, 2)
+        info_layout = QtWidgets.QHBoxLayout()
 
-        header_layout.addStretch(1)
+        info_layout.setSpacing(16)
+
+        for caption, widget in [
+
+            ("Cliente:", self.lbl_cliente),
+
+            ("Utilizador:", self.lbl_utilizador),
+
+            ("Ano:", self.lbl_ano),
+
+            ("Num. Orcamento:", self.lbl_num),
+
+            ("Versao:", self.lbl_ver),
+
+        ]:
+
+            label = QtWidgets.QLabel(caption)
+
+            info_layout.addWidget(label)
+
+            info_layout.addWidget(widget)
+
+            info_layout.addSpacing(8)
+
+        info_layout.addStretch(1)
+
+        header_layout.addLayout(info_layout)
 
 
 
         root.addLayout(header_layout)
+
 
 
 
@@ -1581,7 +1725,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_view.horizontalHeader().setStretchLastSection(False)
 
-        self.table_view.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.table_view.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.table_view.horizontalHeader().setDefaultSectionSize(96)
+
+        self._apply_initial_column_widths()
 
         for col_index, spec in enumerate(self.table_model.columns):
             if spec["type"] == "numeric":
@@ -1651,6 +1798,18 @@ class CusteioItemsPage(QtWidgets.QWidget):
         shortcut_find = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
 
         shortcut_find.activated.connect(self.edit_search.setFocus)
+
+
+
+    def _apply_initial_column_widths(self) -> None:
+
+        header = self.table_view.horizontalHeader()
+        header.setMinimumSectionSize(40)
+        defaults = COLUMN_WIDTH_DEFAULTS
+        for index, spec in enumerate(self.table_model.columns):
+            width = defaults.get(spec['key'])
+            if width:
+                self.table_view.setColumnWidth(index, width)
 
 
 
@@ -1770,7 +1929,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     def _reset_header(self) -> None:
 
-        self.lbl_item.setText("-")
+        base_title = getattr(self, "_base_title_text", "Custeio dos Items")
+        self.lbl_title.setText(f"{base_title} - Item: -")
 
         self.lbl_descr.setText("-")
 
@@ -1836,9 +1996,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     def _apply_item_header(self, item: Optional[OrcamentoItem]) -> None:
 
+        base_title = getattr(self, "_base_title_text", "Custeio dos Items")
+
         if not item:
 
-            self.lbl_item.setText("-")
+            self.lbl_title.setText(f"{base_title} - Item: -")
 
             self.lbl_descr.setText("-")
 
@@ -1854,7 +2016,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or getattr(item, "id_item", None)
 
-        self.lbl_item.setText(str(numero))
+        self.lbl_title.setText(f"{base_title} - Item: {numero}")
 
         descricao = (item.descricao or "").strip()
 
@@ -2186,6 +2348,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model.load_rows(linhas)
 
+        self.table_model.recalculate_all()
+
         self._update_table_placeholder_visibility()
 
 
@@ -2272,6 +2436,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         menu.addSeparator()
 
+        action_divisao = menu.addAction(self._icon("division"), "Inserir Linha 'DIVISAO INDEPENDENTE'")
+
         action_select_mp = menu.addAction(self._icon("select_mp"), "Selecionar Materia-Prima")
 
         if not selected_rows:
@@ -2286,11 +2452,17 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             action_select_mp.setEnabled(False)
 
+            action_divisao.setEnabled(False)
+
         action_paste.setEnabled(bool(self._clipboard_rows))
 
         if len(selected_rows) != 1:
 
             action_select_mp.setEnabled(False)
+
+        if not selected_rows:
+
+            action_divisao.setEnabled(False)
 
         chosen = menu.exec(self.table_view.viewport().mapToGlobal(pos))
 
@@ -2328,6 +2500,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        if chosen == action_divisao and selected_rows:
+
+            self._insert_divisao_independente(selected_rows[-1])
+
+            return
+
         if chosen == action_select_mp and selected_rows:
 
             self._on_select_materia_prima(selected_rows[0])
@@ -2343,11 +2521,45 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             position = row_index + offset if before else row_index + 1 + offset
 
-            self.table_model.insert_rows(position, [svc_custeio.linha_vazia()])
+            linha = svc_custeio.linha_vazia()
+
+            linha["qt_mod"] = 1.0
+
+            linha["qt_und"] = 1.0
+
+            self.table_model.insert_rows(position, [linha])
 
         self.table_model.recalculate_all()
 
         self._update_table_placeholder_visibility()
+
+
+    def _insert_divisao_independente(self, anchor_row: int) -> None:
+
+        position = anchor_row + 1 if anchor_row >= 0 else self.table_model.rowCount()
+
+        linha = svc_custeio.linha_vazia()
+
+        linha["def_peca"] = "DIVISAO INDEPENDENTE"
+
+        linha["descricao"] = ""
+
+        linha["descricao_livre"] = ""
+
+        linha["qt_mod"] = 1.0
+
+        linha["qt_und"] = 1.0
+
+        linha["qt_total"] = 1.0
+
+        self.table_model.insert_rows(position, [linha])
+
+        self.table_model.recalculate_all()
+
+        self._update_table_placeholder_visibility()
+
+        self.table_view.selectRow(position)
+
 
 
     def _delete_rows(self, rows: Sequence[int]) -> None:
@@ -2371,7 +2583,21 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
-        self._clipboard_rows = [dict(self.table_model.rows[idx]) for idx in rows if 0 <= idx < self.table_model.rowCount()]
+        column_keys = tuple(self.table_model.column_keys)
+
+        collected: List[Dict[str, Any]] = []
+
+        for idx in rows:
+
+            if 0 <= idx < self.table_model.rowCount():
+
+                source_row = self.table_model.rows[idx]
+
+                filtered = {key: source_row.get(key) for key in column_keys}
+
+                collected.append(filtered)
+
+        self._clipboard_rows = collected
 
 
     def _paste_rows(self, target_rows: Sequence[int]) -> None:
@@ -2388,13 +2614,21 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
-        for offset, row_index in enumerate(target_rows):
+        column_keys = tuple(self.table_model.column_keys)
 
-            source = self._clipboard_rows[offset % len(self._clipboard_rows)]
+        rows_to_insert: List[Dict[str, Any]] = []
 
-            updates = {k: v for k, v in source.items() if k != "id"}
+        for source in self._clipboard_rows:
 
-            self.table_model.update_row_fields(row_index, updates)
+            filtered = {key: source.get(key) for key in column_keys}
+
+            filtered["id"] = None
+
+            rows_to_insert.append(filtered)
+
+        insert_at = (max(target_rows) + 1) if target_rows else self.table_model.rowCount()
+
+        self.table_model.insert_rows(insert_at, rows_to_insert)
 
         self.table_model.recalculate_all()
 
@@ -2434,6 +2668,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
         updates = svc_custeio.dados_material(materia)
 
         self.table_model.update_row_fields(row_index, updates, skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp"))
+
+        orla_updates = svc_custeio.calcular_espessuras_orla(self.session, row)
+        self.table_model.update_row_fields(row_index, orla_updates)
 
         self.table_model.set_blk(row_index, True)
 
@@ -2482,6 +2719,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model.update_row_fields(row_index, updates, skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp"))
 
+        orla_updates = svc_custeio.calcular_espessuras_orla(self.session, row)
+        self.table_model.update_row_fields(row_index, orla_updates)
+
         row["mat_default"] = selection
 
         self.table_model.recalculate_all()
@@ -2505,6 +2745,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             pass
 
         cache: Dict[str, Any] = {}
+        orla_lookup = svc_custeio.obter_mapa_orlas(self.session)
 
         for idx, row in enumerate(self.table_model.rows):
 
@@ -2574,6 +2815,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 if not atual_default or atual_default == familia_atual:
 
                     row["mat_default"] = novo_default
+
+            orla_updates = svc_custeio.aplicar_espessuras_orla(row, orla_lookup)
+            self.table_model.update_row_fields(idx, orla_updates)
 
         self.table_model.recalculate_all()
 

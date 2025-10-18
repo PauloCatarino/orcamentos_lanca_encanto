@@ -50,8 +50,37 @@ class DadosItemsPage(DadosGeraisPage):
             import_button_text="Importar Dados Items",
             import_multi_button_text="Importar Multi Dados Items",
         )
+        self._setup_item_header()
         self.current_orcamento_id: Optional[int] = None
         self.current_item_id: Optional[int] = None
+
+    def _setup_item_header(self) -> None:
+        grid = getattr(self, "_header_grid", None)
+        if not isinstance(grid, QtWidgets.QGridLayout):
+            return
+
+        column_span = max(1, grid.columnCount())
+
+        self.lbl_item_description = QtWidgets.QLabel("-")
+        self.lbl_item_description.setWordWrap(True)
+        self.lbl_item_description.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+
+        grid.addWidget(self.lbl_item_description, 1, 0, 1, column_span)
+
+        if self._dimensions_layout is not None:
+            grid.removeItem(self._dimensions_layout)
+            grid.addLayout(self._dimensions_layout, 2, 0, 1, column_span)
+
+        if self._info_pairs_layout is not None:
+            grid.removeItem(self._info_pairs_layout)
+            grid.addLayout(self._info_pairs_layout, 3, 0, 1, column_span)
+            self._info_pairs_layout.setSpacing(18)
+
+        captions = (self._dimension_labels or {}).get("captions", [])
+        if len(captions) >= 3:
+            captions[0].setText("Comp:")
+            captions[1].setText("Largura:")
+            captions[2].setText("Profundidade:")
 
     # ------------------------------------------------------------------ Integration
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
@@ -83,6 +112,7 @@ class DadosItemsPage(DadosGeraisPage):
             self.context = None
             self._reset_tables()
             self.lbl_title.setText(self.page_title)
+            self.lbl_item_description.setText("-")
             self._update_dimensions_labels(visible=False)
             return
 
@@ -104,6 +134,7 @@ class DadosItemsPage(DadosGeraisPage):
 
         self._update_dimensions_labels(visible=False)
 
+        self.lbl_item_description.setText("-")
 
 
 
@@ -111,14 +142,13 @@ class DadosItemsPage(DadosGeraisPage):
         item: Optional[OrcamentoItem] = self.session.get(OrcamentoItem, item_id)
         if not item:
             self.lbl_title.setText(self.page_title)
+            self.lbl_item_description.setText("-")
             self._update_dimensions_labels(visible=False)
             return
         numero = getattr(item, "item_ord", None) or getattr(item, "item", None) or item_id
         descricao = (item.descricao or "").strip()
-        if descricao:
-            self.lbl_title.setText(f"{self.page_title} - Item {numero}: {descricao}")
-        else:
-            self.lbl_title.setText(f"{self.page_title} - Item {numero}")
+        self.lbl_title.setText(f"{self.page_title} - Item: {numero}")
+        self.lbl_item_description.setText(descricao or "-")
         self._update_dimensions_labels(
             altura=getattr(item, "altura", None),
             largura=getattr(item, "largura", None),
@@ -136,6 +166,36 @@ class DadosItemsPage(DadosGeraisPage):
             field = getattr(spec, "field", "") or ""
             if field.lower().startswith("reserva"):
                 table.setColumnHidden(col_idx, True)
+
+    def on_guardar(self) -> None:  # type: ignore[override]
+        if not self.context:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
+            return
+
+        payload = {key: model.export_rows() for key, model in self.models.items()}
+
+        try:
+            self.svc.guardar_dados_gerais(self.session, self.context, payload)
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao guardar dados do item: {exc}")
+            return
+
+        ctx = self.context
+        item_label = getattr(ctx, "item_ordem", None)
+        if item_label is None:
+            item_label = getattr(ctx, "item_id", None)
+        item_text = str(item_label) if item_label is not None else "-"
+
+        versao = (getattr(ctx, "versao", "") or "").strip()
+        versao_text = versao.zfill(2) if versao.isdigit() else (versao or "-")
+
+        mensagem = (
+            f"Dados do Item: {item_text} para o Orcamento: {getattr(ctx, 'num_orcamento', '-')}"
+            f" com Versao: {versao_text} gravados com sucesso."
+        )
+        QtWidgets.QMessageBox.information(self, "Sucesso", mensagem)
 
     # ------------------------------------------------------------------ Local models
 

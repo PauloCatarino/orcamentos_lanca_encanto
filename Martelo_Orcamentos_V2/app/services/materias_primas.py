@@ -281,30 +281,42 @@ def import_materias_primas(db: Session, base_path: Optional[str] = None) -> int:
     db.query(MateriaPrima).delete()
 
     inserted = 0
-    for row in ws.iter_rows(min_row=6, max_col=len(COLUMN_DEFS)):
-        values = [cell.value for cell in row]
-        if all(v is None or str(v).strip() == "" for v in values):
-            continue
-        data = {}
-        for meta, value in zip(COLUMN_DEFS, values):
-            key = meta.attr
-            if value is None:
-                data[key] = None
-                continue
+    for row in ws.iter_rows(min_row=6, max_col=len(COLUMN_DEFS)):
+        values = [cell.value for cell in row]
+        if all(v is None or str(v).strip() == "" for v in values):
+            continue
+        data = {}
+        familia_valor = None
+        for meta, value in zip(COLUMN_DEFS, values):
+            key = meta.attr
+            if value is None:
+                data[key] = None
+                continue
             if meta.kind == "numeric":
                 try:
-                    data[key] = Decimal(str(value).replace(',', '.'))
-                except Exception:
-                    data[key] = None
-            elif key == "data_ultimo_preco" and isinstance(value, (datetime, )):
-                data[key] = value.date().isoformat()
-            else:
-                data[key] = str(value).strip()
-        stock_val = data.get("stock")
-        if stock_val is None:
-            data["stock"] = 0
-        else:
-            try:
+                    data[key] = Decimal(str(value).replace(',', '.'))
+                except Exception:
+                    data[key] = None
+            elif key == "data_ultimo_preco" and isinstance(value, (datetime, )):
+                data[key] = value.date().isoformat()
+            else:
+                data[key] = str(value).strip()
+            if key == "familia":
+                familia_valor = (data[key] or "").strip().upper()
+        if familia_valor == "ORLAS" and data.get("esp_mp") is not None:
+            try:
+                esp_decimal = data["esp_mp"]
+                if not isinstance(esp_decimal, Decimal):
+                    esp_decimal = Decimal(str(esp_decimal).replace(',', '.'))
+                data["esp_mp"] = esp_decimal.quantize(Decimal("0.1"))
+            except Exception:
+                # Mantém valor original se não for possível formatar
+                pass
+        stock_val = data.get("stock")
+        if stock_val is None:
+            data["stock"] = 0
+        else:
+            try:
                 stock_decimal = Decimal(str(stock_val).replace(',', '.'))
             except Exception:
                 stock_decimal = Decimal('0')

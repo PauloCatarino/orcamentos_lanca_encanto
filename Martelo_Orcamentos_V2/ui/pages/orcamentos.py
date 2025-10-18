@@ -51,6 +51,9 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setStretchLastSection(False)
         self.table.selectionModel().selectionChanged.connect(self.load_selected)
 
         # Botões (com ícones)
@@ -108,8 +111,9 @@ class OrcamentosPage(QtWidgets.QWidget):
         left = QtWidgets.QWidget(); vleft = QtWidgets.QVBoxLayout(left); vleft.addLayout(search_bar); vleft.addWidget(self.table)
         right = QtWidgets.QWidget(); vright = QtWidgets.QVBoxLayout(right); vright.addLayout(form); vright.addLayout(buttons)
         split = QtWidgets.QSplitter(); split.addWidget(left); split.addWidget(right)
-        split.setStretchFactor(0, 4); split.setStretchFactor(1, 3)
-        split.setSizes([900, 500])
+        split.setStretchFactor(0, 8); split.setStretchFactor(1, 3)
+        split.setSizes([1100, 420])
+        right.setMaximumWidth(520)
 
         lay = QtWidgets.QVBoxLayout(self)
         lay.addWidget(split)
