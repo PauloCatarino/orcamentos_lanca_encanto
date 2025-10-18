@@ -85,6 +85,7 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
 }
 
 RULES_SETTING_TEMPLATE = "custeio_rules_{orcamento}_{versao}"
+RULES_SETTING_DEFAULT = "custeio_rules_default"
 
 
 def _clone_rules(rules: Mapping[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -94,11 +95,34 @@ def _clone_rules(rules: Mapping[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any
     return cloned
 
 
-def load_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext) -> Dict[str, Dict[str, Any]]:
+def load_qt_rules(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext] = None,
+    *,
+    orcamento_id: Optional[int] = None,
+    versao: Optional[str] = None,
+) -> Dict[str, Dict[str, Any]]:
+    if ctx is not None:
+        orcamento_id = getattr(ctx, "orcamento_id", None)
+        versao = getattr(ctx, "versao", None)
+
     base = _clone_rules(DEFAULT_QT_RULES)
-    if not ctx:
+
+    if orcamento_id is None:
+        raw = get_setting(session, RULES_SETTING_DEFAULT, None)
+        if not raw:
+            return base
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return base
+        if isinstance(data, dict):
+            for key, override in data.items():
+                if key in base and isinstance(override, dict):
+                    base[key].update({k: v for k, v in override.items() if v is not None})
         return base
-    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=orcamento_id, versao=versao or "01")
     raw = get_setting(session, setting_key, None)
     if not raw:
         return base
@@ -113,18 +137,46 @@ def load_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext) -> D
     return base
 
 
-def save_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext, rules: Mapping[str, Any]) -> None:
-    if not ctx:
+def save_qt_rules(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    rules: Mapping[str, Any],
+    *,
+    orcamento_id: Optional[int] = None,
+    versao: Optional[str] = None,
+) -> None:
+    if ctx is not None:
+        orcamento_id = getattr(ctx, "orcamento_id", None)
+        versao = getattr(ctx, "versao", None)
+
+    if orcamento_id is None:
+        set_setting(session, RULES_SETTING_DEFAULT, json.dumps(rules, ensure_ascii=False))
+        session.flush()
         return
-    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=orcamento_id, versao=versao or "01")
     set_setting(session, setting_key, json.dumps(rules, ensure_ascii=False))
     session.flush()
 
 
-def reset_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext) -> None:
-    if not ctx:
+def reset_qt_rules(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    *,
+    orcamento_id: Optional[int] = None,
+    versao: Optional[str] = None,
+    reset_default: bool = False,
+) -> None:
+    if ctx is not None:
+        orcamento_id = getattr(ctx, "orcamento_id", None)
+        versao = getattr(ctx, "versao", None)
+
+    if reset_default or orcamento_id is None:
+        set_setting(session, RULES_SETTING_DEFAULT, None)
+        session.flush()
         return
-    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=orcamento_id, versao=versao or "01")
     set_setting(session, setting_key, None)
     session.flush()
 
@@ -496,6 +548,7 @@ TREE_DEFINITION: List[TreeNode] = [
 CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "id", "label": "id", "type": "int", "editable": False},
     {"key": "descricao_livre", "label": "Descricao_Livre", "type": "text", "editable": True},
+    {"key": "icon_hint", "label": "", "type": "icon", "editable": False},
     {"key": "def_peca", "label": "Def_Peca", "type": "text", "editable": False},
     {"key": "descricao", "label": "Descricao", "type": "text", "editable": False},
     {"key": "qt_mod", "label": "QT_mod", "type": "numeric", "editable": True},
@@ -895,7 +948,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         linha["id"] = registro.id
         for spec in CUSTEIO_COLUMN_SPECS:
             key = spec["key"]
-            if key == "id":
+            if key == "id" or spec["type"] == "icon":
                 continue
             valor = getattr(registro, key, None)
             if spec["type"] == "numeric":
@@ -933,7 +986,7 @@ def salvar_custeio_items(session: Session, ctx: svc_dados_items.DadosItemsContex
         )
         for spec in CUSTEIO_COLUMN_SPECS:
             key = spec["key"]
-            if key == "id":
+            if key == "id" or spec["type"] == "icon":
                 continue
             valor = linha.get(key)
             if spec["type"] == "numeric":
@@ -959,23 +1012,67 @@ def gerar_linhas_para_selecoes(
         if not parts:
             continue
 
+        raw_def: str = parts[-1]
+
+        tokens = [tok.strip() for tok in raw_def.split("+") if tok.strip()]
+        parent_label = tokens[0] if tokens else raw_def
+        child_tokens = tokens[1:] if len(tokens) > 1 else []
+
         linha = _empty_row()
         linha["descricao_livre"] = ""
-        linha["def_peca"] = parts[-1]
+        linha["def_peca"] = raw_def
 
-        grupo = grupo_por_def_peca(linha["def_peca"])
-        material = obter_material_por_grupo(session, ctx, grupo)
+        grupo_parent = grupo_por_def_peca(parent_label)
+        material_parent = obter_material_por_grupo(session, ctx, grupo_parent)
 
-        if material:
-            _preencher_linha_com_material(linha, material, grupo)
+        if material_parent:
+            _preencher_linha_com_material(linha, material_parent, grupo_parent)
         else:
-            linha["descricao"] = linha["def_peca"]
+            linha["descricao"] = parent_label
+
         if linha.get("qt_mod") in (None, 0):
             linha["qt_mod"] = 1
         if linha.get("qt_und") in (None, 0):
             linha["qt_und"] = 1
+
+        linha["_child_tokens"] = child_tokens
+        linha["_parent_label"] = parent_label
+
         _aplicar_orla_espessuras(linha, orla_lookup)
         linhas.append(linha)
+
+        if child_tokens:
+            seen_counts: Dict[str, int] = {}
+            for child_label in child_tokens:
+                base = child_label.strip()
+                if not base:
+                    continue
+                seen_counts[base] = seen_counts.get(base, 0) + 1
+                suffix = seen_counts[base]
+                def_child = f"{base}_{suffix}" if suffix > 1 else base
+
+                child_row = _empty_row()
+                child_row["descricao_livre"] = ""
+                child_row["def_peca"] = def_child
+
+                grupo_child = grupo_por_def_peca(base) or base
+                material_child = obter_material_por_grupo(session, ctx, grupo_child)
+                if not material_child:
+                    material_child = obter_material_por_grupo(session, ctx, base)
+
+                if material_child:
+                    _preencher_linha_com_material(child_row, material_child, grupo_child)
+                else:
+                    child_row["descricao"] = base
+
+                child_row["qt_mod"] = 1
+                child_row["qt_und"] = 1
+                child_row["_parent_label"] = parent_label
+                child_row["_child_source"] = base
+                child_row["_regra_nome"] = base
+
+                _aplicar_orla_espessuras(child_row, orla_lookup)
+                linhas.append(child_row)
 
     return linhas
 

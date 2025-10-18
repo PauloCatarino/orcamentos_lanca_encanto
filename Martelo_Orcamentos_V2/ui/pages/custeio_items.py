@@ -74,6 +74,7 @@ CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
 COLUMN_WIDTH_DEFAULTS = {
     "id": 55,
     "descricao_livre": 170,
+    "icon_hint": 36,
     "def_peca": 170,
     "descricao": 200,
     "qt_mod": 110,
@@ -511,6 +512,26 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         value = row_data.get(key)
 
+        if key == "icon_hint":
+
+            if role == QtCore.Qt.DecorationRole:
+
+                icon_value = row_data.get("icon_hint")
+
+                if isinstance(icon_value, QtGui.QIcon):
+
+                    return icon_value
+
+                if isinstance(icon_value, str) and icon_value:
+
+                    return QtGui.QIcon(icon_value)
+
+            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+
+                return ""
+
+            return None
+
         if role == QtCore.Qt.BackgroundRole:
 
             if row_type == "division":
@@ -708,6 +729,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         spec = self.columns[col]
 
         key = spec["key"]
+
+        if spec["type"] == "icon":
+
+            return False
 
 
 
@@ -1022,6 +1047,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 row["_group_uid"] = row.get("_group_uid") or current_group_uid
 
+                row.pop("icon_hint", None)
+
                 row["_qt_divisor"] = divisor
 
                 row["_qt_parent_factor"] = None
@@ -1061,6 +1088,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["_qt_child_factor"] = None
 
                 row["qt_total"] = divisor
+
+                if getattr(self, "_page", None):
+
+                    row.setdefault("icon_hint", self._page._icon("division"))
 
                 current_parent_row = None
 
@@ -1110,21 +1141,42 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["_qt_divisor"] = divisor
 
-            try:
+            row_type = row.get("_row_type")
 
-                parent_factor = float(current_parent_row.get("qt_mod") if row.get("_row_type") == "child" and current_parent_row else row.get("qt_mod") or 1.0)
+            if row_type != "division":
+                row.pop("icon_hint", None)
 
-            except Exception:
+            if row_type == "child" and current_parent_row is not None:
 
-                parent_factor = 1.0
+                try:
 
-            row["qt_mod"] = parent_factor if row.get("_row_type") == "child" else row.get("qt_mod")
+                    parent_factor = float(current_parent_row.get("qt_und") or 1.0)
+
+                except Exception:
+
+                    parent_factor = 1.0
+
+            else:
+
+                try:
+
+                    parent_factor = float(row.get("qt_mod") or 1.0)
+
+                except Exception:
+
+                    parent_factor = 1.0
+
+                if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
+
+                    row["qt_mod"] = parent_factor
 
             child_factor_value = row.get("qt_und")
 
-            if row.get("_row_type") == "child" and current_parent_row is not None:
+            if row_type == "child" and current_parent_row is not None:
 
-                regra_nome = row.get("_regra_nome")
+                regra_nome = row.get("_regra_nome") or row.get("_child_source")
+
+                regra_nome = svc_custeio.identificar_regra(regra_nome or "", rules)
 
                 try:
 
@@ -1132,7 +1184,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 except Exception:
 
-                    child_factor = float(child_factor_value or 1.0)
+                    try:
+
+                        child_factor = float(child_factor_value or 1.0)
+
+                    except Exception:
+
+                        child_factor = 1.0
 
                 row["qt_und"] = child_factor
 
@@ -1150,7 +1208,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["_qt_child_factor"] = child_factor
 
-            total = divisor * parent_factor * child_factor
+            try:
+
+                total = float(divisor) * float(parent_factor) * float(child_factor)
+
+            except Exception:
+
+                total = 0.0
 
             row["qt_total"] = total if total else None
 
@@ -2767,6 +2831,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         linha["qt_total"] = 1.0
 
+        linha["icon_hint"] = self._icon("division")
+
         self.table_model.insert_rows(position, [linha])
 
         self.table_model.recalculate_all()
@@ -3121,7 +3187,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.current_item_id = normalized_item_id
 
-
+        self._collapsed_groups.clear()
 
         print(f"[Custeio.load_item] orcamento_id={orcamento_id} item_id={item_id}")
         if not orcamento_id:
@@ -3213,6 +3279,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.current_orcamento_id = None
 
         self.current_item_id = None
+
+        self._collapsed_groups.clear()
 
         self._reset_header()
 
