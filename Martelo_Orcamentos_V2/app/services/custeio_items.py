@@ -79,8 +79,8 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "PUXADOR": {
         "matches": ["PUXADOR"],
-        "expression": "QT_PAI",
-        "tooltip": "1 puxador por porta (quantidade = QT_und da peça principal).",
+        "expression": "1",
+        "tooltip": "1 puxador por porta (multiplicado pelo QT_und da peça principal).",
     },
 }
 

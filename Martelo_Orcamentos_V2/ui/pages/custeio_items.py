@@ -428,17 +428,18 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         factors: List[str] = []
         divisor = self._format_factor(row.get("_qt_divisor"))
-        if divisor and (divisor != "1" or row_type in ("child", "parent")):
+        if divisor:
             factors.append(divisor)
 
         parent_factor = self._format_factor(row.get("_qt_parent_factor"))
-        factors.append(parent_factor or "1")
+        if parent_factor:
+            factors.append(parent_factor)
 
         child_factor = self._format_factor(row.get("_qt_child_factor"))
-        if child_factor:
+        if row_type == "child":
+            factors.append(child_factor or "1")
+        elif child_factor and child_factor not in ("", "1"):
             factors.append(child_factor)
-        elif row_type == "child":
-            factors.append("1")
 
         return " x ".join(factors)
 
@@ -541,6 +542,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if row_type == "separator":
 
                 return QtGui.QColor(235, 235, 235)
+
+        if key == "qt_und" and role == QtCore.Qt.ToolTipRole:
+
+            tooltip = row_data.get("_qt_rule_tooltip")
+
+            if tooltip:
+
+                return tooltip
 
         if role == QtCore.Qt.FontRole:
 
@@ -1174,9 +1183,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if row_type == "child" and current_parent_row is not None:
 
-                regra_nome = row.get("_regra_nome") or row.get("_child_source")
+                regra_base = row.get("_regra_nome") or row.get("_child_source")
 
-                regra_nome = svc_custeio.identificar_regra(regra_nome or "", rules)
+                regra_nome = svc_custeio.identificar_regra(regra_base or "", rules)
+
+                rule_data = rules.get(regra_nome) if regra_nome else None
 
                 try:
 
@@ -1192,17 +1203,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                         child_factor = 1.0
 
+                row["_regra_nome"] = regra_nome
+
+                row["_qt_rule_tooltip"] = rule_data.get("tooltip") if rule_data else None
+
                 row["qt_und"] = child_factor
 
             else:
 
-                try:
+                row["_qt_rule_tooltip"] = None
 
-                    child_factor = float(child_factor_value or 1.0)
-
-                except Exception:
-
-                    child_factor = 1.0
+                child_factor = 1.0
 
             row["_qt_parent_factor"] = parent_factor
 
@@ -3027,6 +3038,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         cache: Dict[str, Any] = {}
         orla_lookup = svc_custeio.obter_mapa_orlas(self.session)
+        uid_map = {row.get("_uid"): row for row in self.table_model.rows if row.get("_uid")}
 
         for idx, row in enumerate(self.table_model.rows):
 
@@ -3034,7 +3046,20 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                 continue
 
+            row_type = row.get("_row_type")
+
             familia_hint = row.get("familia")
+
+            if row_type == "child" and not familia_hint:
+
+                parent_uid = row.get("_parent_uid")
+
+                parent_row = uid_map.get(parent_uid)
+
+                if parent_row:
+
+                    familia_hint = parent_row.get("familia")
+
             mat_default = (row.get("mat_default") or "").strip()
 
             if mat_default:
@@ -3046,6 +3071,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 def_peca = (row.get("def_peca") or "").strip()
 
                 grupo = svc_custeio.grupo_por_def_peca(def_peca)
+
+                if not grupo and row.get("_child_source"):
+
+                    grupo = svc_custeio.grupo_por_def_peca(row["_child_source"]) or row.get("_child_source")
 
             if not grupo:
 
