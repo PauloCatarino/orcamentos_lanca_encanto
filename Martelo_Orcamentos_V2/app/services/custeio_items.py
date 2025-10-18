@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import Decimal
+import json
 import re
 import unicodedata
+import uuid
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
 
 from sqlalchemy import delete, select
@@ -15,6 +18,7 @@ from Martelo_Orcamentos_V2.app.models.materia_prima import MateriaPrima
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
+from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 
 
 TreeNode = Dict[str, Any]
@@ -46,6 +50,140 @@ GROUP_LOOKUP: Dict[str, Dict[str, str]] = {}
 for _menu, _groups in svc_dados_items.MENU_FIXED_GROUPS.items():
     for _name in _groups:
         GROUP_LOOKUP[_normalize_token(_name)] = {"menu": _menu, "name": _name}
+
+DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
+    "PES": {
+        "matches": ["PES"],
+        "expression": "4 if COMP < 650 and LARG < 800 else 6 if COMP >= 650 and LARG < 800 else 8",
+        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP≥650 & LARG<800 | 8 caso contrário",
+    },
+    "SUPORTE PRATELEIRA": {
+        "matches": ["SUPORTE PRATELEIRA"],
+        "expression": "8 if COMP >= 1100 and LARG >= 800 else 6 if COMP >= 1100 else 4",
+        "tooltip": "4 por defeito | 6 se COMP≥1100 | 8 se COMP≥1100 & LARG≥800",
+    },
+    "VARAO SPP": {
+        "matches": ["VARAO SPP", "VARAO"],
+        "expression": "1",
+        "tooltip": "1 varão por peça principal (COMP herdado para cálculo de ML).",
+    },
+    "SUPORTE TERMINAL VARAO": {
+        "matches": ["SUPORTE TERMINAL VARAO"],
+        "expression": "2",
+        "tooltip": "2 suportes por varão.",
+    },
+    "DOBRADICA": {
+        "matches": ["DOBRADICA"],
+        "expression": "(2 if COMP < 850 else 3 if COMP < 1600 else 2 + int((COMP - 2 * 120) / 750)) + (1 if LARG >= 605 else 0)",
+        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, ≥1600mm: 2+(úteis/750mm) +1 se LARG≥605mm",
+    },
+    "PUXADOR": {
+        "matches": ["PUXADOR"],
+        "expression": "QT_PAI",
+        "tooltip": "1 puxador por porta (quantidade = QT_und da peça principal).",
+    },
+}
+
+RULES_SETTING_TEMPLATE = "custeio_rules_{orcamento}_{versao}"
+
+
+def _clone_rules(rules: Mapping[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    cloned: Dict[str, Dict[str, Any]] = {}
+    for key, value in rules.items():
+        cloned[key] = deepcopy(value)
+    return cloned
+
+
+def load_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext) -> Dict[str, Dict[str, Any]]:
+    base = _clone_rules(DEFAULT_QT_RULES)
+    if not ctx:
+        return base
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+    raw = get_setting(session, setting_key, None)
+    if not raw:
+        return base
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return base
+    if isinstance(data, dict):
+        for key, override in data.items():
+            if key in base and isinstance(override, dict):
+                base[key].update({k: v for k, v in override.items() if v is not None})
+    return base
+
+
+def save_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext, rules: Mapping[str, Any]) -> None:
+    if not ctx:
+        return
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+    set_setting(session, setting_key, json.dumps(rules, ensure_ascii=False))
+    session.flush()
+
+
+def reset_qt_rules(session: Session, ctx: svc_dados_items.DadosItemsContext) -> None:
+    if not ctx:
+        return
+    setting_key = RULES_SETTING_TEMPLATE.format(orcamento=ctx.orcamento_id, versao=ctx.versao)
+    set_setting(session, setting_key, None)
+    session.flush()
+
+
+def _identify_regra(def_peca: str, rules: Mapping[str, Dict[str, Any]]) -> Optional[str]:
+    token = _normalize_token(def_peca)
+    if not token:
+        return None
+    for name, data in rules.items():
+        for match in data.get("matches", []):
+            if _normalize_token(match) in token:
+                return name
+    return None
+
+
+def calcular_qt_filhos(
+    regra_nome: Optional[str],
+    parent_row: Mapping[str, Any],
+    child_row: Mapping[str, Any],
+    divisor: float,
+    parent_qt: float,
+    rules: Mapping[str, Dict[str, Any]],
+) -> float:
+    if not regra_nome or regra_nome not in rules:
+        return float(child_row.get("qt_und") or 1.0)
+    regra = rules[regra_nome]
+    expression = regra.get("expression")
+    default = regra.get("default")
+    qt_pai = float(parent_row.get("qt_und") or 1.0)
+    env = {
+        "COMP": float(parent_row.get("comp") or 0),
+        "LARG": float(parent_row.get("larg") or 0),
+        "ESP": float(parent_row.get("esp") or 0),
+        "COMP_MP": float(parent_row.get("comp_mp") or 0),
+        "LARG_MP": float(parent_row.get("larg_mp") or 0),
+        "ESP_MP": float(parent_row.get("esp_mp") or 0),
+        "QT_PAI": qt_pai,
+        "QT_DIV": divisor,
+        "QT_MOD": parent_qt,
+    }
+    if expression:
+        try:
+            value = eval(expression, {"__builtins__": {}}, env)  # noqa: S307
+        except Exception:
+            value = default if default is not None else 1
+    else:
+        value = default if default is not None else 1
+    try:
+        result = float(value)
+    except Exception:
+        result = 1.0
+    if regra_nome == "PUXADOR":
+        result = qt_pai * result
+    return max(result, 0.0)
+
+
+def identificar_regra(def_peca: str, rules: Optional[Mapping[str, Dict[str, Any]]] = None) -> Optional[str]:
+    source = rules or DEFAULT_QT_RULES
+    return _identify_regra(def_peca, source)
 
 
 TREE_DEFINITION: List[TreeNode] = [

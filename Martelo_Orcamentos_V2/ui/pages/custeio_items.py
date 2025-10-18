@@ -6,7 +6,8 @@ from __future__ import annotations
 
 
 
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
+import uuid
 
 
 
@@ -367,6 +368,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def __init__(self, parent=None):
 
         super().__init__(parent)
+        self._page = parent if parent is not None else None
 
         self.columns = svc_custeio.CUSTEIO_COLUMN_SPECS
 
@@ -383,6 +385,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._italic_font = QtGui.QFont()
 
         self._italic_font.setItalic(True)
+
+        self._bold_font = QtGui.QFont()
+
+        self._bold_font.setBold(True)
 
         self.rows: List[Dict[str, Any]] = []
 
@@ -413,27 +419,26 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if not (0 <= row_index < len(self.rows)):
             return ""
         row = self.rows[row_index]
+        row_type = row.get("_row_type") or "normal"
+        if row_type == "separator":
+            return ""
         if self._is_division_row(row):
             return self._format_factor(row.get("qt_mod")) or ""
 
         factors: List[str] = []
-        divisor = row.get("_qt_divisor")
-        formatted_div = self._format_factor(divisor)
-        if formatted_div:
-            factors.append(formatted_div)
+        divisor = self._format_factor(row.get("_qt_divisor"))
+        if divisor and (divisor != "1" or row_type in ("child", "parent")):
+            factors.append(divisor)
 
-        parent_factor = row.get("_qt_parent_factor")
-        formatted_parent = self._format_factor(parent_factor)
-        if formatted_parent and formatted_parent != "1":
-            factors.append(formatted_parent)
+        parent_factor = self._format_factor(row.get("_qt_parent_factor"))
+        factors.append(parent_factor or "1")
 
-        child_factor = row.get("_qt_child_factor")
-        formatted_child = self._format_factor(child_factor)
-        if formatted_child and formatted_child != "1":
-            factors.append(formatted_child)
+        child_factor = self._format_factor(row.get("_qt_child_factor"))
+        if child_factor:
+            factors.append(child_factor)
+        elif row_type == "child":
+            factors.append("1")
 
-        if not factors:
-            return ""
         return " x ".join(factors)
 
 
@@ -496,15 +501,33 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
+        row_data = self.rows[row]
+
+        row_type = row_data.get("_row_type")
+
         spec = self.columns[col]
 
         key = spec["key"]
 
-        value = self.rows[row].get(key)
+        value = row_data.get(key)
+
+        if role == QtCore.Qt.BackgroundRole:
+
+            if row_type == "division":
+
+                return QtGui.QColor(210, 210, 210)
+
+            if row_type == "separator":
+
+                return QtGui.QColor(235, 235, 235)
 
         if role == QtCore.Qt.FontRole:
 
-            if self.rows[row].get("blk") and key in ITALIC_ON_BLK_KEYS:
+            if row_type == "division":
+
+                return self._bold_font
+
+            if row_data.get("blk") and key in ITALIC_ON_BLK_KEYS:
 
                 return self._italic_font
 
@@ -567,6 +590,22 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
         if role == QtCore.Qt.DisplayRole:
+
+            if key == "id" and row_type == "division":
+
+                collapsed = False
+
+                page_ref = getattr(self, "_page", None)
+
+                if page_ref is not None:
+
+                    collapsed = row_data.get("_group_uid") in getattr(page_ref, "_collapsed_groups", set())
+
+                symbol = "⊕" if collapsed else "⊖"
+
+                base_value = value if value not in (None, "") else ""
+
+                return (symbol + " " + str(base_value).strip()).strip()
 
             if value in (None, ""):
 
@@ -762,11 +801,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         else:
 
-            self.rows[row][key] = value
+            if key == "esp":
 
+                self.rows[row][key] = self.rows[row].get("esp_mp")
 
+            else:
 
-        if requires_recalc:
+                self.rows[row][key] = value
+
+        if requires_recalc or key == "esp":
 
             self.recalculate_all()
 
@@ -933,9 +976,37 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             return
 
+        page_ref = getattr(self, "_page", None)
+
+        session = getattr(page_ref, "session", None) if page_ref is not None else None
+
+        context = getattr(page_ref, "context", None) if page_ref is not None else None
+
+        if session is not None and context is not None:
+
+            try:
+
+                rules = svc_custeio.load_qt_rules(session, context)
+
+            except Exception:
+
+                rules = svc_custeio.DEFAULT_QT_RULES
+
+        else:
+
+            rules = svc_custeio.DEFAULT_QT_RULES
+
         divisor = 1.0
 
+        current_group_uid = str(uuid.uuid4())
+
+        current_parent_row: Optional[Dict[str, Any]] = None
+
+        current_parent_uid: Optional[str] = None
+
         for row in self.rows:
+
+            row["_uid"] = row.get("_uid") or str(uuid.uuid4())
 
             row["comp_res"] = row.get("comp")
 
@@ -943,19 +1014,45 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["esp_res"] = row.get("esp")
 
+            def_peca = row.get("def_peca") or ""
+
+            if not def_peca.strip():
+
+                row["_row_type"] = "separator"
+
+                row["_group_uid"] = row.get("_group_uid") or current_group_uid
+
+                row["_qt_divisor"] = divisor
+
+                row["_qt_parent_factor"] = None
+
+                row["_qt_child_factor"] = None
+
+                row["qt_total"] = None
+
+                current_parent_row = None
+
+                current_parent_uid = None
+
+                continue
+
             if self._is_division_row(row):
 
-                valor_divisor = row.get("qt_mod")
+                row["_row_type"] = "division"
 
                 try:
 
-                    divisor = float(valor_divisor) if valor_divisor not in (None, "") else 1.0
+                    divisor = float(row.get("qt_mod") or 1.0)
 
                 except Exception:
 
                     divisor = 1.0
 
                 divisor = max(divisor, 1.0)
+
+                current_group_uid = row.get("_group_uid") or str(uuid.uuid4())
+
+                row["_group_uid"] = current_group_uid
 
                 row["_qt_divisor"] = divisor
 
@@ -965,41 +1062,101 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 row["qt_total"] = divisor
 
+                current_parent_row = None
+
+                current_parent_uid = None
+
                 continue
+
+            if "+" in def_peca:
+
+                row["_row_type"] = "parent"
+
+                current_group_uid = row.get("_group_uid") or str(uuid.uuid4())
+
+                row["_group_uid"] = current_group_uid
+
+                current_parent_row = row
+
+                current_parent_uid = row["_uid"]
+
+                row["_regra_nome"] = None
+
+            else:
+
+                regra_nome = svc_custeio.identificar_regra(def_peca, rules)
+
+                if regra_nome:
+
+                    row["_row_type"] = "child"
+
+                    row["_group_uid"] = row.get("_group_uid") or current_group_uid
+
+                    row["_parent_uid"] = current_parent_uid
+
+                    row["_regra_nome"] = regra_nome
+
+                else:
+
+                    row["_row_type"] = "normal"
+
+                    row["_group_uid"] = row.get("_group_uid") or current_group_uid
+
+                    current_parent_row = None
+
+                    current_parent_uid = None
+
+                    row["_regra_nome"] = None
 
             row["_qt_divisor"] = divisor
 
-            parent_factor = row.get("qt_mod")
-
-            child_factor = row.get("qt_und")
-
             try:
 
-                parent = float(parent_factor) if parent_factor not in (None, "") else 1.0
+                parent_factor = float(current_parent_row.get("qt_mod") if row.get("_row_type") == "child" and current_parent_row else row.get("qt_mod") or 1.0)
 
             except Exception:
 
-                parent = 1.0
+                parent_factor = 1.0
 
-            try:
+            row["qt_mod"] = parent_factor if row.get("_row_type") == "child" else row.get("qt_mod")
 
-                child = float(child_factor) if child_factor not in (None, "") else 1.0
+            child_factor_value = row.get("qt_und")
 
-            except Exception:
+            if row.get("_row_type") == "child" and current_parent_row is not None:
 
-                child = 1.0
+                regra_nome = row.get("_regra_nome")
 
-            row["_qt_parent_factor"] = parent
+                try:
 
-            row["_qt_child_factor"] = child
+                    child_factor = svc_custeio.calcular_qt_filhos(regra_nome, current_parent_row, row, divisor, parent_factor, rules)
 
-            total = divisor * parent * child
+                except Exception:
+
+                    child_factor = float(child_factor_value or 1.0)
+
+                row["qt_und"] = child_factor
+
+            else:
+
+                try:
+
+                    child_factor = float(child_factor_value or 1.0)
+
+                except Exception:
+
+                    child_factor = 1.0
+
+            row["_qt_parent_factor"] = parent_factor
+
+            row["_qt_child_factor"] = child_factor
+
+            total = divisor * parent_factor * child_factor
 
             row["qt_total"] = total if total else None
 
-        if not self.rows:
+            if row.get("esp_mp") not in (None, ""):
 
-            return
+                row["esp"] = row.get("esp_mp")
 
         left = self._column_index.get("qt_mod")
 
@@ -1024,6 +1181,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         bottom_right_all = self.index(len(self.rows) - 1, len(self.columns) - 1)
 
         self.dataChanged.emit(top_left_all, bottom_right_all, [QtCore.Qt.DisplayRole, QtCore.Qt.EditRole])
+
+        if getattr(self, "_page", None):
+            self._page._apply_collapse_state()
 
 
     def update_row_fields(self, row_index: int, updates: Mapping[str, Any], skip_keys: Optional[Sequence[str]] = None) -> None:
@@ -1069,6 +1229,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             else:
 
                 row[key] = value
+
+        if "esp_mp" in updates:
+
+            row["esp"] = updates.get("esp_mp")
+
+        elif row.get("esp_mp") not in (None, ""):
+
+            row["esp"] = row.get("esp_mp")
 
         top_left = self.index(row_index, 0)
 
@@ -1365,7 +1533,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model = CusteioTableModel(self)
 
+        self.table_model._page = self
 
+        self._collapsed_groups: Set[str] = set()
 
         self._setup_ui()
 
@@ -1873,6 +2043,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         item.setCheckable(True)
 
+        item.setToolTip(label)
+
         item.setCheckState(QtCore.Qt.Unchecked)
 
 
@@ -2373,6 +2545,31 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+    def _apply_collapse_state(self) -> None:
+
+        if not hasattr(self, "table_view"):
+            return
+
+        collapsed = getattr(self, "_collapsed_groups", set())
+        current_group = None
+        row_count = self.table_model.rowCount()
+
+        for idx in range(row_count):
+            row = self.table_model.rows[idx]
+            row_type = row.get("_row_type")
+            group_uid = row.get("_group_uid") or current_group
+
+            if row_type == "division":
+                current_group = group_uid
+                self.table_view.setRowHidden(idx, False)
+                continue
+
+            hide = bool(group_uid in collapsed) if group_uid else False
+            self.table_view.setRowHidden(idx, hide)
+
+        self.table_view.viewport().update()
+
+
     def _icon(self, key: str) -> QtGui.QIcon:
 
         style = self.style() or QtWidgets.QApplication.style()
@@ -2399,9 +2596,31 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         spec = self.table_model.columns[index.column()]
 
+        row_data = self.table_model.rows[index.row()]
+
+        if spec["key"] == "id" and row_data.get("_row_type") == "division":
+
+            group_uid = row_data.get("_group_uid")
+
+            if group_uid:
+
+                if group_uid in self._collapsed_groups:
+
+                    self._collapsed_groups.remove(group_uid)
+
+                else:
+
+                    self._collapsed_groups.add(group_uid)
+
+                self._apply_collapse_state()
+
+                self.table_model.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole])
+
+            return
+
         if spec["type"] == "bool":
 
-            current = bool(self.table_model.rows[index.row()].get(spec["key"]))
+            current = bool(row_data.get(spec["key"]))
 
             new_state = QtCore.Qt.Unchecked if current else QtCore.Qt.Checked
 
@@ -2522,10 +2741,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
             position = row_index + offset if before else row_index + 1 + offset
 
             linha = svc_custeio.linha_vazia()
-
-            linha["qt_mod"] = 1.0
-
-            linha["qt_und"] = 1.0
 
             self.table_model.insert_rows(position, [linha])
 
