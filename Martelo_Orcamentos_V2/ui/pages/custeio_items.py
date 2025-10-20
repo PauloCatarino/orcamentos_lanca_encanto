@@ -431,7 +431,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if divisor:
             factors.append(divisor)
 
-        parent_factor = self._format_factor(row.get("_qt_parent_factor"))
+        parent_factor_val = row.get("_qt_parent_factor")
+        if row_type == "parent":
+            # For parent rows, the main factor is qt_und, not qt_mod
+            parent_factor_val = row.get("qt_und")
+
+        parent_factor = self._format_factor(parent_factor_val)
         if parent_factor:
             factors.append(parent_factor)
 
@@ -1096,6 +1101,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 row["_qt_child_factor"] = None
 
+                row["qt_und"] = None
+
                 row["qt_total"] = divisor
 
                 if getattr(self, "_page", None):
@@ -1156,27 +1163,23 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row.pop("icon_hint", None)
 
             if row_type == "child" and current_parent_row is not None:
-
                 try:
-
                     parent_factor = float(current_parent_row.get("qt_und") or 1.0)
-
                 except Exception:
-
                     parent_factor = 1.0
-
-            else:
-
+            elif row_type == "parent":
                 try:
-
-                    parent_factor = float(row.get("qt_mod") or 1.0)
-
+                    parent_factor = float(row.get("qt_und") or 1.0)
                 except Exception:
-
                     parent_factor = 1.0
-
+                if row.get("qt_und") in (None, ""):
+                    row["qt_und"] = parent_factor
+            else:
+                try:
+                    parent_factor = float(row.get("qt_mod") or 1.0)
+                except Exception:
+                    parent_factor = 1.0
                 if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
-
                     row["qt_mod"] = parent_factor
 
             child_factor_value = row.get("qt_und")
@@ -2629,18 +2632,26 @@ class CusteioItemsPage(QtWidgets.QWidget):
         current_group = None
         row_count = self.table_model.rowCount()
 
+        # First pass: determine visibility based on groups
+        visibility: List[bool] = [True] * row_count
         for idx in range(row_count):
             row = self.table_model.rows[idx]
             row_type = row.get("_row_type")
-            group_uid = row.get("_group_uid") or current_group
+            group_uid = row.get("_group_uid")
 
             if row_type == "division":
                 current_group = group_uid
-                self.table_view.setRowHidden(idx, False)
+                visibility[idx] = True
                 continue
 
-            hide = bool(group_uid in collapsed) if group_uid else False
-            self.table_view.setRowHidden(idx, hide)
+            if current_group and current_group in collapsed:
+                visibility[idx] = False
+            else:
+                visibility[idx] = True
+        
+        # Second pass: apply visibility
+        for idx in range(row_count):
+            self.table_view.setRowHidden(idx, not visibility[idx])
 
         self.table_view.viewport().update()
 
@@ -2664,41 +2675,38 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
     def _on_table_clicked(self, index: QtCore.QModelIndex) -> None:
-
         if not index.isValid():
-
             return
 
         spec = self.table_model.columns[index.column()]
-
         row_data = self.table_model.rows[index.row()]
 
         if spec["key"] == "id" and row_data.get("_row_type") == "division":
-
             group_uid = row_data.get("_group_uid")
-
             if group_uid:
-
                 if group_uid in self._collapsed_groups:
-
                     self._collapsed_groups.remove(group_uid)
-
                 else:
-
                     self._collapsed_groups.add(group_uid)
 
-                self._apply_collapse_state()
+                # Find the range of rows to toggle
+                start_row = index.row()
+                end_row = self.table_model.rowCount()
+                for i in range(start_row + 1, self.table_model.rowCount()):
+                    if self.table_model.rows[i].get("_row_type") == "division":
+                        end_row = i
+                        break
+                
+                is_collapsed = group_uid in self._collapsed_groups
+                for i in range(start_row + 1, end_row):
+                    self.table_view.setRowHidden(i, is_collapsed)
 
                 self.table_model.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole])
-
             return
 
         if spec["type"] == "bool":
-
             current = bool(row_data.get(spec["key"]))
-
             new_state = QtCore.Qt.Unchecked if current else QtCore.Qt.Checked
-
             self.table_model.setData(index, new_state, QtCore.Qt.CheckStateRole)
 
 
