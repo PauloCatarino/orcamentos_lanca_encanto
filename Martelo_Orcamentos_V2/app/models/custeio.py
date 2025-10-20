@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -43,6 +44,9 @@ class CusteioItem(CusteioContextMixin, Base):
     descricao = Column(String(255), nullable=True)
     qt_mod = Column(Numeric(18, 4), nullable=True)
     qt_und = Column(Numeric(18, 4), nullable=True)
+    comp_expr = Column(String(255), nullable=True)
+    larg_expr = Column(String(255), nullable=True)
+    esp_expr = Column(String(255), nullable=True)
     comp = Column(Numeric(18, 4), nullable=True)
     larg = Column(Numeric(18, 4), nullable=True)
     esp = Column(Numeric(18, 4), nullable=True)
@@ -108,3 +112,36 @@ class CusteioItem(CusteioContextMixin, Base):
     soma_custo_und = Column(Numeric(18, 4), nullable=True)
     soma_custo_total = Column(Numeric(18, 4), nullable=True)
     soma_custo_acb = Column(Numeric(18, 4), nullable=True)
+
+
+class CusteioItemDimensoes(CusteioContextMixin, Base):
+    __tablename__ = "custeio_item_dimensoes"
+    __table_args__ = (
+        UniqueConstraint(
+            "orcamento_id",
+            "item_id",
+            "versao",
+            "user_id",
+            name="u_custeio_item_dimensoes_ctx",
+        ),
+    )
+
+    h = Column(Numeric(18, 4), nullable=True)
+    l = Column(Numeric(18, 4), nullable=True)
+    p = Column(Numeric(18, 4), nullable=True)
+
+    h1 = Column(Numeric(18, 4), nullable=True)
+    l1 = Column(Numeric(18, 4), nullable=True)
+    p1 = Column(Numeric(18, 4), nullable=True)
+
+    h2 = Column(Numeric(18, 4), nullable=True)
+    l2 = Column(Numeric(18, 4), nullable=True)
+    p2 = Column(Numeric(18, 4), nullable=True)
+
+    h3 = Column(Numeric(18, 4), nullable=True)
+    l3 = Column(Numeric(18, 4), nullable=True)
+    p3 = Column(Numeric(18, 4), nullable=True)
+
+    h4 = Column(Numeric(18, 4), nullable=True)
+    l4 = Column(Numeric(18, 4), nullable=True)
+    p4 = Column(Numeric(18, 4), nullable=True)

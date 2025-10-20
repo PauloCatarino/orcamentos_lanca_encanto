@@ -6,14 +6,14 @@ import json
 import re
 import unicodedata
 import uuid
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, func
 from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models.client import Client
-from Martelo_Orcamentos_V2.app.models.custeio import CusteioItem
-from Martelo_Orcamentos_V2.app.models.dados_gerais import DadosItemsMaterial
+from Martelo_Orcamentos_V2.app.models.custeio import CusteioItem, CusteioItemDimensoes
+from Martelo_Orcamentos_V2.app.models.dados_gerais import DadosItemsMaterial, DadosItemsFerragem
 from Martelo_Orcamentos_V2.app.models.materia_prima import MateriaPrima
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.models.user import User
@@ -37,6 +37,25 @@ ACABAMENTO_DEFAULTS = [
     "Acabamento Face Inf 2",
 ]
 
+DIMENSION_KEY_ORDER: Sequence[str] = (
+    "H",
+    "L",
+    "P",
+    "H1",
+    "L1",
+    "P1",
+    "H2",
+    "L2",
+    "P2",
+    "H3",
+    "L3",
+    "P3",
+    "H4",
+    "L4",
+    "P4",
+)
+DIMENSION_ALLOWED_VARIABLES: Set[str] = set(DIMENSION_KEY_ORDER) | {"HM", "LM", "PM"}
+
 
 def _normalize_token(value: Optional[str]) -> str:
     if value is None:
@@ -50,6 +69,29 @@ GROUP_LOOKUP: Dict[str, Dict[str, str]] = {}
 for _menu, _groups in svc_dados_items.MENU_FIXED_GROUPS.items():
     for _name in _groups:
         GROUP_LOOKUP[_normalize_token(_name)] = {"menu": _menu, "name": _name}
+
+_FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
+    _normalize_token("SUPORTE PRATELEIRA"): {"tipo": "SUPORTE PRATELEIRA", "familia": "FERRAGENS"},
+    _normalize_token("VARAO"): {"tipo": "SPP", "familia": "FERRAGENS"},
+    _normalize_token("VARÃO"): {"tipo": "SPP", "familia": "FERRAGENS"},
+    _normalize_token("SUPORTE VARAO"): {"tipo": "SUPORTE VARAO", "familia": "FERRAGENS"},
+    _normalize_token("SUPORTE VARÃO"): {"tipo": "SUPORTE VARAO", "familia": "FERRAGENS"},
+    _normalize_token("PUXADOR"): {"tipo": "PUXADOR", "familia": "FERRAGENS"},
+    _normalize_token("PES"): {"tipo": "PES", "familia": "FERRAGENS"},
+    _normalize_token("PÉS"): {"tipo": "PES", "familia": "FERRAGENS"},
+    _normalize_token("DOBRADICA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
+    _normalize_token("DOBRADIÇA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
+}
+
+_FERRAGEM_TIPO_KEYWORDS: Dict[str, Sequence[str]] = {
+    _normalize_token("SUPORTE PRATELEIRA"): ("suporte", "prateleira"),
+    _normalize_token("SUPORTE VARAO"): ("suporte", "varao"),
+    _normalize_token("SUPORTE VARÃO"): ("suporte", "varao"),
+    _normalize_token("SPP"): ("varao", "spp"),
+    _normalize_token("PUXADOR"): ("puxador",),
+    _normalize_token("PES"): ("pes",),
+    _normalize_token("DOBRADICAS"): ("dobradica",),
+}
 
 DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "PES": {
@@ -553,9 +595,9 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "descricao", "label": "Descricao", "type": "text", "editable": False},
     {"key": "qt_mod", "label": "QT_mod", "type": "numeric", "editable": True},
     {"key": "qt_und", "label": "QT_und", "type": "numeric", "editable": True},
-    {"key": "comp", "label": "Comp", "type": "numeric", "editable": True, "format": "int"},
-    {"key": "larg", "label": "Larg", "type": "numeric", "editable": True, "format": "int"},
-    {"key": "esp", "label": "Esp", "type": "numeric", "editable": True, "format": "int"},
+    {"key": "comp", "label": "Comp", "type": "text", "editable": True},
+    {"key": "larg", "label": "Larg", "type": "text", "editable": True},
+    {"key": "esp", "label": "Esp", "type": "text", "editable": True},
     {"key": "mps", "label": "MPs", "type": "bool", "editable": True},
     {"key": "mo", "label": "MO", "type": "bool", "editable": True},
     {"key": "orla", "label": "Orla", "type": "bool", "editable": True},
@@ -691,6 +733,180 @@ def _grupo_label_from_material(material: Any) -> Optional[str]:
     return None
 
 
+def _clean_ferragem_token(token: str) -> str:
+    cleaned = token.strip()
+    while cleaned and cleaned[-1].isdigit():
+        cleaned = cleaned[:-1]
+    cleaned = cleaned.rstrip("_ ").strip()
+    return cleaned or token
+
+
+def _lookup_ferragem_info(label: Optional[str]) -> Optional[Dict[str, str]]:
+    if label is None:
+        return None
+    text = str(label).strip()
+    if not text:
+        return None
+    token = _normalize_token(text)
+    if not token:
+        return None
+    info = _FERRAGEM_CHILD_TYPE_MAP.get(token)
+    if info:
+        return info
+    simplified = _clean_ferragem_token(token)
+    if simplified and simplified != token:
+        info = _FERRAGEM_CHILD_TYPE_MAP.get(simplified)
+        if info:
+            return info
+    if "_" in token:
+        base = token.split("_", 1)[0].strip()
+        info = _FERRAGEM_CHILD_TYPE_MAP.get(base)
+        if info:
+            return info
+    return None
+
+
+def _group_keywords_for_tipo(tipo: Optional[str]) -> Sequence[str]:
+    if not tipo:
+        return ()
+    key = _normalize_token(tipo)
+    keywords = _FERRAGEM_TIPO_KEYWORDS.get(key)
+    if keywords:
+        return keywords
+    return tuple(word for word in key.split() if word)
+
+
+def _buscar_ferragem_por_tipo(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    tipo: Optional[str],
+    familia: Optional[str] = None,
+):
+    if not tipo:
+        return None
+    tipo_text = str(tipo).strip()
+    if not tipo_text:
+        return None
+
+    stmt = (
+        select(DadosItemsFerragem)
+        .where(
+            DadosItemsFerragem.orcamento_id == ctx.orcamento_id,
+            DadosItemsFerragem.item_id == ctx.item_id,
+        )
+    )
+    stmt = stmt.where(func.lower(DadosItemsFerragem.tipo) == tipo_text.lower())
+
+    if familia:
+        familia_text = str(familia).strip()
+        if familia_text:
+            stmt = stmt.where(func.lower(DadosItemsFerragem.familia) == familia_text.lower())
+
+    stmt = stmt.order_by(DadosItemsFerragem.linha, DadosItemsFerragem.grupo_ferragem).limit(1)
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def obter_ferragem_por_tipo(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    tipo: Optional[str],
+    familia: Optional[str] = None,
+):
+    if not tipo:
+        return None
+    familia_base = familia or "FERRAGENS"
+    material = _buscar_ferragem_por_tipo(session, ctx, tipo, familia_base)
+    if material:
+        return material
+    return _buscar_ferragem_por_tipo(session, ctx, tipo, None)
+
+
+def inferir_ferragem_info(data: Any) -> Optional[Dict[str, str]]:
+    if isinstance(data, Mapping):
+        mapping = data
+        tipo_val = mapping.get("tipo")
+        familia_val = mapping.get("familia")
+        if tipo_val:
+            familia_text = str(familia_val or "FERRAGENS").strip()
+            if _normalize_token(familia_text) == _normalize_token("FERRAGENS"):
+                return {"tipo": str(tipo_val).strip(), "familia": familia_text}
+        for key in ("_child_source", "def_peca", "descricao", "descricao_livre", "_parent_label", "mat_default"):
+            value = mapping.get(key)
+            info = inferir_ferragem_info(value)
+            if info:
+                return info
+        return None
+    if isinstance(data, str):
+        text = data.strip()
+        if not text:
+            return None
+        info = _lookup_ferragem_info(text)
+        if info:
+            return info
+        parts = [part.strip() for part in text.split("+") if part.strip()]
+        for part in parts:
+            info = _lookup_ferragem_info(part)
+            if info:
+                return info
+        return None
+    return None
+
+
+def lista_mat_default_ferragens(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    tipo: Optional[str],
+) -> List[str]:
+    if not tipo:
+        return []
+    tipo_text = str(tipo).strip()
+    if not tipo_text:
+        return []
+
+    stmt = (
+        select(DadosItemsFerragem.grupo_ferragem)
+        .where(
+            DadosItemsFerragem.orcamento_id == ctx.orcamento_id,
+            DadosItemsFerragem.item_id == ctx.item_id,
+            func.lower(DadosItemsFerragem.tipo) == tipo_text.lower(),
+        )
+        .order_by(DadosItemsFerragem.linha, DadosItemsFerragem.grupo_ferragem)
+    )
+
+    valores = session.execute(stmt).scalars().all()
+    vistos: Set[str] = set()
+    resultado: List[str] = []
+    for valor in valores:
+        if not valor:
+            continue
+        texto = str(valor).strip()
+        if not texto:
+            continue
+        token = _normalize_token(texto)
+        if token in vistos:
+            continue
+        vistos.add(token)
+        resultado.append(texto)
+
+    if resultado:
+        return resultado
+
+    defaults = svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_FERRAGENS, ())
+    keywords = _group_keywords_for_tipo(tipo_text)
+    for grupo in defaults:
+        texto = str(grupo).strip()
+        if not texto:
+            continue
+        token = _normalize_token(texto)
+        if token in vistos:
+            continue
+        if not keywords or all(keyword in token for keyword in keywords):
+            vistos.add(token)
+            resultado.append(texto)
+
+    return resultado
+
+
 def _collect_group_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:
     model = svc_dados_items.MODEL_MAP.get(menu)
     if not model:
@@ -801,6 +1017,16 @@ def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
     if value is None:
         return None
     return float(value)
+
+
+def _format_formula_value(value: Any) -> Optional[str]:
+    coerced = _coerce_dimensao_valor(value)
+    if coerced is None:
+        return None
+    if abs(coerced - round(coerced)) < 1e-6:
+        return str(int(round(coerced)))
+    formatted = f"{coerced:.4f}".rstrip("0").rstrip(".")
+    return formatted or str(coerced)
 
 
 def _to_decimal(value: Any) -> Optional[Decimal]:
@@ -950,6 +1176,16 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
             key = spec["key"]
             if key == "id" or spec["type"] == "icon":
                 continue
+
+            if key in {"comp", "larg", "esp"}:
+                expr_attr = f"{key}_expr"
+                expr_val = getattr(registro, expr_attr, None)
+                if expr_val not in (None, ""):
+                    linha[key] = expr_val
+                else:
+                    linha[key] = _format_formula_value(getattr(registro, key, None))
+                continue
+
             valor = getattr(registro, key, None)
             if spec["type"] == "numeric":
                 linha[key] = _decimal_to_float(valor)
@@ -963,7 +1199,12 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
     return linhas
 
 
-def salvar_custeio_items(session: Session, ctx: svc_dados_items.DadosItemsContext, linhas: Sequence[Mapping[str, Any]]) -> None:
+def salvar_custeio_items(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    linhas: Sequence[Mapping[str, Any]],
+    dimensoes: Optional[Mapping[str, Any]] = None,
+) -> None:
     # Remove registros antigos
     session.execute(
         delete(CusteioItem).where(
@@ -988,6 +1229,15 @@ def salvar_custeio_items(session: Session, ctx: svc_dados_items.DadosItemsContex
             key = spec["key"]
             if key == "id" or spec["type"] == "icon":
                 continue
+
+            if key in {"comp", "larg", "esp"}:
+                expr_attr = f"{key}_expr"
+                expr_val = linha.get(key)
+                setattr(registro, expr_attr, _normalise_string(expr_val))
+                resultado = linha.get(f"{key}_res")
+                setattr(registro, key, _to_decimal(resultado))
+                continue
+
             valor = linha.get(key)
             if spec["type"] == "numeric":
                 setattr(registro, key, _to_decimal(valor))
@@ -996,6 +1246,13 @@ def salvar_custeio_items(session: Session, ctx: svc_dados_items.DadosItemsContex
             else:
                 setattr(registro, key, _normalise_string(valor))
         session.add(registro)
+
+    if dimensoes is not None:
+        try:
+            guardar_dimensoes(session, ctx, dimensoes)
+        except Exception:
+            # Se falhar, mantem estados anteriores mas nao interrompe a gravacao principal
+            pass
 
     session.commit()
 
@@ -1060,10 +1317,31 @@ def gerar_linhas_para_selecoes(
                 if not material_child:
                     material_child = obter_material_por_grupo(session, ctx, base)
 
+                ferragem_info: Optional[Dict[str, str]] = None
+                if not material_child:
+                    ferragem_info = _lookup_ferragem_info(base)
+                    if ferragem_info:
+                        material_child = obter_ferragem_por_tipo(
+                            session,
+                            ctx,
+                            ferragem_info.get("tipo"),
+                            ferragem_info.get("familia"),
+                        )
+
                 if material_child:
-                    _preencher_linha_com_material(child_row, material_child, grupo_child)
+                    grupo_hint = grupo_child or (ferragem_info.get("tipo") if ferragem_info else None)
+                    _preencher_linha_com_material(child_row, material_child, grupo_hint)
                 else:
                     child_row["descricao"] = base
+                    if ferragem_info:
+                        if ferragem_info.get("familia"):
+                            child_row.setdefault("familia", ferragem_info["familia"])
+                        if ferragem_info.get("tipo"):
+                            child_row.setdefault("tipo", ferragem_info["tipo"])
+                        if not child_row.get("mat_default"):
+                            lista = lista_mat_default_ferragens(session, ctx, ferragem_info.get("tipo"))
+                            if lista:
+                                child_row["mat_default"] = lista[0]
 
                 child_row["qt_mod"] = 1
                 child_row["qt_und"] = 1
@@ -1106,6 +1384,17 @@ def _preencher_linha_com_material(
     linha["orl_1_0"] = getattr(material, "orl_1_0", None)
     linha["tipo"] = getattr(material, "tipo", None)
     linha["familia"] = getattr(material, "familia", None)
+
+    comp_val = _format_formula_value(getattr(material, "comp", None))
+    if comp_val is not None:
+        linha["comp"] = comp_val
+    larg_val = _format_formula_value(getattr(material, "larg", None))
+    if larg_val is not None:
+        linha["larg"] = larg_val
+    esp_val = _format_formula_value(getattr(material, "esp", None))
+    if esp_val is not None:
+        linha["esp"] = esp_val
+
     linha["comp_mp"] = _decimal_to_float(getattr(material, "comp_mp", None))
     linha["larg_mp"] = _decimal_to_float(getattr(material, "larg_mp", None))
     linha["esp_mp"] = _decimal_to_float(getattr(material, "esp_mp", None))
@@ -1209,6 +1498,97 @@ def dados_material(material: Any) -> Dict[str, Any]:
     linha: Dict[str, Any] = {}
     _preencher_linha_com_material(linha, material)
     return linha
+
+
+def _empty_dimensoes_dict() -> Dict[str, Optional[float]]:
+    return {key: None for key in DIMENSION_KEY_ORDER}
+
+
+def _coerce_dimensao_valor(valor: Any) -> Optional[float]:
+    if valor in (None, "", False):
+        return None
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        try:
+            text = str(valor).replace(",", ".")
+            return float(text) if text else None
+        except (TypeError, ValueError):
+            return None
+
+
+def carregar_dimensoes(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+) -> Tuple[Dict[str, Optional[float]], bool]:
+    if ctx is None:
+        return _empty_dimensoes_dict(), False
+
+    stmt = (
+        select(CusteioItemDimensoes)
+        .where(
+            CusteioItemDimensoes.orcamento_id == ctx.orcamento_id,
+            CusteioItemDimensoes.item_id == ctx.item_id,
+            CusteioItemDimensoes.versao == ctx.versao,
+            CusteioItemDimensoes.user_id == ctx.user_id,
+        )
+        .order_by(CusteioItemDimensoes.id.desc())
+        .limit(1)
+    )
+    registro = session.execute(stmt).scalar_one_or_none()
+    valores = _empty_dimensoes_dict()
+    if registro:
+        for chave in DIMENSION_KEY_ORDER:
+            valores[chave] = _decimal_to_float(getattr(registro, chave.lower(), None))
+    return valores, registro is not None
+
+
+def guardar_dimensoes(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    valores: Mapping[str, Any],
+) -> None:
+    if ctx is None:
+        return
+
+    stmt = (
+        select(CusteioItemDimensoes)
+        .where(
+            CusteioItemDimensoes.orcamento_id == ctx.orcamento_id,
+            CusteioItemDimensoes.item_id == ctx.item_id,
+            CusteioItemDimensoes.versao == ctx.versao,
+            CusteioItemDimensoes.user_id == ctx.user_id,
+        )
+        .limit(1)
+    )
+    registro = session.execute(stmt).scalar_one_or_none()
+    if registro is None:
+        registro = CusteioItemDimensoes(
+            orcamento_id=ctx.orcamento_id,
+            item_id=ctx.item_id,
+            cliente_id=ctx.cliente_id,
+            user_id=ctx.user_id,
+            ano=ctx.ano,
+            num_orcamento=ctx.num_orcamento,
+            versao=ctx.versao,
+            ordem=0,
+        )
+
+    for chave in DIMENSION_KEY_ORDER:
+        setattr(registro, chave.lower(), _to_decimal(valores.get(chave)))
+
+    session.add(registro)
+    session.flush()
+
+
+def dimensoes_default_por_item(item: Optional[OrcamentoItem]) -> Dict[str, Optional[float]]:
+    valores = _empty_dimensoes_dict()
+    if not item:
+        return valores
+    valores["H"] = _decimal_to_float(getattr(item, "altura", None))
+    valores["L"] = _decimal_to_float(getattr(item, "largura", None))
+    valores["P"] = _decimal_to_float(getattr(item, "profundidade", None))
+    return valores
 
 
 def _group_info(grupo: Optional[str]) -> Optional[Dict[str, str]]:

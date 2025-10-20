@@ -6,7 +6,10 @@ from __future__ import annotations
 
 
 
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+import ast
+import re
+import unicodedata
 import uuid
 
 
@@ -45,6 +48,11 @@ ITALIC_ON_BLK_KEYS = {
 }
 
 MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS
+
+DIMENSION_KEY_ORDER: Sequence[str] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
+DIMENSION_ALLOWED_VARIABLES: Set[str] = set(svc_custeio.DIMENSION_ALLOWED_VARIABLES)
+_TOKEN_PATTERN = re.compile(r"[A-Z]+[0-9]*")
+_FORMULA_ALLOWED_CHARS = re.compile(r"^[0-9A-Z+\-*/().,\\s]*$")
 
 HEADER_TOOLTIPS = {
     "descricao_livre": "Texto livre editavel para identificar a linha no custeio.",
@@ -397,7 +405,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
     @staticmethod
     def _normalize_def_peca(value: Optional[str]) -> str:
-        return (value or "").strip().upper()
+        text = (value or "").strip()
+        if not text:
+            return ""
+        normalized = unicodedata.normalize("NFKD", text)
+        cleaned = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        return cleaned.upper()
 
     def _is_division_row(self, row: Mapping[str, Any]) -> bool:
         return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
@@ -447,6 +460,105 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             factors.append(child_factor)
 
         return " x ".join(factors)
+
+    def _sanitize_formula_input(self, value: Any) -> Optional[str]:
+        if value in (None, False):
+            return ""
+        text = str(value)
+        if not text:
+            return ""
+        text = text.replace(",", ".").upper()
+        # Allow spaces in the expression
+        if not _FORMULA_ALLOWED_CHARS.match(text):
+            return None
+        tokens = _TOKEN_PATTERN.findall(text)
+        for token in tokens:
+            if token not in DIMENSION_ALLOWED_VARIABLES:
+                return None
+        return text.strip()
+
+    @staticmethod
+    def _format_result_number(value: Optional[float]) -> Optional[str]:
+        if value is None:
+            return None
+        if abs(value - int(round(value))) < 1e-6:
+            return str(int(round(value)))
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+
+    def _prepare_formula_expression(self, value: Any) -> str:
+        if value in (None, ""):
+            return ""
+        text = str(value).replace(",", ".").upper()
+        return text.strip()
+
+    def _build_formula_tooltip(self, expression: str, result: Optional[float], error: Optional[str]) -> Optional[str]:
+        expression = expression.strip()
+        if error:
+            return f"{expression} → erro: {error}" if expression else f"Erro: {error}"
+        if expression and result is not None:
+            return f"{expression} = {self._format_result_number(result)}"
+        if expression:
+            return expression
+        if result is not None:
+            return self._format_result_number(result)
+        return None
+
+    def _evaluate_formula_expression(
+        self,
+        expression: str,
+        global_vars: Mapping[str, Optional[float]],
+        local_vars: Mapping[str, Optional[float]],
+    ) -> Tuple[Optional[float], Optional[str]]:
+        expr = expression.strip()
+        if not expr:
+            return (None, None)
+        try:
+            node = ast.parse(expr, mode="eval")
+            variables: Dict[str, Optional[float]] = {}
+            variables.update(global_vars)
+            variables.update({k: v for k, v in local_vars.items() if v is not None})
+            value = self._eval_formula_ast(node.body, variables)
+            return (float(value), None)
+        except ZeroDivisionError:
+            return (None, "Divisao por zero")
+        except Exception as exc:
+            return (None, str(exc))
+
+    def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> float:
+        if isinstance(node, ast.BinOp):
+            left = self._eval_formula_ast(node.left, variables)
+            right = self._eval_formula_ast(node.right, variables)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            raise ValueError("Operador nao suportado")
+        if isinstance(node, ast.UnaryOp):
+            operand = self._eval_formula_ast(node.operand, variables)
+            if isinstance(node.op, ast.UAdd):
+                return operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            raise ValueError("Operador nao suportado")
+        if isinstance(node, ast.Name):
+            key = node.id.upper()
+            if key not in variables:
+                raise ValueError(f"Variavel {key} desconhecida")
+            valor = variables[key]
+            if valor is None:
+                raise ValueError(f"Variavel {key} sem valor")
+            return float(valor)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return float(node.value)
+            raise ValueError("Constante invalida")
+        if isinstance(node, ast.Num):  # type: ignore[attr-defined]
+            return float(node.n)  # pragma: no cover
+        raise ValueError("Expressao invalida")
 
 
 
@@ -517,6 +629,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         key = spec["key"]
 
         value = row_data.get(key)
+
+        if key in {"comp", "larg", "esp"}:
+            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+                return value or ""
+            if role == QtCore.Qt.ToolTipRole:
+                tooltip = row_data.get(f"_{key}_tooltip")
+                if tooltip:
+                    return tooltip
+                return None
 
         if key == "icon_hint":
 
@@ -786,7 +907,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         requires_recalc = False
 
-        if spec["type"] == "numeric":
+        if key in {"comp", "larg", "esp"}:
+            sanitized = self._sanitize_formula_input(value)
+            if sanitized is None and value not in (None, ""):
+                return False
+            self.rows[row][key] = sanitized or ""
+            requires_recalc = True
+        elif spec["type"] == "numeric":
 
             if key == "qt_mod" and self._is_division_row(self.rows[row]):
 
@@ -840,15 +967,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         else:
 
-            if key == "esp":
+            self.rows[row][key] = value
 
-                self.rows[row][key] = self.rows[row].get("esp_mp")
-
-            else:
-
-                self.rows[row][key] = value
-
-        if requires_recalc or key == "esp":
+        if requires_recalc:
 
             self.recalculate_all()
 
@@ -982,7 +1103,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             else:
 
-                coerced[key] = value
+                if key in {"comp", "larg", "esp"}:
+                    sanitized = self._sanitize_formula_input(value)
+                    if sanitized is None and value not in (None, ""):
+                        sanitized = str(value).replace(",", ".").upper().strip()
+                    coerced[key] = sanitized or ""
+                else:
+                    coerced[key] = value
 
         return coerced
 
@@ -1035,6 +1162,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             rules = svc_custeio.DEFAULT_QT_RULES
 
+        global_dimensions: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
+        if page_ref is not None and hasattr(page_ref, "dimension_values"):
+            try:
+                dimension_values = page_ref.dimension_values()
+            except Exception:
+                dimension_values = {}
+            for key in DIMENSION_KEY_ORDER:
+                global_dimensions[key] = dimension_values.get(key)
+
         divisor = 1.0
 
         current_group_uid = str(uuid.uuid4())
@@ -1043,15 +1179,22 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         current_parent_uid: Optional[str] = None
 
+        current_local_dimensions: Dict[str, Optional[float]] = {}
+
         for row in self.rows:
 
             row["_uid"] = row.get("_uid") or str(uuid.uuid4())
 
-            row["comp_res"] = row.get("comp")
+            row["_comp_error"] = None
+            row["_comp_tooltip"] = None
+            row["_larg_error"] = None
+            row["_larg_tooltip"] = None
+            row["_esp_error"] = None
+            row["_esp_tooltip"] = None
 
-            row["larg_res"] = row.get("larg")
-
-            row["esp_res"] = row.get("esp")
+            row["comp_res"] = None
+            row["larg_res"] = None
+            row["esp_res"] = None
 
             def_peca = row.get("def_peca") or ""
 
@@ -1113,8 +1256,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 current_parent_uid = None
 
-                continue
-
             if "+" in def_peca:
 
                 row["_row_type"] = "parent"
@@ -1155,6 +1296,42 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                     row["_regra_nome"] = None
 
+            expr_comp = self._prepare_formula_expression(row.get("comp"))
+            row["comp"] = expr_comp
+            comp_val, comp_error = self._evaluate_formula_expression(expr_comp, global_dimensions, current_local_dimensions)
+            row["comp_res"] = comp_val
+            row["_comp_error"] = comp_error
+            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error)
+
+            expr_larg = self._prepare_formula_expression(row.get("larg"))
+            row["larg"] = expr_larg
+            larg_val, larg_error = self._evaluate_formula_expression(expr_larg, global_dimensions, current_local_dimensions)
+            row["larg_res"] = larg_val
+            row["_larg_error"] = larg_error
+            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error)
+
+            expr_esp = self._prepare_formula_expression(row.get("esp"))
+            row["esp"] = expr_esp
+            esp_val, esp_error = self._evaluate_formula_expression(expr_esp, global_dimensions, current_local_dimensions)
+            row["esp_res"] = esp_val
+            row["_esp_error"] = esp_error
+            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error)
+
+            if row.get("_row_type") == "division":
+                current_local_dimensions = {
+                    "HM": comp_val,
+                    "LM": larg_val,
+                    "PM": esp_val,
+                }
+                row["_qt_divisor"] = divisor
+                row["_qt_parent_factor"] = None
+                row["_qt_child_factor"] = None
+                row["qt_und"] = None
+                row["qt_total"] = divisor
+                current_parent_row = None
+                current_parent_uid = None
+                continue
+
             row["_qt_divisor"] = divisor
 
             row_type = row.get("_row_type")
@@ -1175,12 +1352,31 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 if row.get("qt_und") in (None, ""):
                     row["qt_und"] = parent_factor
             else:
-                try:
-                    parent_factor = float(row.get("qt_mod") or 1.0)
-                except Exception:
-                    parent_factor = 1.0
-                if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
-                    row["qt_mod"] = parent_factor
+                tipo_val = (row.get("tipo") or "").strip().casefold()
+                if tipo_val == "pai":
+                    try:
+                        parent_factor = float(row.get("qt_und") or 1.0)
+                    except Exception:
+                        parent_factor = 1.0
+                    if row.get("qt_und") in (None, ""):
+                        row["qt_und"] = parent_factor
+                else:
+                    raw_qt_mod = row.get("qt_mod")
+                    try:
+                        parent_factor = float(raw_qt_mod or 0.0)
+                    except Exception:
+                        parent_factor = 0.0
+                    try:
+                        qt_und_val = float(row.get("qt_und") or 0.0)
+                    except Exception:
+                        qt_und_val = 0.0
+                    if qt_und_val > 0 and (raw_qt_mod in (None, "", 0, 0.0, 1, 1.0) or abs(parent_factor - 1.0) < 1e-6):
+                        parent_factor = qt_und_val
+                        row["qt_mod"] = parent_factor
+                    if parent_factor <= 0:
+                        parent_factor = 1.0
+                    if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
+                        row["qt_mod"] = parent_factor
 
             child_factor_value = row.get("qt_und")
 
@@ -1206,11 +1402,33 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                         child_factor = 1.0
 
+                try:
+                    parent_qt = float(current_parent_row.get("qt_und") or 1.0)
+                except Exception:
+                    parent_qt = 1.0
+
+                raw_child_token = row.get("_child_source") or row.get("descricao") or row.get("tipo")
+                normalized_child = self._normalize_def_peca(raw_child_token)
+
+                if "VARAO" in normalized_child:
+                    if "SUPORTE" in normalized_child:
+                        child_factor = parent_qt * 2
+                    else:
+                        child_factor = parent_qt
+
                 row["_regra_nome"] = regra_nome
 
                 row["_qt_rule_tooltip"] = rule_data.get("tooltip") if rule_data else None
 
                 row["qt_und"] = child_factor
+
+                if (row.get("und") or "").strip().upper() == "ML" and current_parent_row is not None:
+                    inherited_comp = current_parent_row.get("comp_res")
+                    formatted = self._format_result_number(inherited_comp) or ""
+                    row["comp"] = formatted
+                    row["comp_res"] = inherited_comp
+                    row["_comp_error"] = None
+                    row["_comp_tooltip"] = self._build_formula_tooltip(formatted, inherited_comp, None)
 
             else:
 
@@ -1232,9 +1450,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["qt_total"] = total if total else None
 
-            if row.get("esp_mp") not in (None, ""):
+            if row.get("esp_mp") not in (None, "") and not expr_esp:
 
-                row["esp"] = row.get("esp_mp")
+                default_esp = svc_custeio._coerce_dimensao_valor(row.get("esp_mp"))
+
+                row["esp"] = self._format_dimension_value(default_esp)
+
+                row["esp_res"] = default_esp
+
+                row["_esp_error"] = None
+
+                row["_esp_tooltip"] = self._build_formula_tooltip(row["esp"], default_esp, None)
 
         left = self._column_index.get("qt_mod")
 
@@ -1387,17 +1613,54 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
             return svc_custeio.lista_mat_default()
 
-        familia: Optional[str] = None
-
         try:
 
             row = page.table_model.rows[index.row()]
 
-            familia = row.get("familia") or row.get("mat_default")
-
         except Exception:
 
-            familia = None
+            row = {}
+
+        familia_val = (row.get("familia") or "").strip()
+
+        row_type = (row or {}).get("_row_type")
+
+        info_ferragem = None
+        is_ferragens = False
+
+        if row_type == "child":
+
+            info_ferragem = svc_custeio.inferir_ferragem_info(row) if row else None
+
+            is_ferragens = bool(familia_val) and familia_val.casefold() == "ferragens"
+
+            if not is_ferragens and info_ferragem:
+
+                familia_info = (info_ferragem.get("familia") or "").strip()
+
+                if familia_info and familia_info.casefold() == "ferragens":
+
+                    is_ferragens = True
+
+        if is_ferragens:
+
+            tipo_hint: Optional[str] = None
+
+            if info_ferragem and info_ferragem.get("tipo"):
+
+                tipo_hint = info_ferragem["tipo"]
+
+            elif row.get("tipo"):
+
+                tipo_hint = row.get("tipo")
+
+            options = svc_custeio.lista_mat_default_ferragens(session, context, tipo_hint)
+
+            if options:
+
+                return options
+
+        familia = row.get("familia") or row.get("mat_default")
 
         options = svc_custeio.lista_mat_default(session, context, familia)
 
@@ -1602,6 +1865,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.current_orcamento_id: Optional[int] = None
 
         self.current_item_id: Optional[int] = None
+        self._current_item_obj: Optional[OrcamentoItem] = None
 
 
 
@@ -1946,6 +2210,30 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         right_layout.addLayout(actions_layout)
 
+        self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimensions_dirty = False
+        self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER))
+        self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.dimensions_table.setFixedHeight(72)
+        self.dimensions_table.verticalHeader().setVisible(False)
+        self.dimensions_table.horizontalHeader().setVisible(False)
+        self.dimensions_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.dimensions_table.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.dimensions_table.setAlternatingRowColors(True)
+        for col, key in enumerate(DIMENSION_KEY_ORDER):
+            header_item = QtWidgets.QTableWidgetItem(key)
+            header_item.setFlags(QtCore.Qt.ItemIsEnabled)
+            header_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.dimensions_table.setItem(0, col, header_item)
+            value_item = QtWidgets.QTableWidgetItem("")
+            value_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.dimensions_table.setItem(1, col, value_item)
+            self.dimensions_table.setColumnWidth(col, 60)
+        self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
+        self.dimensions_table.setEnabled(False)
+        right_layout.addWidget(self.dimensions_table)
+        self._update_dimension_table()
 
 
         self.table_view = CusteioTableView()
@@ -2058,6 +2346,107 @@ class CusteioItemsPage(QtWidgets.QWidget):
             width = defaults.get(spec['key'])
             if width:
                 self.table_view.setColumnWidth(index, width)
+
+
+
+    def _format_dimension_value(self, value: Optional[float]) -> str:
+        if value is None:
+            return ""
+        if abs(value - int(round(value))) < 1e-6:
+            return str(int(round(value)))
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+
+    def _coerce_dimension_value(self, text: Any) -> Optional[float]:
+        if text in (None, ""):
+            return None
+        stripped = str(text).strip()
+        if not stripped:
+            return None
+        try:
+            return float(stripped.replace(",", "."))
+        except ValueError:
+            return None
+
+
+
+    def _update_dimension_table(self) -> None:
+        if not hasattr(self, "dimensions_table"):
+            return
+        self.dimensions_table.blockSignals(True)
+        for col, key in enumerate(DIMENSION_KEY_ORDER):
+            item = self.dimensions_table.item(1, col)
+            if item is None:
+                item = QtWidgets.QTableWidgetItem("")
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                self.dimensions_table.setItem(1, col, item)
+            item.setText(self._format_dimension_value(self._dimension_values.get(key)))
+        self.dimensions_table.blockSignals(False)
+
+
+
+    def _set_dimensions_enabled(self, enabled: bool) -> None:
+        if hasattr(self, "dimensions_table"):
+            self.dimensions_table.setEnabled(enabled)
+
+
+
+    def _clear_dimension_values(self) -> None:
+        self._dimension_values = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimensions_dirty = False
+        self._set_dimensions_enabled(False)
+        self._update_dimension_table()
+
+
+
+    def _load_dimension_values(self, item_obj: Optional[OrcamentoItem]) -> None:
+        if self.context is None:
+            self._clear_dimension_values()
+            return
+        try:
+            armazenados, tem_registro = svc_custeio.carregar_dimensoes(self.session, self.context)
+        except Exception:
+            armazenados, tem_registro = {}, False
+        defaults = svc_custeio.dimensoes_default_por_item(item_obj)
+        for key in DIMENSION_KEY_ORDER:
+            valor = armazenados.get(key)
+            if not tem_registro and valor is None:
+                valor = defaults.get(key)
+            self._dimension_values[key] = valor
+        self._dimensions_dirty = False
+        self._set_dimensions_enabled(True)
+        self._update_dimension_table()
+
+
+
+    def _on_dimension_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.row() != 1:
+            return
+        key = DIMENSION_KEY_ORDER[item.column()]
+        novo_valor = self._coerce_dimension_value(item.text())
+        if item.text().strip() and novo_valor is None:
+            self.dimensions_table.blockSignals(True)
+            item.setText(self._format_dimension_value(self._dimension_values.get(key)))
+            self.dimensions_table.blockSignals(False)
+            return
+        self._dimension_values[key] = novo_valor
+        self.dimensions_table.blockSignals(True)
+        item.setText(self._format_dimension_value(novo_valor))
+        self.dimensions_table.blockSignals(False)
+        self._dimensions_dirty = True
+        if self.context:
+            self.table_model.recalculate_all()
+
+
+
+    def dimension_values(self) -> Dict[str, Optional[float]]:
+        return {key: self._dimension_values.get(key) for key in DIMENSION_KEY_ORDER}
+
+
+
+    def _collect_dimension_payload(self) -> Dict[str, Optional[float]]:
+        return self.dimension_values()
 
 
 
@@ -2558,11 +2947,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        dimensoes = self._collect_dimension_payload()
         linhas = self.table_model.export_rows()
 
         try:
 
-            svc_custeio.salvar_custeio_items(self.session, self.context, linhas)
+            svc_custeio.salvar_custeio_items(self.session, self.context, linhas, dimensoes)
 
         except Exception as exc:
 
@@ -2573,6 +2963,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return
 
         QtWidgets.QMessageBox.information(self, "Sucesso", "Dados de custeio guardados.")
+
+        self._dimensions_dirty = False
 
         self._reload_custeio_rows()
 
@@ -3084,27 +3476,77 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                     grupo = svc_custeio.grupo_por_def_peca(row["_child_source"]) or row.get("_child_source")
 
-            if not grupo:
+            grupo_norm = (grupo or "").strip()
 
-                continue
+            familia_norm = (familia_hint or "").strip()
 
-            cache_key = (grupo, familia_hint)
+            material = None
 
-            if cache_key not in cache:
+            if grupo_norm:
 
-                cache[cache_key] = svc_custeio.obter_material_por_grupo(
+                cache_key = ("grupo", grupo_norm.casefold(), familia_norm.casefold())
 
-                    self.session,
+                if cache_key not in cache:
 
-                    self.context,
+                    cache[cache_key] = svc_custeio.obter_material_por_grupo(
 
-                    grupo,
+                        self.session,
 
-                    familia_hint,
+                        self.context,
 
-                )
+                        grupo_norm,
 
-            material = cache[cache_key]
+                        familia_hint,
+
+                    )
+
+                material = cache[cache_key]
+
+            ferragem_info = None
+
+            if not material:
+
+                ferragem_info = svc_custeio.inferir_ferragem_info(row)
+
+                if ferragem_info:
+
+                    tipo_val = ferragem_info.get("tipo")
+
+                    familia_val = ferragem_info.get("familia")
+
+                    cache_key = ("ferragem", (tipo_val or "").strip().casefold(), (familia_val or "").strip().casefold())
+
+                    if cache_key not in cache:
+
+                        cache[cache_key] = svc_custeio.obter_ferragem_por_tipo(
+
+                            self.session,
+
+                            self.context,
+
+                            tipo_val,
+
+                            familia_val,
+
+                        )
+
+                    material = cache[cache_key]
+
+                    if familia_val and not row.get("familia"):
+
+                        row["familia"] = familia_val
+
+                    if tipo_val and not row.get("tipo"):
+
+                        row["tipo"] = tipo_val
+
+                    if not row.get("mat_default"):
+
+                        lista = svc_custeio.lista_mat_default_ferragens(self.session, self.context, tipo_val)
+
+                        if lista:
+
+                            row["mat_default"] = lista[0]
 
             if not material:
 
@@ -3277,6 +3719,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._apply_item_header(item_obj)
 
+        self._current_item_obj = item_obj
+
 
 
         if item_obj is not None:
@@ -3299,6 +3743,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+        if self.context is not None:
+            self._load_dimension_values(item_obj)
+        else:
+            self._clear_dimension_values()
+
+
+
         self._reload_custeio_rows()
 
         self._apply_updates_from_items()
@@ -3316,6 +3767,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.current_orcamento_id = None
 
         self.current_item_id = None
+
+        self._current_item_obj = None
+
+        self._clear_dimension_values()
 
         self._collapsed_groups.clear()
 
