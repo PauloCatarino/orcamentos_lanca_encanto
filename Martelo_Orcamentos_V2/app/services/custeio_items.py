@@ -116,8 +116,8 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
-        "expression": "(2 if COMP < 850 else 3 if COMP < 1600 else 2 + int((COMP - 2 * 120) / 750)) + (1 if LARG >= 605 else 0)",
-        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, ≥1600mm: 2+(úteis/750mm) +1 se LARG≥605mm",
+        "expression": "(2 if COMP < 850 else 3 if COMP < 1600 else 2 + ((COMP - 2 * 120) // 750)) + (1 if LARG >= 605 else 0)",
+        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, ≥1600mm: 2+(úteis//750mm) +1 se LARG≥605mm"
     },
     "PUXADOR": {
         "matches": ["PUXADOR"],
