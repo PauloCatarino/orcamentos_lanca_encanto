@@ -34,7 +34,13 @@ def init_db():
     try:
         # Importar modelos para registar as tabelas
         try:
-            from .models import user, client, orcamento, item_children, app_setting, materia_prima, dados_gerais  # noqa: F401
+            from .models import user, client, orcamento, item_children, app_setting, materia_prima, dados_gerais, custeio  # noqa: F401
+            
+            # Drop custeio_items table if it exists to force recreation with new schema
+            if custeio.CusteioItem.__table__.exists(engine):
+                custeio.CusteioItem.__table__.drop(engine)
+                logger.info("Tabela 'custeio_items' removida para recriação.")
+
         except Exception:
             pass
         Base.metadata.create_all(bind=engine)

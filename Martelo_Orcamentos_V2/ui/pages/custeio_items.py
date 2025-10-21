@@ -491,10 +491,21 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         text = str(value).replace(",", ".").upper()
         return text.strip()
 
-    def _build_formula_tooltip(self, expression: str, result: Optional[float], error: Optional[str]) -> Optional[str]:
+    def _build_formula_tooltip(
+        self,
+        expression: str,
+        result: Optional[float],
+        error: Optional[str],
+        *,
+        substitutions: Optional[str] = None,
+    ) -> Optional[str]:
         expression = expression.strip()
         if error:
-            return f"{expression} → erro: {error}" if expression else f"Erro: {error}"
+            base = f"{expression} = erro: {error}" if expression else f"Erro: {error}"
+            return base
+        if expression and substitutions and result is not None:
+            rendered = f"{expression} = {substitutions} = {self._format_result_number(result)}"
+            return rendered
         if expression and result is not None:
             return f"{expression} = {self._format_result_number(result)}"
         if expression:
@@ -508,41 +519,41 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         expression: str,
         global_vars: Mapping[str, Optional[float]],
         local_vars: Mapping[str, Optional[float]],
-    ) -> Tuple[Optional[float], Optional[str]]:
+    ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
         expr = expression.strip()
         if not expr:
-            return (None, None)
+            return (None, None, None)
         try:
             node = ast.parse(expr, mode="eval")
             variables: Dict[str, Optional[float]] = {}
             variables.update(global_vars)
             variables.update({k: v for k, v in local_vars.items() if v is not None})
-            value = self._eval_formula_ast(node.body, variables)
-            return (float(value), None)
+            value, substitution = self._eval_formula_ast(node.body, variables)
+            return (float(value), None, substitution)
         except ZeroDivisionError:
-            return (None, "Divisao por zero")
+            return (None, "Divisao por zero", None)
         except Exception as exc:
-            return (None, str(exc))
+            return (None, str(exc), None)
 
-    def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> float:
+    def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> Tuple[float, str]:
         if isinstance(node, ast.BinOp):
-            left = self._eval_formula_ast(node.left, variables)
-            right = self._eval_formula_ast(node.right, variables)
+            left_val, left_expr = self._eval_formula_ast(node.left, variables)
+            right_val, right_expr = self._eval_formula_ast(node.right, variables)
             if isinstance(node.op, ast.Add):
-                return left + right
+                return left_val + right_val, f"({left_expr}+{right_expr})"
             if isinstance(node.op, ast.Sub):
-                return left - right
+                return left_val - right_val, f"({left_expr}-{right_expr})"
             if isinstance(node.op, ast.Mult):
-                return left * right
+                return left_val * right_val, f"({left_expr}*{right_expr})"
             if isinstance(node.op, ast.Div):
-                return left / right
+                return left_val / right_val, f"({left_expr}/{right_expr})"
             raise ValueError("Operador nao suportado")
         if isinstance(node, ast.UnaryOp):
-            operand = self._eval_formula_ast(node.operand, variables)
+            operand_val, operand_expr = self._eval_formula_ast(node.operand, variables)
             if isinstance(node.op, ast.UAdd):
-                return operand
+                return operand_val, f"+{operand_expr}"
             if isinstance(node.op, ast.USub):
-                return -operand
+                return -operand_val, f"-{operand_expr}"
             raise ValueError("Operador nao suportado")
         if isinstance(node, ast.Name):
             key = node.id.upper()
@@ -551,13 +562,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             valor = variables[key]
             if valor is None:
                 raise ValueError(f"Variavel {key} sem valor")
-            return float(valor)
+            return float(valor), self._format_result_number(float(valor)) or str(float(valor))
         if isinstance(node, ast.Constant):
             if isinstance(node.value, (int, float)):
-                return float(node.value)
+                return float(node.value), self._format_result_number(float(node.value)) or str(float(node.value))
             raise ValueError("Constante invalida")
         if isinstance(node, ast.Num):  # type: ignore[attr-defined]
-            return float(node.n)  # pragma: no cover
+            val = float(node.n)  # pragma: no cover
+            return val, self._format_result_number(val) or str(val)
         raise ValueError("Expressao invalida")
 
 
@@ -1423,7 +1435,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["qt_und"] = child_factor
 
                 if (row.get("und") or "").strip().upper() == "ML" and current_parent_row is not None:
+                    page_ref = getattr(self, "_page", None)
                     inherited_comp = current_parent_row.get("comp_res")
+                    if inherited_comp is None and page_ref is not None:
+                        inherited_comp = getattr(page_ref, "_coerce_dimension_value", lambda x: x)(current_parent_row.get("comp"))
                     formatted = self._format_result_number(inherited_comp) or ""
                     row["comp"] = formatted
                     row["comp_res"] = inherited_comp
@@ -1452,7 +1467,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if row.get("esp_mp") not in (None, "") and not expr_esp:
 
-                default_esp = svc_custeio._coerce_dimensao_valor(row.get("esp_mp"))
+                default_esp = self._coerce_dimension_value(row.get("esp_mp"))
 
                 row["esp"] = self._format_dimension_value(default_esp)
 
