@@ -517,8 +517,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             base = f"{expression} = erro: {error}" if expression else f"Erro: {error}"
             return base
         if expression and substitutions and result is not None:
-            rendered = f"{expression} = {substitutions} = {self._format_result_number(result)}"
-            return rendered
+            if substitutions.strip() and substitutions.strip() != expression.strip():
+                rendered = f"{expression} = {substitutions} = {self._format_result_number(result)}"
+                return rendered
         if expression and result is not None:
             return f"{expression} = {self._format_result_number(result)}"
         if expression:
@@ -531,26 +532,49 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self,
         expression: str,
         context: Mapping[str, Optional[float]],
-    ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
+    ) -> Tuple[Optional[float], Optional[str]]:
         expr = expression.strip()
         if not expr:
-            return (None, None, None)
-        
-        # Garante que o contexto tem chaves maiúsculas
-        safe_context = {k.upper(): v for k, v in context.items() if v is not None}
+            return (None, None)
+
+        safe_context: Dict[str, Optional[float]] = {}
+        for key, value in (context or {}).items():
+            if key is None:
+                continue
+            safe_context[key.upper()] = value
 
         try:
             node = ast.parse(expr, mode="eval")
             value, substitution = self._eval_formula_ast(node.body, safe_context)
-            return (float(value), None, substitution)
+            return (float(value), None)
         except ZeroDivisionError:
-            return (None, "Divisao por zero", None)
+            return (None, "Divisao por zero")
         except Exception as exc:
-            # Verifica se o erro é sobre uma variável local não definida
             msg = str(exc).lower()
             if "variavel" in msg and ("hm" in msg or "lm" in msg or "pm" in msg):
-                return (None, f"Variável local não definida: {exc}", None)
-            return (None, str(exc), None)
+                return (None, f"Variavel local nao definida: {exc}")
+            return (None, str(exc))
+
+    def _render_formula_substitution(
+        self,
+        expression: str,
+        context: Mapping[str, Optional[float]],
+    ) -> Optional[str]:
+        expr = expression.strip()
+        if not expr:
+            return None
+
+        def replace(match: re.Match) -> str:
+            token = match.group(0)
+            value = context.get(token.upper())
+            if value is None:
+                return token
+            formatted = self._format_result_number(float(value))
+            return formatted or str(value)
+
+        substituted = _TOKEN_PATTERN.sub(replace, expr)
+        substituted = substituted.strip()
+        return substituted or None
 
     def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> Tuple[float, str]:
         if isinstance(node, ast.BinOp):
@@ -1225,6 +1249,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 dimension_values = {}
             for key in DIMENSION_KEY_ORDER:
                 global_dimensions[key] = _coerce_dimension(dimension_values.get(key))
+        global_context_base: Dict[str, Optional[float]] = {key.upper(): value for key, value in global_dimensions.items()}
+
 
         divisor = 1.0
 
@@ -1305,7 +1331,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 if getattr(self, "_page", None):
 
-                    row.setdefault("icon_hint", self._page._icon("division"))
+                    row["icon_hint"] = self._page._icon("division")
 
                 current_parent_row = None
 
@@ -1353,39 +1379,73 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             expr_comp = self._prepare_formula_expression(row.get("comp"))
             row["comp"] = expr_comp
-            comp_val, comp_error, comp_substitution = self._evaluate_formula_expression(expr_comp, global_dimensions, current_local_dimensions)
-            row["comp_res"] = comp_val
-            row["_comp_error"] = comp_error
-            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_substitution)
-
             expr_larg = self._prepare_formula_expression(row.get("larg"))
             row["larg"] = expr_larg
-            larg_val, larg_error, larg_substitution = self._evaluate_formula_expression(expr_larg, global_dimensions, current_local_dimensions)
-            row["larg_res"] = larg_val
-            row["_larg_error"] = larg_error
-            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_substitution)
-
             expr_esp = self._prepare_formula_expression(row.get("esp"))
             row["esp"] = expr_esp
-            esp_val, esp_error, esp_substitution = self._evaluate_formula_expression(expr_esp, global_dimensions, current_local_dimensions)
-            row["esp_res"] = esp_val
-            row["_esp_error"] = esp_error
-            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_substitution)
 
             if row.get("_row_type") == "division":
+                comp_val, comp_error = self._evaluate_formula_expression(expr_comp, global_context_base)
+                comp_sub = self._render_formula_substitution(expr_comp, global_context_base)
+                comp_store = comp_val if comp_error is None else None
+                row["comp_res"] = comp_store
+                row["_comp_error"] = comp_error
+                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_store, comp_error, substitutions=comp_sub)
+
+                larg_val, larg_error = self._evaluate_formula_expression(expr_larg, global_context_base)
+                larg_sub = self._render_formula_substitution(expr_larg, global_context_base)
+                larg_store = larg_val if larg_error is None else None
+                row["larg_res"] = larg_store
+                row["_larg_error"] = larg_error
+                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_store, larg_error, substitutions=larg_sub)
+
+                esp_val, esp_error = self._evaluate_formula_expression(expr_esp, global_context_base)
+                esp_sub = self._render_formula_substitution(expr_esp, global_context_base)
+                esp_store = esp_val if esp_error is None else None
+                row["esp_res"] = esp_store
+                row["_esp_error"] = esp_error
+                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_store, esp_error, substitutions=esp_sub)
+
                 current_local_dimensions = {
-                    "HM": comp_val,
-                    "LM": larg_val,
-                    "PM": esp_val,
+                    "HM": comp_store,
+                    "LM": larg_store,
+                    "PM": esp_store,
                 }
                 row["_qt_divisor"] = divisor
                 row["_qt_parent_factor"] = None
                 row["_qt_child_factor"] = None
                 row["qt_und"] = None
                 row["qt_total"] = divisor
-                current_parent_row = None
-                current_parent_uid = None
+                current_parent_row = row
+                current_parent_uid = row["_uid"]
                 continue
+
+            merged_context = dict(global_context_base)
+            for key, value in current_local_dimensions.items():
+                if value is None:
+                    continue
+                merged_context[key.upper()] = value
+
+            comp_val, comp_error = self._evaluate_formula_expression(expr_comp, merged_context)
+            comp_sub = self._render_formula_substitution(expr_comp, merged_context)
+            comp_store = comp_val if comp_error is None else None
+            row["comp_res"] = comp_store
+            row["_comp_error"] = comp_error
+            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_store, comp_error, substitutions=comp_sub)
+
+            larg_val, larg_error = self._evaluate_formula_expression(expr_larg, merged_context)
+            larg_sub = self._render_formula_substitution(expr_larg, merged_context)
+            larg_store = larg_val if larg_error is None else None
+            row["larg_res"] = larg_store
+            row["_larg_error"] = larg_error
+            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_store, larg_error, substitutions=larg_sub)
+
+            esp_val, esp_error = self._evaluate_formula_expression(expr_esp, merged_context)
+            esp_sub = self._render_formula_substitution(expr_esp, merged_context)
+            esp_store = esp_val if esp_error is None else None
+            row["esp_res"] = esp_store
+            row["_esp_error"] = esp_error
+            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_store, esp_error, substitutions=esp_sub)
 
             row["_qt_divisor"] = divisor
 
@@ -1485,8 +1545,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     row["_comp_error"] = None
                     substitution = self._format_result_number(inherited_comp) or row.get("comp")
                     row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp or (row.get("comp") or substitution or ""), inherited_comp, None, substitutions=substitution or None)
-                    if (row.get("comp") in (None, "")) and substitution:
-                        row["comp"] = substitution
 
             else:
 
@@ -1519,8 +1577,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 substitution = self._format_result_number(default_esp) or row.get("esp")
 
                 row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp or (row.get("esp") or substitution or ""), default_esp, None, substitutions=substitution or None)
-                if (row.get("esp") in (None, "")) and substitution:
-                    row["esp"] = substitution
 
         left = self._column_index.get("qt_mod")
 
@@ -3146,20 +3202,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
                     self._collapsed_groups.remove(group_uid)
                 else:
                     self._collapsed_groups.add(group_uid)
-
-                # Find the range of rows to toggle
-                start_row = index.row()
-                end_row = self.table_model.rowCount()
-                for i in range(start_row + 1, self.table_model.rowCount()):
-                    if self.table_model.rows[i].get("_row_type") == "division":
-                        end_row = i
-                        break
-                
-                is_collapsed = group_uid in self._collapsed_groups
-                for i in range(start_row + 1, end_row):
-                    self.table_view.setRowHidden(i, is_collapsed)
-
-                self.table_model.dataChanged.emit(index, index, [QtCore.Qt.DisplayRole])
+                self._apply_collapse_state()
             return
 
         if spec["type"] == "bool":
