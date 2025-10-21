@@ -422,6 +422,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def _is_division_row(self, row: Mapping[str, Any]) -> bool:
         return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
 
+    def _is_modulo_row(self, row: Mapping[str, Any]) -> bool:
+        return self._normalize_def_peca(row.get("def_peca")) == "MODULO"
+
     @staticmethod
     def _format_factor(value: Optional[float]) -> Optional[str]:
         if value in (None, ""):
@@ -575,6 +578,19 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         substituted = _TOKEN_PATTERN.sub(replace, expr)
         substituted = substituted.strip()
         return substituted or None
+
+    def _evaluate_formula_with_env(
+        self,
+        prepared_expression: str,
+        context: Mapping[str, Optional[float]],
+    ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
+        if not prepared_expression:
+            return (None, None, None)
+        value, error = self._evaluate_formula_expression(prepared_expression, context)
+        substitution = self._render_formula_substitution(prepared_expression, context)
+        if error is None and value is not None:
+            value = round(value, 1)
+        return (value, error, substitution)
 
     def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> Tuple[float, str]:
         if isinstance(node, ast.BinOp):
@@ -1260,7 +1276,19 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         current_parent_uid: Optional[str] = None
 
-        current_local_dimensions: Dict[str, Optional[float]] = {}
+        group_dims: Dict[str, Optional[float]] = {"H": None, "L": None, "P": None}
+        modulo_dims: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
+
+        def _build_eval_env() -> Dict[str, Optional[float]]:
+            env: Dict[str, Optional[float]] = {
+                "H": group_dims.get("H") if group_dims.get("H") is not None else 0.0,
+                "L": group_dims.get("L") if group_dims.get("L") is not None else 0.0,
+                "P": group_dims.get("P") if group_dims.get("P") is not None else 0.0,
+            }
+            env["HM"] = modulo_dims.get("HM") if modulo_dims.get("HM") is not None else env["H"]
+            env["LM"] = modulo_dims.get("LM") if modulo_dims.get("LM") is not None else env["L"]
+            env["PM"] = modulo_dims.get("PM") if modulo_dims.get("PM") is not None else env["P"]
+            return env
 
         for row in self.rows:
 
@@ -1385,32 +1413,25 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             row["esp"] = expr_esp
 
             if row.get("_row_type") == "division":
-                comp_val, comp_error = self._evaluate_formula_expression(expr_comp, global_context_base)
-                comp_sub = self._render_formula_substitution(expr_comp, global_context_base)
-                comp_store = comp_val if comp_error is None else None
-                row["comp_res"] = comp_store
+                comp_val, comp_error, comp_sub = self._evaluate_formula_with_env(expr_comp, global_context_base)
+                row["comp_res"] = comp_val
                 row["_comp_error"] = comp_error
-                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_store, comp_error, substitutions=comp_sub)
+                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_sub)
 
-                larg_val, larg_error = self._evaluate_formula_expression(expr_larg, global_context_base)
-                larg_sub = self._render_formula_substitution(expr_larg, global_context_base)
-                larg_store = larg_val if larg_error is None else None
-                row["larg_res"] = larg_store
+                larg_val, larg_error, larg_sub = self._evaluate_formula_with_env(expr_larg, global_context_base)
+                row["larg_res"] = larg_val
                 row["_larg_error"] = larg_error
-                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_store, larg_error, substitutions=larg_sub)
+                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_sub)
 
-                esp_val, esp_error = self._evaluate_formula_expression(expr_esp, global_context_base)
-                esp_sub = self._render_formula_substitution(expr_esp, global_context_base)
-                esp_store = esp_val if esp_error is None else None
-                row["esp_res"] = esp_store
+                esp_val, esp_error, esp_sub = self._evaluate_formula_with_env(expr_esp, global_context_base)
+                row["esp_res"] = esp_val
                 row["_esp_error"] = esp_error
-                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_store, esp_error, substitutions=esp_sub)
+                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_sub)
 
-                current_local_dimensions = {
-                    "HM": comp_store,
-                    "LM": larg_store,
-                    "PM": esp_store,
-                }
+                group_dims["H"] = comp_val if comp_val is not None else _coerce_dimension(row.get("comp"))
+                group_dims["L"] = larg_val if larg_val is not None else _coerce_dimension(row.get("larg"))
+                group_dims["P"] = esp_val if esp_val is not None else _coerce_dimension(row.get("esp"))
+                modulo_dims = {"HM": None, "LM": None, "PM": None}
                 row["_qt_divisor"] = divisor
                 row["_qt_parent_factor"] = None
                 row["_qt_child_factor"] = None
@@ -1420,32 +1441,49 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 current_parent_uid = row["_uid"]
                 continue
 
-            merged_context = dict(global_context_base)
-            for key, value in current_local_dimensions.items():
-                if value is None:
-                    continue
-                merged_context[key.upper()] = value
+            if self._is_modulo_row(row):
+                modulo_env: Dict[str, Optional[float]] = {
+                    "H": group_dims.get("H") if group_dims.get("H") is not None else 0.0,
+                    "L": group_dims.get("L") if group_dims.get("L") is not None else 0.0,
+                    "P": group_dims.get("P") if group_dims.get("P") is not None else 0.0,
+                }
+                modulo_env["HM"] = modulo_env["H"]
+                modulo_env["LM"] = modulo_env["L"]
+                modulo_env["PM"] = modulo_env["P"]
+                mod_comp_val, mod_comp_error, mod_comp_sub = self._evaluate_formula_with_env(expr_comp, modulo_env)
+                row["comp_res"] = mod_comp_val
+                row["_comp_error"] = mod_comp_error
+                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, mod_comp_val, mod_comp_error, substitutions=mod_comp_sub)
 
-            comp_val, comp_error = self._evaluate_formula_expression(expr_comp, merged_context)
-            comp_sub = self._render_formula_substitution(expr_comp, merged_context)
-            comp_store = comp_val if comp_error is None else None
-            row["comp_res"] = comp_store
-            row["_comp_error"] = comp_error
-            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_store, comp_error, substitutions=comp_sub)
+                mod_larg_val, mod_larg_error, mod_larg_sub = self._evaluate_formula_with_env(expr_larg, modulo_env)
+                row["larg_res"] = mod_larg_val
+                row["_larg_error"] = mod_larg_error
+                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, mod_larg_val, mod_larg_error, substitutions=mod_larg_sub)
 
-            larg_val, larg_error = self._evaluate_formula_expression(expr_larg, merged_context)
-            larg_sub = self._render_formula_substitution(expr_larg, merged_context)
-            larg_store = larg_val if larg_error is None else None
-            row["larg_res"] = larg_store
-            row["_larg_error"] = larg_error
-            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_store, larg_error, substitutions=larg_sub)
+                mod_esp_val, mod_esp_error, mod_esp_sub = self._evaluate_formula_with_env(expr_esp, modulo_env)
+                row["esp_res"] = mod_esp_val
+                row["_esp_error"] = mod_esp_error
+                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, mod_esp_val, mod_esp_error, substitutions=mod_esp_sub)
 
-            esp_val, esp_error = self._evaluate_formula_expression(expr_esp, merged_context)
-            esp_sub = self._render_formula_substitution(expr_esp, merged_context)
-            esp_store = esp_val if esp_error is None else None
-            row["esp_res"] = esp_store
-            row["_esp_error"] = esp_error
-            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_store, esp_error, substitutions=esp_sub)
+                modulo_dims["HM"] = mod_comp_val if mod_comp_val is not None else modulo_env["H"]
+                modulo_dims["LM"] = mod_larg_val if mod_larg_val is not None else modulo_env["L"]
+                modulo_dims["PM"] = mod_esp_val if mod_esp_val is not None else modulo_env["P"]
+            else:
+                merged_context = _build_eval_env()
+                comp_val, comp_error, comp_sub = self._evaluate_formula_with_env(expr_comp, merged_context)
+                row["comp_res"] = comp_val
+                row["_comp_error"] = comp_error
+                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_sub)
+
+                larg_val, larg_error, larg_sub = self._evaluate_formula_with_env(expr_larg, merged_context)
+                row["larg_res"] = larg_val
+                row["_larg_error"] = larg_error
+                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_sub)
+
+                esp_val, esp_error, esp_sub = self._evaluate_formula_with_env(expr_esp, merged_context)
+                row["esp_res"] = esp_val
+                row["_esp_error"] = esp_error
+                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_sub)
 
             row["_qt_divisor"] = divisor
 
