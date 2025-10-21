@@ -500,6 +500,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         substitutions: Optional[str] = None,
     ) -> Optional[str]:
         expression = expression.strip()
+        substitutions = (substitutions or "").strip()
+        if substitutions.startswith("(") and substitutions.endswith(")"):
+            inner = substitutions[1:-1].strip()
+            if inner.count("(") == inner.count(")"):
+                substitutions = inner or substitutions
+
         if error:
             base = f"{expression} = erro: {error}" if expression else f"Erro: {error}"
             return base
@@ -1191,6 +1197,23 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         current_parent_uid: Optional[str] = None
 
+        def _coerce_dimension(raw: Any) -> Optional[float]:
+            if page_ref is not None and hasattr(page_ref, "_coerce_dimension_value"):
+                try:
+                    coerced = page_ref._coerce_dimension_value(raw)
+                except Exception:
+                    coerced = None
+                if coerced is not None:
+                    return coerced
+            if raw in (None, "", False):
+                return None
+            if isinstance(raw, (int, float)):
+                return float(raw)
+            try:
+                return float(str(raw).replace(",", "."))
+            except (TypeError, ValueError):
+                return None
+
         current_local_dimensions: Dict[str, Optional[float]] = {}
 
         for row in self.rows:
@@ -1435,15 +1458,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["qt_und"] = child_factor
 
                 if (row.get("und") or "").strip().upper() == "ML" and current_parent_row is not None:
-                    page_ref = getattr(self, "_page", None)
                     inherited_comp = current_parent_row.get("comp_res")
-                    if inherited_comp is None and page_ref is not None:
-                        inherited_comp = getattr(page_ref, "_coerce_dimension_value", lambda x: x)(current_parent_row.get("comp"))
+                    if inherited_comp is None:
+                        inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
                     formatted = self._format_result_number(inherited_comp) or ""
                     row["comp"] = formatted
                     row["comp_res"] = inherited_comp
                     row["_comp_error"] = None
-                    row["_comp_tooltip"] = self._build_formula_tooltip(formatted, inherited_comp, None)
+                    row["_comp_tooltip"] = self._build_formula_tooltip(formatted, inherited_comp, None, substitutions=formatted or None)
 
             else:
 
@@ -1467,15 +1489,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if row.get("esp_mp") not in (None, "") and not expr_esp:
 
-                default_esp = self._coerce_dimension_value(row.get("esp_mp"))
+                default_esp = _coerce_dimension(row.get("esp_mp"))
 
-                row["esp"] = self._format_dimension_value(default_esp)
+                formatted_esp = self._format_result_number(default_esp) or ""
+
+                row["esp"] = formatted_esp
 
                 row["esp_res"] = default_esp
 
                 row["_esp_error"] = None
 
-                row["_esp_tooltip"] = self._build_formula_tooltip(row["esp"], default_esp, None)
+                row["_esp_tooltip"] = self._build_formula_tooltip(formatted_esp, default_esp, None, substitutions=formatted_esp or None)
 
         left = self._column_index.get("qt_mod")
 
