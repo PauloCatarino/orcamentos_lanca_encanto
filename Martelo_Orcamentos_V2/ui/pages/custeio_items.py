@@ -530,22 +530,26 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def _evaluate_formula_expression(
         self,
         expression: str,
-        global_vars: Mapping[str, Optional[float]],
-        local_vars: Mapping[str, Optional[float]],
+        context: Mapping[str, Optional[float]],
     ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
         expr = expression.strip()
         if not expr:
             return (None, None, None)
+        
+        # Garante que o contexto tem chaves maiúsculas
+        safe_context = {k.upper(): v for k, v in context.items() if v is not None}
+
         try:
             node = ast.parse(expr, mode="eval")
-            variables: Dict[str, Optional[float]] = {}
-            variables.update(global_vars)
-            variables.update({k: v for k, v in local_vars.items() if v is not None})
-            value, substitution = self._eval_formula_ast(node.body, variables)
+            value, substitution = self._eval_formula_ast(node.body, safe_context)
             return (float(value), None, substitution)
         except ZeroDivisionError:
             return (None, "Divisao por zero", None)
         except Exception as exc:
+            # Verifica se o erro é sobre uma variável local não definida
+            msg = str(exc).lower()
+            if "variavel" in msg and ("hm" in msg or "lm" in msg or "pm" in msg):
+                return (None, f"Variável local não definida: {exc}", None)
             return (None, str(exc), None)
 
     def _eval_formula_ast(self, node: ast.AST, variables: Mapping[str, Optional[float]]) -> Tuple[float, str]:
@@ -670,9 +674,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     page_ref = getattr(self, "_page", None)
                     collapsed_groups = getattr(page_ref, "_collapsed_groups", set()) if page_ref is not None else set()
                     is_collapsed = row_data.get("_group_uid") in collapsed_groups
-                    return "+" if is_collapsed else "-"
+                    symbol = "+" if is_collapsed else "-"
+                    return f" {symbol} "
                 raw_id = row_data.get("id")
                 return "" if raw_id in (None, "") else str(raw_id)
+            if role == QtCore.Qt.DecorationRole:
+                if row_type == "division":
+                    page_ref = getattr(self, "_page", None)
+                    if page_ref is not None:
+                        return page_ref._icon("division")
+                return None
             if role == QtCore.Qt.TextAlignmentRole:
                 return QtCore.Qt.AlignCenter
             if role == QtCore.Qt.ToolTipRole:
@@ -684,26 +695,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return None
 
         if key == "icon_hint":
-            if role == QtCore.Qt.DecorationRole:
-                icon_value = row_data.get("icon_hint")
-                if row_type == "division":
-                    if not isinstance(icon_value, QtGui.QIcon):
-                        page_ref = getattr(self, "_page", None)
-                        if page_ref is not None:
-                            icon_value = page_ref._icon("division")
-                            row_data["icon_hint"] = icon_value
-                if isinstance(icon_value, QtGui.QIcon):
-                    return icon_value
-                if isinstance(icon_value, str) and icon_value:
-                    return QtGui.QIcon(icon_value)
-            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.DecorationRole):
                 return ""
             return None
 
         if role == QtCore.Qt.BackgroundRole:
 
             if row_type == "division":
-                return QtGui.QColor(170, 170, 170)
+                return QtGui.QColor(160, 160, 160)  # Cinza mais escuro
 
             if row_type == "separator":
                 return QtGui.QColor(235, 235, 235)
