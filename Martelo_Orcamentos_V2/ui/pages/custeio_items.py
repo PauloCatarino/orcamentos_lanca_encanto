@@ -53,6 +53,26 @@ DIMENSION_KEY_ORDER: Sequence[str] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
 DIMENSION_ALLOWED_VARIABLES: Set[str] = set(svc_custeio.DIMENSION_ALLOWED_VARIABLES)
 _TOKEN_PATTERN = re.compile(r"[A-Z]+[0-9]*")
 _FORMULA_ALLOWED_CHARS = re.compile(r"^[0-9A-Z+\-*/().,\\s]*$")
+_AUTO_QTMOD_PATTERN = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*x\s*\d+(?:[.,]\d+)?\s*$", re.IGNORECASE)
+
+DIMENSION_GROUPS: Tuple[Tuple[str, str, str], ...] = (
+    ("H", "L", "P"),
+    ("H1", "L1", "P1"),
+    ("H2", "L2", "P2"),
+    ("H3", "L3", "P3"),
+    ("H4", "L4", "P4"),
+)
+DIMENSION_GROUP_COLORS: Tuple[QtGui.QColor, ...] = (
+    QtGui.QColor("#FFF2CC"),
+    QtGui.QColor("#CCE5FF"),
+    QtGui.QColor("#D4EDDA"),
+    QtGui.QColor("#F8D7DA"),
+    QtGui.QColor("#E2D9FF"),
+)
+DIMENSION_COLOR_MAP: Dict[str, QtGui.QColor] = {}
+for color, group in zip(DIMENSION_GROUP_COLORS, DIMENSION_GROUPS):
+    for key in group:
+        DIMENSION_COLOR_MAP[key] = color
 
 HEADER_TOOLTIPS = {
     "descricao_livre": "Texto livre editavel para identificar a linha no custeio.",
@@ -1276,17 +1296,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         current_parent_uid: Optional[str] = None
 
-        group_dims: Dict[str, Optional[float]] = {"H": None, "L": None, "P": None}
         current_local_dimensions: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
 
         def _build_eval_env(include_locals: bool = True) -> Dict[str, Optional[float]]:
             env: Dict[str, Optional[float]] = dict(global_context_base)
-            if group_dims.get("H") is not None:
-                env["H"] = group_dims["H"]
-            if group_dims.get("L") is not None:
-                env["L"] = group_dims["L"]
-            if group_dims.get("P") is not None:
-                env["P"] = group_dims["P"]
             if include_locals:
                 for key in ("HM", "LM", "PM"):
                     env[key] = current_local_dimensions.get(key)
@@ -1304,6 +1317,55 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 value = round(value, 1)
             tooltip = self._build_formula_tooltip(expression, value, error, substitutions=substitution)
             return value, error, tooltip
+
+        def _update_qt_mod_expression(row: Dict[str, Any], divisor_value: Optional[float], parent_factor_value: Optional[float]) -> None:
+            row_type_local = row.get("_row_type")
+            if row_type_local in ("child", "division", "parent"):
+                return
+            raw_qt_mod = row.get("qt_mod")
+            auto_manage = False
+            if raw_qt_mod in (None, ""):
+                auto_manage = True
+            elif isinstance(raw_qt_mod, str):
+                if _AUTO_QTMOD_PATTERN.match(raw_qt_mod.strip()):
+                    auto_manage = True
+            elif isinstance(raw_qt_mod, (int, float)):
+                auto_manage = True
+            if not auto_manage:
+                return
+            if divisor_value is None or parent_factor_value is None:
+                return
+            divisor_text = self._format_factor(divisor_value)
+            parent_text = self._format_factor(parent_factor_value)
+            if not divisor_text or not parent_text:
+                return
+            new_value = f"{divisor_text} x {parent_text}"
+            if row.get("qt_mod") != new_value:
+                row["qt_mod"] = new_value
+
+        def _coerce_factor_value(raw: Any) -> Optional[float]:
+            if raw in (None, "", False):
+                return None
+            if isinstance(raw, (int, float)):
+                try:
+                    return float(raw)
+                except (TypeError, ValueError):
+                    return None
+            text = str(raw).strip()
+            if not text:
+                return None
+            text = text.replace(",", ".")
+            try:
+                return float(text)
+            except (TypeError, ValueError):
+                pass
+            matches = re.findall(r"[0-9]+(?:\\.[0-9]+)?", text)
+            if matches:
+                try:
+                    return float(matches[-1])
+                except (TypeError, ValueError):
+                    return None
+            return None
 
         for row in self.rows:
 
@@ -1450,9 +1512,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["_esp_error"] = esp_error
                 row["_esp_tooltip"] = esp_tooltip
 
-                group_dims["H"] = comp_val if comp_val is not None else _coerce_dimension(row.get("comp"))
-                group_dims["L"] = larg_val if larg_val is not None else _coerce_dimension(row.get("larg"))
-                group_dims["P"] = esp_val if esp_val is not None else _coerce_dimension(row.get("esp"))
                 current_local_dimensions["HM"] = comp_val
                 current_local_dimensions["LM"] = larg_val
                 current_local_dimensions["PM"] = esp_val
@@ -1511,21 +1570,20 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                         row["qt_und"] = parent_factor
                 else:
                     raw_qt_mod = row.get("qt_mod")
-                    try:
-                        parent_factor = float(raw_qt_mod or 0.0)
-                    except Exception:
-                        parent_factor = 0.0
-                    try:
-                        qt_und_val = float(row.get("qt_und") or 0.0)
-                    except Exception:
-                        qt_und_val = 0.0
-                    if qt_und_val > 0 and (raw_qt_mod in (None, "", 0, 0.0, 1, 1.0) or abs(parent_factor - 1.0) < 1e-6):
-                        parent_factor = qt_und_val
-                        row["qt_mod"] = parent_factor
-                    if parent_factor <= 0:
+                    parent_factor = _coerce_factor_value(raw_qt_mod)
+                    qt_und_val = _coerce_factor_value(row.get("qt_und"))
+                    if qt_und_val is not None and qt_und_val > 0:
+                        if parent_factor is None or parent_factor <= 0 or abs(parent_factor - 1.0) < 1e-6:
+                            parent_factor = qt_und_val
+                            if raw_qt_mod in (None, "", 0, 0.0, 1, 1.0):
+                                row["qt_mod"] = parent_factor
+                    if parent_factor is None or parent_factor <= 0:
                         parent_factor = 1.0
                     if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
                         row["qt_mod"] = parent_factor
+
+            if row_type != "child":
+                _update_qt_mod_expression(row, divisor, parent_factor)
 
             child_factor_value = row.get("qt_und")
 
@@ -2361,6 +2419,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         right_layout.addLayout(actions_layout)
 
         self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimension_col_map: Dict[str, int] = {key: idx for idx, key in enumerate(DIMENSION_KEY_ORDER)}
         self._dimensions_dirty = False
         self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER))
         self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
@@ -2371,10 +2430,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.dimensions_table.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
         self.dimensions_table.setAlternatingRowColors(True)
+        self.dimensions_table.setStyleSheet("QTableWidget { gridline-color: #d0d0d0; }")
         for col, key in enumerate(DIMENSION_KEY_ORDER):
             header_item = QtWidgets.QTableWidgetItem(key)
             header_item.setFlags(QtCore.Qt.ItemIsEnabled)
             header_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            header_font = header_item.font()
+            header_font.setBold(True)
+            header_item.setFont(header_font)
             self.dimensions_table.setItem(0, col, header_item)
             value_item = QtWidgets.QTableWidgetItem("")
             value_item.setTextAlignment(QtCore.Qt.AlignCenter)
@@ -2520,6 +2583,26 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return None
 
 
+    def _style_dimension_cell(self, key: str, item: Optional[QtWidgets.QTableWidgetItem] = None) -> None:
+        if not hasattr(self, "dimensions_table"):
+            return
+        if item is None:
+            col = self._dimension_col_map.get(key) if hasattr(self, "_dimension_col_map") else None
+            if col is None:
+                return
+            item = self.dimensions_table.item(1, col)
+            if item is None:
+                return
+        text = (item.text() or "").strip()
+        has_value = bool(text)
+        color = DIMENSION_COLOR_MAP.get(key)
+        brush = QtGui.QBrush(color) if has_value and color is not None else QtGui.QBrush(QtCore.Qt.transparent)
+        item.setBackground(brush)
+        font = item.font()
+        font.setBold(has_value)
+        item.setFont(font)
+
+
 
     def _update_dimension_table(self) -> None:
         if not hasattr(self, "dimensions_table"):
@@ -2532,6 +2615,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 item.setTextAlignment(QtCore.Qt.AlignCenter)
                 self.dimensions_table.setItem(1, col, item)
             item.setText(self._format_dimension_value(self._dimension_values.get(key)))
+            self._style_dimension_cell(key, item)
         self.dimensions_table.blockSignals(False)
 
 
@@ -2579,11 +2663,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.dimensions_table.blockSignals(True)
             item.setText(self._format_dimension_value(self._dimension_values.get(key)))
             self.dimensions_table.blockSignals(False)
+            self._style_dimension_cell(key, item)
             return
         self._dimension_values[key] = novo_valor
         self.dimensions_table.blockSignals(True)
         item.setText(self._format_dimension_value(novo_valor))
         self.dimensions_table.blockSignals(False)
+        self._style_dimension_cell(key, item)
         self._dimensions_dirty = True
         if self.context:
             self.table_model.recalculate_all()

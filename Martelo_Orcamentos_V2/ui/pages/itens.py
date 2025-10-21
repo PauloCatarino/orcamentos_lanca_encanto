@@ -6,11 +6,11 @@
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
-from typing import Optional, List
+from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 
 # PySide6
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtUiTools import QUiLoader           # ? para carregar .ui em runtime
 from PySide6.QtCore import QFile, Qt, QItemSelectionModel, Signal
 from PySide6.QtGui import QDoubleValidator
@@ -30,7 +30,31 @@ from Martelo_Orcamentos_V2.app.services.orcamentos import (
 )
 from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
+from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
+from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 from ..models.qt_table import SimpleTableModel
+
+
+DIMENSION_KEY_ORDER: Tuple[str, ...] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
+PRIMARY_DIMENSION_KEYS = ("H", "L", "P")
+DIMENSION_GROUPS = [
+    ("H", "L", "P"),
+    ("H1", "L1", "P1"),
+    ("H2", "L2", "P2"),
+    ("H3", "L3", "P3"),
+    ("H4", "L4", "P4"),
+]
+DIMENSION_GROUP_COLORS: List[QtGui.QColor] = [
+    QtGui.QColor("#FFF2CC"),  # amarelo claro
+    QtGui.QColor("#CCE5FF"),  # azul claro
+    QtGui.QColor("#D4EDDA"),  # verde claro
+    QtGui.QColor("#F8D7DA"),  # vermelho claro
+    QtGui.QColor("#E2D9FF"),  # lilas claro
+]
+DIMENSION_COLOR_MAP: Dict[str, QtGui.QColor] = {}
+for color, group in zip(DIMENSION_GROUP_COLORS, DIMENSION_GROUPS):
+    for key in group:
+        DIMENSION_COLOR_MAP[key] = color
 
 
 # ---------- helper para carregar .ui e expor widgets por objectName ----------
@@ -132,13 +156,6 @@ class ItensPage(QtWidgets.QWidget):
         if not self.edit_und.text().strip():
             self.edit_und.setText("und")
 
-        # S? a TABELA cresce (tudo acima fica compacto)
-        if hasattr(self, "verticalLayoutMain"):
-            self.verticalLayoutMain.setStretch(0, 0)  # header
-            self.verticalLayoutMain.setStretch(1, 0)  # form
-            self.verticalLayoutMain.setStretch(2, 0)  # bot?es
-            self.verticalLayoutMain.setStretch(3, 1)  # tabela
-
         # ------------------------------------------------------------------
         # 3) Model da tabela
         # ------------------------------------------------------------------
@@ -209,6 +226,12 @@ class ItensPage(QtWidgets.QWidget):
             w = column_widths.get(col_def[0])
             if w:
                 header.resizeSection(i, w)
+
+        self._init_dimensions_ui()
+
+        self.edit_altura.textEdited.connect(lambda text: self._on_primary_dimension_text_edited("H", text))
+        self.edit_largura.textEdited.connect(lambda text: self._on_primary_dimension_text_edited("L", text))
+        self.edit_profundidade.textEdited.connect(lambda text: self._on_primary_dimension_text_edited("P", text))
 
         # Altura das linhas (como combin?mos: 26px colapsado)
         self._row_height_collapsed = 26
@@ -416,6 +439,255 @@ class ItensPage(QtWidgets.QWidget):
             text = text.rstrip("0").rstrip(".")
         return text
 
+    # ==========================================================================
+    # Tabela de vari?veis dimensionais (H, L, P, H1...)
+    # ==========================================================================
+    def _init_dimensions_ui(self) -> None:
+        self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimension_col_map: Dict[str, int] = {key: idx for idx, key in enumerate(DIMENSION_KEY_ORDER)}
+        self._dimensions_dirty = False
+
+        self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER), self)
+        self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.dimensions_table.setFixedHeight(72)
+        self.dimensions_table.verticalHeader().setVisible(False)
+        self.dimensions_table.horizontalHeader().setVisible(False)
+        self.dimensions_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.dimensions_table.setFocusPolicy(Qt.StrongFocus)
+        self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.dimensions_table.setAlternatingRowColors(True)
+        self.dimensions_table.setStyleSheet(
+            "QTableWidget { gridline-color: #d0d0d0; }"
+        )
+
+        for row in range(2):
+            self.dimensions_table.setRowHeight(row, 28 if row else 24)
+
+        for col, key in enumerate(DIMENSION_KEY_ORDER):
+            header_item = QtWidgets.QTableWidgetItem(key)
+            header_item.setFlags(QtCore.Qt.ItemIsEnabled)
+            header_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            header_font = header_item.font()
+            header_font.setBold(True)
+            header_item.setFont(header_font)
+            self.dimensions_table.setItem(0, col, header_item)
+
+            value_item = QtWidgets.QTableWidgetItem("")
+            value_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            if key in PRIMARY_DIMENSION_KEYS:
+                value_item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+            else:
+                value_item.setFlags(
+                    QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled
+                )
+            self.dimensions_table.setItem(1, col, value_item)
+            self.dimensions_table.setColumnWidth(col, 60)
+
+        self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
+
+        # Inserir no layout principal antes da tabela de itens
+        self.dimensions_frame = QtWidgets.QFrame(self)
+        frame_layout = QtWidgets.QVBoxLayout(self.dimensions_frame)
+        frame_layout.setContentsMargins(0, 4, 0, 4)
+        frame_layout.setSpacing(0)
+        frame_layout.addWidget(self.dimensions_table)
+
+        if hasattr(self, "verticalLayoutMain"):
+            layout: QtWidgets.QVBoxLayout = self.verticalLayoutMain
+            table_index = layout.indexOf(self.table)
+            if table_index == -1:
+                layout.addWidget(self.dimensions_frame)
+            else:
+                layout.insertWidget(table_index, self.dimensions_frame)
+            self._configure_main_layout_stretch()
+
+        self._set_dimensions_enabled(False)
+        self._update_dimension_table()
+
+    def _configure_main_layout_stretch(self) -> None:
+        if not hasattr(self, "verticalLayoutMain"):
+            return
+        layout: QtWidgets.QVBoxLayout = self.verticalLayoutMain
+        count = layout.count()
+        for idx in range(count):
+            layout.setStretch(idx, 0)
+
+        table_index = layout.indexOf(self.table)
+        if table_index != -1:
+            layout.setStretch(table_index, 1)
+
+    def _format_dimension_value(self, value: Optional[float]) -> str:
+        if value is None:
+            return ""
+        if abs(value - int(round(value))) < 1e-6:
+            return str(int(round(value)))
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+
+    def _coerce_dimension_value(self, text: Any) -> Optional[float]:
+        if text in (None, ""):
+            return None
+        stripped = str(text).strip()
+        if not stripped:
+            return None
+        stripped = stripped.replace(",", ".")
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+
+    def _style_dimension_cell(self, item: Optional[QtWidgets.QTableWidgetItem], key: str) -> None:
+        if item is None:
+            return
+        text = (item.text() or "").strip()
+        has_value = bool(text)
+        color = DIMENSION_COLOR_MAP.get(key)
+        if has_value and color is not None:
+            item.setBackground(QtGui.QBrush(color))
+        else:
+            item.setBackground(QtGui.QBrush(QtCore.Qt.transparent))
+        font = item.font()
+        font.setBold(has_value)
+        item.setFont(font)
+
+    def _set_dimension_value(
+        self,
+        key: str,
+        value: Optional[float],
+        *,
+        mark_dirty: bool = False,
+        source_item: Optional[QtWidgets.QTableWidgetItem] = None,
+    ) -> None:
+        if key not in self._dimension_values:
+            return
+        current = self._dimension_values.get(key)
+        if current == value:
+            target_item = source_item or self.dimensions_table.item(1, self._dimension_col_map.get(key, -1))
+            self._style_dimension_cell(target_item, key)
+            if mark_dirty and current != value:
+                self._dimensions_dirty = True
+            return
+
+        self._dimension_values[key] = value
+        target_item = source_item
+        if target_item is None and hasattr(self, "dimensions_table"):
+            col = self._dimension_col_map.get(key)
+            if col is not None and col >= 0:
+                target_item = self.dimensions_table.item(1, col)
+        if target_item is not None:
+            self.dimensions_table.blockSignals(True)
+            target_item.setText(self._format_dimension_value(value))
+            self.dimensions_table.blockSignals(False)
+            self._style_dimension_cell(target_item, key)
+        if mark_dirty:
+            self._dimensions_dirty = True
+
+    def _update_dimension_table(self) -> None:
+        if not hasattr(self, "dimensions_table"):
+            return
+        self.dimensions_table.blockSignals(True)
+        for key, col in self._dimension_col_map.items():
+            item = self.dimensions_table.item(1, col)
+            if item is None:
+                item = QtWidgets.QTableWidgetItem("")
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+                self.dimensions_table.setItem(1, col, item)
+            item.setText(self._format_dimension_value(self._dimension_values.get(key)))
+            self._style_dimension_cell(item, key)
+        self.dimensions_table.blockSignals(False)
+
+    def _set_dimensions_enabled(self, enabled: bool) -> None:
+        if hasattr(self, "dimensions_table"):
+            self.dimensions_table.setEnabled(enabled)
+
+    def _clear_dimension_values(self, *, enable: bool = False) -> None:
+        self._dimension_values = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimensions_dirty = False
+        self._set_dimensions_enabled(enable)
+        self._update_dimension_table()
+
+    def _collect_dimension_payload(self) -> Dict[str, Optional[float]]:
+        return {key: self._dimension_values.get(key) for key in DIMENSION_KEY_ORDER}
+
+    def _on_primary_dimension_text_edited(self, key: str, text: str) -> None:
+        value = self._coerce_dimension_value(text)
+        self._set_dimension_value(key, value, mark_dirty=True)
+
+    def _apply_primary_dimensions_to_table(self, *, mark_dirty: bool) -> None:
+        values = {
+            "H": self._coerce_dimension_value(self.edit_altura.text()),
+            "L": self._coerce_dimension_value(self.edit_largura.text()),
+            "P": self._coerce_dimension_value(self.edit_profundidade.text()),
+        }
+        updated = False
+        for key, new_value in values.items():
+            if self._dimension_values.get(key) != new_value:
+                self._set_dimension_value(key, new_value, mark_dirty=mark_dirty)
+                updated = True
+            else:
+                col = self._dimension_col_map.get(key)
+                item = self.dimensions_table.item(1, col) if col is not None else None
+                self._style_dimension_cell(item, key)
+        if mark_dirty and updated:
+            self._dimensions_dirty = True
+
+    def _load_dimension_values_for_item(self, item: Optional[OrcamentoItem]) -> None:
+        item_id = getattr(item, "id_item", None)
+        if not item_id or not self._orc_id:
+            self._clear_dimension_values(enable=bool(self._orc_id))
+            self._apply_primary_dimensions_to_table(mark_dirty=False)
+            return
+        try:
+            ctx = svc_dados_items.carregar_contexto(self.db, self._orc_id, item_id)
+        except Exception as exc:  # pragma: no cover - apenas log
+            print(f"[ItensPage] Falha ao carregar contexto de dimensoes: {exc}")
+            self._clear_dimension_values(enable=True)
+            self._apply_primary_dimensions_to_table(mark_dirty=False)
+            return
+        try:
+            armazenados, tem_registro = svc_custeio.carregar_dimensoes(self.db, ctx)
+        except Exception as exc:  # pragma: no cover - apenas log
+            print(f"[ItensPage] Falha ao carregar dimensoes armazenadas: {exc}")
+            armazenados, tem_registro = {}, False
+
+        defaults = svc_custeio.dimensoes_default_por_item(item)
+        for key in DIMENSION_KEY_ORDER:
+            valor = armazenados.get(key)
+            if valor is None and not tem_registro:
+                valor = defaults.get(key)
+            self._dimension_values[key] = valor
+        self._dimensions_dirty = False
+        self._set_dimensions_enabled(True)
+        self._update_dimension_table()
+        self._apply_primary_dimensions_to_table(mark_dirty=False)
+
+    def _persist_dimensions(self, item_id: Optional[int], *, force: bool = False) -> None:
+        if not item_id or not self._orc_id:
+            return
+        if not force and not self._dimensions_dirty:
+            return
+        try:
+            ctx = svc_dados_items.carregar_contexto(self.db, self._orc_id, item_id)
+        except Exception as exc:
+            raise RuntimeError(f"Falha ao preparar contexto de dimensoes: {exc}") from exc
+        payload = self._collect_dimension_payload()
+        try:
+            svc_custeio.guardar_dimensoes(self.db, ctx, payload)
+        except Exception as exc:
+            raise RuntimeError(f"Falha ao guardar dimensoes do item: {exc}") from exc
+
+    def _on_dimension_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.row() != 1:
+            return
+        key = DIMENSION_KEY_ORDER[item.column()]
+        novo_valor = self._coerce_dimension_value(item.text())
+        if item.text().strip() and novo_valor is None:
+            self.dimensions_table.blockSignals(True)
+            item.setText(self._format_dimension_value(self._dimension_values.get(key)))
+            self.dimensions_table.blockSignals(False)
+            self._style_dimension_cell(item, key)
+            return
+        self._set_dimension_value(key, novo_valor, mark_dirty=True, source_item=item)
+
     def _populate_form(self, item):
         self.edit_item.setText(getattr(item, "item_nome", "") or "")
         self.edit_codigo.setText((getattr(item, "codigo", "") or "").upper())
@@ -428,6 +700,7 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_qt.setText(qt_txt or "1")
         self.edit_item.setReadOnly(True)
         self._edit_item_id = getattr(item, "id_item", None)
+        self._load_dimension_values_for_item(item)
 
     def _clear_form(self):
         self.edit_item.clear()
@@ -440,6 +713,7 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_qt.setText("1")
         self.edit_item.setReadOnly(True)
         self._edit_item_id = None
+        self._clear_dimension_values(enable=bool(self._orc_id))
 
     # ==========================================================================
     # Tabela: altura das linhas
@@ -539,12 +813,14 @@ class ItensPage(QtWidgets.QWidget):
             self.edit_item.setText(str(self._next_item_number(self._orc_id, versao_norm)))
 
         try:
+            self._apply_primary_dimensions_to_table(mark_dirty=True)
             form = self._collect_form_data()
         except Exception as e:
             QMessageBox.critical(self, "Erro", str(e))
             return
 
         new_row = None
+        persist_target_id: Optional[int] = None
         try:
             print(f"[Itens.on_save_item] id_item before save: {id_item}")
             if id_item:
@@ -562,6 +838,7 @@ class ItensPage(QtWidgets.QWidget):
                     qt=form["qt"],
                     updated_by=self._current_user_id(),
                 )
+                persist_target_id = id_item
                 msg = "Item atualizado com sucesso."
             else:
                 new_row = create_item(
@@ -578,10 +855,15 @@ class ItensPage(QtWidgets.QWidget):
                     qt=form["qt"],
                     created_by=self._current_user_id(),
                 )
+                persist_target_id = getattr(new_row, "id_item", None)
                 msg = "Item gravado com sucesso."
 
+            if persist_target_id:
+                self._persist_dimensions(persist_target_id, force=True)
+
             self.db.commit()
-            target_id = getattr(new_row, "id_item", None) or id_item
+            self._dimensions_dirty = False
+            target_id = getattr(new_row, "id_item", None) or persist_target_id
             print(f"[Itens.on_save_item] target_id after save: {target_id}")
             self.refresh(select_id=target_id, select_last=target_id is None)
             QMessageBox.information(self, "Sucesso", msg)
