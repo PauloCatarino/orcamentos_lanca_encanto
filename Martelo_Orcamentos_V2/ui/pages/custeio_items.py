@@ -397,10 +397,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         base_font = QtWidgets.QApplication.font()
         self._division_font = QtGui.QFont(base_font)
-        point_size = base_font.pointSize()
+        point_size = base_font.pointSizeF()
         if point_size <= 0:
-            point_size = 10
-        self._division_font.setPointSize(point_size + 1)
+            point_size = 10.0
+        self._division_font.setPointSizeF(point_size + 2.0)
         self._division_font.setBold(True)
 
         self._bold_font = QtGui.QFont(base_font)
@@ -684,33 +684,28 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return None
 
         if key == "icon_hint":
-
             if role == QtCore.Qt.DecorationRole:
-
                 icon_value = row_data.get("icon_hint")
-
+                if row_type == "division":
+                    if not isinstance(icon_value, QtGui.QIcon):
+                        page_ref = getattr(self, "_page", None)
+                        if page_ref is not None:
+                            icon_value = page_ref._icon("division")
+                            row_data["icon_hint"] = icon_value
                 if isinstance(icon_value, QtGui.QIcon):
-
                     return icon_value
-
                 if isinstance(icon_value, str) and icon_value:
-
                     return QtGui.QIcon(icon_value)
-
             if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
-
                 return ""
-
             return None
 
         if role == QtCore.Qt.BackgroundRole:
 
             if row_type == "division":
-
-                return QtGui.QColor(180, 180, 180)
+                return QtGui.QColor(170, 170, 170)
 
             if row_type == "separator":
-
                 return QtGui.QColor(235, 235, 235)
 
         if key == "qt_und" and role == QtCore.Qt.ToolTipRole:
@@ -1491,6 +1486,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     row["_comp_error"] = None
                     substitution = self._format_result_number(inherited_comp) or row.get("comp")
                     row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp or (row.get("comp") or substitution or ""), inherited_comp, None, substitutions=substitution or None)
+                    if (row.get("comp") in (None, "")) and substitution:
+                        row["comp"] = substitution
 
             else:
 
@@ -1523,6 +1520,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 substitution = self._format_result_number(default_esp) or row.get("esp")
 
                 row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp or (row.get("esp") or substitution or ""), default_esp, None, substitutions=substitution or None)
+                if (row.get("esp") in (None, "")) and substitution:
+                    row["esp"] = substitution
 
         left = self._column_index.get("qt_mod")
 
