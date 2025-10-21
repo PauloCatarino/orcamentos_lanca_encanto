@@ -395,8 +395,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self._italic_font.setItalic(True)
 
-        self._bold_font = QtGui.QFont()
+        base_font = QtWidgets.QApplication.font()
+        self._division_font = QtGui.QFont(base_font)
+        point_size = base_font.pointSize()
+        if point_size <= 0:
+            point_size = 10
+        self._division_font.setPointSize(point_size + 1)
+        self._division_font.setBold(True)
 
+        self._bold_font = QtGui.QFont(base_font)
         self._bold_font.setBold(True)
 
         self.rows: List[Dict[str, Any]] = []
@@ -657,6 +664,25 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     return tooltip
                 return None
 
+        if key == "id":
+            if role == QtCore.Qt.DisplayRole:
+                if row_type == "division":
+                    page_ref = getattr(self, "_page", None)
+                    collapsed_groups = getattr(page_ref, "_collapsed_groups", set()) if page_ref is not None else set()
+                    is_collapsed = row_data.get("_group_uid") in collapsed_groups
+                    return "+" if is_collapsed else "-"
+                raw_id = row_data.get("id")
+                return "" if raw_id in (None, "") else str(raw_id)
+            if role == QtCore.Qt.TextAlignmentRole:
+                return QtCore.Qt.AlignCenter
+            if role == QtCore.Qt.ToolTipRole:
+                if row_type == "division":
+                    return "Clique para expandir/contrair este grupo."
+                raw_id = row_data.get("id")
+                if raw_id not in (None, ""):
+                    return f"ID: {raw_id}"
+                return None
+
         if key == "icon_hint":
 
             if role == QtCore.Qt.DecorationRole:
@@ -681,7 +707,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if row_type == "division":
 
-                return QtGui.QColor(210, 210, 210)
+                return QtGui.QColor(180, 180, 180)
 
             if row_type == "separator":
 
@@ -699,7 +725,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if row_type == "division":
 
-                return self._bold_font
+                return self._division_font
 
             if row_data.get("blk") and key in ITALIC_ON_BLK_KEYS:
 
@@ -1166,6 +1192,23 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         context = getattr(page_ref, "context", None) if page_ref is not None else None
 
+        def _coerce_dimension(raw: Any) -> Optional[float]:
+            if page_ref is not None and hasattr(page_ref, "_coerce_dimension_value"):
+                try:
+                    coerced = page_ref._coerce_dimension_value(raw)
+                except Exception:
+                    coerced = None
+                if coerced is not None:
+                    return coerced
+            if raw in (None, "", False):
+                return None
+            if isinstance(raw, (int, float)):
+                return float(raw)
+            try:
+                return float(str(raw).replace(",", "."))
+            except (TypeError, ValueError):
+                return None
+
         if session is not None and context is not None:
 
             try:
@@ -1187,7 +1230,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             except Exception:
                 dimension_values = {}
             for key in DIMENSION_KEY_ORDER:
-                global_dimensions[key] = dimension_values.get(key)
+                global_dimensions[key] = _coerce_dimension(dimension_values.get(key))
 
         divisor = 1.0
 
@@ -1196,23 +1239,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         current_parent_row: Optional[Dict[str, Any]] = None
 
         current_parent_uid: Optional[str] = None
-
-        def _coerce_dimension(raw: Any) -> Optional[float]:
-            if page_ref is not None and hasattr(page_ref, "_coerce_dimension_value"):
-                try:
-                    coerced = page_ref._coerce_dimension_value(raw)
-                except Exception:
-                    coerced = None
-                if coerced is not None:
-                    return coerced
-            if raw in (None, "", False):
-                return None
-            if isinstance(raw, (int, float)):
-                return float(raw)
-            try:
-                return float(str(raw).replace(",", "."))
-            except (TypeError, ValueError):
-                return None
 
         current_local_dimensions: Dict[str, Optional[float]] = {}
 
@@ -1461,11 +1487,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     inherited_comp = current_parent_row.get("comp_res")
                     if inherited_comp is None:
                         inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
-                    formatted = self._format_result_number(inherited_comp) or ""
-                    row["comp"] = formatted
                     row["comp_res"] = inherited_comp
                     row["_comp_error"] = None
-                    row["_comp_tooltip"] = self._build_formula_tooltip(formatted, inherited_comp, None, substitutions=formatted or None)
+                    substitution = self._format_result_number(inherited_comp) or row.get("comp")
+                    row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp or (row.get("comp") or substitution or ""), inherited_comp, None, substitutions=substitution or None)
 
             else:
 
@@ -1491,15 +1516,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 default_esp = _coerce_dimension(row.get("esp_mp"))
 
-                formatted_esp = self._format_result_number(default_esp) or ""
-
-                row["esp"] = formatted_esp
-
                 row["esp_res"] = default_esp
 
                 row["_esp_error"] = None
 
-                row["_esp_tooltip"] = self._build_formula_tooltip(formatted_esp, default_esp, None, substitutions=formatted_esp or None)
+                substitution = self._format_result_number(default_esp) or row.get("esp")
+
+                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp or (row.get("esp") or substitution or ""), default_esp, None, substitutions=substitution or None)
 
         left = self._column_index.get("qt_mod")
 
@@ -3085,6 +3108,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.table_view.setRowHidden(idx, not visibility[idx])
 
         self.table_view.viewport().update()
+
+        id_col = self.table_model._column_index.get("id")
+        if id_col is not None and row_count:
+            top_left = self.table_model.index(0, id_col)
+            bottom_right = self.table_model.index(row_count - 1, id_col)
+            self.table_model.dataChanged.emit(top_left, bottom_right, [QtCore.Qt.DisplayRole])
 
 
     def _icon(self, key: str) -> QtGui.QIcon:
