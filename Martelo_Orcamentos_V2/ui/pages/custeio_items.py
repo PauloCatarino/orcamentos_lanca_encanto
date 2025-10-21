@@ -1310,24 +1310,24 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             expr_comp = self._prepare_formula_expression(row.get("comp"))
             row["comp"] = expr_comp
-            comp_val, comp_error = self._evaluate_formula_expression(expr_comp, global_dimensions, current_local_dimensions)
+            comp_val, comp_error, comp_substitution = self._evaluate_formula_expression(expr_comp, global_dimensions, current_local_dimensions)
             row["comp_res"] = comp_val
             row["_comp_error"] = comp_error
-            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error)
+            row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_substitution)
 
             expr_larg = self._prepare_formula_expression(row.get("larg"))
             row["larg"] = expr_larg
-            larg_val, larg_error = self._evaluate_formula_expression(expr_larg, global_dimensions, current_local_dimensions)
+            larg_val, larg_error, larg_substitution = self._evaluate_formula_expression(expr_larg, global_dimensions, current_local_dimensions)
             row["larg_res"] = larg_val
             row["_larg_error"] = larg_error
-            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error)
+            row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_substitution)
 
             expr_esp = self._prepare_formula_expression(row.get("esp"))
             row["esp"] = expr_esp
-            esp_val, esp_error = self._evaluate_formula_expression(expr_esp, global_dimensions, current_local_dimensions)
+            esp_val, esp_error, esp_substitution = self._evaluate_formula_expression(expr_esp, global_dimensions, current_local_dimensions)
             row["esp_res"] = esp_val
             row["_esp_error"] = esp_error
-            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error)
+            row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_substitution)
 
             if row.get("_row_type") == "division":
                 current_local_dimensions = {
