@@ -1280,11 +1280,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         modulo_dims: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
 
         def _build_eval_env() -> Dict[str, Optional[float]]:
-            env: Dict[str, Optional[float]] = {
-                "H": group_dims.get("H") if group_dims.get("H") is not None else 0.0,
-                "L": group_dims.get("L") if group_dims.get("L") is not None else 0.0,
-                "P": group_dims.get("P") if group_dims.get("P") is not None else 0.0,
-            }
+            env: Dict[str, Optional[float]] = dict(global_context_base)
+            env["H"] = group_dims.get("H") if group_dims.get("H") is not None else env.get("H", 0.0)
+            env["L"] = group_dims.get("L") if group_dims.get("L") is not None else env.get("L", 0.0)
+            env["P"] = group_dims.get("P") if group_dims.get("P") is not None else env.get("P", 0.0)
             env["HM"] = modulo_dims.get("HM") if modulo_dims.get("HM") is not None else env["H"]
             env["LM"] = modulo_dims.get("LM") if modulo_dims.get("LM") is not None else env["L"]
             env["PM"] = modulo_dims.get("PM") if modulo_dims.get("PM") is not None else env["P"]
@@ -1442,11 +1441,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 continue
 
             if self._is_modulo_row(row):
-                modulo_env: Dict[str, Optional[float]] = {
-                    "H": group_dims.get("H") if group_dims.get("H") is not None else 0.0,
-                    "L": group_dims.get("L") if group_dims.get("L") is not None else 0.0,
-                    "P": group_dims.get("P") if group_dims.get("P") is not None else 0.0,
-                }
+                modulo_env: Dict[str, Optional[float]] = dict(global_context_base)
+                modulo_env["H"] = group_dims.get("H") if group_dims.get("H") is not None else modulo_env.get("H", 0.0)
+                modulo_env["L"] = group_dims.get("L") if group_dims.get("L") is not None else modulo_env.get("L", 0.0)
+                modulo_env["P"] = group_dims.get("P") if group_dims.get("P") is not None else modulo_env.get("P", 0.0)
                 modulo_env["HM"] = modulo_env["H"]
                 modulo_env["LM"] = modulo_env["L"]
                 modulo_env["PM"] = modulo_env["P"]
