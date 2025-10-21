@@ -1277,17 +1277,33 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         current_parent_uid: Optional[str] = None
 
         group_dims: Dict[str, Optional[float]] = {"H": None, "L": None, "P": None}
-        modulo_dims: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
+        current_local_dimensions: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
 
-        def _build_eval_env() -> Dict[str, Optional[float]]:
+        def _build_eval_env(include_locals: bool = True) -> Dict[str, Optional[float]]:
             env: Dict[str, Optional[float]] = dict(global_context_base)
-            env["H"] = group_dims.get("H") if group_dims.get("H") is not None else env.get("H", 0.0)
-            env["L"] = group_dims.get("L") if group_dims.get("L") is not None else env.get("L", 0.0)
-            env["P"] = group_dims.get("P") if group_dims.get("P") is not None else env.get("P", 0.0)
-            env["HM"] = modulo_dims.get("HM") if modulo_dims.get("HM") is not None else env["H"]
-            env["LM"] = modulo_dims.get("LM") if modulo_dims.get("LM") is not None else env["L"]
-            env["PM"] = modulo_dims.get("PM") if modulo_dims.get("PM") is not None else env["P"]
+            if group_dims.get("H") is not None:
+                env["H"] = group_dims["H"]
+            if group_dims.get("L") is not None:
+                env["L"] = group_dims["L"]
+            if group_dims.get("P") is not None:
+                env["P"] = group_dims["P"]
+            if include_locals:
+                for key in ("HM", "LM", "PM"):
+                    env[key] = current_local_dimensions.get(key)
+            else:
+                for key in ("HM", "LM", "PM"):
+                    env.setdefault(key, None)
             return env
+
+        def _evaluate_dimension(
+            expression: str, env: Mapping[str, Optional[float]]
+        ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
+            value, error = self._evaluate_formula_expression(expression, env)
+            substitution = self._render_formula_substitution(expression, env)
+            if error is None and value is not None:
+                value = round(value, 1)
+            tooltip = self._build_formula_tooltip(expression, value, error, substitutions=substitution)
+            return value, error, tooltip
 
         for row in self.rows:
 
@@ -1328,7 +1344,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 continue
 
-            if self._is_division_row(row):
+            is_division = self._is_division_row(row)
+
+            if is_division:
 
                 row["_row_type"] = "division"
 
@@ -1364,7 +1382,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 current_parent_uid = None
 
-            if "+" in def_peca:
+                row["_regra_nome"] = None
+
+            elif "+" in def_peca:
 
                 row["_row_type"] = "parent"
 
@@ -1412,25 +1432,30 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             row["esp"] = expr_esp
 
             if row.get("_row_type") == "division":
-                comp_val, comp_error, comp_sub = self._evaluate_formula_with_env(expr_comp, global_context_base)
+                division_env: Dict[str, Optional[float]] = dict(global_context_base)
+                for key in ("HM", "LM", "PM"):
+                    division_env.setdefault(key, None)
+                comp_val, comp_error, comp_tooltip = _evaluate_dimension(expr_comp, division_env)
                 row["comp_res"] = comp_val
                 row["_comp_error"] = comp_error
-                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_sub)
+                row["_comp_tooltip"] = comp_tooltip
 
-                larg_val, larg_error, larg_sub = self._evaluate_formula_with_env(expr_larg, global_context_base)
+                larg_val, larg_error, larg_tooltip = _evaluate_dimension(expr_larg, division_env)
                 row["larg_res"] = larg_val
                 row["_larg_error"] = larg_error
-                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_sub)
+                row["_larg_tooltip"] = larg_tooltip
 
-                esp_val, esp_error, esp_sub = self._evaluate_formula_with_env(expr_esp, global_context_base)
+                esp_val, esp_error, esp_tooltip = _evaluate_dimension(expr_esp, division_env)
                 row["esp_res"] = esp_val
                 row["_esp_error"] = esp_error
-                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_sub)
+                row["_esp_tooltip"] = esp_tooltip
 
                 group_dims["H"] = comp_val if comp_val is not None else _coerce_dimension(row.get("comp"))
                 group_dims["L"] = larg_val if larg_val is not None else _coerce_dimension(row.get("larg"))
                 group_dims["P"] = esp_val if esp_val is not None else _coerce_dimension(row.get("esp"))
-                modulo_dims = {"HM": None, "LM": None, "PM": None}
+                current_local_dimensions["HM"] = comp_val
+                current_local_dimensions["LM"] = larg_val
+                current_local_dimensions["PM"] = esp_val
                 row["_qt_divisor"] = divisor
                 row["_qt_parent_factor"] = None
                 row["_qt_child_factor"] = None
@@ -1440,48 +1465,21 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 current_parent_uid = row["_uid"]
                 continue
 
-            if self._is_modulo_row(row):
-                modulo_env: Dict[str, Optional[float]] = dict(global_context_base)
-                modulo_env["H"] = group_dims.get("H") if group_dims.get("H") is not None else modulo_env.get("H", 0.0)
-                modulo_env["L"] = group_dims.get("L") if group_dims.get("L") is not None else modulo_env.get("L", 0.0)
-                modulo_env["P"] = group_dims.get("P") if group_dims.get("P") is not None else modulo_env.get("P", 0.0)
-                modulo_env["HM"] = modulo_env["H"]
-                modulo_env["LM"] = modulo_env["L"]
-                modulo_env["PM"] = modulo_env["P"]
-                mod_comp_val, mod_comp_error, mod_comp_sub = self._evaluate_formula_with_env(expr_comp, modulo_env)
-                row["comp_res"] = mod_comp_val
-                row["_comp_error"] = mod_comp_error
-                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, mod_comp_val, mod_comp_error, substitutions=mod_comp_sub)
+            merged_context = _build_eval_env()
+            comp_val, comp_error, comp_tooltip = _evaluate_dimension(expr_comp, merged_context)
+            row["comp_res"] = comp_val
+            row["_comp_error"] = comp_error
+            row["_comp_tooltip"] = comp_tooltip
 
-                mod_larg_val, mod_larg_error, mod_larg_sub = self._evaluate_formula_with_env(expr_larg, modulo_env)
-                row["larg_res"] = mod_larg_val
-                row["_larg_error"] = mod_larg_error
-                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, mod_larg_val, mod_larg_error, substitutions=mod_larg_sub)
+            larg_val, larg_error, larg_tooltip = _evaluate_dimension(expr_larg, merged_context)
+            row["larg_res"] = larg_val
+            row["_larg_error"] = larg_error
+            row["_larg_tooltip"] = larg_tooltip
 
-                mod_esp_val, mod_esp_error, mod_esp_sub = self._evaluate_formula_with_env(expr_esp, modulo_env)
-                row["esp_res"] = mod_esp_val
-                row["_esp_error"] = mod_esp_error
-                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, mod_esp_val, mod_esp_error, substitutions=mod_esp_sub)
-
-                modulo_dims["HM"] = mod_comp_val if mod_comp_val is not None else modulo_env["H"]
-                modulo_dims["LM"] = mod_larg_val if mod_larg_val is not None else modulo_env["L"]
-                modulo_dims["PM"] = mod_esp_val if mod_esp_val is not None else modulo_env["P"]
-            else:
-                merged_context = _build_eval_env()
-                comp_val, comp_error, comp_sub = self._evaluate_formula_with_env(expr_comp, merged_context)
-                row["comp_res"] = comp_val
-                row["_comp_error"] = comp_error
-                row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp, comp_val, comp_error, substitutions=comp_sub)
-
-                larg_val, larg_error, larg_sub = self._evaluate_formula_with_env(expr_larg, merged_context)
-                row["larg_res"] = larg_val
-                row["_larg_error"] = larg_error
-                row["_larg_tooltip"] = self._build_formula_tooltip(expr_larg, larg_val, larg_error, substitutions=larg_sub)
-
-                esp_val, esp_error, esp_sub = self._evaluate_formula_with_env(expr_esp, merged_context)
-                row["esp_res"] = esp_val
-                row["_esp_error"] = esp_error
-                row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp, esp_val, esp_error, substitutions=esp_sub)
+            esp_val, esp_error, esp_tooltip = _evaluate_dimension(expr_esp, merged_context)
+            row["esp_res"] = esp_val
+            row["_esp_error"] = esp_error
+            row["_esp_tooltip"] = esp_tooltip
 
             row["_qt_divisor"] = divisor
 
