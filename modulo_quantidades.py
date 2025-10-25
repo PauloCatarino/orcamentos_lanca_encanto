@@ -36,9 +36,9 @@ from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 from PyQt5.QtCore import Qt       # Para Qt.Checked, etc.
 from PyQt5.QtGui import QColor    # Importar QColor para ajustar cor do MODULO
 # Importa constantes de cores de outro módulo
-from modulo_componentes_associados import COLOR_ASSOCIATED_BG, COLOR_MODULO_BG, COLOR_PRIMARY_WITH_ASS_BG # Importa as cores
+from modulo_componentes_associados import COLOR_CHILD_BG, COLOR_MODULO_BG, COLOR_PARENT_BG # Importa as cores
 from utils import converter_texto_para_valor, avaliar_formula_segura, validar_expressao_modulo, VARIAVEIS_VALIDAS, safe_item_text, set_item
-from modulo_componentes_associados import (COLOR_ASSOCIATED_BG, COLOR_MODULO_BG, IDX_COMP_ASS_1, IDX_COMP_ASS_2, IDX_COMP_ASS_3)
+from modulo_componentes_associados import (COLOR_CHILD_BG, COLOR_MODULO_BG, IDX_COMP_ASS_1, IDX_COMP_ASS_2, IDX_COMP_ASS_3)
 
 # Definição dos índices importantes das colunas da tabela "tab_def_pecas"
 IDX_DEF_PECA   = 2   # Coluna que contém o tipo de peça (Def_Peca)
@@ -349,7 +349,7 @@ def atualizar_dados_modulos(ui):
                      item_c = tabela.item(row, c) # Obtém item (garantido por set_item ou inserção inicial)
                      if item_c: # Garante que o item existe
                          # Não sobrescreve cor azul de associados (se já aplicada por engano)
-                         if item_c.background().color().name() != COLOR_ASSOCIATED_BG.name():
+                         if item_c.background().color().name() != COLOR_CHILD_BG.name():
                               item_c.setBackground(COLOR_MODULO_BG) # Cinza mais claro
                          # setItem NÃO é necessário aqui
             finally:
@@ -388,7 +388,7 @@ def atualizar_dados_modulos(ui):
 
              # Garante que a cor de fundo NÃO é cinza para linhas não-MODULO
              # Verifica a cor de fundo atual. Se for cinza (MODULO) e não deveria ser, muda para branco.
-             # A cor azul clara de associado (COLOR_ASSOCIATED_BG) é definida no modulo_componentes_associados.
+             # A cor azul clara de associado (COLOR_CHILD_BG) é definida no modulo_componentes_associados.
              # Não sobrescrever a cor azul clara aqui.
              item_def_check_color = tabela.item(row, IDX_DEF_PECA)
              if item_def_check_color: # Garante item existe
@@ -421,7 +421,7 @@ def atualizar_dados_modulos(ui):
             for col in range(tabela.columnCount()):
                 item = tabela.item(row, col)
                 if item:
-                    item.setBackground(COLOR_PRIMARY_WITH_ASS_BG)  # Aplicar cor de fundo azul escuro na linha completa que tem o componente principal e avaliar se alguma cas colunas COMP_ASS_1/2/3  tem componentes associados
+                    item.setBackground(COLOR_PARENT_BG)  # Aplicar cor de fundo azul escuro na linha completa que tem o componente principal e avaliar se alguma cas colunas COMP_ASS_1/2/3  tem componentes associados
 
 
     print("[INFO] Atualização de dados de módulos (fórmulas e quantidades) concluída.")

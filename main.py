@@ -671,7 +671,7 @@ class MainApp(QMainWindow):
             from dialogo_importar_modulo import DialogoImportarModulo
             # from tabela_def_pecas_items import inserir_linha_componente # Não usamos mais esta diretamente aqui
             from modulo_orquestrador import atualizar_tudo
-            from modulo_componentes_associados import COLOR_ASSOCIATED_BG, COLOR_PRIMARY_WITH_ASS_BG, COLOR_MODULO_BG
+            from modulo_componentes_associados import COLOR_CHILD_BG, COLOR_PARENT_BG, COLOR_MODULO_BG
 
             dialog = DialogoImportarModulo(
                 utilizador_atual=self.ui.comboBox_utilizador.currentText(),
@@ -788,7 +788,7 @@ class MainApp(QMainWindow):
                                 e_associado_neste_bloco = True
 
                             if e_associado_neste_bloco:
-                                cor_a_aplicar_linha_imp = COLOR_ASSOCIATED_BG
+                                cor_a_aplicar_linha_imp = COLOR_CHILD_BG
                             else:  # Nova principal dentro do bloco importado
                                 ultima_principal_importada = r_imp
                                 comps_da_ultima_principal_importada.clear()
@@ -806,7 +806,7 @@ class MainApp(QMainWindow):
                                     comps_da_ultima_principal_importada.add(c3)
 
                                 if comps_da_ultima_principal_importada:
-                                    cor_a_aplicar_linha_imp = COLOR_PRIMARY_WITH_ASS_BG
+                                    cor_a_aplicar_linha_imp = COLOR_PARENT_BG
 
                         for c_col in range(table.columnCount()):
                             item_celula = table.item(

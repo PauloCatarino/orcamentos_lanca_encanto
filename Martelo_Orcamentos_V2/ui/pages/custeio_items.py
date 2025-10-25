@@ -1,4 +1,4 @@
-﻿#--- START OF FILE custeio_items.py ---
+﻿#-\nROW_PARENT_COLOR = QtGui.QColor(230, 240, 255)  # Azul claro para linhas pai\nROW_CHILD_COLOR = QtGui.QColor(255, 250, 205)   # Amarelo suave para linhas filho\nROW_CHILD_INDENT = '\u2003\u2003'  # Espaços para indentação visual dos filhos\n-- START OF FILE custeio_items.py ---
 
 
 
@@ -165,6 +165,13 @@ COLUMN_WIDTH_DEFAULTS = {
     "custo_orl_l1": 110,
     "custo_orl_l2": 110,
 }
+
+# Row display helpers
+# Background colors for parent/child rows in the `def_peca` column.
+ROW_PARENT_COLOR = QtGui.QColor(220, 220, 220)  # slightly darker background for parent rows
+ROW_CHILD_COLOR = QtGui.QColor(245, 245, 245)   # light background for child rows
+# Indentation prefix used for child rows' text in the `def_peca` column.
+ROW_CHILD_INDENT = "    "
 
 
 class CusteioTableView(QtWidgets.QTableView):
@@ -434,6 +441,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._italic_font.setItalic(True)
         self._manual_override_font = QtGui.QFont(self._italic_font)
         self._manual_override_font.setUnderline(True)
+        # Font used to render child component names (italic + underline)
+        self._child_font = QtGui.QFont(self._italic_font)
+        self._child_font.setUnderline(True)
 
         base_font = QtWidgets.QApplication.font()
         self._division_font = QtGui.QFont(base_font)
@@ -924,6 +934,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     return tooltip
                 return None
 
+        if key == "def_peca":
+            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+                value = row_data.get("def_peca") or ""
+                if row_type == "child" and value:
+                    return ROW_CHILD_INDENT + value.lstrip()
+                return value
+
         if key == "id":
             if role == QtCore.Qt.DisplayRole:
                 if row_type == "division":
@@ -956,6 +973,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             return None
 
         if role == QtCore.Qt.BackgroundRole:
+            # Apply parent/child background only to specific visible columns
+            highlight_keys = {"def_peca", "descricao", "qt_mod", "qt_und", "comp", "larg", "esp"}
+            if key in highlight_keys:
+                if row_type == "parent":
+                    return ROW_PARENT_COLOR
+                if row_type == "child":
+                    return ROW_CHILD_COLOR
 
             if row_type == "division":
                 return QtGui.QColor(160, 160, 160)  # Cinza mais escuro
@@ -976,16 +1000,19 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             return None
 
         if role == QtCore.Qt.FontRole:
+            # Parent def_peca should be bold
+            if key == "def_peca" and row_type == "parent":
+                return self._bold_font
+            # Child def_peca should be italic + underline to differentiate
+            if key == "def_peca" and row_type == "child":
+                return self._child_font
+            # Manual override styling for qt_und (keeps previous behaviour)
             if key == "qt_und" and row_data.get("_qt_manual_override"):
                 return self._manual_override_font
             if row_type == "division":
-
                 return self._division_font
-
             if row_data.get("blk") and key in ITALIC_ON_BLK_KEYS:
-
                 return self._italic_font
-
             return None
 
         if role == QtCore.Qt.ToolTipRole:
@@ -1151,9 +1178,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row_data = self.rows[index.row()]
 
-            if key == "qt_und" and self._is_division_row(row_data):
-
-                return flags
+            # Disallow editing qt_und for child rows: child quantities are
+            # computed automatically from the parent and must not be changed
+            # by the user. Division rows also remain non-editable for qt_und.
+            if key == "qt_und":
+                if self._is_division_row(row_data):
+                    return flags
+                if (row_data.get("_row_type") or "").lower() == "child":
+                    return flags
 
             flags |= QtCore.Qt.ItemIsEditable
 
@@ -1692,6 +1724,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             elif "+" in def_peca:
 
                 row["_row_type"] = "parent"
+                row["_is_parent"] = True
 
                 current_group_uid = row.get("_group_uid") or str(uuid.uuid4())
 
@@ -1710,6 +1743,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 if regra_nome and current_parent_row is not None:
 
                     row["_row_type"] = "child"
+                    row["_is_associated"] = True
 
                     row["_group_uid"] = row.get("_group_uid") or current_group_uid
 
@@ -3830,9 +3864,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         action_paste = menu.addAction(self._icon("paste"), "Colar linha(s)")
 
-        manual_rows = [idx for idx in selected_rows if self.table_model.is_qt_und_manual(idx)]
-
-        action_revert_formula = menu.addAction(self._icon("revert_formula"), "Reverter QT_und para formula")
+    # Removed manual revert action: child/associated components are no
+    # longer editable by the user and revert option is not available.
 
         menu.addSeparator()
 
@@ -3854,11 +3887,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             action_divisao.setEnabled(False)
 
-            action_revert_formula.setEnabled(False)
-
         action_paste.setEnabled(bool(self._clipboard_rows))
 
-        action_revert_formula.setEnabled(bool(manual_rows))
+    # revert action removed
 
         if len(selected_rows) != 1:
 
@@ -3904,11 +3935,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
-        if chosen == action_revert_formula and manual_rows:
-
-            self.table_model.revert_qt_und(manual_rows)
-
-            return
+        # revert action removed: no handling
 
         if chosen == action_divisao and selected_rows:
 

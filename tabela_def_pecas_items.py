@@ -31,7 +31,7 @@ from utils import set_item  # (Já incluído na importação de utils no topo)
 from utils import safe_item_text, obter_diretorio_base
 from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction, QToolTip, QApplication
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
-from PyQt5.QtGui import QColor, QPen, QFont
+from PyQt5.QtGui import QColor, QPen, QFont, QFont
 from PyQt5 import QtGui
 import openpyxl
 import os

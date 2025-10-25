@@ -19,7 +19,14 @@ from decimal import Decimal, InvalidOperation # Importar Decimal
 from tabela_def_pecas_items import on_mp_button_clicked # importa o handler do botão “Escolher” a partir do módulo correto
 
 from utils import converter_texto_para_valor, formatar_valor_moeda, formatar_valor_percentual, set_item, safe_item_text
-from modulo_componentes_associados import (IDX_COMP_ASS_1, IDX_COMP_ASS_2, IDX_COMP_ASS_3,COLOR_ASSOCIATED_BG, COLOR_PRIMARY_WITH_ASS_BG) 
+from modulo_componentes_associados import (
+    IDX_COMP_ASS_1,
+    IDX_COMP_ASS_2,
+    IDX_COMP_ASS_3,
+    COLOR_CHILD_BG,
+    COLOR_PARENT_BG,
+    COLOR_MODULO_BG,
+)
 from aplicar_formatacao_visual_blk import aplicar_ou_limpar_formatacao_blk # Importar
 
 
@@ -1004,31 +1011,39 @@ def carregar_dados_def_pecas(ui):
             # 1. Verifica se é ASSOCIADA à ÚLTIMA principal encontrada
             is_associated = False
             if ultima_principal_row is not None and def_peca_texto in comps_da_ultima_principal:
-                def_peca_item.setBackground(COLOR_ASSOCIATED_BG) # Azul claro
-                #print(f"  [L{row:03}] '{def_peca_texto}' marcada como ASSOCIADA à L{ultima_principal_row} (Azul Claro)")
+                def_peca_item.setBackground(COLOR_CHILD_BG)
+                fonte_assoc = QFont(def_peca_item.font())
+                fonte_assoc.setBold(False)
+                def_peca_item.setFont(fonte_assoc)
+                texto_atual = def_peca_item.text()
+                if texto_atual and not texto_atual.startswith("	"):
+                    def_peca_item.setText("	" + texto_atual)
+                meta_assoc = def_peca_item.data(Qt.UserRole + 100) or {}
+                meta_assoc.update({"_is_associated": True, "_parent_row_idx": ultima_principal_row})
+                def_peca_item.setData(Qt.UserRole + 100, meta_assoc)
                 is_associated = True
-                # Uma peça associada NÃO PODE ser uma nova principal ao mesmo tempo
 
-            # 2. Se NÃO for associada, verifica se PODE ser uma NOVA principal
             if not is_associated:
-                # Esta linha é agora a candidata a ser a "última principal"
                 ultima_principal_row = row
-                # Lê os componentes associados desta linha (colunas 34, 35, 36)
                 comp1 = safe_item_text(tbl, row, IDX_COMP_ASS_1).strip().upper()
                 comp2 = safe_item_text(tbl, row, IDX_COMP_ASS_2).strip().upper()
                 comp3 = safe_item_text(tbl, row, IDX_COMP_ASS_3).strip().upper()
-                # Atualiza o conjunto de componentes da *nova* última principal
-                comps_da_ultima_principal = {c for c in [comp1, comp2, comp3] if c} # Guarda apenas os não vazios
+                comps_da_ultima_principal = {c for c in [comp1, comp2, comp3] if c}
 
-                # Se esta nova principal TEM componentes associados, pinta-a de azul-escuro
+                texto_sem_indent = def_peca_item.text().lstrip("	")
+                if def_peca_item.text() != texto_sem_indent:
+                    def_peca_item.setText(texto_sem_indent)
+
                 if comps_da_ultima_principal:
-                    def_peca_item.setBackground(COLOR_PRIMARY_WITH_ASS_BG) # Azul escuro
-                    print(f"  [L{row:03}] '{def_peca_texto}' marcada como PRINCIPAL com associados: {comps_da_ultima_principal} (Azul Escuro)") # pretendo eliminar esta linha
+                    def_peca_item.setBackground(COLOR_PARENT_BG)
+                    fonte_parent = QFont(def_peca_item.font())
+                    fonte_parent.setBold(True)
+                    def_peca_item.setFont(fonte_parent)
+                    meta_parent = def_peca_item.data(Qt.UserRole + 100) or {}
+                    meta_parent.update({"_is_parent": True, "_has_associados": True})
+                    def_peca_item.setData(Qt.UserRole + 100, meta_parent)
                 else:
-                    # É uma linha principal, mas sem associados definidos nela
-                    # Mantém a cor de fundo padrão (já resetada)
-                    print(f"  [L{row:03}] '{def_peca_texto}' é linha PRINCIPAL sem associados.")  # pretendo eliminar esta linha
-                    # Não precisa limpar comps_da_ultima_principal aqui, pois foi resetado acima
+                    def_peca_item.setData(Qt.UserRole + 100, {"_is_parent": False, "_has_associados": False})
 
         print("--- Aplicação de cores concluída ---")
         # ------------------------------------------------------------------
