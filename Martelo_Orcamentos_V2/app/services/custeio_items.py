@@ -116,13 +116,19 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
-        "expression": "(2 if COMP < 850 else 3 if COMP < 1600 else 2 + ((COMP - 2 * 120) // 750)) + (1 if LARG >= 605 else 0)",
-        "tooltip": "2 se COMP<850mm, 3 se COMP<1600mm, ≥1600mm: 2+(úteis//750mm) +1 se LARG≥605mm"
+        "expression": "("
+                        "2 if COMP <= 850 "
+                        "else 3 if COMP <= 1600 "
+                        "else 4 if COMP <= 2000 "
+                        "else 5 if COMP <= 2600 "
+                        "else 6 + ((COMP - 2600) // 600)"
+                    ") + (1 if LARG >= 605 else 0)",
+        "tooltip": "Até 850: 2 | 851–1600: 3 | 1601–2000: 4 | 2001–2600: 5 | depois: +1/600mm. Soma +1 se LARG≥605."
     },
     "PUXADOR": {
         "matches": ["PUXADOR"],
         "expression": "1",
-        "tooltip": "1 puxador por porta (multiplicado pelo QT_und da peça principal).",
+        "tooltip": "1 puxador por porta (total acompanha o QT_und da peca principal).",
     },
 }
 
@@ -247,17 +253,30 @@ def calcular_qt_filhos(
     regra = rules[regra_nome]
     expression = regra.get("expression")
     default = regra.get("default")
-    qt_pai = float(parent_row.get("qt_und") or 1.0)
+
+    def _numeric(value: Any) -> float:
+        coerced = _coerce_dimensao_valor(value)
+        if coerced is None:
+            try:
+                return float(value or 0)
+            except Exception:
+                return 0.0
+        return coerced
+
+    qt_pai = _numeric(parent_row.get("qt_und")) or 1.0
+    comp_val = parent_row.get("comp_res")
+    larg_val = parent_row.get("larg_res")
+    esp_val = parent_row.get("esp_res")
     env = {
-        "COMP": float(parent_row.get("comp") or 0),
-        "LARG": float(parent_row.get("larg") or 0),
-        "ESP": float(parent_row.get("esp") or 0),
-        "COMP_MP": float(parent_row.get("comp_mp") or 0),
-        "LARG_MP": float(parent_row.get("larg_mp") or 0),
-        "ESP_MP": float(parent_row.get("esp_mp") or 0),
+        "COMP": _numeric(comp_val if comp_val not in (None, "") else parent_row.get("comp")),
+        "LARG": _numeric(larg_val if larg_val not in (None, "") else parent_row.get("larg")),
+        "ESP": _numeric(esp_val if esp_val not in (None, "") else parent_row.get("esp")),
+        "COMP_MP": _numeric(parent_row.get("comp_mp")),
+        "LARG_MP": _numeric(parent_row.get("larg_mp")),
+        "ESP_MP": _numeric(parent_row.get("esp_mp")),
         "QT_PAI": qt_pai,
-        "QT_DIV": divisor,
-        "QT_MOD": parent_qt,
+        "QT_DIV": _numeric(divisor),
+        "QT_MOD": _numeric(parent_qt),
     }
     if expression:
         try:
@@ -270,8 +289,6 @@ def calcular_qt_filhos(
         result = float(value)
     except Exception:
         result = 1.0
-    if regra_nome == "PUXADOR":
-        result = qt_pai * result
     return max(result, 0.0)
 
 
@@ -1348,6 +1365,15 @@ def gerar_linhas_para_selecoes(
                 child_row["_parent_label"] = parent_label
                 child_row["_child_source"] = base
                 child_row["_regra_nome"] = base
+                normalized_child = _normalize_token(base)
+                if "SUPORTE VARAO" in normalized_child:
+                    child_row["qt_und"] = 2
+                elif "VARAO" in normalized_child and "SUPORTE" not in normalized_child:
+                    child_row["qt_und"] = 1
+                if (child_row.get("und") or "").strip().upper() == "ML":
+                    inherited_comp = linha.get("comp")
+                    if inherited_comp:
+                        child_row["comp"] = inherited_comp
 
                 _aplicar_orla_espessuras(child_row, orla_lookup)
                 linhas.append(child_row)

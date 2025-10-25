@@ -1,4 +1,4 @@
-#--- START OF FILE custeio_items.py ---
+﻿#--- START OF FILE custeio_items.py ---
 
 
 
@@ -49,11 +49,30 @@ ITALIC_ON_BLK_KEYS = {
 
 MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS
 
+MANUAL_QT_UND_KEYWORDS: Tuple[str, ...] = (
+    "DOBRADICA",
+    "DOBRADICAS",
+    "SUPORTE PRATELEIRA",
+    "SUPORTE PRATELEIRAS",
+    "PUXADOR",
+    "PUXADORES",
+    "SUPORTE VARAO",
+    "SUPORTE TERMINAL VARAO",
+    "SUPORTE CENTRAL VARAO",
+)
+
+
+def _float_almost_equal(a: Optional[float], b: Optional[float], *, tol: float = 1e-6) -> bool:
+    if a is None or b is None:
+        return False
+    return abs(a - b) <= tol
+
 DIMENSION_KEY_ORDER: Sequence[str] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
 DIMENSION_ALLOWED_VARIABLES: Set[str] = set(svc_custeio.DIMENSION_ALLOWED_VARIABLES)
 _TOKEN_PATTERN = re.compile(r"[A-Z]+[0-9]*")
 _FORMULA_ALLOWED_CHARS = re.compile(r"^[0-9A-Z+\-*/().,\\s]*$")
 _AUTO_QTMOD_PATTERN = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*x\s*\d+(?:[.,]\d+)?\s*$", re.IGNORECASE)
+_NUMERIC_LITERAL_PATTERN = re.compile(r"^\s*[0-9]+(?:[.,][0-9]+)?\s*$")
 
 DIMENSION_GROUPS: Tuple[Tuple[str, str, str], ...] = (
     ("H", "L", "P"),
@@ -412,8 +431,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._tooltip_columns_idx = [self._column_index[key] for key in CELL_TOOLTIP_KEYS if key in self._column_index]
 
         self._italic_font = QtGui.QFont()
-
         self._italic_font.setItalic(True)
+        self._manual_override_font = QtGui.QFont(self._italic_font)
+        self._manual_override_font.setUnderline(True)
 
         base_font = QtWidgets.QApplication.font()
         self._division_font = QtGui.QFont(base_font)
@@ -430,6 +450,157 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
     # --- Helpers ------------------------------------------------------
 
+    def _mark_dirty(self, dirty: bool = True) -> None:
+        page = getattr(self, "_page", None)
+        if page is not None and hasattr(page, "_set_rows_dirty"):
+            page._set_rows_dirty(bool(dirty))
+
+    def _normalized_token(self, row: Mapping[str, Any]) -> str:
+        normalized = row.get("_normalized_child") or row.get("_normalized_def")
+        if normalized:
+            return str(normalized)
+
+        raw = (
+            row.get("_child_source")
+            or row.get("descricao")
+            or row.get("tipo")
+            or row.get("def_peca")
+            or ""
+        )
+        normalized = self._normalize_def_peca(raw)
+        if isinstance(row, dict):
+            row["_normalized_child"] = normalized
+            row["_normalized_def"] = normalized
+        return normalized
+
+    @staticmethod
+    def _is_varao_child_token(token: str) -> bool:
+        if not token:
+            return False
+        has_varao = "VARAO" in token
+        has_support = "SUPORTE" in token
+        return has_varao and not has_support
+
+    def _supports_qt_und_override(self, row: Mapping[str, Any]) -> bool:
+        """Return True when the row is an automatic child eligible for override."""
+        if not isinstance(row, Mapping):
+            return False
+
+        if (row.get("_row_type") or "").lower() != "child":
+            return False
+
+        normalized = self._normalized_token(row)
+        if not normalized:
+            return False
+
+        if self._is_varao_child_token(normalized):
+            return False
+
+        return any(keyword in normalized for keyword in MANUAL_QT_UND_KEYWORDS)
+
+    @staticmethod
+    def _coerce_numeric(value: Any) -> Optional[float]:
+        if value in (None, "", False):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _process_qt_und_edit(self, row_index: int, value: Any) -> bool:
+        if not (0 <= row_index < len(self.rows)):
+            return False
+        row = self.rows[row_index]
+        new_value = self._coerce_numeric(value)
+        manual_allowed = self._supports_qt_und_override(row)
+        formula_val = self._coerce_numeric(row.get("_qt_formula_value"))
+        row_type = (row.get("_row_type") or "").lower()
+
+        if manual_allowed:
+            manual_override = False
+            manual_value: Optional[float] = None
+
+            if new_value is None:
+                manual_override = False
+            elif formula_val is not None and _float_almost_equal(new_value, formula_val):
+                manual_override = False
+            else:
+                page = getattr(self, "_page", None)
+                confirmer = getattr(page, "confirm_qt_und_override", None)
+                if callable(confirmer):
+                    if not confirmer(row, new_value):
+                        return False
+                manual_override = True
+                manual_value = new_value
+
+            if manual_override and manual_value is not None:
+                row["qt_und"] = manual_value
+                row["_qt_manual_override"] = True
+                row["_qt_manual_value"] = manual_value
+                formatted_formula = self._format_result_number(formula_val) or str(formula_val) if formula_val is not None else ""
+                row["_qt_manual_tooltip"] = f"Valor manual (formula: {formatted_formula})" if formatted_formula else "Valor manual"
+            else:
+                row["_qt_manual_override"] = False
+                row["_qt_manual_value"] = None
+                if formula_val is not None:
+                    row["qt_und"] = formula_val
+                else:
+                    row["qt_und"] = new_value
+                row["_qt_manual_tooltip"] = None
+            self._mark_dirty()
+            return True
+
+        if row_type == "child":
+            if formula_val is not None:
+                row["qt_und"] = formula_val
+            else:
+                row["qt_und"] = new_value
+        else:
+            row["qt_und"] = new_value
+        row["_qt_manual_override"] = False
+        row["_qt_manual_value"] = None
+        row["_qt_manual_tooltip"] = None
+        self._mark_dirty()
+        return True
+
+    def is_qt_und_manual(self, row_index: int) -> bool:
+        if not (0 <= row_index < len(self.rows)):
+            return False
+        row = self.rows[row_index]
+        if (row.get("_row_type") or "").lower() != "child":
+            return False
+        manual_value = self._coerce_numeric(row.get("_qt_manual_value"))
+        if manual_value is not None:
+            return True
+        if not self._supports_qt_und_override(row):
+            return False
+        stored = self._coerce_numeric(row.get("qt_und"))
+        formula = self._coerce_numeric(row.get("_qt_formula_value"))
+        if stored is None or formula is None:
+            return False
+        return not _float_almost_equal(stored, formula)
+
+    def revert_qt_und(self, row_indices: Sequence[int]) -> None:
+        if not row_indices:
+            return
+        changed = False
+        for row_index in sorted(set(row_indices)):
+            if not self.is_qt_und_manual(row_index):
+                continue
+            row = self.rows[row_index]
+            formula = self._coerce_numeric(row.get("_qt_formula_value"))
+            if formula is None:
+                continue
+            row["qt_und"] = formula
+            row["_qt_manual_override"] = False
+            row["_qt_manual_value"] = None
+            row["_qt_manual_tooltip"] = None
+            changed = True
+        if not changed:
+            return
+        self._mark_dirty()
+        self.recalculate_all()
+
     @staticmethod
     def _normalize_def_peca(value: Optional[str]) -> str:
         text = (value or "").strip()
@@ -440,7 +611,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         return cleaned.upper()
 
     def _is_division_row(self, row: Mapping[str, Any]) -> bool:
-        return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
+          return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
 
     def _is_modulo_row(self, row: Mapping[str, Any]) -> bool:
         return self._normalize_def_peca(row.get("def_peca")) == "MODULO"
@@ -466,30 +637,49 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         row_type = row.get("_row_type") or "normal"
         if row_type == "separator":
             return ""
+        # Division rows: mostrar apenas o valor de qt_mod da divisão
         if self._is_division_row(row):
             return self._format_factor(row.get("qt_mod")) or ""
 
-        factors: List[str] = []
-        divisor = self._format_factor(row.get("_qt_divisor"))
-        if divisor:
-            factors.append(divisor)
+        parts: List[str] = []
 
-        parent_factor_val = row.get("_qt_parent_factor")
+        # Mostra o divisor (valor da divisão) se existir
+        divisor_raw = row.get("_qt_divisor")
+        divisor_text = self._format_factor(divisor_raw)
+        if divisor_text:
+            parts.append(divisor_text)
+
+        # Para linhas do tipo 'parent' queremos: divisor x qt_und
         if row_type == "parent":
-            # For parent rows, the main factor is qt_und, not qt_mod
-            parent_factor_val = row.get("qt_und")
+            parent_raw = row.get("qt_und")
+            if parent_raw not in (None, ""):
+                parent_text = self._format_factor(parent_raw) or str(parent_raw)
+                parts.append(parent_text)
+            return " x ".join(parts)
 
-        parent_factor = self._format_factor(parent_factor_val)
-        if parent_factor:
-            factors.append(parent_factor)
-
-        child_factor = self._format_factor(row.get("_qt_child_factor"))
+        # Para componentes child: divisor x parent_qt_und x child_qt_und
         if row_type == "child":
-            factors.append(child_factor or "1")
-        elif child_factor and child_factor not in ("", "1"):
-            factors.append(child_factor)
+            parent_id = row.get("_parent_uid")
+            parent_row = next((r for r in self.rows if r.get("_uid") == parent_id), None)
+            if parent_row is not None:
+                p_raw = parent_row.get("qt_und")
+                if p_raw not in (None, ""):
+                    p_text = self._format_factor(p_raw) or str(p_raw)
+                    parts.append(p_text)
+            # child qt_und - show even if equals 1 when explicitly set
+            c_raw = row.get("qt_und")
+            if c_raw not in (None, ""):
+                c_text = self._format_factor(c_raw) or str(c_raw)
+                parts.append(c_text)
+            return " x ".join(parts)
 
-        return " x ".join(factors)
+        # Outros tipos (normal): mostrar qt_und quando presente
+        q_raw = row.get("qt_und")
+        if q_raw not in (None, ""):
+            q_text = self._format_factor(q_raw) or str(q_raw)
+            parts.append(q_text)
+
+        return " x ".join(parts)
 
     def _sanitize_formula_input(self, value: Any) -> Optional[str]:
         if value in (None, False):
@@ -768,15 +958,20 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return QtGui.QColor(235, 235, 235)
 
         if key == "qt_und" and role == QtCore.Qt.ToolTipRole:
-
-            tooltip = row_data.get("_qt_rule_tooltip")
-
-            if tooltip:
-
-                return tooltip
+            tooltips: List[str] = []
+            manual_tip = row_data.get("_qt_manual_tooltip")
+            if manual_tip:
+                tooltips.append(str(manual_tip))
+            rule_tip = row_data.get("_qt_rule_tooltip")
+            if rule_tip:
+                tooltips.append(str(rule_tip))
+            if tooltips:
+                return "\n".join(tooltips)
+            return None
 
         if role == QtCore.Qt.FontRole:
-
+            if key == "qt_und" and row_data.get("_qt_manual_override"):
+                return self._manual_override_font
             if row_type == "division":
 
                 return self._division_font
@@ -810,16 +1005,29 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
         if key == "qt_mod":
-
             if role == QtCore.Qt.DisplayRole:
-
-                return self._format_qt_mod_display(row)
-
+                return self._format_qt_mod_display(index.row())
             if role == QtCore.Qt.ToolTipRole:
-
-                formatted = self._format_qt_mod_display(row)
-
-                return formatted or None
+                row_obj = self.rows[index.row()]
+                formula = self._format_qt_mod_display(index.row())
+                if not formula:
+                    return None
+                # Use computed numeric factors stored during recalc for accuracy
+                try:
+                    divisor_val = float(row_obj.get("_qt_divisor") or 1.0)
+                except Exception:
+                    divisor_val = 1.0
+                try:
+                    parent_val = float(row_obj.get("_qt_parent_factor") or 1.0)
+                except Exception:
+                    parent_val = 1.0
+                try:
+                    child_val = float(row_obj.get("_qt_child_factor") or 1.0)
+                except Exception:
+                    child_val = 1.0
+                # The displayed formula may omit factors that are empty; compute product accordingly
+                result = divisor_val * parent_val * child_val
+                return f"{formula} = {result:.2f}"
 
         if spec["type"] == "bool":
 
@@ -988,6 +1196,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 self._emit_font_updates(row)
 
             self.dataChanged.emit(index, index, roles)
+            self._mark_dirty()
 
             return True
 
@@ -1010,6 +1219,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if sanitized is None and value not in (None, ""):
                 return False
             self.rows[row][key] = sanitized or ""
+            self._mark_dirty()
             requires_recalc = True
         elif spec["type"] == "numeric":
 
@@ -1042,30 +1252,36 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 self.rows[row][key] = float(numeric_value)
 
                 requires_recalc = True
+                self._mark_dirty()
+
+            elif key == "qt_und":
+
+                if not self._process_qt_und_edit(row, value):
+
+                    return False
+
+                requires_recalc = True
 
             else:
 
-                if value in (None, ""):
+                coerced = self._coerce_numeric(value)
 
-                    self.rows[row][key] = None
+                if value not in (None, "", False) and coerced is None:
 
-                else:
+                    return False
 
-                    try:
+                self.rows[row][key] = coerced
 
-                        self.rows[row][key] = float(value)
-
-                    except (TypeError, ValueError):
-
-                        return False
-
-                if key in {"qt_mod", "qt_und"}:
+                if key == "qt_mod":
 
                     requires_recalc = True
+
+                self._mark_dirty()
 
         else:
 
             self.rows[row][key] = value
+            self._mark_dirty()
 
         if requires_recalc:
 
@@ -1102,6 +1318,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self.rows = []
 
         self.endResetModel()
+        self._mark_dirty(False)
 
 
 
@@ -1112,6 +1329,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self.rows = [self._coerce_row_impl(row) for row in rows]
 
         self.endResetModel()
+        self._mark_dirty(False)
 
 
 
@@ -1132,6 +1350,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             self.rows.append(self._coerce_row_impl(row))
 
         self.endInsertRows()
+        self._mark_dirty()
 
 
     def insert_rows(self, position: int, rows: Sequence[Mapping[str, Any]]) -> None:
@@ -1149,6 +1368,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             self.rows.insert(position + offset, self._coerce_row_impl(row))
 
         self.endInsertRows()
+        self._mark_dirty()
 
 
     def remove_rows(self, indices: Sequence[int]) -> None:
@@ -1157,6 +1377,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             return
 
+        modified = False
         for row in sorted(set(indices), reverse=True):
 
             if 0 <= row < len(self.rows):
@@ -1166,7 +1387,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 del self.rows[row]
 
                 self.endRemoveRows()
-
+                modified = True
+        if modified:
+            self._mark_dirty()
 
     def _coerce_row_impl(self, row: Mapping[str, Any]) -> Dict[str, Any]:
 
@@ -1208,6 +1431,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     coerced[key] = sanitized or ""
                 else:
                     coerced[key] = value
+
+        if isinstance(row, Mapping):
+            for extra_key in ("_row_type", "_parent_uid", "_group_uid", "_child_source", "_normalized_child", "_qt_manual_override", "_qt_manual_value", "_qt_manual_tooltip", "_qt_formula_value", "_regra_nome"):
+                if extra_key in row:
+                    coerced[extra_key] = row[extra_key]
 
         return coerced
 
@@ -1315,8 +1543,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             substitution = self._render_formula_substitution(expression, env)
             if error is None and value is not None:
                 value = round(value, 1)
-            tooltip = self._build_formula_tooltip(expression, value, error, substitutions=substitution)
-            return value, error, tooltip
+            return value, error, substitution
 
         def _update_qt_mod_expression(row: Dict[str, Any], divisor_value: Optional[float], parent_factor_value: Optional[float]) -> None:
             row_type_local = row.get("_row_type")
@@ -1366,6 +1593,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 except (TypeError, ValueError):
                     return None
             return None
+
+        def _maybe_update_dimension_literal(row_dict: Dict[str, Any], key: str, value: Optional[float]) -> None:
+            if value is None:
+                return
+            raw_expr = (row_dict.get(key) or "").strip()
+            if raw_expr and not _NUMERIC_LITERAL_PATTERN.match(raw_expr):
+                return
+            formatted = self._format_result_number(value)
+            if formatted:
+                row_dict[key] = formatted
 
         for row in self.rows:
 
@@ -1464,7 +1701,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 regra_nome = svc_custeio.identificar_regra(def_peca, rules)
 
-                if regra_nome:
+                if regra_nome and current_parent_row is not None:
 
                     row["_row_type"] = "child"
 
@@ -1488,6 +1725,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             expr_comp = self._prepare_formula_expression(row.get("comp"))
             row["comp"] = expr_comp
+            # Normalized token for this row (used to detect VARAO even when not a 'child')
+            raw_row_token = def_peca or row.get("descricao") or row.get("tipo") or ""
+            normalized_row_token = self._normalize_def_peca(raw_row_token)
+            if isinstance(row, dict):
+                row["_normalized_def"] = normalized_row_token
             expr_larg = self._prepare_formula_expression(row.get("larg"))
             row["larg"] = expr_larg
             expr_esp = self._prepare_formula_expression(row.get("esp"))
@@ -1497,20 +1739,32 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 division_env: Dict[str, Optional[float]] = dict(global_context_base)
                 for key in ("HM", "LM", "PM"):
                     division_env.setdefault(key, None)
-                comp_val, comp_error, comp_tooltip = _evaluate_dimension(expr_comp, division_env)
+                comp_val, comp_error, comp_sub = _evaluate_dimension(expr_comp, division_env)
                 row["comp_res"] = comp_val
                 row["_comp_error"] = comp_error
-                row["_comp_tooltip"] = comp_tooltip
+                comp_expr_for_tooltip = row.get("comp") or expr_comp
+                comp_sub_for_tooltip = comp_sub
+                if comp_expr_for_tooltip != expr_comp:
+                    comp_sub_for_tooltip = self._render_formula_substitution(comp_expr_for_tooltip, division_env)
+                row["_comp_tooltip"] = self._build_formula_tooltip(comp_expr_for_tooltip, comp_val, comp_error, substitutions=comp_sub_for_tooltip)
 
-                larg_val, larg_error, larg_tooltip = _evaluate_dimension(expr_larg, division_env)
+                larg_val, larg_error, larg_sub = _evaluate_dimension(expr_larg, division_env)
                 row["larg_res"] = larg_val
                 row["_larg_error"] = larg_error
-                row["_larg_tooltip"] = larg_tooltip
+                larg_expr_for_tooltip = row.get("larg") or expr_larg
+                larg_sub_for_tooltip = larg_sub
+                if larg_expr_for_tooltip != expr_larg:
+                    larg_sub_for_tooltip = self._render_formula_substitution(larg_expr_for_tooltip, division_env)
+                row["_larg_tooltip"] = self._build_formula_tooltip(larg_expr_for_tooltip, larg_val, larg_error, substitutions=larg_sub_for_tooltip)
 
-                esp_val, esp_error, esp_tooltip = _evaluate_dimension(expr_esp, division_env)
+                esp_val, esp_error, esp_sub = _evaluate_dimension(expr_esp, division_env)
                 row["esp_res"] = esp_val
                 row["_esp_error"] = esp_error
-                row["_esp_tooltip"] = esp_tooltip
+                esp_expr_for_tooltip = row.get("esp") or expr_esp
+                esp_sub_for_tooltip = esp_sub
+                if esp_expr_for_tooltip != expr_esp:
+                    esp_sub_for_tooltip = self._render_formula_substitution(esp_expr_for_tooltip, division_env)
+                row["_esp_tooltip"] = self._build_formula_tooltip(esp_expr_for_tooltip, esp_val, esp_error, substitutions=esp_sub_for_tooltip)
 
                 current_local_dimensions["HM"] = comp_val
                 current_local_dimensions["LM"] = larg_val
@@ -1525,21 +1779,54 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 continue
 
             merged_context = _build_eval_env()
-            comp_val, comp_error, comp_tooltip = _evaluate_dimension(expr_comp, merged_context)
+            comp_val, comp_error, comp_sub = _evaluate_dimension(expr_comp, merged_context)
             row["comp_res"] = comp_val
             row["_comp_error"] = comp_error
-            row["_comp_tooltip"] = comp_tooltip
+            _maybe_update_dimension_literal(row, "comp", comp_val)
+            comp_expr_for_tooltip = row.get("comp") or expr_comp
+            comp_sub_for_tooltip = comp_sub
+            if comp_expr_for_tooltip != expr_comp:
+                comp_sub_for_tooltip = self._render_formula_substitution(comp_expr_for_tooltip, merged_context)
+            row["_comp_tooltip"] = self._build_formula_tooltip(comp_expr_for_tooltip, comp_val, comp_error, substitutions=comp_sub_for_tooltip)
 
-            larg_val, larg_error, larg_tooltip = _evaluate_dimension(expr_larg, merged_context)
+            larg_val, larg_error, larg_sub = _evaluate_dimension(expr_larg, merged_context)
             row["larg_res"] = larg_val
             row["_larg_error"] = larg_error
-            row["_larg_tooltip"] = larg_tooltip
+            _maybe_update_dimension_literal(row, "larg", larg_val)
+            larg_expr_for_tooltip = row.get("larg") or expr_larg
+            larg_sub_for_tooltip = larg_sub
+            if larg_expr_for_tooltip != expr_larg:
+                larg_sub_for_tooltip = self._render_formula_substitution(larg_expr_for_tooltip, merged_context)
+            row["_larg_tooltip"] = self._build_formula_tooltip(larg_expr_for_tooltip, larg_val, larg_error, substitutions=larg_sub_for_tooltip)
 
-            esp_val, esp_error, esp_tooltip = _evaluate_dimension(expr_esp, merged_context)
+            esp_val, esp_error, esp_sub = _evaluate_dimension(expr_esp, merged_context)
             row["esp_res"] = esp_val
             row["_esp_error"] = esp_error
-            row["_esp_tooltip"] = esp_tooltip
+            _maybe_update_dimension_literal(row, "esp", esp_val)
+            esp_expr_for_tooltip = row.get("esp") or expr_esp
+            esp_sub_for_tooltip = esp_sub
+            if esp_expr_for_tooltip != expr_esp:
+                esp_sub_for_tooltip = self._render_formula_substitution(esp_expr_for_tooltip, merged_context)
+            row["_esp_tooltip"] = self._build_formula_tooltip(esp_expr_for_tooltip, esp_val, esp_error, substitutions=esp_sub_for_tooltip)
 
+            # Herança de comprimento para VARAO e componentes ML mesmo quando não são marcados como 'child'
+            # Isto garante que linhas "VARAO" exibam o comprimento do componente PAI (ex.: 1000)
+            try:
+                is_ml = (row.get("und") or "").strip().upper() == "ML"
+            except Exception:
+                is_ml = False
+            if current_parent_row is not None and row.get("_row_type") != "division" and row.get("_row_type") != "parent":
+                if is_ml or (normalized_row_token and "VARAO" in normalized_row_token):
+                    inherited_comp = current_parent_row.get("comp_res")
+                    if inherited_comp is None:
+                        inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
+                    if inherited_comp is not None:
+                        row["comp_res"] = inherited_comp
+                        row["_comp_error"] = None
+                        _maybe_update_dimension_literal(row, "comp", inherited_comp)
+                        formatted = self._format_result_number(inherited_comp)
+                        expr_for_tooltip = (row.get("comp") or formatted or "").strip()
+                        row["_comp_tooltip"] = self._build_formula_tooltip(expr_for_tooltip, inherited_comp, None, substitutions=formatted or None)
             row["_qt_divisor"] = divisor
 
             row_type = row.get("_row_type")
@@ -1571,21 +1858,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 else:
                     raw_qt_mod = row.get("qt_mod")
                     parent_factor = _coerce_factor_value(raw_qt_mod)
-                    qt_und_val = _coerce_factor_value(row.get("qt_und"))
+                    qt_und_val = self._coerce_numeric(row.get("qt_und"))
                     if qt_und_val is not None and qt_und_val > 0:
-                        if parent_factor is None or parent_factor <= 0 or abs(parent_factor - 1.0) < 1e-6:
-                            parent_factor = qt_und_val
-                            if raw_qt_mod in (None, "", 0, 0.0, 1, 1.0):
-                                row["qt_mod"] = parent_factor
-                    if parent_factor is None or parent_factor <= 0:
+                        parent_factor = qt_und_val
+                    elif parent_factor is None or parent_factor <= 0:
                         parent_factor = 1.0
                     if row_type not in ("child", "separator") and row.get("qt_mod") in (None, ""):
                         row["qt_mod"] = parent_factor
 
             if row_type != "child":
                 _update_qt_mod_expression(row, divisor, parent_factor)
-
-            child_factor_value = row.get("qt_und")
 
             if row_type == "child" and current_parent_row is not None:
 
@@ -1595,18 +1877,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 rule_data = rules.get(regra_nome) if regra_nome else None
 
+                existing_child = self._coerce_numeric(row.get("qt_und"))
+
                 try:
-
                     child_factor = svc_custeio.calcular_qt_filhos(regra_nome, current_parent_row, row, divisor, parent_factor, rules)
-
                 except Exception:
-
                     try:
-
-                        child_factor = float(child_factor_value or 1.0)
-
+                        child_factor = float(existing_child if existing_child is not None else 1.0)
                     except Exception:
-
                         child_factor = 1.0
 
                 try:
@@ -1616,44 +1894,124 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 raw_child_token = row.get("_child_source") or row.get("descricao") or row.get("tipo")
                 normalized_child = self._normalize_def_peca(raw_child_token)
+                row["_normalized_child"] = normalized_child
 
                 if "VARAO" in normalized_child:
+                    # VARAO (bar) children are measured in ML: default qt_und is 1 and
+                    # they inherit the parent's comp (length). For support varao, use qt_und=2
                     if "SUPORTE" in normalized_child:
-                        child_factor = parent_qt * 2
+                        # support for varao: typically two supports per parent
+                        try:
+                            child_factor = 2
+                        except Exception:
+                            child_factor = 2
+                        # for supports we do not inherit comp; leave comp empty
+                        row["comp_res"] = None
+                        if isinstance(row, dict):
+                            row["comp"] = ""
                     else:
-                        child_factor = parent_qt
+                        # regular VARAO: one rod per parent module; inherit length
+                        try:
+                            child_factor = 1
+                        except Exception:
+                            child_factor = 1
+                        # inherit comp_res from parent so comp shows parent's length
+                        inherited_comp = current_parent_row.get("comp_res")
+                        if inherited_comp is None:
+                            inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
+                        if inherited_comp is not None:
+                            row["comp_res"] = inherited_comp
+                            row["_comp_error"] = None
+                            _maybe_update_dimension_literal(row, "comp", inherited_comp)
+                            formatted = self._format_result_number(inherited_comp)
+                            expr_for_tooltip = (row.get("comp") or formatted or "").strip()
+                            row["_comp_tooltip"] = self._build_formula_tooltip(expr_for_tooltip, inherited_comp, None, substitutions=formatted or None)
 
                 row["_regra_nome"] = regra_nome
 
                 row["_qt_rule_tooltip"] = rule_data.get("tooltip") if rule_data else None
 
-                row["qt_und"] = child_factor
+                formula_child = child_factor
+                row["_qt_formula_value"] = formula_child
 
-                if (row.get("und") or "").strip().upper() == "ML" and current_parent_row is not None:
+                manual_allowed = self._supports_qt_und_override(row)
+                manual_value = self._coerce_numeric(row.get("_qt_manual_value"))
+                stored_child = self._coerce_numeric(row.get("qt_und"))
+                manual_override_flag = bool(row.get("_qt_manual_override"))
+
+                if manual_allowed:
+                    if manual_value is not None:
+                        effective_child = manual_value
+                        manual_override_flag = True
+                    elif manual_override_flag and stored_child is not None and not _float_almost_equal(stored_child, formula_child):
+                        effective_child = stored_child
+                        manual_value = stored_child
+                    elif stored_child is not None and not _float_almost_equal(stored_child, formula_child):
+                        manual_override_flag = True
+                        manual_value = stored_child
+                        effective_child = stored_child
+                    else:
+                        manual_override_flag = False
+                        manual_value = None
+                        effective_child = formula_child
+                else:
+                    manual_override_flag = False
+                    manual_value = None
+                    effective_child = formula_child
+
+                row["qt_und"] = effective_child
+                row["_qt_manual_override"] = manual_override_flag
+                if manual_override_flag and manual_value is not None:
+                    row["_qt_manual_value"] = manual_value
+                    formatted_formula = self._format_result_number(formula_child) or str(formula_child)
+                    row["_qt_manual_tooltip"] = f"Valor manual (formula: {formatted_formula})"
+                else:
+                    row["_qt_manual_value"] = None
+                    row["_qt_manual_tooltip"] = None
+
+                # Herança de comprimento para VARAO e componentes ML (skip supports)
+                is_ml = ((row.get("und") or "").strip().upper() == "ML")
+                is_varao = ("VARAO" in (normalized_child or ""))
+                is_support_varao = ("SUPORTE" in (normalized_child or ""))
+                if (is_ml or is_varao) and current_parent_row is not None and not is_support_varao:
                     inherited_comp = current_parent_row.get("comp_res")
                     if inherited_comp is None:
                         inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
                     row["comp_res"] = inherited_comp
                     row["_comp_error"] = None
-                    substitution = self._format_result_number(inherited_comp) or row.get("comp")
-                    row["_comp_tooltip"] = self._build_formula_tooltip(expr_comp or (row.get("comp") or substitution or ""), inherited_comp, None, substitutions=substitution or None)
+                    _maybe_update_dimension_literal(row, "comp", inherited_comp)
+                    formatted = self._format_result_number(inherited_comp)
+                    expr_for_tooltip = (row.get("comp") or formatted or "").strip()
+                    row["_comp_tooltip"] = self._build_formula_tooltip(expr_for_tooltip, inherited_comp, None, substitutions=formatted or None)
 
             else:
 
                 row["_qt_rule_tooltip"] = None
 
-                child_factor = 1.0
+                # Para linhas do tipo 'parent' não tratamos qt_und como factor filho
+                if row_type == "parent":
+                    # parent rows contribute via _qt_parent_factor; child factor must be 1
+                    formula_child = 1.0
+                    row["_qt_formula_value"] = formula_child
+                    row["_qt_manual_override"] = False
+                    row["_qt_manual_tooltip"] = None
+                    row["_qt_manual_value"] = None
+                    effective_child = formula_child
+                else:
+                    formula_child = 1.0
+                    row["_qt_formula_value"] = formula_child
+                    row["_qt_manual_override"] = False
+                    row["_qt_manual_tooltip"] = None
+                    row["_qt_manual_value"] = None
+                    effective_child = formula_child
 
             row["_qt_parent_factor"] = parent_factor
 
-            row["_qt_child_factor"] = child_factor
+            row["_qt_child_factor"] = effective_child
 
             try:
-
-                total = float(divisor) * float(parent_factor) * float(child_factor)
-
+                total = float(divisor) * float(parent_factor) * float(effective_child)
             except Exception:
-
                 total = 0.0
 
             row["qt_total"] = total if total else None
@@ -1979,6 +2337,18 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
                 coerced[key] = value
 
+        if isinstance(row, Mapping):
+            for extra_key in (
+                "_qt_manual_override",
+                "_qt_formula_value",
+                "_child_source",
+                "_parent_uid",
+                "_group_uid",
+                "_row_type",
+                "_normalized_child",
+            ):
+                if extra_key in row:
+                    coerced[extra_key] = row[extra_key]
         return coerced
 
 
@@ -2056,6 +2426,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         "refresh": QtWidgets.QStyle.SP_BrowserReload,
         "save": QtWidgets.QStyle.SP_DialogSaveButton,
         "division": QtWidgets.QStyle.SP_FileDialogNewFolder,
+        "revert_formula": QtWidgets.QStyle.SP_ArrowBack,
     }
 
 
@@ -2086,6 +2457,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_model._page = self
 
         self._collapsed_groups: Set[str] = set()
+        self._rows_dirty = False
 
         self._setup_ui()
 
@@ -2409,6 +2781,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_refresh = QtWidgets.QPushButton("Atualizar")
 
         self.btn_save = QtWidgets.QPushButton("Guardar Dados Custeio")
+        self._save_button_base_text = self.btn_save.text()
 
         actions_layout.addWidget(self.btn_refresh)
 
@@ -2539,6 +2912,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_save.clicked.connect(self._on_save_custeio)
 
         self._update_table_placeholder_visibility()
+        self._update_save_button_text()
 
 
 
@@ -2631,6 +3005,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._dimensions_dirty = False
         self._set_dimensions_enabled(False)
         self._update_dimension_table()
+        self._update_save_button_text()
 
 
 
@@ -2651,6 +3026,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._dimensions_dirty = False
         self._set_dimensions_enabled(True)
         self._update_dimension_table()
+        self._update_save_button_text()
 
 
 
@@ -2671,6 +3047,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.dimensions_table.blockSignals(False)
         self._style_dimension_cell(key, item)
         self._dimensions_dirty = True
+        self._update_save_button_text()
         if self.context:
             self.table_model.recalculate_all()
 
@@ -2683,6 +3060,35 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     def _collect_dimension_payload(self) -> Dict[str, Optional[float]]:
         return self.dimension_values()
+
+
+    def is_dirty(self) -> bool:
+
+        return bool(self._rows_dirty or self._dimensions_dirty)
+
+
+    def _update_save_button_text(self) -> None:
+
+        if hasattr(self, "btn_save"):
+
+            base = getattr(self, "_save_button_base_text", "Guardar Dados Custeio")
+
+            suffix = "*" if self.is_dirty() else ""
+
+            self.btn_save.setText(f"{base}{suffix}")
+
+
+    def _set_rows_dirty(self, dirty: bool) -> None:
+
+        new_state = bool(dirty)
+
+        if self._rows_dirty == new_state:
+
+            return
+
+        self._rows_dirty = new_state
+
+        self._update_save_button_text()
 
 
 
@@ -3175,15 +3581,20 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_table_placeholder_visibility()
 
 
-    def _on_save_custeio(self) -> None:
+    def _save_custeio(self, *, auto: bool = False) -> bool:
 
         if not self.context:
 
-            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+            if not auto:
 
-            return
+                QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+
+            return False
+
+        self.table_model.recalculate_all()
 
         dimensoes = self._collect_dimension_payload()
+
         linhas = self.table_model.export_rows()
 
         try:
@@ -3194,13 +3605,25 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             self.session.rollback()
 
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao guardar Dados Custeio: {exc}")
+            QtWidgets.QMessageBox.critical(
 
-            return
+                self,
 
-        QtWidgets.QMessageBox.information(self, "Sucesso", "Dados de custeio guardados.")
+                "Erro",
+
+                f"Falha ao guardar Dados Custeio: {exc}",
+
+            )
+
+            return False
+
+        if not auto:
+
+            QtWidgets.QMessageBox.information(self, "Sucesso", "Dados de custeio guardados.")
 
         self._dimensions_dirty = False
+
+        self._set_rows_dirty(False)
 
         self._reload_custeio_rows()
 
@@ -3210,6 +3633,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._update_table_placeholder_visibility()
 
+        self._update_save_button_text()
+
+        return True
+
+
+    def _on_save_custeio(self) -> None:
+
+        self._save_custeio(auto=False)
 
 
     def _reload_custeio_rows(self) -> None:
@@ -3248,6 +3679,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.lbl_placeholder.show()
         self.btn_save.setEnabled(self.context is not None and has_rows)
         self.btn_refresh.setEnabled(has_rows)
+        self._update_save_button_text()
 
 
 
@@ -3308,6 +3740,41 @@ class CusteioItemsPage(QtWidgets.QWidget):
         return sorted({index.row() for index in selection.selectedRows()})
 
 
+    def confirm_qt_und_override(self, row_data: Mapping[str, Any], new_value: Optional[float]) -> bool:
+
+        descricao = str(row_data.get("descricao") or row_data.get("def_peca") or "").strip()
+
+        if not descricao:
+
+            descricao = "linha selecionada"
+
+        value_display = "-" if new_value is None else (self.table_model._format_result_number(new_value) or str(new_value))
+
+        message = (
+
+            f"O valor de QT_und para {descricao} resulta de uma formula.\n"
+
+            f"Pretende alterar manualmente para {value_display}?"
+
+        )
+
+        reply = QtWidgets.QMessageBox.question(
+
+            self,
+
+            "Confirmar alteracao",
+
+            message,
+
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+
+            QtWidgets.QMessageBox.No,
+
+        )
+
+        return reply == QtWidgets.QMessageBox.Yes
+
+
     def _on_table_clicked(self, index: QtCore.QModelIndex) -> None:
         if not index.isValid():
             return
@@ -3357,6 +3824,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         action_paste = menu.addAction(self._icon("paste"), "Colar linha(s)")
 
+        manual_rows = [idx for idx in selected_rows if self.table_model.is_qt_und_manual(idx)]
+
+        action_revert_formula = menu.addAction(self._icon("revert_formula"), "Reverter QT_und para formula")
+
         menu.addSeparator()
 
         action_divisao = menu.addAction(self._icon("division"), "Inserir Linha 'DIVISAO INDEPENDENTE'")
@@ -3377,7 +3848,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             action_divisao.setEnabled(False)
 
+            action_revert_formula.setEnabled(False)
+
         action_paste.setEnabled(bool(self._clipboard_rows))
+
+        action_revert_formula.setEnabled(bool(manual_rows))
 
         if len(selected_rows) != 1:
 
@@ -3420,6 +3895,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if chosen == action_paste:
 
             self._paste_rows(selected_rows)
+
+            return
+
+        if chosen == action_revert_formula and manual_rows:
+
+            self.table_model.revert_qt_und(manual_rows)
 
             return
 
@@ -3868,6 +4349,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     # ------------------------------------------------------------------ Public API
 
+    def auto_save_if_dirty(self) -> bool:
+
+        if not self.is_dirty():
+
+            return True
+
+        if not self.context:
+
+            return True
+
+        return self._save_custeio(auto=True)
+
+
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
 
         self.current_orcamento_id = orcamento_id
@@ -4010,3 +4504,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_model.clear()
 
         self._update_table_placeholder_visibility()
+
+
+

@@ -77,6 +77,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
     def on_abrir_orcamento(self, orcamento_id: int):
+        if self.current_orcamento_id:
+            if not self.pg_custeio.auto_save_if_dirty():
+                return
         self.current_orcamento_id = orcamento_id
         self.current_item_id = None
         self.pg_itens.load_orcamento(orcamento_id)
@@ -91,6 +94,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.setCurrentIndex(1)
 
     def on_menu_changed(self, index: int):
+        current_index = self.stack.currentIndex()
+        if current_index == 6 and index != 6:
+            if not self.pg_custeio.auto_save_if_dirty():
+                self.list.blockSignals(True)
+                self.list.setCurrentRow(current_index)
+                self.list.blockSignals(False)
+                self.stack.setCurrentIndex(current_index)
+                return
         self.stack.setCurrentIndex(index)
         if index == 0:
             self.pg_orc.reload_clients()
@@ -102,6 +113,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pg_custeio.load_item(self.current_orcamento_id, self.current_item_id)
 
     def on_item_selected(self, item_id: Optional[int]):
+        if self.current_orcamento_id:
+            if not self.pg_custeio.auto_save_if_dirty():
+                return
         self.current_item_id = item_id
         if not self.current_orcamento_id:
             return
