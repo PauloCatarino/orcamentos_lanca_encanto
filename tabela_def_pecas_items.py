@@ -31,7 +31,7 @@ from utils import set_item  # (Já incluído na importação de utils no topo)
 from utils import safe_item_text, obter_diretorio_base
 from PyQt5.QtWidgets import QTableWidgetItem, QMenu, QStyledItemDelegate, QComboBox, QAbstractItemView, QMessageBox, QLineEdit, QPushButton, QStyle, QHeaderView, QAction, QToolTip, QApplication
 from PyQt5.QtCore import Qt, QTimer, QEvent, QObject
-from PyQt5.QtGui import QColor, QPen
+from PyQt5.QtGui import QColor, QPen, QFont
 from PyQt5 import QtGui
 import openpyxl
 import os
@@ -48,7 +48,7 @@ from utils import (formatar_valor_moeda, formatar_valor_percentual, converter_te
 from aplicar_formatacao_visual_blk import aplicar_ou_limpar_formatacao_blk
 
 # Importa as cores para os componentes associados e MODULO
-from modulo_componentes_associados import COLOR_ASSOCIATED_BG, COLOR_MODULO_BG
+from modulo_componentes_associados import COLOR_CHILD_BG, COLOR_PARENT_BG, COLOR_MODULO_BG
 # Importa a função para o botão "Escolher" (MP) na tabela
 from modulo_orquestrador import atualizar_tudo
 
@@ -405,7 +405,7 @@ def inserir_pecas_selecionadas(ui):
 ##############################################
 
 
-def inserir_linha_componente(ui, texto_peca):
+def inserir_linha_componente(ui, texto_peca, parent_row_idx=None):
     """
     Insere uma nova linha BÁSICA na tabela 'tab_def_pecas' com base no nome da peça (texto_peca),
     que representa um componente associado. Esta função é usada pela lógica de inserção
@@ -481,8 +481,21 @@ def inserir_linha_componente(ui, texto_peca):
     # Componentes associados não devem permitir edição do tipo de peça
     item_def.setFlags(item_def.flags() & ~Qt.ItemIsEditable)
     item_def.setData(Qt.UserRole, grupo_encontrado)  # Armazena o grupo
-    # 🟦 cor azul clara para identificar componentes associados
-    item_def.setBackground(QColor(230, 240, 255))
+
+    if parent_row_idx is not None:
+        meta = item_def.data(Qt.UserRole + 100) or {}
+        meta.update({"_is_associated": True, "_parent_row_idx": parent_row_idx})
+        item_def.setData(Qt.UserRole + 100, meta)
+        try:
+            item_def.setBackground(COLOR_CHILD_BG)
+        except Exception:
+            item_def.setBackground(QColor(255, 250, 205))
+        texto_atual = item_def.text() or texto_peca
+        if not texto_atual.startswith("\t"):
+            item_def.setText("\t" + texto_atual)
+        fonte = QFont(item_def.font())
+        fonte.setBold(False)
+        item_def.setFont(fonte)
     # setItem NÃO é necessário aqui
 
     # Colunas 3-8 (Descricao, QT_mod, QT_und, Comp, Larg, Esp) - Vazias iniciais
@@ -895,7 +908,7 @@ class DefPecaDelegate(QStyledItemDelegate):
         if item:
             cor = item.background().color()
             if (
-                cor.name() == COLOR_ASSOCIATED_BG.name()
+                cor.name() == COLOR_CHILD_BG.name()
                 or not (item.flags() & Qt.ItemIsEditable)
             ):
                 return None
@@ -1322,15 +1335,19 @@ def inserir_componentes_associados_para_linha(ui, linha_principal):
         # Verifica a cor atual para não sobrescrever a cor cinza do MODULO
         current_color = item_def.background().color()
         if current_color.name() != COLOR_MODULO_BG.name():  # Se não for a cor cinza do MODULO
-            # Aplica a cor azul mais escura apenas se a linha tiver associados E não for um MODULO
             if comps_a_inserir:
-                # Azul mais escuro para principal com associados
-                item_def.setBackground(QColor(180, 200, 255))
+                try:
+                    item_def.setBackground(COLOR_PARENT_BG)
+                except Exception:
+                    item_def.setBackground(QColor(230, 240, 255))
+                fonte = QFont(item_def.font())
+                fonte.setBold(True)
+                item_def.setFont(fonte)
+                meta = item_def.data(Qt.UserRole + 100) or {}
+                meta.update({"_is_parent": True, "_has_associados": True})
+                item_def.setData(Qt.UserRole + 100, meta)
             else:
-                # Se não tem associados, garante que não fica com a cor azul mais escura
-                # Mas não volta para branco, pois pode ser a cor de um item já existente que não tinha associados
-                # A lógica de cor final para não-associados é tratada no orquestrador
-                pass  # Não faz nada se não tem associados e não é MODULO
+                pass  # Sem associados: mantém a cor atual
         else:
             # Se for um MODULO COM associados, pode adicionar tooltip
             if comps_a_inserir:

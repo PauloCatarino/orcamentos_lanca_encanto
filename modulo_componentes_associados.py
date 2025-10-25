@@ -67,10 +67,13 @@ IDX_COMP_ASS_2 = 35          # Coluna COMP_ASS_2 (Nome do 2º componente associa
 IDX_COMP_ASS_3 = 36          # Coluna COMP_ASS_3 (Nome do 3º componente associado)
 
 
-# --- Cores para identificar tipos de linha ---
-COLOR_ASSOCIATED_BG = QColor(230, 240, 255) # Azul claro para linhas de componentes associados
-COLOR_PRIMARY_WITH_ASS_BG = QColor(180, 200, 255) # Azul mais escuro para linha principal com associados
-COLOR_MODULO_BG = QColor(220, 220, 220) # Cinza claro para linhas MODULO
+# --- Cores para identificar tipos de linha (V2: destaque de PAI/FILHO) ---
+COLOR_PARENT_BG = QColor(230, 240, 255)   # Azul claro para linha PAI (texto em negrito)
+COLOR_CHILD_BG = QColor(255, 250, 205)    # Amarelo suave para linha FILHO/associada
+COLOR_MODULO_BG = QColor(220, 220, 220)   # Cinza claro para linhas do tipo MODULO
+# Compatibilidade retroativa com nomes antigos
+COLOR_ASSOCIATED_BG = COLOR_CHILD_BG
+COLOR_PRIMARY_WITH_ASS_BG = COLOR_PARENT_BG
 
 
 ##########################################################################
@@ -199,7 +202,7 @@ def identificar_componentes_associados_para_linha(ui, row, df_excel_cp):
             if item_def_check_stop:
                 cor_fundo_stop = item_def_check_stop.background().color()
                 nome_peca_stop = item_def_check_stop.text().strip().upper() # Obter nome para verificar "MODULO"
-                if cor_fundo_stop.name() == COLOR_PRIMARY_WITH_ASS_BG.name() or \
+                if cor_fundo_stop.name() == COLOR_PARENT_BG.name() or \
                    cor_fundo_stop.name() == COLOR_MODULO_BG.name() or \
                    nome_peca_stop == "MODULO": # Verificar também pelo nome "MODULO"
                     #print(f"[ID_ASSOC] Stop search for '{nome_assoc_esperado}' at L{r_check+1} (nova principal/modulo)")
@@ -211,7 +214,7 @@ def identificar_componentes_associados_para_linha(ui, row, df_excel_cp):
                 cor_fundo_check = item_def_check.background().color()
                 
                 if texto_peca_check == nome_assoc_esperado.upper() and \
-                   cor_fundo_check.name() == COLOR_ASSOCIATED_BG.name():
+                   cor_fundo_check.name() == COLOR_CHILD_BG.name():
                     ocorrencias_encontradas_e_formatadas += 1
         
         # Quantos faltam inserir para este nome_assoc_esperado
@@ -261,7 +264,7 @@ def processar_qt_und_associado_para_linha(ui, row):
     col_up     = lambda r,c: safe_item_text(t, r, c)            # texto célula qualquer
     is_assoc   = lambda r: t.item(r, IDX_DEF_PECA)              \
                             and t.item(r, IDX_DEF_PECA).background().color().getRgb()[:3] \
-                                == COLOR_ASSOCIATED_BG.getRgb()[:3]
+                                == COLOR_CHILD_BG.getRgb()[:3]
     # Se não for associado --> nada a fazer
     if not is_assoc(row):
         return

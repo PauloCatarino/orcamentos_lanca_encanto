@@ -35,7 +35,7 @@ Dependências:
 import pandas as pd # Para carregar o Excel
 import os # Para construir o caminho do Excel
 from PyQt5.QtCore import Qt # Necessário para flags, etc.
-from PyQt5.QtGui import QColor # Importar QColor de QtGui
+from PyQt5.QtGui import QColor, QFont # Importar QColor e QFont de QtGui
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox, QApplication, QComboBox # Necessário para manipular itens na tabela UI
 
 # --- Importar funções que serão chamadas pelo orquestrador ---
@@ -50,7 +50,7 @@ from modulo_calculos_custos import atualizar_calculos_custos # Esta itera intern
 # from modulo_calculos_custos import processar_calculos_para_linha # Não chamada diretamente aqui
 
 # Importar funções que o orquestrador ainda chama diretamente (para inserção de associados e atualização de dados base)
-from modulo_componentes_associados import identificar_componentes_associados_para_linha # Identifica associados para UMA linha principal
+from modulo_componentes_associados import identificar_componentes_associados_para_linha, COLOR_PARENT_BG, COLOR_MODULO_BG # Identifica associados para UMA linha principal
 from modulo_componentes_associados import processar_qt_und_associado_para_linha # Processa QT_und para UMA linha associada (chamada pelo orquestrador após outros calculos)
 
 
@@ -292,9 +292,23 @@ def atualizar_tudo(ui):
             if componentes_associados_a_inserir_neste_ciclo_com_origem:
                 print(f"[INFO] Ciclo {ciclos_executados}: Inserindo {len(componentes_associados_a_inserir_neste_ciclo_com_origem)} linhas de componentes associados.")
                 for nome_associado, linha_origem_debug in componentes_associados_a_inserir_neste_ciclo_com_origem:
+                    parent_row_idx = linha_origem_debug
+                    item_def_parent = table.item(parent_row_idx, IDX_DEF_PECA)
+                    if item_def_parent:
+                        current_color = item_def_parent.background().color()
+                        if current_color.name() != COLOR_MODULO_BG.name():
+                            try:
+                                item_def_parent.setBackground(COLOR_PARENT_BG)
+                            except Exception:
+                                item_def_parent.setBackground(QColor(230, 240, 255))
+                            fonte_parent = QFont(item_def_parent.font())
+                            fonte_parent.setBold(True)
+                            item_def_parent.setFont(fonte_parent)
+                            meta_parent = item_def_parent.data(Qt.UserRole + 100) or {}
+                            meta_parent.update({"_is_parent": True, "_has_associados": True})
+                            item_def_parent.setData(Qt.UserRole + 100, meta_parent)
 
-                    # Esta função insere uma linha básica, mas NÃO A PROCESSA COMPLETAMENTE AINDA.
-                    inserir_linha_componente(ui, nome_associado)
+                    inserir_linha_componente(ui, nome_associado, parent_row_idx=parent_row_idx)
                     novas_linhas_adicionadas_neste_ciclo = True
                 print(f"[INFO] Ciclo {ciclos_executados}: Inserção de linhas associadas concluída.")
 

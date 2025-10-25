@@ -519,6 +519,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if manual_allowed:
             manual_override = False
             manual_value: Optional[float] = None
+            stored_child = self._coerce_numeric(row.get("qt_und"))
 
             if new_value is None:
                 manual_override = False
@@ -532,6 +533,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                         return False
                 manual_override = True
                 manual_value = new_value
+
+            if manual_allowed and not manual_override and manual_value is None:
+                if manual_value is None and stored_child is not None and formula_val is not None and not _float_almost_equal(stored_child, formula_val):
+                    manual_override = True
+                    manual_value = stored_child
 
             if manual_override and manual_value is not None:
                 row["qt_und"] = manual_value
@@ -1944,8 +1950,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                         effective_child = manual_value
                         manual_override_flag = True
                     elif manual_override_flag and stored_child is not None and not _float_almost_equal(stored_child, formula_child):
-                        effective_child = stored_child
                         manual_value = stored_child
+                        effective_child = stored_child
                     elif stored_child is not None and not _float_almost_equal(stored_child, formula_child):
                         manual_override_flag = True
                         manual_value = stored_child

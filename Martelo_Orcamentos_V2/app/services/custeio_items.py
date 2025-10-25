@@ -109,10 +109,20 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
         "expression": "1",
         "tooltip": "1 varão por peça principal (COMP herdado para cálculo de ML).",
     },
+    "SUPORTE VARAO": {
+        "matches": ["SUPORTE VARAO"],
+        "expression": "2",
+        "tooltip": "2 suportes por varão.",
+    },
     "SUPORTE TERMINAL VARAO": {
         "matches": ["SUPORTE TERMINAL VARAO"],
         "expression": "2",
         "tooltip": "2 suportes por varão.",
+    },
+    "SUPORTE VARAO": {
+        "matches": ["SUPORTE VARAO"],
+        "expression": "2",
+        "tooltip": "2 suportes por varao.",
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
@@ -1361,15 +1371,10 @@ def gerar_linhas_para_selecoes(
                                 child_row["mat_default"] = lista[0]
 
                 child_row["qt_mod"] = 1
-                child_row["qt_und"] = 1
+                child_row["qt_und"] = None
                 child_row["_parent_label"] = parent_label
                 child_row["_child_source"] = base
                 child_row["_regra_nome"] = base
-                normalized_child = _normalize_token(base)
-                if "SUPORTE VARAO" in normalized_child:
-                    child_row["qt_und"] = 2
-                elif "VARAO" in normalized_child and "SUPORTE" not in normalized_child:
-                    child_row["qt_und"] = 1
                 if (child_row.get("und") or "").strip().upper() == "ML":
                     inherited_comp = linha.get("comp")
                     if inherited_comp:
