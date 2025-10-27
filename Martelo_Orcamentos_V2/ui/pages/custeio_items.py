@@ -102,6 +102,8 @@ HEADER_TOOLTIPS = {
     "blk": "Quando ativo bloqueia atualizacoes vindas da tabela Dados Items.",
     "nst": "Indica que o material foi marcado como Nao-Stock nos Dados Items.",
     "mat_default": "Grupo de material usado como origem das informacoes desta linha.",
+    "acabamento_sup": "Acabamento aplicado na face superior (selecionado a partir da lista de acabamentos).",
+    "acabamento_inf": "Acabamento aplicado na face inferior (selecionado a partir da lista de acabamentos).",
     "ref_le": "Referencia LE selecionada no material mapeado.",
     "descricao_no_orcamento": "Descricao utilizada na impressao do orcamento.",
     "pliq": "Preco liquido do material, conforme Dados Items.",
@@ -114,6 +116,9 @@ HEADER_TOOLTIPS = {
     "comp_mp": "Comprimento em mm da materia-prima.",
     "larg_mp": "Largura em mm da materia-prima.",
     "esp_mp": "Espessura em mm da materia-prima.",
+    "area_m2_und": "Area (m2) calculada por unidade com base em comp_res e larg_res.",
+    "perimetro_und": "Perimetro (m) calculado por unidade (2 x (comp_res + larg_res) em metros).",
+    "spp_ml_und": "Comprimento (m) por unidade gerado a partir de COMP_res quando a peca e classificada como SPP/ML.",
 }
 
 CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
@@ -135,7 +140,8 @@ COLUMN_WIDTH_DEFAULTS = {
     "blk": 50,
     "nst": 55,
     "mat_default": 150,
-    "acabamento": 150,
+    "acabamento_sup": 150,
+    "acabamento_inf": 150,
     "qt_total": 90,
     "comp_res": 80,
     "larg_res": 80,
@@ -164,6 +170,8 @@ COLUMN_WIDTH_DEFAULTS = {
     "custo_orl_c2": 110,
     "custo_orl_l1": 110,
     "custo_orl_l2": 110,
+    "area_m2_und": 90,
+    "perimetro_und": 90,
 }
 
 # Row display helpers
@@ -457,6 +465,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._bold_font.setBold(True)
 
         self.rows: List[Dict[str, Any]] = []
+        self._orla_info_cache: Dict[Tuple[str, Optional[float]], Tuple[float, float, Optional[str]]] = {}
 
     # --- Helpers ------------------------------------------------------
 
@@ -516,6 +525,74 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def _ensure_orla_info(self, row_data: Dict[str, Any], side: str) -> Tuple[Optional[float], Optional[float], Optional[str]]:
+        """Garante que os campos orl_pliq e orl_desp para o lado indicado estão preenchidos a partir da Materia Prima."""
+        ref_raw = row_data.get(f"orl_ref_{side}") or row_data.get("ref_le")
+        ref_clean = None
+        if ref_raw not in (None, ""):
+            try:
+                ref_clean = str(ref_raw).strip()
+            except Exception:
+                ref_clean = str(ref_raw)
+            ref_clean = ref_clean or None
+
+        pliq = row_data.get(f"orl_pliq_{side}")
+        desp = row_data.get(f"orl_desp_{side}")
+
+        base_pliq = row_data.get("pliq")
+
+        needs_lookup = False
+        if ref_clean is None:
+            needs_lookup = False
+        else:
+            if pliq in (None, ""):
+                needs_lookup = True
+            else:
+                try:
+                    pliq_float = float(pliq)
+                    base_float = float(base_pliq) if base_pliq not in (None, "") else None
+                except (TypeError, ValueError):
+                    pliq_float = None
+                    base_float = None
+                if pliq_float is None:
+                    needs_lookup = True
+                elif base_float is not None and abs(pliq_float - base_float) < 1e-6:
+                    needs_lookup = True
+            if desp in (None, ""):
+                needs_lookup = True
+
+        if needs_lookup and ref_clean:
+            page = getattr(self, "_page", None)
+            session = getattr(page, "session", None) if page is not None else None
+
+            if session is not None:
+                esp_raw = row_data.get(f"orl_{side}")
+                try:
+                    esp_val = float(str(esp_raw).replace(",", ".")) if esp_raw not in (None, "") else None
+                except (TypeError, ValueError):
+                    esp_val = None
+
+                cache_key = (ref_clean, esp_val)
+                info = self._orla_info_cache.get(cache_key)
+                if info is None:
+                    try:
+                        info = svc_custeio._obter_info_orla_por_ref(session, ref_clean, esp_esperada=esp_val)
+                    except Exception:
+                        info = (0.0, 0.0, ref_clean)
+                    self._orla_info_cache[cache_key] = info
+                preco_m2, desp_percent, matched = info
+                if preco_m2:
+                    row_data[f"orl_pliq_{side}"] = preco_m2
+                    pliq = preco_m2
+                if desp_percent not in (None, ""):
+                    row_data[f"orl_desp_{side}"] = desp_percent
+                    desp = desp_percent
+                if matched:
+                    row_data[f"orl_ref_{side}"] = matched
+                    ref_clean = matched
+
+        return pliq, desp, ref_clean
 
     def _process_qt_und_edit(self, row_index: int, value: Any) -> bool:
         if not (0 <= row_index < len(self.rows)):
@@ -627,10 +704,20 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         return cleaned.upper()
 
     def _is_division_row(self, row: Mapping[str, Any]) -> bool:
-          return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
+        return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
 
     def _is_modulo_row(self, row: Mapping[str, Any]) -> bool:
         return self._normalize_def_peca(row.get("def_peca")) == "MODULO"
+
+    def _is_spp_row(self, row: Mapping[str, Any]) -> bool:
+        und = (row.get("und") or "").strip().upper()
+        if und == "ML":
+            return True
+        def_peca_norm = self._normalize_def_peca(row.get("def_peca"))
+        raw_def = (row.get("def_peca") or "").upper()
+        if "{SPP}" in raw_def:
+            return True
+        return def_peca_norm.startswith("SPP")
 
     @staticmethod
     def _format_factor(value: Optional[float]) -> Optional[str]:
@@ -940,6 +1027,434 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 if row_type == "child" and value:
                     return ROW_CHILD_INDENT + value.lstrip()
                 return value
+
+        ORLA_ML_KEYS = {"ml_orl_c1", "ml_orl_c2", "ml_orl_l1", "ml_orl_l2"}
+        ORLA_COST_KEYS = {"custo_orl_c1", "custo_orl_c2", "custo_orl_l1", "custo_orl_l2"}
+        ORLA_TOTAL_KEYS = {"soma_total_ml_orla", "custo_total_orla"}
+
+        if role == QtCore.Qt.ToolTipRole and key in ORLA_ML_KEYS:
+            side = key.replace("ml_orl_", "")
+            dim_mm = row_data.get("comp_res") if side in ("c1", "c2") else row_data.get("larg_res")
+            ml_val = row_data.get(key) or 0
+            esp_orla = row_data.get(f"orl_{side}")
+
+            def _clean_ref(ref_val: Any) -> Optional[str]:
+                if ref_val in (None, ""):
+                    return None
+                try:
+                    cleaned = str(ref_val).strip()
+                except Exception:
+                    cleaned = str(ref_val)
+                return cleaned or None
+
+            raw_orl_04 = _clean_ref(row_data.get("orl_0_4"))
+            raw_orl_10 = _clean_ref(row_data.get("orl_1_0"))
+            matched_ref = _clean_ref(row_data.get(f"orl_ref_{side}"))
+
+            ensured_pliq, ensured_desp, ensured_ref = self._ensure_orla_info(row_data, side)
+            if ensured_ref:
+                matched_ref = ensured_ref
+
+            chosen_ref = matched_ref
+            source_labels: List[str] = []
+            if matched_ref and matched_ref == raw_orl_04:
+                source_labels.append("ORL 0.4")
+            if matched_ref and matched_ref == raw_orl_10:
+                source_labels.append("ORL 1.0")
+            if not source_labels:
+                if matched_ref:
+                    source_labels.append("Materia Prima (ref_le)")
+                elif raw_orl_04 or raw_orl_10:
+                    if esp_orla not in (None, 0):
+                        try:
+                            esp_float = float(esp_orla)
+                        except Exception:
+                            esp_float = None
+                        if esp_float is not None:
+                            if abs(esp_float - 0.4) < 0.01 and raw_orl_04:
+                                chosen_ref = raw_orl_04
+                                source_labels.append("ORL 0.4")
+                            elif abs(esp_float - 1.0) < 0.01 and raw_orl_10:
+                                chosen_ref = raw_orl_10
+                                source_labels.append("ORL 1.0")
+                            elif raw_orl_10:
+                                chosen_ref = raw_orl_10
+                                source_labels.append("ORL 1.0")
+                            elif raw_orl_04:
+                                chosen_ref = raw_orl_04
+                                source_labels.append("ORL 0.4")
+
+            pliq_orla = ensured_pliq if ensured_pliq not in (None, "") else row_data.get(f"orl_pliq_{side}")
+            if pliq_orla in (None, ""):
+                pliq_orla = row_data.get("pliq")
+
+            desp_orla = ensured_desp if ensured_desp not in (None, "") else row_data.get(f"orl_desp_{side}")
+            if desp_orla in (None, ""):
+                desp_orla = row_data.get("desp")
+
+            try:
+                qt_total = float(row_data.get("qt_total") or 1)
+            except Exception:
+                qt_total = 1.0
+
+            try:
+                ml_per_unit_base = float(dim_mm) / 1000.0 if dim_mm not in (None, "") else 0.0
+            except Exception:
+                ml_per_unit_base = 0.0
+
+            try:
+                ml_total_float = float(ml_val)
+            except Exception:
+                ml_total_float = 0.0
+
+            try:
+                per_unit_with_waste = ml_total_float / qt_total if qt_total else ml_total_float
+            except Exception:
+                per_unit_with_waste = ml_total_float
+
+            try:
+                desp_pct = float(desp_orla or 0.0)
+                if desp_pct <= 1:
+                    desp_pct *= 100.0
+                desp_from_default = False
+            except Exception:
+                desp_pct = 8.0
+                desp_from_default = True
+
+            if abs(desp_pct - int(desp_pct)) < 1e-6:
+                desp_display = f"{int(desp_pct)}%"
+            else:
+                desp_display = f"{desp_pct:.2f}%"
+            if desp_from_default or desp_orla in (None, "", 0):
+                desp_display = f"{desp_display} (default)"
+
+            ml_base_display = self._format_result_number(ml_per_unit_base) or "0"
+            per_unit_display = self._format_result_number(per_unit_with_waste) or "0"
+            ml_total_display = self._format_result_number(ml_total_float) or "0"
+            qt_total_display = self._format_result_number(qt_total) or str(qt_total)
+
+            esp_display = None
+            if esp_orla not in (None, "", 0):
+                try:
+                    esp_val = float(esp_orla)
+                    esp_display = int(esp_val) if abs(esp_val - int(esp_val)) < 1e-6 else round(esp_val, 2)
+                except Exception:
+                    esp_display = esp_orla
+
+            lines: List[str] = []
+            base_dim = dim_mm if dim_mm not in (None, "") else "0"
+            lines.append(f"ML {side.upper()} - passos do calculo")
+            lines.append(f"1) Dimensao base: {base_dim} mm -> {ml_base_display} m")
+            lines.append(f"2) Desperdicio aplicado: {desp_display}")
+            lines.append(f"3) ML por unidade (com desperdicio): {per_unit_display} m")
+            lines.append(f"4) Qt_total: {qt_total_display} -> ML total: {ml_total_display} m")
+
+            if chosen_ref:
+                label = " | ".join(source_labels) if source_labels else "referencia"
+                ref_line = f"5) Referencia orla ({label}): {chosen_ref}"
+                if esp_display is not None:
+                    ref_line += f" | Espessura lado: {esp_display}"
+                lines.append(ref_line)
+            else:
+                missing_line = "5) Referencia orla: nao encontrada nas colunas ORL 0.4/1.0"
+                if esp_display is not None:
+                    missing_line += f" | Espessura lado: {esp_display}"
+                lines.append(missing_line)
+
+            if pliq_orla not in (None, "", 0):
+                try:
+                    pliq_val = float(pliq_orla)
+                    lines.append(f"6) PliQ materia-prima: {pliq_val:.2f} €/m2")
+                except Exception:
+                    lines.append(f"6) PliQ materia-prima: {pliq_orla} €/m2")
+            else:
+                lines.append("6) PliQ materia-prima: sem valor disponivel")
+
+            if chosen_ref:
+                fonte_label = " | ".join(source_labels) if source_labels else "Materia Prima"
+                lines.append(f"7) Fonte PliQ/Desperdicio: {fonte_label}")
+
+            return "\n".join(lines)
+
+
+
+        if role == QtCore.Qt.ToolTipRole and key in ORLA_COST_KEYS:
+            side = key.replace("custo_orl_", "")
+            ml_key = f"ml_orl_{side}"
+            ml_val = row_data.get(ml_key) or 0
+            custo_val = row_data.get(key) or 0
+            esp_orla = row_data.get(f"orl_{side}")
+
+            def _clean_ref(ref_val: Any) -> Optional[str]:
+                if ref_val in (None, ""):
+                    return None
+                try:
+                    cleaned = str(ref_val).strip()
+                except Exception:
+                    cleaned = str(ref_val)
+                return cleaned or None
+
+            raw_orl_04 = _clean_ref(row_data.get("orl_0_4"))
+            raw_orl_10 = _clean_ref(row_data.get("orl_1_0"))
+            matched_ref = _clean_ref(row_data.get(f"orl_ref_{side}"))
+
+            ensured_pliq, ensured_desp, ensured_ref = self._ensure_orla_info(row_data, side)
+            if ensured_ref:
+                matched_ref = ensured_ref
+
+            chosen_ref = matched_ref
+            source_labels: List[str] = []
+            if matched_ref and matched_ref == raw_orl_04:
+                source_labels.append("ORL 0.4")
+            if matched_ref and matched_ref == raw_orl_10:
+                source_labels.append("ORL 1.0")
+            if not source_labels:
+                if matched_ref:
+                    source_labels.append("Materia Prima (ref_le)")
+                elif raw_orl_04 or raw_orl_10:
+                    if esp_orla not in (None, 0):
+                        try:
+                            esp_float = float(esp_orla)
+                        except Exception:
+                            esp_float = None
+                        if esp_float is not None:
+                            if abs(esp_float - 0.4) < 0.01 and raw_orl_04:
+                                chosen_ref = raw_orl_04
+                                source_labels.append("ORL 0.4")
+                            elif abs(esp_float - 1.0) < 0.01 and raw_orl_10:
+                                chosen_ref = raw_orl_10
+                                source_labels.append("ORL 1.0")
+                            elif raw_orl_10:
+                                chosen_ref = raw_orl_10
+                                source_labels.append("ORL 1.0")
+                            elif raw_orl_04:
+                                chosen_ref = raw_orl_04
+                                source_labels.append("ORL 0.4")
+
+            pliq_orla = ensured_pliq if ensured_pliq not in (None, "") else row_data.get(f"orl_pliq_{side}")
+            if pliq_orla in (None, ""):
+                pliq_orla = row_data.get("pliq")
+
+            desp_orla = ensured_desp if ensured_desp not in (None, "") else row_data.get(f"orl_desp_{side}")
+            if desp_orla in (None, ""):
+                desp_orla = row_data.get("desp")
+
+            try:
+                qt_total = float(row_data.get("qt_total") or 1)
+            except Exception:
+                qt_total = 1.0
+
+            dim_mm = row_data.get("comp_res") if side in ("c1", "c2") else row_data.get("larg_res")
+            try:
+                ml_per_unit_base = float(dim_mm) / 1000.0 if dim_mm not in (None, "") else 0.0
+            except Exception:
+                ml_per_unit_base = 0.0
+
+            try:
+                ml_total_float = float(ml_val)
+            except Exception:
+                ml_total_float = 0.0
+
+            try:
+                per_unit_with_waste = ml_total_float / qt_total if qt_total else ml_total_float
+            except Exception:
+                per_unit_with_waste = ml_total_float
+
+            try:
+                desp_pct = float(desp_orla or 0.0)
+                if desp_pct <= 1:
+                    desp_pct *= 100.0
+                desp_from_default = False
+            except Exception:
+                desp_pct = 8.0
+                desp_from_default = True
+
+            if abs(desp_pct - int(desp_pct)) < 1e-6:
+                desp_display = f"{int(desp_pct)}%"
+            else:
+                desp_display = f"{desp_pct:.2f}%"
+            if desp_from_default or desp_orla in (None, "", 0):
+                desp_display = f"{desp_display} (default)"
+
+            try:
+                custo_total_float = float(custo_val)
+            except Exception:
+                custo_total_float = 0.0
+
+            try:
+                pliq_val = float(pliq_orla or 0.0)
+            except Exception:
+                pliq_val = 0.0
+
+            try:
+                _, fator = svc_custeio._get_orla_width_factor(row_data.get("esp_res"))
+                fator_float = float(fator)
+            except Exception:
+                fator_float = 0.0
+
+            euro_ml_val = (pliq_val / fator_float) if fator_float else 0.0
+
+            ml_base_display = self._format_result_number(ml_per_unit_base) or "0"
+            per_unit_display = self._format_result_number(per_unit_with_waste) or "0"
+            ml_total_display = self._format_result_number(ml_total_float) or "0"
+            qt_total_display = self._format_result_number(qt_total) or str(qt_total)
+            custo_total_display = f"{custo_total_float:.2f} €"
+
+            esp_display = None
+            if esp_orla not in (None, "", 0):
+                try:
+                    esp_val = float(esp_orla)
+                    esp_display = int(esp_val) if abs(esp_val - int(esp_val)) < 1e-6 else round(esp_val, 2)
+                except Exception:
+                    esp_display = esp_orla
+
+            lines: List[str] = []
+            base_dim = dim_mm if dim_mm not in (None, "") else "0"
+            lines.append(f"Custo ORL {side.upper()} - passos do calculo")
+            lines.append(f"1) Dimensao base: {base_dim} mm -> {ml_base_display} m")
+            lines.append(f"2) Desperdicio aplicado: {desp_display}")
+            lines.append(f"3) ML/unidade (com desperdicio): {per_unit_display} m | Qt_total: {qt_total_display} -> ML total: {ml_total_display} m")
+
+            if chosen_ref:
+                label = " | ".join(source_labels) if source_labels else "referencia"
+                ref_line = f"4) Referencia orla ({label}): {chosen_ref}"
+                if esp_display is not None:
+                    ref_line += f" | Espessura lado: {esp_display}"
+                lines.append(ref_line)
+            else:
+                missing_line = "4) Referencia orla: nao encontrada nas colunas ORL 0.4/1.0"
+                if esp_display is not None:
+                    missing_line += f" | Espessura lado: {esp_display}"
+                lines.append(missing_line)
+
+            if pliq_val and fator_float:
+                fator_display = int(fator_float) if abs(fator_float - int(fator_float)) < 1e-6 else round(fator_float, 2)
+                lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 @ fator {fator_display} = {euro_ml_val:.2f} €/ml")
+            elif pliq_val:
+                lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 (fator indisponivel)")
+            else:
+                lines.append("5) Conversao preco: sem dados de PliQ")
+
+            if euro_ml_val:
+                per_unit_cost = (per_unit_with_waste * euro_ml_val) if per_unit_with_waste else 0.0
+                lines.append(f"6) Custo total: {ml_total_display} m x {euro_ml_val:.2f} €/ml = {custo_total_display}")
+                lines.append(f"   Custo por unidade: {per_unit_display} m x {euro_ml_val:.2f} €/ml = {per_unit_cost:.2f} €")
+            else:
+                lines.append(f"6) Custo total: {custo_total_display}")
+
+            if chosen_ref:
+                fonte_label = " | ".join(source_labels) if source_labels else "Materia Prima"
+                lines.append(f"7) Fonte PliQ/Desperdicio: {fonte_label}")
+
+            return "\n".join(lines)
+
+
+
+        if role == QtCore.Qt.ToolTipRole and key in ORLA_TOTAL_KEYS:
+            parts: List[str] = []
+            for side in ("c1", "c2", "l1", "l2"):
+                ml_side = row_data.get(f"ml_orl_{side}") or 0
+                custo_side = row_data.get(f"custo_orl_{side}") or 0
+                try:
+                    ml_fmt = self._format_result_number(float(ml_side)) or "0"
+                except Exception:
+                    ml_fmt = str(ml_side)
+                try:
+                    custo_fmt = f"{float(custo_side):.2f} €"
+                except Exception:
+                    custo_fmt = f"{custo_side} €"
+                parts.append(f"{side.upper()}: ML={ml_fmt} m | Custo={custo_fmt}")
+            total_ml = row_data.get("soma_total_ml_orla") or 0
+            total_custo = row_data.get("custo_total_orla") or 0
+            try:
+                total_ml_fmt = self._format_result_number(float(total_ml)) or "0"
+            except Exception:
+                total_ml_fmt = str(total_ml)
+            try:
+                total_custo_fmt = f"{float(total_custo):.2f} €"
+            except Exception:
+                total_custo_fmt = f"{total_custo} €"
+            parts.append(f"Totais: ML={total_ml_fmt} m | Custo={total_custo_fmt}")
+            return "\n".join(parts)
+
+        if role == QtCore.Qt.ToolTipRole and key == "spp_ml_und":
+            if not self._is_spp_row(row_data):
+                return None
+            und_value = (row_data.get("und") or "-").strip() or "-"
+            comp_res = row_data.get("comp_res")
+            try:
+                comp_float = float(comp_res) if comp_res not in (None, "") else None
+            except (TypeError, ValueError):
+                comp_float = None
+            spp_val = row_data.get("spp_ml_und")
+            try:
+                spp_float = float(spp_val) if spp_val not in (None, "") else None
+            except (TypeError, ValueError):
+                spp_float = None
+            lines = [f"SPP ML por unidade (und={und_value})"]
+            reason_bits = []
+            if (row_data.get("und") or "").strip().upper() == "ML":
+                reason_bits.append("und=ML")
+            def_peca_raw = (row_data.get("def_peca") or "").upper()
+            if "{SPP}" in def_peca_raw:
+                reason_bits.append("marcador {SPP}")
+            if reason_bits:
+                lines.append("Deteccao SPP: " + " + ".join(reason_bits))
+            if comp_float is not None:
+                comp_m = comp_float / 1000.0
+                lines.append(f"COMP_res: {comp_float:.2f} mm -> {comp_m:.2f} m")
+            else:
+                lines.append("COMP_res: valor indisponivel")
+            if spp_float is not None:
+                stored = self._format_result_number(spp_float) or f"{spp_float:.2f}"
+                lines.append(f"Valor apresentado: {stored} m")
+            else:
+                lines.append("Valor apresentado: -")
+            return "\n".join(lines)
+
+        if role == QtCore.Qt.ToolTipRole and key in {"area_m2_und", "perimetro_und"}:
+            comp_res = row_data.get("comp_res")
+            larg_res = row_data.get("larg_res")
+
+            try:
+                comp_float = float(comp_res) if comp_res not in (None, "") else None
+            except (TypeError, ValueError):
+                comp_float = None
+            try:
+                larg_float = float(larg_res) if larg_res not in (None, "") else None
+            except (TypeError, ValueError):
+                larg_float = None
+
+            lines: List[str] = []
+            if comp_float is not None and larg_float is not None:
+                comp_m = comp_float / 1000.0
+                larg_m = larg_float / 1000.0
+                if key == "area_m2_und":
+                    try:
+                        area_val = float(row_data.get("area_m2_und") or (comp_m * larg_m))
+                    except (TypeError, ValueError):
+                        area_val = comp_m * larg_m
+                    lines.append("Area por unidade")
+                    lines.append(f"Comprimento: {comp_float} mm -> {comp_m:.3f} m")
+                    lines.append(f"Largura: {larg_float} mm -> {larg_m:.3f} m")
+                    lines.append(f"Calculo: {comp_m:.3f} m * {larg_m:.3f} m = {area_val:.4f} m2")
+                else:
+                    try:
+                        per_val = float(row_data.get("perimetro_und") or (2 * (comp_m + larg_m)))
+                    except (TypeError, ValueError):
+                        per_val = 2 * (comp_m + larg_m)
+                    lines.append("Perimetro por unidade")
+                    lines.append(f"Comprimento: {comp_float} mm -> {comp_m:.3f} m")
+                    lines.append(f"Largura: {larg_float} mm -> {larg_m:.3f} m")
+                    lines.append(f"Calculo: 2 * ({comp_m:.3f} m + {larg_m:.3f} m) = {per_val:.4f} m")
+            else:
+                if key == "area_m2_und":
+                    lines.append("Area por unidade")
+                    lines.append("Dimensoes incompletas para calcular a area.")
+                else:
+                    lines.append("Perimetro por unidade")
+                    lines.append("Dimensoes incompletas para calcular o perimetro.")
+            return "\n".join(lines)
 
         if key == "id":
             if role == QtCore.Qt.DisplayRole:
@@ -1321,6 +1836,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             self.rows[row][key] = value
             self._mark_dirty()
 
+        if key in {"orl_0_4", "orl_1_0", "orl_c1", "orl_c2", "orl_l1", "orl_l2"}:
+            self._orla_info_cache.clear()
+            for lado in ("c1", "c2", "l1", "l2"):
+                self._ensure_orla_info(self.rows[row], lado)
+            requires_recalc = True
+
         if requires_recalc:
 
             self.recalculate_all()
@@ -1354,6 +1875,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self.beginResetModel()
 
         self.rows = []
+        self._orla_info_cache.clear()
 
         self.endResetModel()
         self._mark_dirty(False)
@@ -1365,6 +1887,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self.beginResetModel()
 
         self.rows = [self._coerce_row_impl(row) for row in rows]
+        self._orla_info_cache.clear()
 
         self.endResetModel()
         self._mark_dirty(False)
@@ -1814,6 +2337,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["_qt_child_factor"] = None
                 row["qt_und"] = None
                 row["qt_total"] = divisor
+                row["spp_ml_und"] = None
                 current_parent_row = row
                 current_parent_uid = row["_uid"]
                 continue
@@ -2056,6 +2580,34 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row["qt_total"] = total if total else None
 
+            # Atualizar métricas derivadas (área e perímetro por unidade)
+            comp_res_val = row.get("comp_res")
+            larg_res_val = row.get("larg_res")
+            area_val: Optional[float] = None
+            perimetro_val: Optional[float] = None
+            try:
+                comp_float = float(comp_res_val) if comp_res_val not in (None, "") else None
+            except (TypeError, ValueError):
+                comp_float = None
+            try:
+                larg_float = float(larg_res_val) if larg_res_val not in (None, "") else None
+            except (TypeError, ValueError):
+                larg_float = None
+            if comp_float is not None and larg_float is not None:
+                comp_m = comp_float / 1000.0
+                larg_m = larg_float / 1000.0
+                area_val = round(comp_m * larg_m, 4)
+                perimetro_val = round(2 * (comp_m + larg_m), 4)
+            row["area_m2_und"] = area_val
+            row["perimetro_und"] = perimetro_val
+            if self._is_spp_row(row):
+                if comp_float is not None:
+                    row["spp_ml_und"] = round(comp_float / 1000.0, 2)
+                else:
+                    row["spp_ml_und"] = None
+            else:
+                row["spp_ml_und"] = None
+
             if row.get("esp_mp") not in (None, "") and not expr_esp:
 
                 default_esp = _coerce_dimension(row.get("esp_mp"))
@@ -2067,6 +2619,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 substitution = self._format_result_number(default_esp) or row.get("esp")
 
                 row["_esp_tooltip"] = self._build_formula_tooltip(expr_esp or (row.get("esp") or substitution or ""), default_esp, None, substitutions=substitution or None)
+
+        if session is not None:
+            self._orla_info_cache.clear()
+            ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
+            for row in self.rows:
+                try:
+                    svc_custeio.preencher_info_orlas_linha(session, row, ref_cache)
+                except Exception:
+                    continue
 
         left = self._column_index.get("qt_mod")
 
@@ -2393,8 +2954,8 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
 
 class AcabamentoDelegate(QtWidgets.QStyledItemDelegate):
-    """Delegate para coluna 'acabamento' que preenche um QComboBox com as
-    opções de acabamentos disponíveis para o item em contexto."""
+    """Delegate para colunas de acabamento que preenche um QComboBox com as
+    opcoes de acabamentos disponiveis para o item em contexto."""
 
     def __init__(self, parent: Optional[QtCore.QObject] = None, page: Optional["CusteioItemsPage"] = None):
         super().__init__(parent)
@@ -2476,6 +3037,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.current_user = current_user
+        self.current_user_id = getattr(current_user, "id", None) if current_user is not None else None
 
         self.session = SessionLocal()
 
@@ -2504,6 +3066,21 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._populate_tree()
 
         self._update_summary()
+
+
+    def _auto_dimensions_enabled(self) -> bool:
+
+        if self.current_user_id is None:
+
+            return False
+
+        try:
+
+            return svc_custeio.is_auto_dimension_enabled(self.session, self.current_user_id)
+
+        except Exception:
+
+            return False
 
 
 
@@ -2906,12 +3483,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             pass
 
-        # Registar delegate para a coluna 'acabamento' (drop-down de acabamentos)
-        try:
-            acb_col = self.table_model.column_keys.index("acabamento")
-            self.table_view.setItemDelegateForColumn(acb_col, AcabamentoDelegate(self.table_view, self))
-        except ValueError:
-            pass
+        # Registar delegates para colunas de acabamento (drop-down de acabamentos)
+        for acb_key in ("acabamento_sup", "acabamento_inf"):
+            try:
+                acb_col = self.table_model.column_keys.index(acb_key)
+                self.table_view.setItemDelegateForColumn(acb_col, AcabamentoDelegate(self.table_view, self))
+            except ValueError:
+                continue
 
         self.table_view.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
@@ -3593,7 +4171,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+        auto_dimensions = self._auto_dimensions_enabled()
+
         novas_linhas = svc_custeio.gerar_linhas_para_selecoes(self.session, self.context, selections)
+
+        if auto_dimensions:
+
+            try:
+
+                svc_custeio.aplicar_dimensoes_automaticas(novas_linhas)
+
+            except Exception:
+
+                pass
 
         if not novas_linhas:
 

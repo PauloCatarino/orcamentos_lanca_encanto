@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 import re
 import unicodedata
@@ -56,6 +56,31 @@ DIMENSION_KEY_ORDER: Sequence[str] = (
 )
 DIMENSION_ALLOWED_VARIABLES: Set[str] = set(DIMENSION_KEY_ORDER) | {"HM", "LM", "PM"}
 
+_AUTO_DIMENSION_SETTING_TEMPLATE = "custeio:auto_dims:user:{user_id}"
+_AUTO_DIMENSION_TRUE_VALUES = {"1", "true", "yes", "on", "sim"}
+_AUTO_DIMENSION_RULES: Tuple[Tuple[str, str, str], ...] = (
+    ("COSTA", "HM", "LM"),
+    ("PORTA ABRIR", "HM", "LM"),
+    ("LATERAL", "HM", "PM"),
+    ("DIVISORIA", "HM", "PM"),
+    ("TETO", "LM", "PM"),
+    ("FUNDO", "LM", "PM"),
+    ("PRATELEIRA AMOVIVEL", "LM", "PM"),
+    ("PRAT AMOV", "LM", "PM"),
+    ("PRATELEIRA FIXA", "LM", "PM"),
+    ("PRAT FIXA", "LM", "PM"),
+)
+
+_DIVISAO_LABEL_TOKEN = "DIVISAO INDEPENDENTE"
+
+
+def _uppercase_no_accents(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    text = unicodedata.normalize("NFKD", str(value))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.upper()
+
 
 def _normalize_token(value: Optional[str]) -> str:
     if value is None:
@@ -97,12 +122,12 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "PES": {
         "matches": ["PES"],
         "expression": "4 if COMP < 650 and LARG < 800 else 6 if COMP >= 650 and LARG < 800 else 8",
-        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP≥650 & LARG<800 | 8 caso contrário",
+        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP>=650 & LARG<800 | 8 caso contrário",
     },
     "SUPORTE PRATELEIRA": {
         "matches": ["SUPORTE PRATELEIRA"],
         "expression": "8 if COMP >= 1100 and LARG >= 800 else 6 if COMP >= 1100 else 4",
-        "tooltip": "4 por defeito | 6 se COMP≥1100 | 8 se COMP≥1100 & LARG≥800",
+        "tooltip": "4 por defeito | 6 se COMP>=1100 | 8 se COMP>=1100 & LARG>=800",
     },
     "VARAO SPP": {
         "matches": ["VARAO SPP", "VARAO"],
@@ -122,7 +147,7 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "SUPORTE VARAO": {
         "matches": ["SUPORTE VARAO"],
         "expression": "2",
-        "tooltip": "2 suportes por varao.",
+        "tooltip": "2 suportes por varão.",
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
@@ -133,12 +158,12 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
                         "else 5 if COMP <= 2600 "
                         "else 6 + ((COMP - 2600) // 600)"
                     ") + (1 if LARG >= 605 else 0)",
-        "tooltip": "Até 850: 2 | 851–1600: 3 | 1601–2000: 4 | 2001–2600: 5 | depois: +1/600mm. Soma +1 se LARG≥605."
+        "tooltip": "Até 850: 2 | 851-1600: 3 | 1601-2000: 4 | 2001-2600: 5 | depois: +1/600mm. Soma +1 se LARG>=605.",
     },
     "PUXADOR": {
         "matches": ["PUXADOR"],
         "expression": "1",
-        "tooltip": "1 puxador por porta (total acompanha o QT_und da peca principal).",
+        "tooltip": "1 puxador por porta (total acompanha o QT_und da peça principal).",
     },
 }
 
@@ -385,27 +410,14 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
-        "label": "GAVETA FRENTE",
-        "group": "Gaveta Frente",
+        "label": "GAVETAS",
+        "group": "Gavetas",
         "children": [
             {"label": "FRENTE GAVETA [2222]"},
             {"label": "FRENTE GAVETA [2222] + PUXADOR"},
-        ],
-    },
-    {
-        "label": "GAVETA CAIXA",
-        "group": "Gaveta Caixa",
-        "children": [
             {"label": "LATERAL GAVETA [2202]"},
             {"label": "TRASEIRA GAVETA [2000]"},
-        ],
-    },
-    {
-        "label": "GAVETA FUNDO",
-        "group": "Gaveta Fundo",
-        "children": [
             {"label": "FUNDO GAVETA [0022]"},
-            {"label": "FUNDO GAVETA [0000]"},
         ],
     },
     {
@@ -631,7 +643,8 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "blk", "label": "BLK", "type": "bool", "editable": True},
     {"key": "nst", "label": "NST", "type": "bool", "editable": True},
     {"key": "mat_default", "label": "Mat_Default", "type": "text", "editable": True},
-    {"key": "acabamento", "label": "Acabamento", "type": "text", "editable": True},
+    {"key": "acabamento_sup", "label": "Acabamento_SUP", "type": "text", "editable": True},
+    {"key": "acabamento_inf", "label": "Acabamento_INF", "type": "text", "editable": True},
     {"key": "qt_total", "label": "Qt_Total", "type": "numeric", "editable": False, "format": "two"},
     {"key": "comp_res", "label": "comp_res", "type": "numeric", "editable": False, "format": "int"},
     {"key": "larg_res", "label": "larg_res", "type": "numeric", "editable": False, "format": "int"},
@@ -664,6 +677,7 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "custo_total_orla", "label": "CUSTO_TOTAL_ORLA", "type": "numeric", "editable": False, "format": "two"},
     {"key": "soma_total_ml_orla", "label": "SOMA_TOTAL_ML_ORLA", "type": "numeric", "editable": False, "format": "two"},
     {"key": "area_m2_und", "label": "AREA_M2_und", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "perimetro_und", "label": "PERIMETRO_und", "type": "numeric", "editable": False, "format": "two"},
     {"key": "spp_ml_und", "label": "SPP_ML_und", "type": "numeric", "editable": False, "format": "two"},
     {"key": "cp01_sec", "label": "CP01_SEC", "type": "numeric", "editable": True, "format": "two"},
     {"key": "cp01_sec_und", "label": "CP01_SEC_und", "type": "numeric", "editable": True, "format": "two"},
@@ -1046,6 +1060,74 @@ def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
     return float(value)
 
 
+def _auto_dimensions_setting_key(user_id: int) -> str:
+    return _AUTO_DIMENSION_SETTING_TEMPLATE.format(user_id=user_id)
+
+
+def is_auto_dimension_enabled(session: Session, user_id: Optional[int]) -> bool:
+    if not user_id:
+        return False
+    raw = get_setting(session, _auto_dimensions_setting_key(user_id), None)
+    if raw is None:
+        return False
+    token = str(raw).strip().lower()
+    return token in _AUTO_DIMENSION_TRUE_VALUES
+
+
+def set_auto_dimension_enabled(session: Session, user_id: Optional[int], enabled: bool) -> None:
+    if not user_id:
+        return
+    value = "1" if enabled else "0"
+    set_setting(session, _auto_dimensions_setting_key(user_id), value)
+
+
+def _normalize_def_peca_for_auto(def_peca: Optional[str]) -> str:
+    if not def_peca:
+        return ""
+    text = unicodedata.normalize("NFKD", str(def_peca))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.upper().replace("_", " ")
+    text = re.sub(r"[^A-Z0-9 ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def sugerir_dimensoes_automaticas(def_peca: Optional[str]) -> Optional[Tuple[str, str]]:
+    normalized = _normalize_def_peca_for_auto(def_peca)
+    if not normalized:
+        return None
+    for prefix, comp_expr, larg_expr in _AUTO_DIMENSION_RULES:
+        if normalized.startswith(prefix):
+            return comp_expr, larg_expr
+    return None
+
+
+def aplicar_dimensoes_automaticas(linhas: Sequence[Dict[str, Any]]) -> None:
+    for linha in linhas:
+        sugestao = sugerir_dimensoes_automaticas(linha.get("def_peca"))
+        if not sugestao:
+            continue
+        comp_expr, larg_expr = sugestao
+        if linha.get("comp") in (None, ""):
+            linha["comp"] = comp_expr
+        if linha.get("larg") in (None, ""):
+            linha["larg"] = larg_expr
+
+
+def _is_divisao_def(def_peca: Optional[str]) -> bool:
+    return _uppercase_no_accents(def_peca).strip() == _DIVISAO_LABEL_TOKEN
+
+
+def _is_spp_context(und: Optional[str], def_peca: Optional[str]) -> bool:
+    if (und or "").strip().upper() == "ML":
+        return True
+    raw = (def_peca or "").upper()
+    if "{SPP}" in raw:
+        return True
+    texto = _uppercase_no_accents(def_peca)
+    return texto.startswith("SPP")
+
+
 def _format_formula_value(value: Any) -> Optional[str]:
     coerced = _coerce_dimensao_valor(value)
     if coerced is None:
@@ -1180,6 +1262,312 @@ def aplicar_espessuras_orla(linha: Dict[str, Any], lookup: Mapping[str, str]) ->
     return _aplicar_orla_espessuras(linha, lookup)
 
 
+def _parse_float_value(valor: Any) -> Optional[float]:
+    """Converte diferentes representações numéricas (incluindo strings com vírgula) para float."""
+    if valor in (None, "", False):
+        return None
+    if isinstance(valor, Decimal):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return None
+    if isinstance(valor, (int, float)):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return None
+    try:
+        texto = str(valor).strip().replace(",", ".")
+        if not texto:
+            return None
+        return float(texto)
+    except (TypeError, ValueError):
+        return None
+
+
+def preencher_info_orlas_linha(
+    session: Session,
+    linha: Dict[str, Any],
+    ref_cache: Optional[Dict[str, Tuple[float, float, Optional[str]]]] = None,
+) -> None:
+    """Preenche campos orl_ref_*, orl_pliq_* e orl_desp_* com base nas referências das colunas ORL 0.4/1.0."""
+    if ref_cache is None:
+        ref_cache = {}
+
+    for side in ("c1", "c2", "l1", "l2"):
+        esp_orla = _parse_float_value(linha.get(f"orl_{side}"))
+        chosen_ref: Optional[str] = None
+        pliq = 0.0
+        desp = 0.0
+
+        if esp_orla is not None:
+            if abs(esp_orla - 0.4) < 0.01:
+                chosen_ref = linha.get("orl_0_4")
+            elif abs(esp_orla - 1.0) < 0.01:
+                chosen_ref = linha.get("orl_1_0")
+            else:
+                chosen_ref = linha.get("orl_1_0") or linha.get("orl_0_4")
+
+        if chosen_ref:
+            chosen_ref = str(chosen_ref).strip() or None
+
+        if chosen_ref:
+            cache_key = chosen_ref
+            if cache_key in ref_cache:
+                preco_m2, desp_percent, matched = ref_cache[cache_key]
+            else:
+                preco_m2, desp_percent, matched = _obter_info_orla_por_ref(
+                    session,
+                    chosen_ref,
+                    esp_esperada=esp_orla,
+                )
+                ref_cache[cache_key] = (preco_m2, desp_percent, matched)
+            pliq = preco_m2 or 0.0
+            desp = desp_percent or 0.0
+            if matched:
+                chosen_ref = matched
+
+        linha[f"orl_ref_{side}"] = chosen_ref
+        linha[f"orl_pliq_{side}"] = pliq
+        linha[f"orl_desp_{side}"] = desp
+
+
+def _get_orla_width_factor(esp_peca: Any) -> Tuple[float, float]:
+    """Retorna (largura_mm, fator) com base na espessura da peça.
+
+    Mantém compatibilidade com calculo_orlas.get_orla_width_factor.
+    """
+    try:
+        if esp_peca is None:
+            return 0, 0
+        esp = float(esp_peca)
+    except Exception:
+        return 0, 0
+
+    if esp <= 0:
+        return 0, 0
+    if esp < 20:
+        return 23, 43
+    if esp < 31:
+        return 35, 28
+    if esp < 40:
+        return 45, 22
+    return 60, 16
+
+
+def _obter_info_orla_por_ref(
+    session: Session,
+    ref_candidate: Optional[str],
+    esp_esperada: Optional[float] = None,
+) -> Tuple[float, float, Optional[str]]:
+    """Retorna (preco_m2, desp_percent, matched_ref_le) para a orla escolhida."""
+    if not ref_candidate:
+        return 0.0, 0.0, None
+
+    chave = str(ref_candidate).strip()
+    if not chave:
+        return 0.0, 0.0, None
+
+    stmt = (
+        select(MateriaPrima)
+        .where(func.coalesce(MateriaPrima.ref_le, "") == chave)
+        .limit(1)
+    )
+    mat = session.execute(stmt).scalar_one_or_none()
+    if mat:
+        try:
+            return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or chave)
+        except Exception:
+            return 0.0, 0.0, None
+
+    stmt2 = (
+        select(MateriaPrima)
+        .where(func.lower(func.coalesce(MateriaPrima.descricao_orcamento, "")) == chave.lower())
+        .limit(1)
+    )
+    mat = session.execute(stmt2).scalar_one_or_none()
+    if mat:
+        try:
+            return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or chave)
+        except Exception:
+            return 0.0, 0.0, None
+
+    if esp_esperada is not None:
+        try:
+            esp_val = float(esp_esperada)
+        except Exception:
+            esp_val = None
+        if esp_val is not None:
+            stmt3 = (
+                select(MateriaPrima)
+                .where(func.coalesce(MateriaPrima.familia, "").ilike("orlas"))
+                .where(func.cast(MateriaPrima.esp_mp, func.FLOAT) == esp_val)
+                .limit(1)
+            )
+            mat = session.execute(stmt3).scalar_one_or_none()
+            if mat:
+                try:
+                    return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or None)
+                except Exception:
+                    return 0.0, 0.0, None
+
+    return 0.0, 0.0, None
+
+
+def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -> None:
+    """Recalcula ml/custo de orlas para as linhas do item informado."""
+    if orcamento_id is None or item_id is None:
+        return
+
+    stmt = (
+        select(CusteioItem)
+        .where(
+            CusteioItem.orcamento_id == orcamento_id,
+            CusteioItem.item_id == item_id,
+        )
+        .order_by(CusteioItem.ordem, CusteioItem.id)
+    )
+    registros = session.execute(stmt).scalars().all()
+
+    ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
+
+    for reg in registros:
+        comp_res_val = _parse_float_value(reg.comp_res)
+        larg_res_val = _parse_float_value(reg.larg_res)
+        esp_res_val = _parse_float_value(reg.esp_res)
+
+        comp_res_mm = Decimal(str(comp_res_val)) if comp_res_val is not None else Decimal("0")
+        larg_res_mm = Decimal(str(larg_res_val)) if larg_res_val is not None else Decimal("0")
+        esp_res = esp_res_val or 0.0
+        comp_m = (comp_res_mm / Decimal("1000")).quantize(Decimal("0.0001"))
+        larg_m = (larg_res_mm / Decimal("1000")).quantize(Decimal("0.0001"))
+
+        if _is_divisao_def(reg.def_peca):
+            reg.area_m2_und = None
+            reg.perimetro_und = None
+        else:
+            area_decimal = (comp_res_mm * larg_res_mm) / Decimal("1000000") if comp_res_mm and larg_res_mm else Decimal("0")
+            perimetro_decimal = ((comp_res_mm + larg_res_mm) * Decimal("2")) / Decimal("1000") if comp_res_mm or larg_res_mm else Decimal("0")
+            reg.area_m2_und = area_decimal.quantize(Decimal("0.0001"))
+            reg.perimetro_und = perimetro_decimal.quantize(Decimal("0.0001"))
+
+        if _is_divisao_def(reg.def_peca):
+            reg.spp_ml_und = None
+        elif _is_spp_context(getattr(reg, "und", None), getattr(reg, "def_peca", None)):
+            if comp_res_val is not None:
+                spp_decimal = (Decimal(str(comp_res_val)) / Decimal("1000")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                reg.spp_ml_und = spp_decimal
+            else:
+                reg.spp_ml_und = None
+        else:
+            reg.spp_ml_und = None
+
+        soma_ml = Decimal("0")
+        soma_custos = Decimal("0")
+
+        for chave, dim_m in (("c1", comp_m), ("c2", comp_m), ("l1", larg_m), ("l2", larg_m)):
+            esp_orla = _parse_float_value(getattr(reg, f"orl_{chave}"))
+            ml_val = Decimal("0")
+            custo_val = Decimal("0")
+
+            if esp_orla not in (None, 0):
+                ref_cand: Optional[str] = None
+                if abs(esp_orla - 0.4) < 0.01:
+                    ref_cand = reg.orl_0_4
+                elif abs(esp_orla - 1.0) < 0.01:
+                    ref_cand = reg.orl_1_0
+                else:
+                    ref_cand = reg.orl_1_0 or reg.orl_0_4
+
+                if ref_cand:
+                    ref_cand = str(ref_cand).strip() or None
+
+                preco_m2 = 0.0
+                desp_percent = 0.0
+                matched_ref: Optional[str] = None
+                if ref_cand:
+                    cache_key = ref_cand
+                    if cache_key in ref_cache:
+                        preco_m2, desp_percent, matched_ref = ref_cache[cache_key]
+                    else:
+                        preco_m2, desp_percent, matched_ref = _obter_info_orla_por_ref(session, ref_cand, esp_esperada=esp_orla)
+                        ref_cache[cache_key] = (preco_m2, desp_percent, matched_ref)
+
+                ml_base = dim_m.quantize(Decimal("0.01"))
+
+                try:
+                    desp_pct = float(desp_percent or 0.0)
+                    if desp_pct <= 1:
+                        desp_pct *= 100.0
+                except Exception:
+                    desp_pct = 0.0
+
+                if not desp_pct:
+                    desp_pct = 8.0
+
+                try:
+                    desp_decimal = Decimal(str(desp_pct)) / Decimal("100")
+                except Exception:
+                    desp_decimal = Decimal("0.08")
+
+                ml_unit_with_waste = (ml_base * (Decimal("1") + desp_decimal)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                qt_total_val = _parse_float_value(reg.qt_total) or 1.0
+                qt_total = Decimal(str(qt_total_val))
+
+                ml_val = (ml_unit_with_waste * qt_total).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+                try:
+                    _, fator = _get_orla_width_factor(esp_res)
+                    if fator and preco_m2:
+                        euro_por_ml = (Decimal(str(preco_m2)) / Decimal(str(fator))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    else:
+                        euro_por_ml = Decimal("0.00")
+                except Exception:
+                    euro_por_ml = Decimal("0.00")
+
+                custo_val = (ml_val * euro_por_ml).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            if chave == "c1":
+                reg.ml_orl_c1 = ml_val
+                reg.custo_orl_c1 = custo_val
+            elif chave == "c2":
+                reg.ml_orl_c2 = ml_val
+                reg.custo_orl_c2 = custo_val
+            elif chave == "l1":
+                reg.ml_orl_l1 = ml_val
+                reg.custo_orl_l1 = custo_val
+            elif chave == "l2":
+                reg.ml_orl_l2 = ml_val
+                reg.custo_orl_l2 = custo_val
+
+            soma_ml += ml_val
+            soma_custos += custo_val
+
+        reg.soma_total_ml_orla = soma_ml.quantize(Decimal("0.0001"))
+        reg.custo_total_orla = soma_custos.quantize(Decimal("0.0001"))
+
+    session.flush()
+
+
+def _registro_precisa_recalculo(reg: CusteioItem) -> bool:
+    campos_orla = (
+        (reg.orl_c1, reg.ml_orl_c1, reg.custo_orl_c1),
+        (reg.orl_c2, reg.ml_orl_c2, reg.custo_orl_c2),
+        (reg.orl_l1, reg.ml_orl_l1, reg.custo_orl_l1),
+        (reg.orl_l2, reg.ml_orl_l2, reg.custo_orl_l2),
+    )
+    for esp_val, ml_val, custo_val in campos_orla:
+        if esp_val not in (None, 0, "") and (ml_val in (None, "") or custo_val in (None, "")):
+            return True
+    if any(
+        reg_field in (None, "", 0)
+        for reg_field in (reg.custo_total_orla, reg.soma_total_ml_orla)
+    ):
+        return True
+    return False
+
+
 def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[int]) -> List[Dict[str, Any]]:
     if not item_id:
         return []
@@ -1194,8 +1582,13 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
     )
     registros = session.execute(stmt).scalars().all()
 
+    if any(_registro_precisa_recalculo(reg) for reg in registros):
+        atualizar_orlas_custeio(session, orcamento_id, item_id)
+        registros = session.execute(stmt).scalars().all()
+
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)
+    ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
     for registro in registros:
         linha = _empty_row()
         linha["id"] = registro.id
@@ -1221,6 +1614,33 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
             else:
                 linha[key] = valor
         _aplicar_orla_espessuras(linha, orla_lookup)
+
+        preencher_info_orlas_linha(session, linha, ref_cache)
+
+        is_divisao = _is_divisao_def(linha.get("def_peca"))
+        need_area = linha.get("area_m2_und") in (None, "", 0)
+        need_perimetro = linha.get("perimetro_und") in (None, "", 0)
+        if is_divisao:
+            linha["area_m2_und"] = None
+            linha["perimetro_und"] = None
+        elif need_area or need_perimetro:
+            comp_val = _parse_float_value(linha.get("comp_res"))
+            larg_val = _parse_float_value(linha.get("larg_res"))
+            if comp_val is not None and larg_val is not None:
+                comp_m = comp_val / 1000.0
+                larg_m = larg_val / 1000.0
+                if need_area:
+                    linha["area_m2_und"] = round(comp_m * larg_m, 4)
+                if need_perimetro:
+                    linha["perimetro_und"] = round(2 * (comp_m + larg_m), 4)
+        if not is_divisao and _is_spp_context(linha.get("und"), linha.get("def_peca")):
+            comp_val = _parse_float_value(linha.get("comp_res"))
+            if comp_val is not None:
+                linha["spp_ml_und"] = round(comp_val / 1000.0, 2)
+            else:
+                linha["spp_ml_und"] = None
+        else:
+            linha["spp_ml_und"] = None
         linhas.append(linha)
 
     return linhas
@@ -1252,6 +1672,26 @@ def salvar_custeio_items(
             versao=ctx.versao,
             ordem=ordem,
         )
+        comp_res_val = _parse_float_value(linha.get("comp_res"))
+        larg_res_val = _parse_float_value(linha.get("larg_res"))
+        is_divisao = _is_divisao_def(linha.get("def_peca"))
+        if comp_res_val is not None and larg_res_val is not None and not is_divisao:
+            comp_m = comp_res_val / 1000.0
+            larg_m = larg_res_val / 1000.0
+            area_val = round(comp_m * larg_m, 4)
+            perimetro_val = round(2 * (comp_m + larg_m), 4)
+            linha["area_m2_und"] = area_val
+            linha["perimetro_und"] = perimetro_val
+        elif is_divisao:
+            linha["area_m2_und"] = None
+            linha["perimetro_und"] = None
+        if not is_divisao and _is_spp_context(linha.get("und"), linha.get("def_peca")):
+            if comp_res_val is not None:
+                linha["spp_ml_und"] = round(comp_res_val / 1000.0, 2)
+            else:
+                linha["spp_ml_und"] = None
+        else:
+            linha["spp_ml_und"] = None
         for spec in CUSTEIO_COLUMN_SPECS:
             key = spec["key"]
             if key == "id" or spec["type"] == "icon":
@@ -1280,6 +1720,12 @@ def salvar_custeio_items(
         except Exception:
             # Se falhar, mantem estados anteriores mas nao interrompe a gravacao principal
             pass
+
+    try:
+        atualizar_orlas_custeio(session, ctx.orcamento_id, ctx.item_id)
+    except Exception:
+        # Não bloqueia o fluxo principal caso o cálculo das orlas falhe
+        pass
 
     session.commit()
 
@@ -1415,6 +1861,8 @@ def _preencher_linha_com_material(
     linha["orl_1_0"] = getattr(material, "orl_1_0", None)
     linha["tipo"] = getattr(material, "tipo", None)
     linha["familia"] = getattr(material, "familia", None)
+    linha["acabamento_sup"] = getattr(material, "acabamento_sup", None) or getattr(material, "acabamento", None)
+    linha["acabamento_inf"] = getattr(material, "acabamento_inf", None)
 
     comp_val = _format_formula_value(getattr(material, "comp", None))
     if comp_val is not None:

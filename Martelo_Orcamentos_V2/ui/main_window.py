@@ -58,7 +58,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.addWidget(self.pg_dados_items)
         self.stack.addWidget(self.pg_custeio)
         self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
-        self.stack.addWidget(SettingsPage())
+        self.pg_settings = SettingsPage(current_user=self.current_user)
+        self.stack.addWidget(self.pg_settings)
 
         self.list.currentRowChanged.connect(self.on_menu_changed)
         self.pg_orc.orcamento_aberto.connect(self.on_abrir_orcamento)

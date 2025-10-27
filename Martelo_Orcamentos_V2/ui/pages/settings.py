@@ -9,10 +9,18 @@ from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 KEY_BASE_PATH = "base_path_orcamentos"
 DEFAULT_BASE_PATH = r"\\server_le\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\MARTELO_ORCAMENTOS_V2"
 
+AUTO_DIMS_HELP_TEXT = (
+    "Quando ativo, o Martelo preenche automaticamente as colunas COMP e LARG "
+    "para peças padrão (COSTA, PORTA ABRIR, LATERAL, DIVISORIA, TETO, FUNDO, "
+    "PRATELEIRA AMOVIVEL, PRAT. AMOV., PRATELEIRA FIXA, PRAT.FIXA) usando as "
+    "dimensões HM/LM/PM do item. Continua possível editar manualmente os valores."
+)
 
 class SettingsPage(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
+        self.current_user = current_user
+        self._current_user_id = getattr(current_user, "id", None) if current_user is not None else None
         self.db = SessionLocal()
         lay = QtWidgets.QFormLayout(self)
         self.ed_base = QtWidgets.QLineEdit()
@@ -35,6 +43,32 @@ class SettingsPage(QtWidgets.QWidget):
         btn_rules.clicked.connect(self._open_rules_dialog)
         lay.addRow(btn_rules)
 
+        self.btn_auto_dims = QtWidgets.QPushButton()
+        self.btn_auto_dims.setCheckable(True)
+        self.btn_auto_dims.toggled.connect(self._update_auto_dims_label)
+        if self._current_user_id is None:
+            self.btn_auto_dims.setEnabled(False)
+            self.btn_auto_dims.setToolTip("Disponível apenas para utilizadores autenticados.")
+            self.btn_auto_dims.setChecked(False)
+        else:
+            try:
+                auto_enabled = svc_custeio.is_auto_dimension_enabled(self.db, self._current_user_id)
+            except Exception:
+                auto_enabled = False
+            self.btn_auto_dims.setChecked(auto_enabled)
+        self._update_auto_dims_label(self.btn_auto_dims.isChecked())
+        self.btn_auto_dims_help = QtWidgets.QToolButton()
+        self.btn_auto_dims_help.setText("?")
+        self.btn_auto_dims_help.setAutoRaise(True)
+        self.btn_auto_dims_help.setToolTip(AUTO_DIMS_HELP_TEXT)
+        self.btn_auto_dims_help.clicked.connect(self._show_auto_dims_help)
+
+        auto_layout = QtWidgets.QHBoxLayout()
+        auto_layout.addWidget(self.btn_auto_dims)
+        auto_layout.addWidget(self.btn_auto_dims_help)
+        auto_layout.addStretch(1)
+        lay.addRow("Preencher COMP/LARG automaticamente", auto_layout)
+
         btn_save = QtWidgets.QPushButton("Gravar Configurações")
         btn_save.clicked.connect(self.on_save)
         lay.addRow(btn_save)
@@ -53,6 +87,8 @@ class SettingsPage(QtWidgets.QWidget):
             materias_path = self.ed_materias.text().strip() or DEFAULT_MATERIAS_BASE_PATH
             set_setting(self.db, KEY_BASE_PATH, base_path)
             set_setting(self.db, KEY_MATERIAS_BASE_PATH, materias_path)
+            if self._current_user_id is not None:
+                svc_custeio.set_auto_dimension_enabled(self.db, self._current_user_id, self.btn_auto_dims.isChecked())
             self.db.commit()
             QtWidgets.QMessageBox.information(self, "OK", "Configurações gravadas.")
         except Exception as e:
@@ -62,6 +98,16 @@ class SettingsPage(QtWidgets.QWidget):
     def _open_rules_dialog(self):
         dlg = QtRulesDialog(self.db, self)
         dlg.exec()
+
+    def _update_auto_dims_label(self, checked: bool) -> None:
+        state = "ON" if checked else "OFF"
+        self.btn_auto_dims.setText(f"Auto preenchimento: {state}")
+        self.btn_auto_dims.setToolTip(
+            f"{AUTO_DIMS_HELP_TEXT}\n\nEstado atual: {state}."
+        )
+
+    def _show_auto_dims_help(self) -> None:
+        QtWidgets.QMessageBox.information(self, "Ajuda", AUTO_DIMS_HELP_TEXT, QtWidgets.QMessageBox.Ok)
 
 
 class QtRulesDialog(QtWidgets.QDialog):
