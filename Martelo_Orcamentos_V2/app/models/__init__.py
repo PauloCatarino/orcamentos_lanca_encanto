@@ -21,3 +21,4 @@ from .dados_gerais import (
     DadosItemsModeloItem,
 )
 from .custeio import CusteioItem
+from .custeio_producao import CusteioProducaoConfig, CusteioProducaoValor

@@ -14,7 +14,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtUiTools import QUiLoader           # ? para carregar .ui em runtime
 from PySide6.QtCore import QFile, Qt, QItemSelectionModel, Signal
 from PySide6.QtGui import QDoubleValidator
-from PySide6.QtWidgets import QHeaderView, QMessageBox
+from PySide6.QtWidgets import QHeaderView, QMessageBox, QButtonGroup
 
 # SQLAlchemy
 from sqlalchemy import select, func
@@ -32,7 +32,9 @@ from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
+from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from ..models.qt_table import SimpleTableModel
+from ..utils.header import apply_highlight_text, init_highlight_label
 
 
 DIMENSION_KEY_ORDER: Tuple[str, ...] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
@@ -109,6 +111,7 @@ def _fmt_int(value):
 
 class ItensPage(QtWidgets.QWidget):
     item_selected = Signal(object)
+    production_mode_changed = Signal(str)
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
         self.current_user = current_user
@@ -125,14 +128,55 @@ class ItensPage(QtWidgets.QWidget):
         # ------------------------------------------------------------------
         # 2) Preparar widgets do formul?rio
         # ------------------------------------------------------------------
+        self._mode_button_group = QButtonGroup(self)
+        self._mode_button_group.setExclusive(True)
+        self._mode_button_group.addButton(self.btn_mode_std)
+        self._mode_button_group.addButton(self.btn_mode_serie)
+        self._style = self.style() or QtWidgets.QApplication.style()
+        style = self._style
+        self.btn_mode_std.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        self.btn_mode_serie.setIcon(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload))
+        self.btn_mode_std.setToolTip("Usar dados STD (standard) no custeio.")
+        self.btn_mode_serie.setToolTip("Usar dados em serie no custeio.")
+        self.btn_mode_std.clicked.connect(lambda: self._on_mode_clicked("STD"))
+        self.btn_mode_serie.clicked.connect(lambda: self._on_mode_clicked("SERIE"))
+        self._production_mode = "STD"
+        self._update_mode_buttons()
+        self.btn_add.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder))
+        self.btn_add.setToolTip("Inserir um novo item no orçamento.")
+        self.btn_save.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
+        self.btn_save.setToolTip("Gravar alterações do item selecionado.")
+        self.btn_del.setIcon(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon))
+        self.btn_del.setToolTip("Eliminar o item selecionado.")
+        self.btn_up.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp))
+        self.btn_up.setToolTip("Mover o item selecionado para cima.")
+        self.btn_dn.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+        self.btn_dn.setToolTip("Mover o item selecionado para baixo.")
+        if hasattr(self, "btn_toggle_rows"):
+            self.btn_toggle_rows.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+            self.btn_toggle_rows.setToolTip("Expandir descrições longas na tabela.")
+        if hasattr(self, "lbl_highlight"):
+            init_highlight_label(self.lbl_highlight)
+        info_labels = [
+            getattr(self, name, None)
+            for name in ("lbl_cliente_val", "lbl_num_val", "lbl_ver_val")
+        ]
+        info_labels = [lbl for lbl in info_labels if lbl is not None]
+        if info_labels:
+            value_font = info_labels[0].font()
+            value_font.setBold(True)
+            value_font.setPointSize(value_font.pointSize() + 2)
+            for lbl in info_labels:
+                lbl.setFont(value_font)
         v = QDoubleValidator(0.0, 9_999_999.0, 3, self)
         v.setNotation(QDoubleValidator.StandardNotation)
         v.setLocale(QtCore.QLocale.system())
 
-        # Validadores + alinhamento ? direita nos campos num?ricos
+        # Validadores + alinhamento à esquerda nos campos numéricos
         for w in (self.edit_altura, self.edit_largura, self.edit_profundidade, self.edit_qt):
             w.setValidator(v)
-            w.setAlignment(Qt.AlignRight)
+            w.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.edit_und.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         # C?digo em mai?sculas (mant?m cursor)
         self.edit_codigo.textEdited.connect(
@@ -252,8 +296,8 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_add.clicked.connect(self.on_new_item)
         self.btn_save.clicked.connect(self.on_save_item)
         self.btn_del.clicked.connect(self.on_del)
-        self.btn_expand.clicked.connect(self.on_expand_rows)
-        self.btn_collapse.clicked.connect(self.on_collapse_rows)
+        if hasattr(self, "btn_toggle_rows"):
+            self.btn_toggle_rows.toggled.connect(self.on_toggle_rows)
         self.btn_up.clicked.connect(lambda: self.on_move(-1))
         self.btn_dn.clicked.connect(lambda: self.on_move(1))
 
@@ -277,6 +321,11 @@ class ItensPage(QtWidgets.QWidget):
                 return _txt(v)
 
         self._orc_id = orc_id
+        cliente_nome = ""
+        ano_txt = ""
+        num_txt = ""
+        ver_txt = ""
+        username = ""
         o = self.db.get(Orcamento, orc_id)
         if o:
             cliente = self.db.get(Client, o.client_id)
@@ -285,10 +334,15 @@ class ItensPage(QtWidgets.QWidget):
                 user = self.db.get(User, getattr(self.current_user, "id", None))
             username = getattr(user, "username", "") or getattr(self.current_user, "username", "") or ""
 
-            self.lbl_cliente_val.setText(_txt(getattr(cliente, "nome", "")))
-            self.lbl_ano_val.setText(_txt(getattr(o, "ano", "")))
-            self.lbl_num_val.setText(_txt(getattr(o, "num_orcamento", "")))
-            self.lbl_ver_val.setText(_fmt_ver(getattr(o, "versao", "")))
+            cliente_nome = _txt(getattr(cliente, "nome", ""))
+            ano_txt = _txt(getattr(o, "ano", ""))
+            num_txt = _txt(getattr(o, "num_orcamento", ""))
+            ver_txt = _fmt_ver(getattr(o, "versao", ""))
+
+            self.lbl_cliente_val.setText(cliente_nome)
+            self.lbl_ano_val.setText(ano_txt)
+            self.lbl_num_val.setText(num_txt)
+            self.lbl_ver_val.setText(ver_txt)
             self.lbl_user_val.setText(_txt(username))
         else:
             self.lbl_cliente_val.setText("")
@@ -296,7 +350,17 @@ class ItensPage(QtWidgets.QWidget):
             self.lbl_num_val.setText("")
             self.lbl_ver_val.setText("")
             self.lbl_user_val.setText("")
+        if hasattr(self, "lbl_highlight"):
+            apply_highlight_text(
+                self.lbl_highlight,
+                cliente=cliente_nome or "",
+                numero=num_txt or "",
+                versao=ver_txt or "",
+                ano=ano_txt or "",
+                utilizador=username or "",
+            )
 
+        self._load_production_mode()
         self.refresh()
 
     def refresh(
@@ -348,6 +412,70 @@ class ItensPage(QtWidgets.QWidget):
 
     def _current_user_id(self) -> Optional[int]:
         return getattr(self.current_user, "id", None)
+
+    def _production_context(self) -> Optional[svc_producao.ProducaoContext]:
+        if not self._orc_id:
+            return None
+        user_id = self._current_user_id()
+        if not user_id:
+            return None
+        versao_text = (self.lbl_ver_val.text() or "").strip() or None
+        try:
+            return svc_producao.build_context(self.db, self._orc_id, user_id, versao=versao_text)
+        except Exception as exc:
+            print(f"[Itens._production_context] {exc}")
+            return None
+
+    def _update_mode_buttons(self) -> None:
+        mode = (self._production_mode or "STD").upper()
+        self.btn_mode_std.blockSignals(True)
+        self.btn_mode_serie.blockSignals(True)
+        self.btn_mode_std.setChecked(mode == "STD")
+        self.btn_mode_serie.setChecked(mode == "SERIE")
+        self.btn_mode_std.blockSignals(False)
+        self.btn_mode_serie.blockSignals(False)
+
+    def _load_production_mode(self) -> None:
+        ctx = self._production_context()
+        has_ctx = ctx is not None
+        self.btn_mode_std.setEnabled(has_ctx)
+        self.btn_mode_serie.setEnabled(has_ctx)
+        mode = "STD"
+        if ctx is not None:
+            try:
+                mode = svc_producao.get_mode(self.db, ctx)
+            except Exception as exc:
+                print(f"[Itens._load_production_mode] {exc}")
+                mode = "STD"
+        if mode not in {"STD", "SERIE"}:
+            mode = "STD"
+        self._production_mode = mode
+        self._update_mode_buttons()
+        self.production_mode_changed.emit(mode)
+
+    def _on_mode_clicked(self, mode: str) -> None:
+        mode_norm = (mode or "").upper()
+        if mode_norm not in {"STD", "SERIE"}:
+            self._update_mode_buttons()
+            return
+        ctx = self._production_context()
+        if ctx is None:
+            QMessageBox.information(self, "Aviso", "Selecione um orcamento antes de alterar o modo produtivo.")
+            self._update_mode_buttons()
+            return
+        if mode_norm == (self._production_mode or "").upper():
+            self._update_mode_buttons()
+            return
+        try:
+            svc_producao.set_mode(self.db, ctx, mode_norm)
+            self.db.commit()
+            self._production_mode = mode_norm
+            self.production_mode_changed.emit(mode_norm)
+        except Exception as exc:
+            self.db.rollback()
+            QMessageBox.critical(self, "Erro", f"Falha ao definir modo de producao: {exc}")
+        finally:
+            self._update_mode_buttons()
 
     def _parse_decimal(self, text: Optional[str], *, default: Optional[Decimal] = None) -> Optional[Decimal]:
         if text is None:
@@ -492,13 +620,22 @@ class ItensPage(QtWidgets.QWidget):
         frame_layout.setSpacing(0)
         frame_layout.addWidget(self.dimensions_table)
 
-        if hasattr(self, "verticalLayoutMain"):
+        added = False
+        if hasattr(self, "dimensions_placeholder_layout"):
+            placeholder = self.dimensions_placeholder_layout
+            if isinstance(placeholder, QtWidgets.QLayout):
+                placeholder.addWidget(self.dimensions_frame)
+                added = True
+        if not added and hasattr(self, "verticalLayoutMain"):
             layout: QtWidgets.QVBoxLayout = self.verticalLayoutMain
             table_index = layout.indexOf(self.table)
             if table_index == -1:
                 layout.addWidget(self.dimensions_frame)
             else:
                 layout.insertWidget(table_index, self.dimensions_frame)
+            added = True
+
+        if added:
             self._configure_main_layout_stretch()
 
         self._set_dimensions_enabled(False)
@@ -728,6 +865,7 @@ class ItensPage(QtWidgets.QWidget):
         if self.model.rowCount():
             for r in range(self.model.rowCount()):
                 vh.resizeSection(r, h)
+        self._update_toggle_rows_button(getattr(self, "_rows_expanded", False))
 
     def _clear_table_selection(self):
         sm = self.table.selectionModel()
@@ -736,6 +874,22 @@ class ItensPage(QtWidgets.QWidget):
         blocker = QtCore.QSignalBlocker(sm)
         sm.clearSelection()
         sm.setCurrentIndex(QtCore.QModelIndex(), QItemSelectionModel.Clear)
+
+    def _update_toggle_rows_button(self, expanded: bool) -> None:
+        if not hasattr(self, "btn_toggle_rows"):
+            return
+        style = self._style or self.style() or QtWidgets.QApplication.style()
+        blocker = QtCore.QSignalBlocker(self.btn_toggle_rows)
+        self.btn_toggle_rows.setChecked(expanded)
+        del blocker
+        if expanded:
+            self.btn_toggle_rows.setText("Colapsar")
+            self.btn_toggle_rows.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp))
+            self.btn_toggle_rows.setToolTip("Reduzir altura das linhas com descrições longas.")
+        else:
+            self.btn_toggle_rows.setText("Expandir")
+            self.btn_toggle_rows.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+            self.btn_toggle_rows.setToolTip("Expandir descrições longas na tabela.")
 
     # ==========================================================================
     # Fluxo: novo/selec??o/guardar/eliminar/mover
@@ -870,6 +1024,7 @@ class ItensPage(QtWidgets.QWidget):
             if target_id:
                 print(f"[Itens.on_save_item] emit target_id={target_id}")
                 self.item_selected.emit(target_id)
+            self.production_mode_changed.emit(self._production_mode)
             self._prepare_next_item()
 
         except Exception as e:
@@ -907,9 +1062,19 @@ class ItensPage(QtWidgets.QWidget):
         self.refresh(select_row=row)
 
     def on_expand_rows(self):
-        self._rows_expanded = True
-        self._apply_row_height()
+        if hasattr(self, "btn_toggle_rows"):
+            self.btn_toggle_rows.setChecked(True)
+        else:
+            self._rows_expanded = True
+            self._apply_row_height()
 
     def on_collapse_rows(self):
-        self._rows_expanded = False
+        if hasattr(self, "btn_toggle_rows"):
+            self.btn_toggle_rows.setChecked(False)
+        else:
+            self._rows_expanded = False
+            self._apply_row_height()
+
+    def on_toggle_rows(self, checked: bool):
+        self._rows_expanded = checked
         self._apply_row_height()

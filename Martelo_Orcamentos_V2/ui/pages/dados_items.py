@@ -11,6 +11,7 @@ from Martelo_Orcamentos_V2.app.services import dados_items as svc_di
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 
 from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
+from ..utils.header import apply_highlight_text, init_highlight_label
 
 
 def _extract_rows_from_payload(
@@ -61,19 +62,24 @@ class DadosItemsPage(DadosGeraisPage):
 
         column_span = max(1, grid.columnCount())
 
+        if not hasattr(self, "lbl_highlight"):
+            self.lbl_highlight = QtWidgets.QLabel("")
+            init_highlight_label(self.lbl_highlight)
+        grid.addWidget(self.lbl_highlight, 1, 0, 1, column_span)
+
         self.lbl_item_description = QtWidgets.QLabel("-")
         self.lbl_item_description.setWordWrap(True)
         self.lbl_item_description.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
 
-        grid.addWidget(self.lbl_item_description, 1, 0, 1, column_span)
+        grid.addWidget(self.lbl_item_description, 2, 0, 1, column_span)
 
         if self._dimensions_layout is not None:
             grid.removeItem(self._dimensions_layout)
-            grid.addLayout(self._dimensions_layout, 2, 0, 1, column_span)
+            grid.addLayout(self._dimensions_layout, 3, 0, 1, column_span)
 
         if self._info_pairs_layout is not None:
             grid.removeItem(self._info_pairs_layout)
-            grid.addLayout(self._info_pairs_layout, 3, 0, 1, column_span)
+            grid.addLayout(self._info_pairs_layout, 4, 0, 1, column_span)
             self._info_pairs_layout.setSpacing(18)
 
         captions = (self._dimension_labels or {}).get("captions", [])
@@ -114,6 +120,7 @@ class DadosItemsPage(DadosGeraisPage):
             self.lbl_title.setText(self.page_title)
             self.lbl_item_description.setText("-")
             self._update_dimensions_labels(visible=False)
+            self._update_highlight_banner()
             return
 
         try:
@@ -126,6 +133,7 @@ class DadosItemsPage(DadosGeraisPage):
             return
 
         self._update_item_header(item_id)
+        self._update_highlight_banner()
 
     def _reset_tables(self) -> None:
         for model in self.models.values():
@@ -135,6 +143,26 @@ class DadosItemsPage(DadosGeraisPage):
         self._update_dimensions_labels(visible=False)
 
         self.lbl_item_description.setText("-")
+
+        self._update_highlight_banner()
+
+    def _update_highlight_banner(self) -> None:
+        label = getattr(self, "lbl_highlight", None)
+        if label is None:
+            return
+
+        def _clean(lbl: QtWidgets.QLabel) -> str:
+            text = (lbl.text() or "").strip()
+            return "" if text in {"", "-"} else text
+
+        apply_highlight_text(
+            label,
+            cliente=_clean(self.lbl_cliente),
+            numero=_clean(self.lbl_num),
+            versao=_clean(self.lbl_ver),
+            ano=_clean(self.lbl_ano),
+            utilizador=_clean(self.lbl_utilizador),
+        )
 
 
 

@@ -16,6 +16,8 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 
 
+
+
 # para testar ->                                        python -m Martelo_Orcamentos_V2.run_dev                  
 
 
@@ -30,7 +32,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "375"
+git commit -m "376"
 git push origin main
 
 '''
@@ -44,7 +46,8 @@ git push origin main
 def main():
     app = QtWidgets.QApplication(sys.argv)
     init_db()
-    login = LoginDialog()
+    # Auto-login para agilizar os testes; remover quando deixar de ser necessário.
+    login = LoginDialog(auto_user="admin", auto_password="admin123", auto_submit=True)
     if login.exec() == QtWidgets.QDialog.Accepted:
         mw = MainWindow(current_user=login.current_user)
         mw.showMaximized()

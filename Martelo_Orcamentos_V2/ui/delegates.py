@@ -1,4 +1,4 @@
-﻿from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
 
 
@@ -14,11 +14,13 @@ class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
         super().paint(painter, option, index)
 
     def createEditor(self, parent, option, index):
-        editor = super().createEditor(parent, option, index)
-        column_kind = None
         model = index.model()
+        column_kind = None
         if hasattr(model, "columns") and 0 <= index.column() < len(model.columns):
             column_kind = getattr(model.columns[index.column()], "kind", None)
+        if column_kind == "bool":
+            return None
+        editor = super().createEditor(parent, option, index)
         if isinstance(editor, QtWidgets.QLineEdit):
             if column_kind in {"money", "decimal", "percent", "integer"}:
                 editor.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

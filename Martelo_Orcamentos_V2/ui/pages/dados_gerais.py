@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 
 
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 
 
@@ -151,6 +151,8 @@ from Martelo_Orcamentos_V2.app.services import user_layouts
 
 
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
+
+from ..utils.header import apply_highlight_text, init_highlight_label
 
 
 
@@ -870,25 +872,10 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
             if spec.kind in {"money", "decimal", "percent", "integer"}:
-
-
-
-                if spec.field in {"comp_mp", "larg_mp", "esp_mp"}:
-
-
-
+                if spec.field in self.CENTER_ALIGN_FIELDS:
                     return int(Qt.AlignCenter | Qt.AlignVCenter)
-
-
-
                 return int(Qt.AlignRight | Qt.AlignVCenter)
-
-
-
             if spec.kind == "bool":
-
-
-
                 return int(Qt.AlignCenter | Qt.AlignVCenter)
 
 
@@ -909,23 +896,35 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-        if role != Qt.DisplayRole:
+        if orientation == Qt.Horizontal:
 
 
 
-            return None
+            if role == Qt.FontRole:
 
 
 
-        if orientation == Qt.Horizontal and 0 <= section < len(self.columns):
+                font = QtGui.QFont()
 
 
 
-            return self.columns[section].header
+                font.setBold(True)
 
 
 
-        if orientation == Qt.Vertical:
+                return font
+
+
+
+            if role == Qt.DisplayRole and 0 <= section < len(self.columns):
+
+
+
+                return self.columns[section].header
+
+
+
+        if orientation == Qt.Vertical and role == Qt.DisplayRole:
 
 
 
@@ -934,8 +933,6 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
         return None
-
-
 
 
 
@@ -967,13 +964,6 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
             base |= Qt.ItemIsUserCheckable
 
-
-
-            if not spec.readonly:
-
-
-
-                base |= Qt.ItemIsEditable
 
 
 
@@ -1017,15 +1007,23 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-        if spec.kind == "bool" and role == Qt.CheckStateRole:
+        if spec.kind == "bool" and role in (Qt.CheckStateRole, Qt.EditRole):
 
 
 
-            row[spec.field] = bool(value == Qt.Checked)
+            current = bool(row.get(spec.field))
 
 
 
-            self.dataChanged.emit(index, index, [Qt.CheckStateRole, Qt.DisplayRole])
+            new_value = not current if role == Qt.EditRole else bool(value == Qt.Checked)
+
+
+
+            row[spec.field] = new_value
+
+
+
+            self.dataChanged.emit(index, index, [Qt.CheckStateRole, Qt.DisplayRole, Qt.EditRole])
 
 
 
@@ -2219,6 +2217,11 @@ class DadosGeraisPage(QtWidgets.QWidget):
         "file":         QtWidgets.QStyle.SP_FileIcon,
     }
 
+    CENTER_ALIGN_FIELDS = {
+        "preco_tab", "preco_liq", "margem", "desconto", "und", "desp",
+        "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp",
+    }
+
     COLUMN_DEFAULT_WIDTHS: Dict[str, int] = {
         "grupo_material": 180,
         "grupo_ferragem": 180,
@@ -2227,19 +2230,19 @@ class DadosGeraisPage(QtWidgets.QWidget):
         "descricao": 200,
         "ref_le": 120,
         "descricao_material": 320,
-        "preco_tab": 110,
-        "preco_liq": 120,
-        "margem": 90,
-        "desconto": 90,
-        "und": 70,
-        "desp": 90,
+        "preco_tab": 90,
+        "preco_liq": 100,
+        "margem": 80,
+        "desconto": 80,
+        "und": 60,
+        "desp": 80,
         "tipo": 140,
         "familia": 150,
-        "comp_mp": 110,
-        "larg_mp": 110,
-        "esp_mp": 110,
-        "orl_0_4": 100,
-        "orl_1_0": 100,
+        "comp_mp": 90,
+        "larg_mp": 90,
+        "esp_mp": 85,
+        "orl_0_4": 85,
+        "orl_1_0": 85,
         "id_mp": 90,
         "nao_stock": 95,
     }
@@ -2470,19 +2473,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
     def _default_info_pairs(self) -> List[Tuple[str, QtWidgets.QLabel]]:
 
-        return [
-
-            ("Cliente:", self.lbl_cliente),
-
-            ("Utilizador:", self.lbl_utilizador),
-
-            ("Ano:", self.lbl_ano),
-
-            ("N.º Orçamento:", self.lbl_num),
-
-            ("Versão:", self.lbl_ver),
-
-        ]
+        return []
 
 
 
@@ -2530,6 +2521,10 @@ class DadosGeraisPage(QtWidgets.QWidget):
         if not table or not model:
             return
         header = table.horizontalHeader()
+        header_font = header.font()
+        if not header_font.bold():
+            header_font.setBold(True)
+            header.setFont(header_font)
         header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         saved_widths = self._column_layout_cache.get(key, {})
         self._layout_blocking_keys.add(key)
@@ -2698,9 +2693,13 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         self.lbl_ver = QLabel("-")
 
+        self.lbl_highlight = QLabel("")
+        init_highlight_label(self.lbl_highlight)
+
 
 
         grid.addWidget(self.lbl_title, 0, 0, 1, 4)
+        grid.addWidget(self.lbl_highlight, 1, 0, 1, 6)
 
 
 
@@ -2766,7 +2765,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        grid.addLayout(self._info_pairs_layout, 1, 0, 1, 6)
+        grid.addLayout(self._info_pairs_layout, 2, 0, 1, 6)
 
 
 
@@ -2824,7 +2823,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
-        grid.addLayout(self._dimensions_layout, 2, 0, 1, 6)
+        grid.addLayout(self._dimensions_layout, 3, 0, 1, 6)
 
 
 
@@ -3494,70 +3493,42 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         orc: Orcamento = self.session.get(Orcamento, orcamento_id)
 
+        cliente_nome = ""
+        ano_text = ""
+        numero_text = ""
+        versao_text = ""
+        username = getattr(self.current_user, "username", None) or ""
 
+        if orc:
+            cliente: Optional[Client] = self.session.get(Client, orc.client_id) if orc.client_id else None
+            user: Optional[User] = self.session.get(User, orc.created_by) if orc.created_by else None
 
-        if not orc:
+            cliente_nome = (getattr(cliente, "nome", "") or "").strip()
+            ano_val = getattr(orc, "ano", "")
+            ano_text = str(ano_val).strip() if ano_val is not None else ""
+            numero_text = str(getattr(orc, "num_orcamento", "") or "")
+            versao_raw = getattr(orc, "versao", "")
+            try:
+                versao_text = f"{int(versao_raw):02d}"
+            except Exception:
+                versao_text = str(versao_raw or "")
+            username = getattr(user, "username", None) or username
 
+        self.lbl_cliente.setText(cliente_nome or "-")
+        self.lbl_ano.setText(ano_text or "-")
+        self.lbl_num.setText(numero_text or "-")
+        self.lbl_ver.setText(versao_text or "-")
+        self.lbl_utilizador.setText(username or "-")
 
-
-            return
-
-
-
-        cliente: Optional[Client] = self.session.get(Client, orc.client_id) if orc.client_id else None
-
-
-
-        user: Optional[User] = self.session.get(User, orc.created_by) if orc.created_by else None
-
-
-
-        self.lbl_cliente.setText(getattr(cliente, "nome", "-") or "-")
-
-
-
-        self.lbl_ano.setText(str(getattr(orc, "ano", "") or "-"))
-
-
-
-        self.lbl_num.setText(str(getattr(orc, "num_orcamento", "") or "-"))
-
-
-
-        versao = getattr(orc, "versao", "")
-
-
-
-        try:
-
-
-
-            versao = f"{int(versao):02d}"
-
-
-
-        except Exception:
-
-
-
-            versao = str(versao or "")
-
-
-
-        self.lbl_ver.setText(versao or "-")
-
-
-
-        username = getattr(user, "username", None) or getattr(self.current_user, "username", None) or "-"
-
-
-
-        self.lbl_utilizador.setText(username)
-
-
-
-
-
+        if hasattr(self, "lbl_highlight"):
+            apply_highlight_text(
+                self.lbl_highlight,
+                cliente=cliente_nome,
+                numero=numero_text,
+                versao=versao_text,
+                ano=ano_text,
+                utilizador=username,
+            )
 
 
     def _carregar_tipos_familias(self) -> None:

@@ -1,11 +1,11 @@
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.models import User
 from Martelo_Orcamentos_V2.app.security import verify_password
 
 
 class LoginDialog(QtWidgets.QDialog):
-    def __init__(self):
+    def __init__(self, auto_user=None, auto_password=None, auto_submit=False):
         super().__init__()
         self.setWindowTitle("Entrar • Martelo V2")
         self.current_user = None
@@ -18,6 +18,12 @@ class LoginDialog(QtWidgets.QDialog):
         btns.accepted.connect(self.try_login)
         btns.rejected.connect(self.reject)
         layout.addRow(btns)
+        if auto_user is not None:
+            self.ed_user.setText(auto_user)
+        if auto_password is not None:
+            self.ed_pass.setText(auto_password)
+        if auto_submit and auto_user and auto_password:
+            QtCore.QTimer.singleShot(0, self.try_login)
 
     def try_login(self):
         username = self.ed_user.text().strip()

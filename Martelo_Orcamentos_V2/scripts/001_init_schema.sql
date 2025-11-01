@@ -392,6 +392,42 @@ CREATE TABLE IF NOT EXISTS dados_items_modelos (
   CONSTRAINT fk_di_model_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS custeio_producao_config (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  orcamento_id BIGINT NOT NULL,
+  cliente_id BIGINT NULL,
+  user_id BIGINT NULL,
+  ano VARCHAR(4) NOT NULL,
+  num_orcamento VARCHAR(16) NOT NULL,
+  versao VARCHAR(4) NOT NULL,
+  modo VARCHAR(8) NOT NULL DEFAULT 'STD',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT u_custeio_producao_config_ctx UNIQUE (orcamento_id, versao, user_id),
+  CONSTRAINT fk_cpc_orcamento FOREIGN KEY (orcamento_id)
+    REFERENCES orcamentos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cpc_cliente FOREIGN KEY (cliente_id)
+    REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_cpc_user FOREIGN KEY (user_id)
+    REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS custeio_producao_valores (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  config_id BIGINT NOT NULL,
+  descricao_equipamento VARCHAR(128) NOT NULL,
+  abreviatura VARCHAR(16) NOT NULL,
+  valor_std DECIMAL(18,4) NOT NULL DEFAULT 0,
+  valor_serie DECIMAL(18,4) NOT NULL DEFAULT 0,
+  resumo VARCHAR(255) NULL,
+  ordem INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_cpp_config FOREIGN KEY (config_id)
+    REFERENCES custeio_producao_config(id) ON DELETE CASCADE,
+  CONSTRAINT u_custeio_producao_valor_desc UNIQUE (config_id, descricao_equipamento)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS dados_items_modelo_items (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   modelo_id BIGINT NOT NULL,

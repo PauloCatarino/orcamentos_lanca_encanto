@@ -453,6 +453,16 @@ TREE_DEFINITION: List[TreeNode] = [
         ],
     },
     {
+        "label": "SERVICOS",
+        "children": [
+            {"label": "MAO OBRA (Min)"},
+            {"label": "CNC (Min)"},
+            {"label": "CNC (5 Min)"},
+            {"label": "CNC (15 Min)"},
+            {"label": "COLAGEM SANDWICH (M2)"},
+        ],
+    },
+    {
         "label": "FERRAGENS",
         "children": [
             {

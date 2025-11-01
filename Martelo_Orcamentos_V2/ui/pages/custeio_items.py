@@ -25,6 +25,7 @@ from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
+from ..utils.header import apply_highlight_text, init_highlight_label
 
 
 
@@ -3122,15 +3123,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+        self.lbl_highlight = QtWidgets.QLabel("")
+        init_highlight_label(self.lbl_highlight)
+        header_layout.addWidget(self.lbl_highlight)
+
         self.lbl_descr = QtWidgets.QLabel("-")
-
         self.lbl_descr.setWordWrap(True)
-
         self.lbl_descr.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
-
         header_layout.addWidget(self.lbl_descr)
-
-
 
         self.lbl_cliente = QtWidgets.QLabel("-")
 
@@ -3173,38 +3173,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
         dims_layout.addStretch(1)
 
         header_layout.addLayout(dims_layout)
-
-
-
-        info_layout = QtWidgets.QHBoxLayout()
-
-        info_layout.setSpacing(16)
-
-        for caption, widget in [
-
-            ("Cliente:", self.lbl_cliente),
-
-            ("Utilizador:", self.lbl_utilizador),
-
-            ("Ano:", self.lbl_ano),
-
-            ("Num. Orcamento:", self.lbl_num),
-
-            ("Versao:", self.lbl_ver),
-
-        ]:
-
-            label = QtWidgets.QLabel(caption)
-
-            info_layout.addWidget(label)
-
-            info_layout.addWidget(widget)
-
-            info_layout.addSpacing(8)
-
-        info_layout.addStretch(1)
-
-        header_layout.addLayout(info_layout)
 
 
 
@@ -3275,23 +3243,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
-        self.btn_expand = QtWidgets.QToolButton()
-
-        self.btn_expand.setText("Expandir")
-
-        self.btn_expand.clicked.connect(self._on_expand_all)
-
-        controls_layout.addWidget(self.btn_expand)
-
-
-
-        self.btn_collapse = QtWidgets.QToolButton()
-
-        self.btn_collapse.setText("Colapsar")
-
-        self.btn_collapse.clicked.connect(self._on_collapse_all)
-
-        controls_layout.addWidget(self.btn_collapse)
+        style = self.style() or QtWidgets.QApplication.style()
+        self.btn_toggle_tree = QtWidgets.QToolButton()
+        self.btn_toggle_tree.setText("Expandir")
+        self.btn_toggle_tree.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+        self.btn_toggle_tree.setCheckable(True)
+        self.btn_toggle_tree.setToolTip("Expandir todos os grupos")
+        self.btn_toggle_tree.toggled.connect(self._on_toggle_tree_expansion)
+        controls_layout.addWidget(self.btn_toggle_tree)
 
 
 
@@ -3741,6 +3700,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.proxy_model.invalidate()
 
         self.tree.expandToDepth(0)
+        self._update_tree_toggle_button(False)
 
 
 
@@ -3853,43 +3813,47 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     def _apply_orcamento_header(self, orcamento: Optional[Orcamento]) -> None:
 
-        if not orcamento:
+        cliente_nome = ""
+        ano_text = ""
+        numero_text = ""
+        versao_text = ""
+        utilizador = ""
 
-            self.lbl_cliente.setText("-")
+        if orcamento:
+            cliente_nome = (
+                svc_custeio.obter_cliente_nome(self.session, getattr(orcamento, "client_id", None)) or ""
+            )
+            utilizador = (
+                svc_custeio.obter_user_nome(
+                    self.session,
+                    getattr(orcamento, "updated_by", None) or getattr(orcamento, "created_by", None),
+                )
+                or ""
+            )
+            ano_raw = getattr(orcamento, "ano", "")
+            ano_text = str(ano_raw).strip() if ano_raw not in (None, "") else ""
+            numero_text = str(getattr(orcamento, "num_orcamento", "") or "")
+            versao_raw = getattr(orcamento, "versao", "")
+            try:
+                versao_text = f"{int(versao_raw):02d}"
+            except Exception:
+                versao_text = str(versao_raw or "")
 
-            self.lbl_utilizador.setText("-")
+        self.lbl_cliente.setText(cliente_nome or "-")
+        self.lbl_utilizador.setText(utilizador or "-")
+        self.lbl_ano.setText(ano_text or "-")
+        self.lbl_num.setText(numero_text or "-")
+        self.lbl_ver.setText(versao_text or "-")
 
-            self.lbl_ano.setText("-")
-
-            self.lbl_num.setText("-")
-
-            self.lbl_ver.setText("-")
-
-            return
-
-
-
-        self.lbl_cliente.setText(
-
-            svc_custeio.obter_cliente_nome(self.session, getattr(orcamento, "client_id", None))
-
-        )
-
-        user_name = svc_custeio.obter_user_nome(
-
-            self.session,
-
-            getattr(orcamento, "updated_by", None) or getattr(orcamento, "created_by", None),
-
-        )
-
-        self.lbl_utilizador.setText(user_name)
-
-        self.lbl_ano.setText(str(getattr(orcamento, "ano", "-") or "-"))
-
-        self.lbl_num.setText(str(getattr(orcamento, "num_orcamento", "-") or "-"))
-
-        self.lbl_ver.setText(str(getattr(orcamento, "versao", "-") or "-"))
+        if hasattr(self, "lbl_highlight"):
+            apply_highlight_text(
+                self.lbl_highlight,
+                cliente=cliente_nome,
+                numero=numero_text,
+                versao=versao_text,
+                ano=ano_text,
+                utilizador=utilizador,
+            )
 
 
 
@@ -3950,18 +3914,39 @@ class CusteioItemsPage(QtWidgets.QWidget):
     # ------------------------------------------------------------------ Slots
 
     def _on_expand_all(self) -> None:
-
         self.tree.expandAll()
-
-
+        self._update_tree_toggle_button(True)
 
     def _on_collapse_all(self) -> None:
-
         self.tree.collapseAll()
+        self._update_tree_toggle_button(False)
 
-        self.tree.expandToDepth(0)
+    def _on_toggle_tree_expansion(self, checked: bool) -> None:
+        if checked:
+            self._on_expand_all()
+        else:
+            self._on_collapse_all()
+        self._update_tree_toggle_button(checked)
 
-
+    def _update_tree_toggle_button(self, expanded: Optional[bool] = None) -> None:
+        if not hasattr(self, "btn_toggle_tree"):
+            return
+        style = self.style() or QtWidgets.QApplication.style()
+        if expanded is None:
+            expanded = self.btn_toggle_tree.isChecked()
+        else:
+            if self.btn_toggle_tree.isChecked() != expanded:
+                blocker = QtCore.QSignalBlocker(self.btn_toggle_tree)
+                self.btn_toggle_tree.setChecked(expanded)
+                del blocker
+        if expanded:
+            self.btn_toggle_tree.setText("Colapsar")
+            self.btn_toggle_tree.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp))
+            self.btn_toggle_tree.setToolTip("Colapsar todos os grupos")
+        else:
+            self.btn_toggle_tree.setText("Expandir")
+            self.btn_toggle_tree.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+            self.btn_toggle_tree.setToolTip("Expandir todos os grupos")
 
     def _on_selected_only_toggled(self, checked: bool) -> None:
 
@@ -3972,6 +3957,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if not checked:
 
             self.tree.expandToDepth(0)
+            self._update_tree_toggle_button(False)
+        else:
+            self._update_tree_toggle_button(True)
 
 
 
