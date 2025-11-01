@@ -667,18 +667,32 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
     if field in types["decimal"]:
         return _ensure_decimal(value)
     if field in types["bool"]:
-        if isinstance(value, str):
-            normalized = _strip_accents(value).strip().lower()
-            if normalized in ("true", "sim", "yes", "1"):
-                return True
-            if normalized in ("false", "nao", "no", "0"):
-                return False
-        if isinstance(value, (int, float, Decimal)):
-            try:
-                return bool(Decimal(str(value)))
-            except Exception:
-                return False
-        return bool(value)
+        if field == "nao_stock":  # Tratamento especial para nao_stock
+            if isinstance(value, str):
+                normalized = _strip_accents(value).strip().lower()
+                if normalized in ("true", "sim", "yes", "1"):
+                    return 1
+                if normalized in ("false", "nao", "no", "0"):
+                    return 0
+            if isinstance(value, (int, float, Decimal)):
+                try:
+                    return 1 if bool(Decimal(str(value))) else 0
+                except Exception:
+                    return 0
+            return 1 if bool(value) else 0
+        else:
+            if isinstance(value, str):
+                normalized = _strip_accents(value).strip().lower()
+                if normalized in ("true", "sim", "yes", "1"):
+                    return True
+                if normalized in ("false", "nao", "no", "0"):
+                    return False
+            if isinstance(value, (int, float, Decimal)):
+                try:
+                    return bool(Decimal(str(value)))
+                except Exception:
+                    return False
+            return bool(value)
     return value
 
 

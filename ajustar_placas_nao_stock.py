@@ -43,7 +43,7 @@ def ajustar_placas_nao_stock(dados_pecas: pd.DataFrame, resumo_placas: pd.DataFr
     print("\nInício do workflow Martelo: Ajuste Placas Não Stock")
     linhas_ajustadas = []
     for idx, row in resumo_placas.iterrows():
-        if str(row.get('nao_stock', '')) == '✓':
+        if int(row.get('nao_stock', 0)) == 1:
             # Quantidade de placas inteiras e área total de placas
             area_pecas = float(row.get('m2_total_pecas', 0))
             area_placa = float(row['area_placa'])

@@ -1,12 +1,8 @@
 ﻿from __future__ import annotations
 
-
-
-
-
-
-
 from dataclasses import dataclass
+
+from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
 import json  # usado em _copy_rows
 from collections import deque
 
@@ -872,8 +868,6 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
             if spec.kind in {"money", "decimal", "percent", "integer"}:
-                if spec.field in self.CENTER_ALIGN_FIELDS:
-                    return int(Qt.AlignCenter | Qt.AlignVCenter)
                 return int(Qt.AlignRight | Qt.AlignVCenter)
             if spec.kind == "bool":
                 return int(Qt.AlignCenter | Qt.AlignVCenter)
@@ -967,6 +961,9 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
+
+
+
         elif not spec.readonly:
 
 
@@ -1007,15 +1004,19 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-        if spec.kind == "bool" and role in (Qt.CheckStateRole, Qt.EditRole):
+        if spec.kind == "bool" and role == Qt.CheckStateRole:
 
 
 
-            current = bool(row.get(spec.field))
+            new_value = bool(value == Qt.Checked)
 
 
 
-            new_value = not current if role == Qt.EditRole else bool(value == Qt.Checked)
+            if row.get(spec.field) == new_value:
+
+
+
+                return True
 
 
 
@@ -1023,7 +1024,7 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-            self.dataChanged.emit(index, index, [Qt.CheckStateRole, Qt.DisplayRole, Qt.EditRole])
+            self.dataChanged.emit(index, index, [Qt.CheckStateRole, Qt.DisplayRole])
 
 
 

@@ -589,7 +589,8 @@ def guardar_por_tabela(parent, nome_tabela, table_widget, mapping, col_names_db)
                 item = table_widget.item(row, col_ui)
                 if campo_bd == 'nao_stock':
                     valor_final = 1 if (item and item.checkState() == Qt.Checked) else 0
-                    valor_str = ""
+                    dados_linha[campo_bd] = valor_final  # Adiciona diretamente ao dicionário
+                    continue  # Pula o resto do processamento para este campo
                 else:
                     valor_str = item.text() if item else ""
 

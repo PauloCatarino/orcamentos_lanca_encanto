@@ -26,6 +26,7 @@ from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
+from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
 
 
 
@@ -1687,7 +1688,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
 
         if spec["type"] == "bool":
-
             flags |= QtCore.Qt.ItemIsUserCheckable
 
         elif spec.get("editable", False):
@@ -3400,6 +3400,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_view = CusteioTableView()
 
+        self.table_view.setItemDelegate(DadosGeraisDelegate(self.table_view))
         self.table_view.setModel(self.table_model)
 
         self.table_view.setAlternatingRowColors(True)
@@ -4881,7 +4882,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
                 updates,
 
-                skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp", "mps", "mo", "orla", "blk", "mat_default", "nst"),
+                skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp", "mps", "mo", "orla", "blk", "mat_default"),
 
             )
 

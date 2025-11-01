@@ -8,6 +8,10 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
+
+from Martelo_Orcamentos_V2.app.services.bool_converter import bool_to_int, int_to_bool
+
 from Martelo_Orcamentos_V2.app.models import (
     Client,
     Orcamento,

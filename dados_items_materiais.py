@@ -198,6 +198,16 @@ def escolher_material_item(ui, linha_tab):
 # Callback de edição e cálculo dos valores (ajustado)
 ########################################
 def on_item_changed_items_materiais(item):
+    table = item.tableWidget()
+    col = item.column()
+    
+    # Se for o checkbox não_stock (coluna 21), salvar imediatamente o estado
+    if col == 21 and item.flags() & Qt.ItemIsUserCheckable:
+        print("[DEBUG] Salvando estado do checkbox nao_stock...")
+        is_checked = item.checkState() == Qt.Checked
+        print(f"[DEBUG] Valor do checkbox: {is_checked}")
+        guardar_dados_item_orcamento_tab_material(table.parent())
+        return
     """
     Callback disparado quando o usuário altera alguma célula na Tab_Material_11.
     Recalcula o 'pliq' (preço líquido) caso as colunas relevantes (ptab, desc1_plus,
@@ -456,6 +466,14 @@ def configurar_tabela_material(parent):
     if chk_idx is not None:
         # Guarda numa propriedade da própria QTableWidget
         tabela.setProperty("checkbox_columns", {chk_idx})
+        # Inicializa a coluna checkbox para todas as linhas
+        for r in range(tabela.rowCount()):
+            item = tabela.item(r, chk_idx)
+            if not item:
+                item = QTableWidgetItem()
+                item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                item.setCheckState(Qt.Unchecked)
+                tabela.setItem(r, chk_idx, item)
 
     # Lista das colunas que entram no copiar/colar
     nomes_para_copiar = [
@@ -655,19 +673,35 @@ def guardar_dados_item_orcamento_tab_material(parent):
 
             widget = tabela.cellWidget(r, col_ui)
             cell = None
+            valor_final = None
+            
             if isinstance(widget, QComboBox):
                 valor_str = widget.currentText().strip()
+                valor_final = valor_str if valor_str else None
             else:
                 cell = tabela.item(r, col_ui)
-                valor_str = cell.text().strip() if cell else ""
-            valor_final = None
-            if key_db == 'nao_stock':
-                valor_final = 1 if (cell and cell.checkState() == Qt.Checked) else 0
-            elif key_db in campos_moeda:
-                try: valor_final = converter_texto_para_valor(valor_str, "moeda") if valor_str else None
-                except: valor_final = None
-            elif key_db in campos_percentual:
-                try: valor_final = converter_texto_para_valor(valor_str, "percentual") if valor_str else None
+                if key_db == 'nao_stock':
+                    if cell:
+                        is_checked = cell.checkState() == Qt.Checked
+                        valor_final = 1 if is_checked else 0
+                        print(f"[DEBUG] Salvando nao_stock: checkbox={is_checked}, valor={valor_final}")
+                    else:
+                        valor_final = 0
+                        print("[DEBUG] Célula nao_stock não encontrada, usando valor padrão 0")
+                else:
+                    valor_str = cell.text().strip() if cell else ""
+                    if key_db in campos_moeda:
+                        try:
+                            valor_final = converter_texto_para_valor(valor_str, "moeda") if valor_str else None
+                        except:
+                            valor_final = None
+                    elif key_db in campos_percentual:
+                        try:
+                            valor_final = converter_texto_para_valor(valor_str, "percentual") if valor_str else None
+                        except:
+                            valor_final = None
+                    else:
+                        valor_final = valor_str if valor_str else None
                 except: valor_final = None
             else: valor_final = valor_str if valor_str else None
             dados_linha[key_db] = valor_final
@@ -701,6 +735,9 @@ def guardar_dados_item_orcamento_tab_material(parent):
             query_insert = f"INSERT INTO dados_items_materiais ({', '.join(col_names_db)}) VALUES ({placeholders})"
             for row_data in dados_para_salvar:
                 try:
+                    print(f"\n[DEBUG] Dados a inserir:")
+                    for col, val in zip(col_names_db, row_data):
+                        print(f"  {col}: {val}")
                     cursor_insert.execute(query_insert, row_data)
                     linhas_inseridas += 1
                 except mysql.connector.Error as insert_err:

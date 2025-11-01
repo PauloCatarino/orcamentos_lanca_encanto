@@ -30,6 +30,19 @@ class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
         return editor
 
     def editorEvent(self, event, model, option, index):
+        if index.flags() & Qt.ItemIsUserCheckable:
+            if event.type() == QtCore.QEvent.Type.MouseButtonPress and option.rect.contains(event.pos()):
+                current = model.data(index, Qt.CheckStateRole)
+                new_state = Qt.Unchecked if current == Qt.Checked else Qt.Checked
+                model.setData(index, new_state, Qt.CheckStateRole)
+                return True
+            if event.type() == QtCore.QEvent.Type.MouseButtonRelease and option.rect.contains(event.pos()):
+                return True
+            if event.type() == QtCore.QEvent.Type.KeyPress and event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
+                current = model.data(index, Qt.CheckStateRole)
+                new_state = Qt.Unchecked if current == Qt.Checked else Qt.Checked
+                model.setData(index, new_state, Qt.CheckStateRole)
+                return True
         if (
             event.type() == QtCore.QEvent.Type.MouseButtonPress
             and not (index.flags() & Qt.ItemIsUserCheckable)
