@@ -172,6 +172,8 @@ def _coerce(menu: str, field: str, value: Any) -> Any:
 
 
 def guardar_dados_gerais(db: Session, ctx: DadosItemsContext, payload: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+    print("[DEBUG svc guardar_dados_gerais] menu:", menu)
+    print(json.dumps(rows, indent=2, default=str))
     for menu, rows in payload.items():
         if menu not in MODEL_MAP:
             continue

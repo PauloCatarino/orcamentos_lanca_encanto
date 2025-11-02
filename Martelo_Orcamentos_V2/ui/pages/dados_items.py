@@ -2,6 +2,8 @@
 
 from functools import partial
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+import json
+from PySide6 import QtWidgets  # se não estiver importado
 
 from PySide6 import QtCore, QtWidgets
 
@@ -203,6 +205,32 @@ class DadosItemsPage(DadosGeraisPage):
         if not self.context:
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhum item selecionado.")
             return
+        # -------------- COMMIT de editores Abertos --------------
+        # Se um editor estiver aberto, commit e fechar para garantir que
+        # o modelo tem o valor mais recente antes de exportar
+        for t in (self.tables or {}).values():
+            try:
+                editor = t.focusWidget()
+                # se o editor pertence ao viewport da tabela, comitamos
+                if editor and editor.parent() is t.viewport():
+                    try:
+                        t.commitData(editor)
+                        t.closeEditor(editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+                    except Exception:
+                        # não fatal: continuamos
+                        pass
+            except Exception:
+                pass
+
+        # -------------- export payload (debug) --------------
+        payload = {key: model.export_rows() for key, model in self.models.items()}
+
+        # DEBUG: mostra payload que será enviado ao serviço (ver console)
+        print("[DEBUG on_guardar payload] -------------------------")
+        print(json.dumps(payload, indent=2, default=str))
+        print("[END DEBUG] ---------------------------------------")
+
+        
 
         payload = {key: model.export_rows() for key, model in self.models.items()}
 
