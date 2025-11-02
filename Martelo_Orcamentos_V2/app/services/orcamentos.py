@@ -1,11 +1,16 @@
+import datetime
+import logging
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import List, Optional
-from sqlalchemy.orm import Session
+
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import Session
+
 from ..models import Orcamento, OrcamentoItem, Client, User
-import datetime
-import re
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -271,7 +276,13 @@ def delete_item(
     item_nome = it.item or "(sem nome)"
 
     # Log opcional (podes mais tarde gravar em tabela de histórico)
-    print(f"[LOG] Item '{item_nome}' (ID={id_item}) removido do orçamento {orc_id} por utilizador {deleted_by}")
+    logger.info(
+        "Item '%s' (ID=%s) removido do orçamento %s por utilizador %s",
+        item_nome,
+        id_item,
+        orc_id,
+        deleted_by,
+    )
 
     db.delete(it)
     db.flush()
@@ -370,7 +381,7 @@ def move_item(
         ).scalar_one_or_none()
 
     if not neighbor:
-        print("[LOG] Movimento ignorado: sem vizinho disponível.")
+        logger.debug("Movimento ignorado: sem vizinho disponível para item %s", id_item)
         return False
 
     # ✅ Troca de posições
@@ -379,7 +390,13 @@ def move_item(
     neighbor.updated_by = moved_by
 
     # Log do movimento
-    print(f"[LOG] Item ID={id_item} trocado com ID={neighbor.id_item} no orçamento {it.id_orcamento} por utilizador {moved_by}")
+    logger.info(
+        "Item ID=%s trocado com ID=%s no orçamento %s por utilizador %s",
+        id_item,
+        neighbor.id_item,
+        it.id_orcamento,
+        moved_by,
+    )
 
     db.flush()
     return True

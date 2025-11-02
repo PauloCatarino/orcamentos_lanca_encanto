@@ -5,6 +5,7 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+import logging
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -871,11 +872,53 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
     return payload
 
 
-def guardar_dados_gerais(db: Session, ctx: DadosGeraisContext, data: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
-    for menu, rows in data.items():
-        model = MODEL_MAP.get(menu)
-        if not model:
+def _coerce(menu: str, field: str, value: Any) -> Any:
+    """
+    Wrapper seguro para _coerce_field. Garante que o campo 'nao_stock'
+    fica sempre guardado como 0/1, aceita True/False, '1'/'0', 'on'/'off'.
+    Se _coerce_field existir mais abaixo, chamamos; senão fazemos fallback.
+    """
+    # fallback simples para nao_stock (garante 0/1)
+    if field == "nao_stock":
+        # Normalizar vários tipos possíveis
+        if isinstance(value, bool):
+            return int(value)
+        if value is None:
+            return 0
+        # aceitar strings '1','0','true','false','on','off'
+        s = str(value).strip().lower()
+        if s in ("1", "true", "yes", "on"):
+            return 1
+        return 0
+
+    # se existir a função _coerce_field definida mais abaixo, usa-a
+    try:
+        return _coerce_field(menu, field, value)  # type: ignore[name-defined]
+    except NameError:
+        # fallback genérico (devolve o valor tal como está)
+        return value
+
+def guardar_dados_gerais(
+    db: Session,
+    ctx: "DadosGeraisContext",  # o tipo context definido neste ficheiro
+    payload: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> None:
+    """
+    Guarda os 'dados gerais' (materiais, ferragens, sistemas_correr, acabamentos, ...)
+    - Para cada menu (p.ex. 'materiais', 'ferragens'...) substitui as linhas existentes
+      para o mesmo contexto (cliente_id / ano / num_orcamento / versao).
+    - 'nao_stock' é tratado pelo _coerce(...) (igual ao que já faz para os items).
+    """
+    # Percorre os menus (materiais, ferragens, sistemas_correr, acabamentos, ...)
+    for menu, rows in payload.items():
+        # Se for um menu desconhecido, ignora
+        if menu not in MODEL_MAP:
             continue
+
+        model = MODEL_MAP[menu]
+
+        # Remove as linhas existentes para o mesmo contexto (cliente / ano / nº orcamento / versão)
+        # (dados gerais não têm item_id nem orcamento_id — usamos o conjunto cliente/ano/num_orcamento/versao)
         db.execute(
             delete(model).where(
                 model.cliente_id == ctx.cliente_id,
@@ -884,12 +927,38 @@ def guardar_dados_gerais(db: Session, ctx: DadosGeraisContext, data: Mapping[str
                 model.versao == ctx.versao,
             )
         )
+
+        # Se não houver linhas, continua para o próximo menu
         if not rows:
             continue
+
+        # Insere cada linha (mantendo 'ordem' se existir, ou atribuindo o enumerado)
         for ordem, row in enumerate(rows):
-            payload = _normalize_row(menu, ctx, row, ordem)
-            db.add(model(**payload))
-    db.flush()
+            body = dict(row)
+            body.setdefault("ordem", ordem)
+
+            # Campos comuns ao contexto de "dados gerais"
+            instance_kwargs: Dict[str, Any] = {
+                "cliente_id": ctx.cliente_id,
+                "user_id": ctx.user_id,
+                "ano": ctx.ano,
+                "num_orcamento": ctx.num_orcamento,
+                "versao": ctx.versao,
+                "ordem": body.get("ordem", ordem) or ordem,
+            }
+
+            # Para cada campo do menu (MENU_FIELDS define a lista de campos permitidos),
+            # coerciamos o valor com _coerce(menu, field, value) (já existente no ficheiro)
+            for field in MENU_FIELDS[menu]:
+                value = body.get(field)
+                coerced = _coerce(menu, field, value)
+                instance_kwargs[field] = coerced
+
+            # Adiciona a nova instância ao sessão
+            db.add(model(**instance_kwargs))
+
+    # Faz commit ao final de tudo
+    db.commit()
 
 
 def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[str, Any]:

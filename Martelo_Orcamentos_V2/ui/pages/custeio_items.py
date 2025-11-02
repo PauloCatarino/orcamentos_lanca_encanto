@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+import logging
 import ast
 import re
 import unicodedata
@@ -27,6 +28,8 @@ from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -3409,11 +3412,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
-        self.table_view.setEditTriggers(
-            QtWidgets.QAbstractItemView.SelectedClicked
-            | QtWidgets.QAbstractItemView.EditKeyPressed
-            | QtWidgets.QAbstractItemView.AnyKeyPressed
-        )
+        # Permitir clique direto em checkboxes e outros campos editáveis
+        self.table_view.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
 
         self.table_view.setStyleSheet(
             "QTableView::item:selected { background-color: #d9d9d9; color: #000000; }\n"
@@ -5003,7 +5003,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._collapsed_groups.clear()
 
-        print(f"[Custeio.load_item] orcamento_id={orcamento_id} item_id={item_id}")
+        logger.debug("Custeio.load_item orcamento_id=%s item_id=%s", orcamento_id, item_id)
         if not orcamento_id:
 
             self.context = None
@@ -5043,12 +5043,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if normalized_item_id:
 
             item_obj = svc_custeio.carregar_item(self.session, normalized_item_id)
-            print(f"[Custeio.load_item] fetched item_obj id={getattr(item_obj, 'id_item', None) if item_obj else None}")
+            logger.debug(
+                "Custeio.load_item fetched item_obj id=%s",
+                getattr(item_obj, "id_item", None) if item_obj else None,
+            )
             if item_obj is None:
 
                 QtWidgets.QMessageBox.warning(self, "Aviso", "Item nao encontrado para o orcamento selecionado.")
                 ids = self.session.execute(select(OrcamentoItem.id_item).where(OrcamentoItem.id_orcamento == orcamento_id)).scalars().all()
-                print(f'[Custeio.load_item] available ids={ids}')
+                logger.debug("Custeio.load_item available ids=%s", ids)
 
 
 

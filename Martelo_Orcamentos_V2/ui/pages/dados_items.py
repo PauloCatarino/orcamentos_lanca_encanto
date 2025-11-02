@@ -3,7 +3,7 @@
 from functools import partial
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import json
-from PySide6 import QtWidgets  # se não estiver importado
+import logging
 
 from PySide6 import QtCore, QtWidgets
 
@@ -15,6 +15,8 @@ from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
 
 from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
 from ..utils.header import apply_highlight_text, init_highlight_label
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_rows_from_payload(
@@ -93,7 +95,7 @@ class DadosItemsPage(DadosGeraisPage):
 
     # ------------------------------------------------------------------ Integration
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
-        print(f"[DadosItems.load_item] orcamento_id={orcamento_id} item_id={item_id}")
+        logger.debug("DadosItems.load_item orcamento_id=%s item_id=%s", orcamento_id, item_id)
         self.current_orcamento_id = orcamento_id
         normalized_item_id = item_id
         if item_id is not None:
@@ -109,7 +111,7 @@ class DadosItemsPage(DadosGeraisPage):
                 self.session.expire_all()
             except Exception:
                 pass
-        print(f"[DadosItems.load_item] normalized_item_id={normalized_item_id}")
+        logger.debug("DadosItems.load_item normalized_item_id=%s", normalized_item_id)
         self.current_item_id = normalized_item_id
 
         try:
@@ -127,7 +129,7 @@ class DadosItemsPage(DadosGeraisPage):
             return
 
         try:
-            print(f"[DadosItems.load_item] calling super.load_orcamento with item_id={normalized_item_id}")
+            logger.debug("DadosItems.load_item calling super.load_orcamento with item_id=%s", normalized_item_id)
             super().load_orcamento(orcamento_id, item_id=normalized_item_id)
         except Exception as exc:  # pragma: no cover - UI feedback
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar Dados Items: {exc}")
@@ -225,10 +227,12 @@ class DadosItemsPage(DadosGeraisPage):
         # -------------- export payload (debug) --------------
         payload = {key: model.export_rows() for key, model in self.models.items()}
 
-        # DEBUG: mostra payload que será enviado ao serviço (ver console)
-        print("[DEBUG on_guardar payload] -------------------------")
-        print(json.dumps(payload, indent=2, default=str))
-        print("[END DEBUG] ---------------------------------------")
+        # DEBUG: mostra payload que será enviado ao serviço (via logging)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "DadosItems.on_guardar payload\n%s",
+                json.dumps(payload, indent=2, default=str),
+            )
 
         
 

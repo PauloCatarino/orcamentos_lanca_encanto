@@ -14,7 +14,6 @@ Base = declarative_base()
 
 # Engine
 engine = create_engine(settings.DB_URI, pool_pre_ping=True, echo=False)
-#engine = create_engine(settings.DB_URI, echo=True, future=True)
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

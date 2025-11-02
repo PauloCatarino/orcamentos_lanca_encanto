@@ -8,6 +8,7 @@
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
+import logging
 
 # PySide6
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -35,6 +36,8 @@ from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from ..models.qt_table import SimpleTableModel
 from ..utils.header import apply_highlight_text, init_highlight_label
+
+logger = logging.getLogger(__name__)
 
 
 DIMENSION_KEY_ORDER: Tuple[str, ...] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
@@ -395,7 +398,7 @@ class ItensPage(QtWidgets.QWidget):
                 else:
                     row_to_select = 0
             if row_to_select is not None:
-                print(f"[Itens.refresh] selecting row {row_to_select} for select_id={select_id}")
+                logger.debug("Itens.refresh selecting row %s for select_id=%s", row_to_select, select_id)
                 self.table.selectRow(row_to_select)
         else:
             self._prepare_next_item(focus_codigo=False)
@@ -423,7 +426,7 @@ class ItensPage(QtWidgets.QWidget):
         try:
             return svc_producao.build_context(self.db, self._orc_id, user_id, versao=versao_text)
         except Exception as exc:
-            print(f"[Itens._production_context] {exc}")
+            logger.exception("Itens._production_context failed: %s", exc)
             return None
 
     def _update_mode_buttons(self) -> None:
@@ -445,7 +448,7 @@ class ItensPage(QtWidgets.QWidget):
             try:
                 mode = svc_producao.get_mode(self.db, ctx)
             except Exception as exc:
-                print(f"[Itens._load_production_mode] {exc}")
+                logger.exception("Itens._load_production_mode failed: %s", exc)
                 mode = "STD"
         if mode not in {"STD", "SERIE"}:
             mode = "STD"
@@ -776,14 +779,14 @@ class ItensPage(QtWidgets.QWidget):
         try:
             ctx = svc_dados_items.carregar_contexto(self.db, self._orc_id, item_id)
         except Exception as exc:  # pragma: no cover - apenas log
-            print(f"[ItensPage] Falha ao carregar contexto de dimensoes: {exc}")
+            logger.exception("ItensPage falha ao carregar contexto de dimensoes: %s", exc)
             self._clear_dimension_values(enable=True)
             self._apply_primary_dimensions_to_table(mark_dirty=False)
             return
         try:
             armazenados, tem_registro = svc_custeio.carregar_dimensoes(self.db, ctx)
         except Exception as exc:  # pragma: no cover - apenas log
-            print(f"[ItensPage] Falha ao carregar dimensoes armazenadas: {exc}")
+            logger.exception("ItensPage falha ao carregar dimensoes armazenadas: %s", exc)
             armazenados, tem_registro = {}, False
 
         defaults = svc_custeio.dimensoes_default_por_item(item)
@@ -976,7 +979,7 @@ class ItensPage(QtWidgets.QWidget):
         new_row = None
         persist_target_id: Optional[int] = None
         try:
-            print(f"[Itens.on_save_item] id_item before save: {id_item}")
+            logger.debug("Itens.on_save_item id_item before save: %s", id_item)
             if id_item:
                 update_item(
                     self.db,
@@ -1018,11 +1021,11 @@ class ItensPage(QtWidgets.QWidget):
             self.db.commit()
             self._dimensions_dirty = False
             target_id = getattr(new_row, "id_item", None) or persist_target_id
-            print(f"[Itens.on_save_item] target_id after save: {target_id}")
+            logger.debug("Itens.on_save_item target_id after save: %s", target_id)
             self.refresh(select_id=target_id, select_last=target_id is None)
             QMessageBox.information(self, "Sucesso", msg)
             if target_id:
-                print(f"[Itens.on_save_item] emit target_id={target_id}")
+                logger.debug("Itens.on_save_item emit target_id=%s", target_id)
                 self.item_selected.emit(target_id)
             self.production_mode_changed.emit(self._production_mode)
             self._prepare_next_item()
