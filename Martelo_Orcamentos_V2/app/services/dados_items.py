@@ -8,14 +8,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from typing import Any, Dict, Mapping, Sequence
-from sqlalchemy import delete
-from sqlalchemy.orm import Session
 import logging
 
 from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
-
-from Martelo_Orcamentos_V2.app.services.bool_converter import bool_to_int, int_to_bool
 
 from Martelo_Orcamentos_V2.app.models import (
     Client,
@@ -173,7 +168,13 @@ def carregar_dados_gerais(db: Session, ctx: DadosItemsContext) -> Dict[str, List
 
 
 def _coerce(menu: str, field: str, value: Any) -> Any:
-    return svc_dg._coerce_field(menu, field, value)  # type: ignore[attr-defined]
+    try:
+        return svc_dg._coerce(menu, field, value)  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            return svc_dg._coerce_field(menu, field, value)  # type: ignore[attr-defined]
+        except Exception:
+            return value
 
 
 logger = logging.getLogger(__name__)

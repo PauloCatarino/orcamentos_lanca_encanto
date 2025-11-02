@@ -1070,6 +1070,31 @@ def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
     return float(value)
 
 
+def _coerce_checkbox_to_bool(value: Any) -> bool:
+    """
+    Converte valores provenientes da UI (ints, strings, etc.) para booleano.
+    Aceita 0/1, True/False, 'sim'/'nao', 'on'/'off', vazio -> False.
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            return int(value) != 0
+        except Exception:
+            return bool(value)
+    if isinstance(value, str):
+        normalized = unicodedata.normalize("NFKD", value).encode("ASCII", "ignore").decode("ASCII")
+        token = normalized.strip().lower()
+        if token in {"1", "true", "t", "sim", "yes", "y", "on"}:
+            return True
+        if token in {"0", "false", "f", "nao", "não", "no", "n", "off", ""}:
+            return False
+        return True
+    return bool(value)
+
+
 def _auto_dimensions_setting_key(user_id: int) -> str:
     return _AUTO_DIMENSION_SETTING_TEMPLATE.format(user_id=user_id)
 
@@ -1620,7 +1645,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
             if spec["type"] == "numeric":
                 linha[key] = _decimal_to_float(valor)
             elif spec["type"] == "bool":
-                linha[key] = bool(valor)
+                linha[key] = _coerce_checkbox_to_bool(valor)
             else:
                 linha[key] = valor
         _aplicar_orla_espessuras(linha, orla_lookup)
@@ -1719,7 +1744,7 @@ def salvar_custeio_items(
             if spec["type"] == "numeric":
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
-                setattr(registro, key, bool(valor))
+                setattr(registro, key, _coerce_checkbox_to_bool(valor))
             else:
                 setattr(registro, key, _normalise_string(valor))
         session.add(registro)
@@ -1887,7 +1912,7 @@ def _preencher_linha_com_material(
     linha["comp_mp"] = _decimal_to_float(getattr(material, "comp_mp", None))
     linha["larg_mp"] = _decimal_to_float(getattr(material, "larg_mp", None))
     linha["esp_mp"] = _decimal_to_float(getattr(material, "esp_mp", None))
-    linha["nst"] = bool(getattr(material, "nao_stock", False))
+    linha["nst"] = _coerce_checkbox_to_bool(getattr(material, "nao_stock", False))
     grupo = _grupo_label_from_material(material) or grupo_hint
     if grupo:
         linha["mat_default"] = grupo
