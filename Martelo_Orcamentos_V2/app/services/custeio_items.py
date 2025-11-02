@@ -1744,7 +1744,9 @@ def salvar_custeio_items(
             if spec["type"] == "numeric":
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
-                setattr(registro, key, _coerce_checkbox_to_bool(valor))
+                # Guardamos como 0/1 no BD (compatível com o que faz dados_items / dados_gerais)
+                coerced_bool = _coerce_checkbox_to_bool(valor)
+                setattr(registro, key, 1 if coerced_bool else 0)
             else:
                 setattr(registro, key, _normalise_string(valor))
         session.add(registro)

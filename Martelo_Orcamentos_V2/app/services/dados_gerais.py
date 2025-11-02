@@ -358,6 +358,21 @@ MENU_DEFAULT_FAMILIA = {
 
 LAYOUT_NAMESPACE = "dados_gerais"
 
+def _familia_for_grupo(menu: str, grupo: Optional[str], default: Optional[str] = None) -> str:
+    """
+    Decide a familia padrão para um grupo. Mantém compatibilidade com a lógica
+    anterior: se for sistemas_correr e o grupo estiver em SISTEMAS_CORRER_PLACAS,
+    devolve 'PLACAS', senão 'FERRAGENS' ou o default fornecido.
+    """
+    base = default or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
+    if not grupo:
+        return base
+    if menu == MENU_SIS_CORRER:
+        key = str(grupo).strip().casefold()
+        if key in SISTEMAS_CORRER_PLACAS_KEYS:
+            return "PLACAS"
+        return "FERRAGENS"
+    return base
 
 def _familia_for_grupo(menu: str, grupo: Optional[str], default: Optional[str] = None) -> str:
     base = default or MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
