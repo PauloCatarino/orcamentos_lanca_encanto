@@ -135,7 +135,8 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
     if "familia" in data and not data.get("familia"):
         data["familia"] = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     if "nao_stock" in data:
-        data["nao_stock"] = bool(data.get("nao_stock"))
+        # int_to_bool trata "0"/"1"/"true"/"false"/None corretamente
+        data["nao_stock"] = int_to_bool(data.get("nao_stock"))
     return data
 
 

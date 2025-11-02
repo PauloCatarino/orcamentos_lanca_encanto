@@ -1,5 +1,8 @@
 from decimal import Decimal
 from typing import Any, Dict, Iterable, Optional
+import logging
+
+from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
 
 from PySide6 import QtCore
 
@@ -17,6 +20,7 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         self._columns = list(columns) if columns is not None else []
         # manter compatibilidade com codigo existente que acede a model.columns
         self.columns = self._columns
+        self._logger = logging.getLogger(__name__)
 
     # -------- API utilitaria --------
     def set_rows(self, rows: Optional[Iterable[Any]]) -> None:
@@ -96,11 +100,11 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         # ---- coluna booleana -> checkbox ----
         if col_type == "bool":
             if role == QtCore.Qt.CheckStateRole:
-                return QtCore.Qt.Checked if bool(val) else QtCore.Qt.Unchecked
+                return QtCore.Qt.Checked if int_to_bool(val) else QtCore.Qt.Unchecked
             if role == QtCore.Qt.DisplayRole:
                 return ""
             if role == QtCore.Qt.EditRole:
-                return bool(val)
+                return int_to_bool(val)
 
         # display / edit role
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
@@ -137,25 +141,42 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         # checkbox -> role CheckStateRole
         if col_type == "bool" and role in (QtCore.Qt.CheckStateRole, QtCore.Qt.EditRole):
             if role == QtCore.Qt.CheckStateRole:
-                new_value = value == QtCore.Qt.Checked
+                new_bool = bool(value == QtCore.Qt.Checked)
             else:
                 if isinstance(value, (int, float)):
-                    new_value = bool(value)
+                    new_bool = bool(value)
                 elif isinstance(value, str):
-                    new_value = value.strip().lower() in {"1", "true", "sim", "yes", "on"}
+                    new_bool = value.strip().lower() in {"1", "true", "sim", "yes", "on"}
                 else:
-                    new_value = bool(value)
+                    new_bool = bool(value)
+
             if isinstance(row_obj, dict):
-                if row_obj.get(attr) == new_value:
+                current_bool = int_to_bool(row_obj.get(attr))
+                if current_bool == new_bool:
                     return True
-                row_obj[attr] = new_value
+                stored_value = row_obj.get(attr)
+                row_obj[attr] = bool_to_int(new_bool) if isinstance(stored_value, (int, float)) and not isinstance(stored_value, bool) else new_bool
             else:
-                if getattr(row_obj, attr, None) == new_value:
+                stored_value = getattr(row_obj, attr, None)
+                current_bool = int_to_bool(stored_value)
+                if current_bool == new_bool:
                     return True
                 try:
-                    setattr(row_obj, attr, new_value)
+                    if isinstance(stored_value, (int, float)) and not isinstance(stored_value, bool):
+                        setattr(row_obj, attr, bool_to_int(new_bool))
+                    else:
+                        setattr(row_obj, attr, new_bool)
                 except Exception:
+                    self._logger.exception("Falha ao persistir bool attr=%s row=%s value=%r", attr, row_obj, value)
                     return False
+
+            self._logger.debug(
+                "SimpleTableModel.setData bool attr=%s row=%s new_bool=%s stored_as=%r",
+                attr,
+                index.row(),
+                new_bool,
+                row_obj[attr] if isinstance(row_obj, dict) else getattr(row_obj, attr, None),
+            )
             self.dataChanged.emit(index, index, [QtCore.Qt.CheckStateRole, QtCore.Qt.DisplayRole])
             return True
 

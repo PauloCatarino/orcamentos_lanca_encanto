@@ -4,13 +4,14 @@
 import logging
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_items").setLevel(logging.WARNING)
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_gerais").setLevel(logging.INFO)
 logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
-logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("Martelo_Orcamentos_V2.ui.models.qt_table").setLevel(logging.DEBUG)
+logging.getLogger("Martelo_Orcamentos_V2.ui.pages.dados_gerais").setLevel(logging.DEBUG)
 
 import sys
 from PySide6 import QtWidgets
@@ -40,7 +41,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "386"
+git commit -m "387"
 git push origin main
 
 '''
