@@ -3140,10 +3140,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
     def _post_table_setup(self, key: str) -> None:
-
-        """Hook for subclasses to tweak table configuration."""
-
-        return
+        """Hook para ajustes adicionais; activa clique unico nos checkboxes."""
+        table = self.tables.get(key)
+        if not table:
+            return
+        table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        table.setItemDelegate(DadosGeraisDelegate(table))
 
 
 

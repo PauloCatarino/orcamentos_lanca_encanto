@@ -1,87 +1,106 @@
-﻿# ui/models/qt_table.py
-from PySide6 import QtCore
 from decimal import Decimal
+from typing import Any, Dict, Iterable, Optional
+
+from PySide6 import QtCore
+
 
 class SimpleTableModel(QtCore.QAbstractTableModel):
     """
-    Tabela simples para listas de objetos (ex.: ORM).
-    columns: lista de tuplos (header, attr, formatter_opcional)
-    - header: texto do cabeçalho (ex.: 'ID_MP', 'PRECO_TABELA')
-    - attr: nome do atributo no objeto (ex.: 'id_mp', 'preco_tabela')
-    - formatter: função que recebe o valor CRU e devolve string formatada
+    Model Qt simples para listas de objetos (ORM, dataclasses) ou dicionarios.
+    columns aceita tuplos, dicionarios ou objetos com atributos (ex.: ColumnSpec).
+    Linhas podem ser objetos com atributos ou dicionarios.
     """
-    def __init__(self, rows=None, columns=None, parent=None):
-        super().__init__(parent)
-        self._rows = rows or []
-        self._columns = columns or []
 
-    # -------- API utilitária --------
-    def set_rows(self, rows):
+    def __init__(self, rows: Optional[Iterable[Any]] = None, columns: Optional[Iterable[Any]] = None, parent=None):
+        super().__init__(parent)
+        self._rows = list(rows) if rows is not None else []
+        self._columns = list(columns) if columns is not None else []
+        # manter compatibilidade com codigo existente que acede a model.columns
+        self.columns = self._columns
+
+    # -------- API utilitaria --------
+    def set_rows(self, rows: Optional[Iterable[Any]]) -> None:
         self.beginResetModel()
-        self._rows = rows or []
+        self._rows = list(rows) if rows is not None else []
         self.endResetModel()
 
-    def get_row(self, r):
-        return self._rows[r]
+    def set_columns(self, columns: Optional[Iterable[Any]]) -> None:
+        self.beginResetModel()
+        self._columns = list(columns) if columns is not None else []
+        self.columns = self._columns
+        self.endResetModel()
+
+    def get_row(self, row_index: int) -> Any:
+        return self._rows[row_index]
+
+    def _col_spec(self, col: Any) -> Dict[str, Any]:
+        """
+        Normaliza a definicao de coluna num dicionario:
+        {header, attr, formatter, type, editable}
+        """
+        if isinstance(col, (tuple, list)):
+            header = col[0] if len(col) > 0 else ""
+            attr = col[1] if len(col) > 1 else None
+            formatter = col[2] if len(col) > 2 else None
+            return {"header": header, "attr": attr, "formatter": formatter, "type": None, "editable": True}
+
+        if isinstance(col, dict):
+            header = col.get("header") or col.get("label") or ""
+            attr = col.get("attr") or col.get("field")
+            formatter = col.get("formatter")
+            col_type = col.get("type") or col.get("kind")
+            editable = col.get("editable")
+            if editable is None:
+                editable = not col.get("readonly", False)
+            return {"header": header, "attr": attr, "formatter": formatter, "type": col_type, "editable": editable}
+
+        # Objetos (ex.: dataclasses)
+        header = getattr(col, "header", getattr(col, "label", str(col)))
+        attr = getattr(col, "attr", getattr(col, "field", None))
+        formatter = getattr(col, "formatter", None)
+        col_type = getattr(col, "type", getattr(col, "kind", None))
+        if isinstance(col_type, str):
+            col_type = col_type.lower()
+        editable_attr = getattr(col, "editable", None)
+        if editable_attr is None:
+            editable_attr = not getattr(col, "readonly", False)
+        return {"header": header, "attr": attr, "formatter": formatter, "type": col_type, "editable": editable_attr}
 
     # -------- Qt Model API ----------
-    def rowCount(self, parent=QtCore.QModelIndex()):
+    def rowCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._rows)
 
-    def columnCount(self, parent=QtCore.QModelIndex()):
+    def columnCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._columns)
 
-    def data(self, index, role=QtCore.Qt.DisplayRole):
+    def data(self, index: QtCore.QModelIndex, role: int = QtCore.Qt.DisplayRole):
         if not index.isValid():
             return None
 
-        row = self._rows[index.row()]
+        row_obj = self._rows[index.row()]
         col = self._columns[index.column()]
+        spec = self._col_spec(col)
+        attr = spec["attr"]
+        formatter = spec["formatter"]
+        col_type = spec.get("type")
 
-        # Desempacotar definição de coluna
-        if isinstance(col, (tuple, list)):
-            header = col[0]
-            attr = col[1] if len(col) > 1 else None
-            formatter = col[2] if len(col) > 2 else None
-        elif isinstance(col, dict):
-            header = col.get("header")
-            attr = col.get("attr")
-            formatter = col.get("formatter")
-        else:
-            header, attr, formatter = col, None, None
-
-        # Obter valor CRU do objeto (para sort e alinhamento)
+        # obter valor bruto
         try:
-            val = getattr(row, attr) if attr else None
+            if isinstance(row_obj, dict):
+                val = row_obj.get(attr) if attr else None
+            else:
+                val = getattr(row_obj, attr) if attr else None
         except Exception:
             val = None
 
-        # -------- Role para ORDENAR: devolver números quando possível --------
-        if role == QtCore.Qt.UserRole:
-            # Ordenação do ID_MP como inteiro (1,2,3,…,10,11…)
-            if header == "ID_MP":
-                try:
-                    # aceita "0012" -> 12; strings vazias continuam como None
-                    s = "" if val is None else str(val).strip()
-                    return int(s) if s != "" else None
-                except Exception:
-                    return val  # se não der para converter, volta ao valor original
+        # ---- coluna booleana -> checkbox ----
+        if col_type == "bool":
+            if role == QtCore.Qt.CheckStateRole:
+                return QtCore.Qt.Checked if bool(val) else QtCore.Qt.Unchecked
+            if role == QtCore.Qt.DisplayRole:
+                return ""
 
-            # Para outros campos, se já for numérico, devolve tal e qual
-            if isinstance(val, (int, float)) or str(type(val)).endswith("Decimal'>"):
-                return val
-
-            # Se for string e parecer número, tenta Decimal (para sort correto)
-            if isinstance(val, str):
-                s = val.strip().replace("€", "").replace("%", "").replace(",", ".")
-                try:
-                    return Decimal(s)
-                except Exception:
-                    return val
-
-            return val
-
-        # -------- Apresentação / edição --------
+        # display / edit role
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
             if formatter and val is not None:
                 try:
@@ -90,70 +109,137 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                     pass
             return "" if val is None else str(val)
 
-        # -------- Alinhamento: números à direita --------
+        # alinhamento: numeros a direita
         if role == QtCore.Qt.TextAlignmentRole:
             if isinstance(val, (int, float)) or str(type(val)).endswith("Decimal'>"):
                 return int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
+        if role == QtCore.Qt.UserRole:
+            return val
+
         return None
 
-    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
+    def setData(self, index: QtCore.QModelIndex, value: Any, role: int = QtCore.Qt.EditRole) -> bool:
+        if not index.isValid():
+            return False
+
+        row_obj = self._rows[index.row()]
+        col = self._columns[index.column()]
+        spec = self._col_spec(col)
+        attr = spec["attr"]
+        col_type = spec.get("type")
+
+        if not attr:
+            return False
+
+        # checkbox -> role CheckStateRole
+        if col_type == "bool" and role == QtCore.Qt.CheckStateRole:
+            new_value = value == QtCore.Qt.Checked
+            if isinstance(row_obj, dict):
+                if row_obj.get(attr) == new_value:
+                    return True
+                row_obj[attr] = new_value
+            else:
+                if getattr(row_obj, attr, None) == new_value:
+                    return True
+                try:
+                    setattr(row_obj, attr, new_value)
+                except Exception:
+                    return False
+            self.dataChanged.emit(index, index, [QtCore.Qt.CheckStateRole, QtCore.Qt.DisplayRole])
+            return True
+
+        if role == QtCore.Qt.EditRole:
+            if isinstance(row_obj, dict):
+                row_obj[attr] = value
+            else:
+                try:
+                    setattr(row_obj, attr, value)
+                except Exception:
+                    return False
+            self.dataChanged.emit(index, index, [QtCore.Qt.EditRole, QtCore.Qt.DisplayRole])
+            return True
+
+        return False
+
+    def flags(self, index: QtCore.QModelIndex) -> QtCore.Qt.ItemFlags:
+        if not index.isValid():
+            return QtCore.Qt.NoItemFlags
+
+        col = self._columns[index.column()]
+        spec = self._col_spec(col)
+        flags = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+
+        if spec.get("type") == "bool":
+            flags |= QtCore.Qt.ItemIsUserCheckable
+        elif spec.get("editable", True):
+            flags |= QtCore.Qt.ItemIsEditable
+
+        return flags
+
+    def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: int = QtCore.Qt.DisplayRole):
         if role != QtCore.Qt.DisplayRole:
             return None
         if orientation == QtCore.Qt.Horizontal:
             if section >= len(self._columns):
                 return ""
             col = self._columns[section]
-            if isinstance(col, (tuple, list)):
-                return col[0]
-            if isinstance(col, dict):
-                return col.get("header", "")
-            return str(col)
-        # Cabeçalho vertical = número de linha
+            spec = self._col_spec(col)
+            return spec.get("header", "")
         return str(section + 1)
 
-    def sort(self, column: int, order: QtCore.Qt.SortOrder = QtCore.Qt.SortOrder.AscendingOrder):
+    # ---------- utilitarios ----------
+    def sort(self, column: int, order: QtCore.Qt.SortOrder = QtCore.Qt.SortOrder.AscendingOrder) -> None:
         if not self._columns or column < 0 or column >= len(self._columns):
             return
         col = self._columns[column]
-        if isinstance(col, (tuple, list)):
-            attr = col[1] if len(col) > 1 else None
-        elif isinstance(col, dict):
-            attr = col.get("attr")
-        else:
-            attr = None
+        spec = self._col_spec(col)
+        attr = spec["attr"]
         reverse = order == QtCore.Qt.SortOrder.DescendingOrder
 
-        def raw_value(row):
-            if not attr:
-                return row
+        def raw_value(row_obj: Any):
             try:
-                value = getattr(row, attr)
+                if isinstance(row_obj, dict):
+                    return row_obj.get(attr)
+                return getattr(row_obj, attr)
             except Exception:
-                value = None
-            return value
-
-        def sort_key(row):
-            value = raw_value(row)
-            if value in (None, ""):
-                return (2, "")
-            if isinstance(value, Decimal):
-                return (0, float(value))
-            if isinstance(value, (int, float)):
-                return (0, float(value))
-            if isinstance(value, str):
-                stripped = value.strip()
-                if not stripped:
-                    return (2, "")
-                numeric = stripped.replace('€', '').replace('%', '').replace(',', '.')
-                try:
-                    return (0, float(numeric))
-                except Exception:
-                    return (1, stripped.lower())
-            return (1, str(value).lower())
+                return None
 
         self.layoutAboutToBeChanged.emit()
         try:
-            self._rows.sort(key=sort_key, reverse=reverse)
+            self._rows.sort(key=lambda row_obj: (raw_value(row_obj) is None, raw_value(row_obj)), reverse=reverse)
         finally:
             self.layoutChanged.emit()
+
+    def _coerce_for_export(self, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            try:
+                return float(value)
+            except Exception:
+                return str(value)
+        return value
+
+    def export_rows(self):
+        """
+        Devolve lista de dicionarios com os dados atuais do modelo.
+        """
+        exported = []
+        for row_obj in self._rows:
+            row_dict: Dict[str, Any] = {}
+            for col in self._columns:
+                spec = self._col_spec(col)
+                attr = spec["attr"]
+                if not attr:
+                    continue
+                try:
+                    if isinstance(row_obj, dict):
+                        val = row_obj.get(attr)
+                    else:
+                        val = getattr(row_obj, attr)
+                except Exception:
+                    val = None
+                row_dict[attr] = self._coerce_for_export(val)
+            exported.append(row_dict)
+        return exported

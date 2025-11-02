@@ -9,6 +9,7 @@ from Martelo_Orcamentos_V2.app.models import OrcamentoItem
 from sqlalchemy.orm import Session
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_di
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
+from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
 
 from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
 from ..utils.header import apply_highlight_text, init_highlight_label
@@ -190,6 +191,9 @@ class DadosItemsPage(DadosGeraisPage):
         model = self.models.get(key)
         if not table or not model:
             return
+        # Permitir toggle imediato nos checkboxes e reaplicar delegate padrão
+        table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        table.setItemDelegate(DadosGeraisDelegate(table))
         for col_idx, spec in enumerate(model.columns):
             field = getattr(spec, "field", "") or ""
             if field.lower().startswith("reserva"):
