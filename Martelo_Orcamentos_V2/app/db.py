@@ -2,6 +2,7 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine
 from Martelo_Orcamentos_V2.app.config import settings
 
 # Logging básico
@@ -12,7 +13,8 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 # Engine
-engine = create_engine(settings.DB_URI, pool_pre_ping=True, echo=False)
+#engine = create_engine(settings.DB_URI, pool_pre_ping=True, echo=False)
+engine = create_engine(settings.DB_URI, echo=True, future=True)
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

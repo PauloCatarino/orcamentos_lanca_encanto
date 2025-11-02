@@ -172,36 +172,141 @@ def _coerce(menu: str, field: str, value: Any) -> Any:
 
 
 def guardar_dados_gerais(db: Session, ctx: DadosItemsContext, payload: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
-    print("[DEBUG svc guardar_dados_gerais] menu:", menu)
-    print(json.dumps(rows, indent=2, default=str))
+    """
+    Guarda os dados gerais (dados items) para um item.
+    - payload: dicionário com chaves por menu ('materiais', 'ferragens', ...)
+      e valor = lista de dicionários (linhas).
+    Estratégia:
+      - imprime payload para debug,
+      - apaga linhas anteriores (com delete),
+      - para cada row tenta coerzir os campos com _coerce(menu, field, value)
+        e se falhar aplica um fallback seguro (ex.: nao_stock -> bool(value)).
+    """
+    import traceback
+
+    # DEBUG: imprimir payload recebido (só para debug; pode remover depois)
+    try:
+        print("[DEBUG svc guardar_dados_gerais payload] >>>")
+        print(json.dumps(payload, indent=2, default=str))
+        print("<<<")
+    except Exception as exc:
+        print("[DEBUG] Falha ao imprimir payload:", exc)
+
+    # Percorre menus e linhas
     for menu, rows in payload.items():
+        try:
+            print(f"[DEBUG] Processando menu={menu!r} linhas={len(rows) if rows is not None else 0}")
+        except Exception:
+            # Se rows não for iterável, não dê crash no print
+            print(f"[DEBUG] Processando menu={menu!r}")
+
+        # Validar menu conhecido
         if menu not in MODEL_MAP:
+            print(f"[DEBUG] menu desconhecido: {menu!r} — a ignorar")
             continue
+
         model = MODEL_MAP[menu]
+
+        # Apagar linhas antigas deste item
         db.execute(delete(model).where(model.item_id == ctx.item_id))
 
         if not rows:
+            # nada a inserir
             continue
 
+        # Inserir cada linha (recria do zero)
         for ordem, row in enumerate(rows):
-            body = dict(row)
-            body.setdefault("ordem", ordem)
-            instance_kwargs: Dict[str, Any] = {
-                "orcamento_id": ctx.orcamento_id,
-                "item_id": ctx.item_id,
-                "cliente_id": ctx.cliente_id,
-                "user_id": ctx.user_id,
-                "ano": ctx.ano,
-                "num_orcamento": ctx.num_orcamento,
-                "versao": ctx.versao,
-                "ordem": body.get("ordem", ordem) or ordem,
-            }
-            for field in MENU_FIELDS[menu]:
-                value = body.get(field)
-                coerced = _coerce(menu, field, value)
-                instance_kwargs[field] = coerced
-            db.add(model(**instance_kwargs))
+            try:
+                body = dict(row)  # cópia defensiva
+                body.setdefault("ordem", ordem)
+
+                # Campos base obrigatórios para construir a instância
+                instance_kwargs: Dict[str, Any] = {
+                    "orcamento_id": ctx.orcamento_id,
+                    "item_id": ctx.item_id,
+                    "cliente_id": ctx.cliente_id,
+                    "user_id": ctx.user_id,
+                    "ano": ctx.ano,
+                    "num_orcamento": ctx.num_orcamento,
+                    "versao": ctx.versao,
+                    "ordem": body.get("ordem", ordem) or ordem,
+                }
+
+                # Coerir cada field de acordo com MENU_FIELDS[menu]
+                for field in MENU_FIELDS[menu]:
+                    value = body.get(field)
+
+                    # Normalizar strings vazias para None (evita coerções estranhas)
+                    if isinstance(value, str) and value.strip() == "":
+                        value = None
+
+                    try:
+                        # tentativa normal de coerção (pode lançar)
+                        coerced = _coerce(menu, field, value)
+                    except Exception as exc:
+                        # Regista o erro e aplica fallback seguro
+                        print(f"[ERRO] ao coerzir campo: menu={menu!r}, field={field!r}, value={value!r}")
+                        traceback.print_exc()
+
+                        # Fallbacks por campo / tipo
+                        if field == "nao_stock":
+                            # checkbox: forçar booleano
+                            coerced = bool(value)
+                        else:
+                            # Tentar converter por categorias definidas (MENU_FIELD_TYPES)
+                            try:
+                                ftypes = MENU_FIELD_TYPES.get(menu, {}) if "MENU_FIELD_TYPES" in globals() else {}
+                                if field in ftypes.get("integer", ()):
+                                    coerced = int(value) if value is not None else None
+                                elif field in ftypes.get("decimal", ()):
+                                    # Decimal importado no topo do ficheiro
+                                    coerced = Decimal(str(value)) if value is not None else None
+                                else:
+                                    # fallback genérico: deixa o valor tal como vem
+                                    coerced = value
+                            except Exception:
+                                # se tudo falhar, não bloqueia a gravação: usa valor original
+                                coerced = value
+
+                    # colocar valor final nos kwargs
+                    # garantir que nao_stock fica como inteiro 0/1 — evita dependências subtis do SQLAlchemy
+                    if field == "nao_stock":
+                        # coerced pode ser bool, 0/1 ou "0"/"1" — normalizamos para int
+                        try:
+                            instance_kwargs[field] = 1 if bool(coerced) else 0
+                        except Exception:
+                            instance_kwargs[field] = 1 if coerced else 0
+                    else:
+                        instance_kwargs[field] = coerced
+
+                # Adiciona a instância à sessão
+                # print de amostra para confirmarmos o que vamos inserir (só primeiras 3 linhas por menu)
+                if ordem < 3:
+                    print(f"[DEBUG-INSERT] menu={menu!r} ordem={ordem} id_origem={body.get('id')!r} nao_stock={instance_kwargs.get('nao_stock')!r}")
+                db.add(model(**instance_kwargs))
+
+            except Exception:
+                # Se uma linha falhar, regista e continua com as outras
+                print(f"[ERRO] falha ao processar linha ordem={ordem} do menu {menu!r}")
+                traceback.print_exc()
+                continue
+
+    # Commitar todas as alterações no fim
     db.commit()
+        # --- verificação pós-commit: ler as linhas gravadas e imprimir nao_stock ---
+    from sqlalchemy import select
+
+    for menu_name, model_cls in MODEL_MAP.items():
+        try:
+            stmt = select(model_cls).where(model_cls.item_id == ctx.item_id).order_by(model_cls.ordem, model_cls.id)
+            saved = db.execute(stmt).scalars().all()
+            print(f"[AFTER COMMIT] menu={menu_name!r} rows_saved={len(saved)}")
+            # imprime só os primeiros 10 para não encher o terminal
+            for r in saved[:10]:
+                print(f"  id={getattr(r,'id',None)} ordem={r.ordem} nao_stock={getattr(r,'nao_stock',None)}")
+        except Exception as e:
+            print(f"[AFTER COMMIT] falha ao ler menu {menu_name!r}: {e}")
+
 
 
 @dataclass
