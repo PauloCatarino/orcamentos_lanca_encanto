@@ -7,6 +7,7 @@ import re
 import unicodedata
 import uuid
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+import logging
 
 from sqlalchemy import delete, select, func
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 
+logger = logging.getLogger(__name__)
 
 TreeNode = Dict[str, Any]
 
@@ -1709,6 +1711,17 @@ def salvar_custeio_items(
     session.flush()
 
     for ordem, linha in enumerate(linhas):
+        # debug: ver o que chega para os booleanos
+        logger.debug(
+            "Salvar Custeio - ordem=%s id=%s bools: mps=%r mo=%r orla=%r blk=%r nst=%r",
+            ordem,
+            linha.get("id"),
+            linha.get("mps"),
+            linha.get("mo"),
+            linha.get("orla"),
+            linha.get("blk"),
+            linha.get("nst"),
+        )
         registro = CusteioItem(
             orcamento_id=ctx.orcamento_id,
             item_id=ctx.item_id,
@@ -1757,7 +1770,8 @@ def salvar_custeio_items(
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
                 coerced_bool = _coerce_checkbox_to_bool(valor)
-                setattr(registro, key, coerced_bool)
+                # garante que armazenamos 0/1 na BD (compatibilidade com schema existente)
+                setattr(registro, key, 1 if coerced_bool else 0)
             else:
                 setattr(registro, key, _normalise_string(valor))
         session.add(registro)

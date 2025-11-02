@@ -2,6 +2,32 @@ from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import Qt
 
 
+class BoolDelegate(QtWidgets.QStyledItemDelegate):
+    """Delegate simples para booleanos: mostra um checkbox e commita ao mudar."""
+    def createEditor(self, parent, option, index):
+        cb = QtWidgets.QCheckBox(parent)
+        cb.setAutoFillBackground(False)
+        cb.setTristate(False)
+        cb.setProperty("_custeio_editor", True)
+        # commit quando o estado mudar
+        cb.stateChanged.connect(lambda _state, editor=cb: self._on_state_changed(editor))
+        return cb
+
+    def _on_state_changed(self, editor):
+        # commit and close the editor (NoHint avoids Qt quirks)
+        self.commitData.emit(editor)
+        self.closeEditor.emit(editor, QtWidgets.QAbstractItemDelegate.NoHint)
+
+    def setEditorData(self, editor: QtWidgets.QCheckBox, index):
+        value = index.data(QtCore.Qt.EditRole)
+        editor.setChecked(bool(value))
+
+    def setModelData(self, editor: QtWidgets.QCheckBox, model, index):
+        # Ao commitar usa CheckStateRole para garantir compatibilidade
+        model.setData(index, QtCore.Qt.Checked if editor.isChecked() else QtCore.Qt.Unchecked, QtCore.Qt.CheckStateRole)
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect)
 class DadosGeraisDelegate(QtWidgets.QStyledItemDelegate):
     """Table delegate that opens editors on a single click and keeps editing clean."""
 

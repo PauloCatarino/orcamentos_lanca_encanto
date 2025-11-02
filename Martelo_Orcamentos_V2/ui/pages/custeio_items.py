@@ -1691,7 +1691,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
 
         if spec["type"] == "bool":
-            flags |= QtCore.Qt.ItemIsUserCheckable
+            # Queremos que o checkbox seja clicável e que aceitamos EditRole/CheckStateRole
+            flags |= QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEditable
 
         elif spec.get("editable", False):
 
@@ -1734,27 +1735,38 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
 
-        if spec["type"] == "bool" and role == QtCore.Qt.CheckStateRole:
+        # tratar booleanos: aceitar CheckStateRole E EditRole (algumas versões do Qt usam EditRole)
+        if spec["type"] == "bool" and role in (QtCore.Qt.CheckStateRole, QtCore.Qt.EditRole):
+            # normalizar para True/False
+            if role == QtCore.Qt.CheckStateRole:
+                new_state = bool(value == QtCore.Qt.Checked)
+            else:
+                # EditRole: pode ser bool, int(0/1), string, ou até o valor Qt.Checked/Unchecked numericamente
+                if isinstance(value, (int, float)):
+                    try:
+                        new_state = int(value) != 0
+                    except Exception:
+                        new_state = bool(value)
+                else:
+                    new_state = bool(value)
 
-            new_state = bool(value == QtCore.Qt.Checked)
-
+            # sem alteração => OK (evita triggers)
             if self.rows[row].get(key) == new_state:
-
                 return True
 
             self.rows[row][key] = new_state
-
             roles = [QtCore.Qt.DisplayRole, QtCore.Qt.CheckStateRole]
 
+            # caso especial 'blk' altera fontes
             if key == "blk":
-
                 roles.append(QtCore.Qt.FontRole)
-
                 self._emit_font_updates(row)
+
+            # debug opcional: registar alteração local
+            logger.debug("CusteioTableModel.setData - row=%s col=%s key=%s new_state=%r", row, col, key, new_state)
 
             self.dataChanged.emit(index, index, roles)
             self._mark_dirty()
-
             return True
 
 

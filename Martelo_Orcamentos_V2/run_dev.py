@@ -10,6 +10,7 @@ logging.basicConfig(
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_items").setLevel(logging.WARNING)
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_gerais").setLevel(logging.INFO)
 logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
+logging.basicConfig(level=logging.DEBUG)
 
 import sys
 from PySide6 import QtWidgets
@@ -39,7 +40,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "384"
+git commit -m "385"
 git push origin main
 
 '''

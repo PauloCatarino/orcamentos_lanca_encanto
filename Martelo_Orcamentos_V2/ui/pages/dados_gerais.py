@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
+from Martelo_Orcamentos_V2.ui.delegates import BoolDelegate  # ou caminho correto
 import json  # usado em _copy_rows
 from collections import deque
 
@@ -3068,7 +3069,9 @@ class DadosGeraisPage(QtWidgets.QWidget):
         for col_idx, spec in enumerate(model.columns):
             if spec.kind == "choice" and callable(spec.options):
                 table.setItemDelegateForColumn(col_idx, ChoiceDelegate(spec.options, table))
-            # 'bool' já é tratado pelo CheckStateRole no modelo; não precisa de delegate.
+            elif spec.kind == "bool":
+                # um delegate simples para checkbox, evita o dropdown True/False
+                table.setItemDelegateForColumn(col_idx, BoolDelegate(table))
     
 
 
