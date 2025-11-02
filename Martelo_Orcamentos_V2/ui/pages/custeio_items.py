@@ -1969,7 +1969,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if spec["type"] == "bool":
 
-                coerced[key] = bool(value)
+                coerced[key] = svc_custeio._coerce_checkbox_to_bool(value)
 
             elif spec["type"] == "numeric":
 

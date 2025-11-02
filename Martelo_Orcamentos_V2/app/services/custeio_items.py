@@ -1072,26 +1072,38 @@ def _decimal_to_float(value: Optional[Decimal]) -> Optional[float]:
 
 def _coerce_checkbox_to_bool(value: Any) -> bool:
     """
-    Converte valores provenientes da UI (ints, strings, etc.) para booleano.
-    Aceita 0/1, True/False, 'sim'/'nao', 'on'/'off', vazio -> False.
+    Converte valores provenientes da UI (ints, strings, Qt.CheckState, etc.) para booleano.
+    Aceita:
+      - None -> False
+      - bool -> mantem
+      - int/float/Decimal -> 0->False, outros->True (aceita 0,1,2)
+      - str -> '1','0','true','false','sim','nao','checked','unchecked','on','off' etc.
     """
     if value is None:
         return False
     if isinstance(value, bool):
         return value
+
+    # Qt.CheckState: Qt.Unchecked=0, Qt.PartiallyChecked=1, Qt.Checked=2
+    # Aceitamos 2 como True, 1 como True (parcial) e 0 como False.
     if isinstance(value, (int, float, Decimal)):
         try:
-            return int(value) != 0
+            ival = int(value)
+            return ival != 0
         except Exception:
             return bool(value)
+
     if isinstance(value, str):
         normalized = unicodedata.normalize("NFKD", value).encode("ASCII", "ignore").decode("ASCII")
         token = normalized.strip().lower()
-        if token in {"1", "true", "t", "sim", "yes", "y", "on"}:
+        if token in {"1", "true", "t", "sim", "yes", "y", "on", "checked", "checked=true", "true"}:
             return True
-        if token in {"0", "false", "f", "nao", "não", "no", "n", "off", ""}:
+        if token in {"0", "false", "f", "nao", "não", "no", "n", "off", "unchecked", ""}:
             return False
+        # Qualquer string não-vazia assume True (compatibilidade com checkbox)
         return True
+
+    # Fallback: truthiness
     return bool(value)
 
 
@@ -1744,9 +1756,8 @@ def salvar_custeio_items(
             if spec["type"] == "numeric":
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
-                # Guardamos como 0/1 no BD (compatível com o que faz dados_items / dados_gerais)
                 coerced_bool = _coerce_checkbox_to_bool(valor)
-                setattr(registro, key, 1 if coerced_bool else 0)
+                setattr(registro, key, coerced_bool)
             else:
                 setattr(registro, key, _normalise_string(valor))
         session.add(registro)
