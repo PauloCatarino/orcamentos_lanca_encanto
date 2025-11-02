@@ -99,6 +99,8 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                 return QtCore.Qt.Checked if bool(val) else QtCore.Qt.Unchecked
             if role == QtCore.Qt.DisplayRole:
                 return ""
+            if role == QtCore.Qt.EditRole:
+                return bool(val)
 
         # display / edit role
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
@@ -133,8 +135,16 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             return False
 
         # checkbox -> role CheckStateRole
-        if col_type == "bool" and role == QtCore.Qt.CheckStateRole:
-            new_value = value == QtCore.Qt.Checked
+        if col_type == "bool" and role in (QtCore.Qt.CheckStateRole, QtCore.Qt.EditRole):
+            if role == QtCore.Qt.CheckStateRole:
+                new_value = value == QtCore.Qt.Checked
+            else:
+                if isinstance(value, (int, float)):
+                    new_value = bool(value)
+                elif isinstance(value, str):
+                    new_value = value.strip().lower() in {"1", "true", "sim", "yes", "on"}
+                else:
+                    new_value = bool(value)
             if isinstance(row_obj, dict):
                 if row_obj.get(attr) == new_value:
                     return True

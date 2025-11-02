@@ -27,7 +27,7 @@ from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
-from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
+from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate, BoolDelegate
 
 logger = logging.getLogger(__name__)
 
@@ -1691,8 +1691,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         flags = QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled
 
         if spec["type"] == "bool":
-            # Queremos que o checkbox seja clicável e que aceitamos EditRole/CheckStateRole
-            flags |= QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEditable
+            flags |= QtCore.Qt.ItemIsUserCheckable
 
         elif spec.get("editable", False):
 
@@ -2695,7 +2694,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             if spec["type"] == "bool":
 
-                row[key] = bool(value)
+                row[key] = svc_custeio._coerce_checkbox_to_bool(value)
 
             elif spec["type"] == "numeric":
 
@@ -2932,7 +2931,7 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
             if spec["type"] == "bool":
 
-                coerced[key] = bool(value)
+                coerced[key] = svc_custeio._coerce_checkbox_to_bool(value)
 
             elif spec["type"] == "numeric":
 
@@ -3441,9 +3440,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._apply_initial_column_widths()
 
+        bool_columns: List[int] = []
         for col_index, spec in enumerate(self.table_model.columns):
             if spec["type"] == "numeric":
                 self.table_view.setItemDelegateForColumn(col_index, NumericLineEditDelegate(self.table_view, spec))
+            elif spec["type"] == "bool":
+                bool_columns.append(col_index)
+
+        for col_index in bool_columns:
+            self.table_view.setItemDelegateForColumn(col_index, BoolDelegate(self.table_view))
 
         try:
 

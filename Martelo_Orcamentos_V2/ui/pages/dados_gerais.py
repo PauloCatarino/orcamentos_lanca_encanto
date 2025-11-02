@@ -1005,11 +1005,43 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-        if spec.kind == "bool" and role == Qt.CheckStateRole:
+        if spec.kind == "bool" and role in (Qt.CheckStateRole, Qt.EditRole):
 
 
 
-            new_value = bool(value == Qt.Checked)
+            if role == Qt.CheckStateRole:
+
+
+
+                new_value = bool(value == Qt.Checked)
+
+
+
+            else:
+
+
+
+                if isinstance(value, (int, float)):
+
+
+
+                    new_value = bool(value)
+
+
+
+                elif isinstance(value, str):
+
+
+
+                    new_value = value.strip().lower() in {"1", "true", "sim", "yes", "on"}
+
+
+
+                else:
+
+
+
+                    new_value = bool(value)
 
 
 
