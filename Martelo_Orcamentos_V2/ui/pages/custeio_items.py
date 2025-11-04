@@ -1,4 +1,4 @@
-﻿#-\nROW_PARENT_COLOR = QtGui.QColor(230, 240, 255)  # Azul claro para linhas pai\nROW_CHILD_COLOR = QtGui.QColor(255, 250, 205)   # Amarelo suave para linhas filho\nROW_CHILD_INDENT = '\u2003\u2003'  # Espaços para indentação visual dos filhos\n-- START OF FILE custeio_items.py ---
+#-\nROW_PARENT_COLOR = QtGui.QColor(230, 240, 255)  # Azul claro para linhas pai\nROW_CHILD_COLOR = QtGui.QColor(255, 250, 205)   # Amarelo suave para linhas filho\nROW_CHILD_INDENT = '\u2003\u2003'  # Espaços para indentação visual dos filhos\n-- START OF FILE custeio_items.py ---
 
 
 
@@ -22,12 +22,28 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
+from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate, BoolDelegate
+
+SPECIAL_MAT_DEFAULTS = {
+    "divisoria": "Divisorias",
+    "travessa": "Travessas",
+    "prumo": "Prumos",
+}
+
+def _special_default_for_row(row: Mapping[str, Any]) -> Optional[str]:
+    def_text = (row.get("def_peca") or row.get("_child_source") or "").strip()
+    if not def_text:
+        return None
+    base = def_text.split("[", 1)[0].strip().casefold()
+    return SPECIAL_MAT_DEFAULTS.get(base)
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +140,7 @@ HEADER_TOOLTIPS = {
     "area_m2_und": "Area (m2) calculada por unidade com base em comp_res e larg_res.",
     "perimetro_und": "Perimetro (m) calculado por unidade (2 x (comp_res + larg_res) em metros).",
     "spp_ml_und": "Comprimento (m) por unidade gerado a partir de COMP_res quando a peca e classificada como SPP/ML.",
+    "soma_custo_acb": "Total de custos de acabamento (faces superior/inferior) calculado a partir da area, preco liquido e desperdicio do acabamento selecionado.",
 }
 
 CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
@@ -471,6 +488,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self.rows: List[Dict[str, Any]] = []
         self._orla_info_cache: Dict[Tuple[str, Optional[float]], Tuple[float, float, Optional[str]]] = {}
+        self._acabamento_info_cache: Dict[str, Optional[Dict[str, Any]]] = {}
 
     # --- Helpers ------------------------------------------------------
 
@@ -598,6 +616,98 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     ref_clean = matched
 
         return pliq, desp, ref_clean
+
+    def _get_acabamento_info(self, nome: Optional[str]) -> Optional[Dict[str, Any]]:
+        if not nome:
+            return None
+        page = getattr(self, "_page", None)
+        session = getattr(page, "session", None) if page is not None else None
+        context = getattr(page, "context", None) if page is not None else None
+        if session is None or context is None:
+            return None
+        try:
+            return svc_custeio.obter_info_acabamento(session, context, nome, cache=self._acabamento_info_cache)
+        except Exception:
+            return None
+
+    def _build_acabamento_tooltip(self, row_data: Mapping[str, Any]) -> Optional[str]:
+        sup_nome = str(row_data.get("acabamento_sup") or "").strip()
+        inf_nome = str(row_data.get("acabamento_inf") or "").strip()
+        if not sup_nome and not inf_nome:
+            return None
+
+        def _fmt_currency(valor: Optional[float]) -> str:
+            if valor is None:
+                return "-"
+            return f"{valor:.2f}".replace(".", ",")
+
+        area_val = self._coerce_numeric(row_data.get("area_m2_und"))
+        qt_total_val = self._coerce_numeric(row_data.get("qt_total")) or 0.0
+        total_val = self._coerce_numeric(row_data.get("soma_custo_acb"))
+
+        lines: List[str] = ["Acabamentos - detalhes do cálculo"]
+        if area_val is not None:
+            lines.append(f"Área por unidade: {area_val:.4f} m²")
+        if qt_total_val:
+            qt_display = self._format_result_number(qt_total_val) or f"{qt_total_val:.2f}"
+            lines.append(f"Qt_total: {qt_display}")
+
+        unit_sum = 0.0
+        has_formula_values = False
+
+        def _append_info(label: str, nome: str) -> None:
+            nonlocal unit_sum, has_formula_values
+            info = self._get_acabamento_info(nome)
+            if not info:
+                lines.append(f"{label}: {nome} (sem dados disponíveis na tabela de acabamentos)")
+                return
+
+            preco = info.get("preco_liq") or 0.0
+            desp_fraction = info.get("desp_fraction") or 0.0
+            desp_percent = info.get("desp_percent")
+            if desp_percent is None:
+                desp_percent = desp_fraction * 100.0
+            fator = 1.0 + desp_fraction
+
+            lines.append(f"{label}: {nome}")
+            lines.append(
+                f"  Preço líq.: {_fmt_currency(preco)} €/m² | Desperdício: {desp_percent:.2f}% (fator {fator:.3f})"
+            )
+
+            if area_val is not None and preco:
+                custo_unit = area_val * preco * fator
+                unit_sum_local = round(custo_unit, 6)
+                unit_sum += unit_sum_local
+                has_formula_values = True
+                lines.append(
+                    f"  Custo unitário: {area_val:.4f} m² × {_fmt_currency(preco)} €/m² × {fator:.3f} = {_fmt_currency(unit_sum_local)} €/und"
+                )
+            else:
+                lines.append("  Custo unitário: insuficiente (área/preço em falta)")
+
+        if sup_nome:
+            _append_info("Superior", sup_nome)
+        if inf_nome:
+            _append_info("Inferior", inf_nome)
+
+        if not has_formula_values and total_val is not None and qt_total_val:
+            unit_sum = round(total_val / qt_total_val, 6)
+        unit_sum = round(unit_sum, 2)
+        lines.append(f"Soma unitária (calculada): {_fmt_currency(unit_sum)} €/und")
+
+        if total_val is not None:
+            total_display = _fmt_currency(total_val)
+            if qt_total_val:
+                qt_display = self._format_result_number(qt_total_val) or f"{qt_total_val:.2f}"
+                lines.append(
+                    f"Custo total registado: {total_display} € (= {_fmt_currency(unit_sum)} €/und × {qt_display})"
+                )
+            else:
+                lines.append(f"Custo total registado: {total_display} €")
+        else:
+            lines.append("Custo total registado: -")
+
+        return "\n".join(lines)
 
     def _process_qt_und_edit(self, row_index: int, value: Any) -> bool:
         if not (0 <= row_index < len(self.rows)):
@@ -1382,6 +1492,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             parts.append(f"Totais: ML={total_ml_fmt} m | Custo={total_custo_fmt}")
             return "\n".join(parts)
 
+        if role == QtCore.Qt.ToolTipRole and key == "soma_custo_acb":
+            return self._build_acabamento_tooltip(row_data)
+
         if role == QtCore.Qt.ToolTipRole and key == "spp_ml_und":
             if not self._is_spp_row(row_data):
                 return None
@@ -1639,8 +1752,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     return str(value)
 
                 if fmt == "money":
-
-                    return f"{num:.2f}€"
+                    texto = f"{num:.2f}".replace(".", ",")
+                    return f"{texto} €"
 
                 if fmt == "percent":
 
@@ -1761,7 +1874,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 roles.append(QtCore.Qt.FontRole)
                 self._emit_font_updates(row)
 
-            # debug opcional: registar alteração local
+            if key == "nst":
+                source_val = self.rows[row].get("_nst_source")
+                if source_val is None:
+                    manual_flag = bool(self.rows[row].get("_nst_manual_override"))
+                else:
+                    manual_flag = bool(new_state) != bool(svc_custeio._coerce_checkbox_to_bool(source_val))
+                self.rows[row]["_nst_manual_override"] = manual_flag
+
             logger.debug("CusteioTableModel.setData - row=%s col=%s key=%s new_state=%r", row, col, key, new_state)
 
             self.dataChanged.emit(index, index, roles)
@@ -1850,6 +1970,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             self.rows[row][key] = value
             self._mark_dirty()
+            if key in {"acabamento_sup", "acabamento_inf"}:
+                self._acabamento_info_cache.clear()
+                requires_recalc = True
 
         if key in {"orl_0_4", "orl_1_0", "orl_c1", "orl_c2", "orl_l1", "orl_l2"}:
             self._orla_info_cache.clear()
@@ -1891,6 +2014,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self.rows = []
         self._orla_info_cache.clear()
+        self._acabamento_info_cache.clear()
 
         self.endResetModel()
         self._mark_dirty(False)
@@ -1903,6 +2027,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         self.rows = [self._coerce_row_impl(row) for row in rows]
         self._orla_info_cache.clear()
+        self._acabamento_info_cache.clear()
 
         self.endResetModel()
         self._mark_dirty(False)
@@ -2009,9 +2134,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     coerced[key] = value
 
         if isinstance(row, Mapping):
-            for extra_key in ("_row_type", "_parent_uid", "_group_uid", "_child_source", "_normalized_child", "_qt_manual_override", "_qt_manual_value", "_qt_manual_tooltip", "_qt_formula_value", "_regra_nome"):
+            for extra_key in ("_row_type", "_parent_uid", "_group_uid", "_child_source", "_normalized_child", "_qt_manual_override", "_qt_manual_value", "_qt_manual_tooltip", "_qt_formula_value", "_regra_nome", "_nst_manual_override", "_nst_source"):
                 if extra_key in row:
                     coerced[extra_key] = row[extra_key]
+
+        coerced["_nst_manual_override"] = bool(coerced.get("_nst_manual_override"))
+        if "_nst_source" not in coerced:
+            base_nst = coerced.get("nst")
+            if base_nst in (None, ""):
+                coerced["_nst_source"] = None
+            else:
+                coerced["_nst_source"] = svc_custeio._coerce_checkbox_to_bool(base_nst)
 
         return coerced
 
@@ -3075,6 +3208,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._collapsed_groups: Set[str] = set()
         self._rows_dirty = False
+        self._nst_override_snapshot: List[bool] = []
 
         self._setup_ui()
 
@@ -4160,6 +4294,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
     def _on_add_selected(self) -> None:
 
         if not self.context:
+            self._nst_override_snapshot = []
 
             QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
 
@@ -4232,6 +4367,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         dimensoes = self._collect_dimension_payload()
 
         linhas = self.table_model.export_rows()
+        snapshot = [bool(row.get("_nst_manual_override")) for row in linhas]
 
         try:
 
@@ -4252,6 +4388,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             )
 
             return False
+
+        self._nst_override_snapshot = snapshot if any(snapshot) else []
 
         if not auto:
 
@@ -4289,14 +4427,49 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        self._capture_nst_snapshot_from_model()
+
         linhas = svc_custeio.listar_custeio_items(self.session, self.context.orcamento_id, self.context.item_id)
 
         self.table_model.load_rows(linhas)
+        self._reapply_nst_override_snapshot()
 
         self.table_model.recalculate_all()
 
         self._update_table_placeholder_visibility()
 
+
+    def _capture_nst_snapshot_from_model(self) -> None:
+        if not self.table_model.rows:
+            if self._nst_override_snapshot:
+                self._nst_override_snapshot = []
+            return
+        snapshot = [bool(row.get("_nst_manual_override")) for row in self.table_model.rows]
+        if any(snapshot):
+            self._nst_override_snapshot = snapshot
+        elif self._nst_override_snapshot:
+            self._nst_override_snapshot = []
+
+
+    def _reapply_nst_override_snapshot(self) -> None:
+        if not self._nst_override_snapshot or not any(self._nst_override_snapshot):
+            if self._nst_override_snapshot:
+                self._nst_override_snapshot = []
+            return
+        row_count = len(self.table_model.rows)
+        for idx, flag in enumerate(self._nst_override_snapshot):
+            if idx >= row_count:
+                break
+            row = self.table_model.rows[idx]
+            manual_flag = bool(flag)
+            row["_nst_manual_override"] = manual_flag
+            if "_nst_source" not in row or row["_nst_source"] is None:
+                base_nst = row.get("nst")
+                if base_nst in (None, ""):
+                    row["_nst_source"] = None
+                else:
+                    row["_nst_source"] = svc_custeio._coerce_checkbox_to_bool(base_nst)
+        self._nst_override_snapshot = self._nst_override_snapshot[:row_count]
 
 
     def _update_table_placeholder_visibility(self) -> None:
@@ -4777,6 +4950,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         cache: Dict[str, Any] = {}
         orla_lookup = svc_custeio.obter_mapa_orlas(self.session)
+        cp_cache = svc_def_pecas.mapa_por_nome(self.session)
         uid_map = {row.get("_uid"): row for row in self.table_model.rows if row.get("_uid")}
 
         for idx, row in enumerate(self.table_model.rows):
@@ -4892,6 +5066,18 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 continue
 
             updates = svc_custeio.dados_material(material)
+            if "nst" in updates:
+                nst_source = svc_custeio._coerce_checkbox_to_bool(updates.get("nst"))
+                row["_nst_source"] = nst_source
+                if row.get("_nst_manual_override"):
+                    updates.pop("nst", None)
+                else:
+                    row["_nst_manual_override"] = False
+            else:
+                if "_nst_source" not in row:
+                    row["_nst_source"] = None
+            updates.pop("acabamento_sup", None)
+            updates.pop("acabamento_inf", None)
 
             self.table_model.update_row_fields(
 
@@ -4902,6 +5088,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 skip_keys=("def_peca", "descricao_livre", "qt_mod", "qt_und", "comp", "larg", "esp", "mps", "mo", "orla", "blk", "mat_default"),
 
             )
+            svc_custeio.aplicar_definicao_cp_linha(self.session, row, cp_cache)
 
             novo_default = updates.get("mat_default")
 
@@ -4914,6 +5101,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 if not atual_default or atual_default == familia_atual:
 
                     row["mat_default"] = novo_default
+
+            special_default = _special_default_for_row(row)
+            if special_default:
+                current_default = (row.get("mat_default") or "").strip().casefold()
+                if not current_default or current_default == "laterais":
+                    row["mat_default"] = special_default
 
             orla_updates = svc_custeio.aplicar_espessuras_orla(row, orla_lookup)
             self.table_model.update_row_fields(idx, orla_updates)
@@ -4994,6 +5187,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
 
         self.current_orcamento_id = orcamento_id
+        self._nst_override_snapshot = []
 
         normalized_item_id = item_id
 
@@ -5128,6 +5322,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._clear_dimension_values()
 
         self._collapsed_groups.clear()
+        self._nst_override_snapshot = []
 
         self._reset_header()
 

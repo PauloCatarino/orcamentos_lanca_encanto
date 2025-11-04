@@ -4,14 +4,14 @@
 import logging
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_items").setLevel(logging.WARNING)
 logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_gerais").setLevel(logging.INFO)
+logging.getLogger("Martelo_Orcamentos_V2.ui.models.qt_table").setLevel(logging.INFO)
+logging.getLogger("Martelo_Orcamentos_V2.ui.pages.dados_gerais").setLevel(logging.INFO)
 logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
-logging.getLogger("Martelo_Orcamentos_V2.ui.models.qt_table").setLevel(logging.DEBUG)
-logging.getLogger("Martelo_Orcamentos_V2.ui.pages.dados_gerais").setLevel(logging.DEBUG)
 
 import sys
 from PySide6 import QtWidgets
@@ -27,7 +27,7 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 
 
 
-# para testar ->                                                        
+# para testar ->                   python -m Martelo_Orcamentos_V2.run_dev                                       
 
 
 #(.venv_Martelo) PS C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2> python -m Martelo_Orcamentos_V2.run_dev
@@ -41,7 +41,7 @@ git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código
 
 git add .
-git commit -m "387"
+git commit -m "388"
 git push origin main
 
 '''

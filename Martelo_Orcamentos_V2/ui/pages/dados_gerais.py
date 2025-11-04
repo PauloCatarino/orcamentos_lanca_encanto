@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import logging
 from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
-
-logger = logging.getLogger(__name__)
 from Martelo_Orcamentos_V2.ui.delegates import BoolDelegate  # ou caminho correto
 import json  # usado em _copy_rows
 from collections import deque
@@ -1005,12 +1002,9 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
-        # Normalizar tratamento de booleanos: aceitar CheckStateRole e EditRole
-        # e comparar sempre valores normalizados (usa int_to_bool)
         if spec.kind == "bool" and role in (Qt.CheckStateRole, Qt.EditRole):
-            raw_value = value
             if role == Qt.CheckStateRole:
-                new_value = bool(value == Qt.Checked)
+                new_value = bool(value)
             else:
                 if isinstance(value, (int, float)):
                     new_value = bool(value)
@@ -1021,14 +1015,6 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
             current_bool = int_to_bool(row.get(spec.field))
             if current_bool == new_value:
-                logger.debug(
-                    "DadosGeraisTableModel.setData bool unchanged row=%s field=%s role=%s raw=%r stored=%r",
-                    index.row(),
-                    spec.field,
-                    role,
-                    raw_value,
-                    row.get(spec.field),
-                )
                 return True
 
             stored = row.get(spec.field)
@@ -1036,16 +1022,6 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
                 row[spec.field] = bool_to_int(new_value)
             else:
                 row[spec.field] = new_value
-
-            logger.debug(
-                "DadosGeraisTableModel.setData bool row=%s field=%s role=%s raw=%r new_value=%s stored_now=%r",
-                index.row(),
-                spec.field,
-                role,
-                raw_value,
-                new_value,
-                row[spec.field],
-            )
 
             self.dataChanged.emit(index, index, [Qt.CheckStateRole, Qt.DisplayRole])
             return True

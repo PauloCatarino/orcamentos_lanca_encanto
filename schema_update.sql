@@ -22,3 +22,20 @@ UPDATE dados_items_sistemas_correr SET nao_stock = CASE WHEN nao_stock THEN 1 EL
 
 ALTER TABLE dados_items_acabamentos MODIFY COLUMN nao_stock INTEGER NOT NULL DEFAULT 0;
 UPDATE dados_items_acabamentos SET nao_stock = CASE WHEN nao_stock THEN 1 ELSE 0 END;
+
+-- Base table for process cost definitions used in custeio
+CREATE TABLE IF NOT EXISTS definicoes_pecas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo_peca_principal VARCHAR(64) NOT NULL,
+    subgrupo_peca VARCHAR(128) NULL,
+    nome_da_peca VARCHAR(255) NOT NULL UNIQUE,
+    cp01_sec DECIMAL(12,4) NULL,
+    cp02_orl DECIMAL(12,4) NULL,
+    cp03_cnc DECIMAL(12,4) NULL,
+    cp04_abd DECIMAL(12,4) NULL,
+    cp05_prensa DECIMAL(12,4) NULL,
+    cp06_esquad DECIMAL(12,4) NULL,
+    cp07_embalagem DECIMAL(12,4) NULL,
+    cp08_mao_de_obra DECIMAL(12,4) NULL,
+    UNIQUE KEY u_definicoes_pecas_nome (nome_da_peca)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

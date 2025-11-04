@@ -19,12 +19,24 @@ from Martelo_Orcamentos_V2.app.models.materia_prima import MateriaPrima
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
+from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 
 logger = logging.getLogger(__name__)
 
 TreeNode = Dict[str, Any]
 
+
+CP_VALUE_KEYS: Tuple[str, ...] = (
+    "cp01_sec",
+    "cp02_orl",
+    "cp03_cnc",
+    "cp04_abd",
+    "cp05_prensa",
+    "cp06_esquad",
+    "cp07_embalagem",
+    "cp08_mao_de_obra",
+)
 
 ACABAMENTO_DEFAULTS = [
     "Lacar Face Sup",
@@ -90,6 +102,28 @@ def _normalize_token(value: Optional[str]) -> str:
     text = unicodedata.normalize("NFKD", str(value).strip())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     return text.casefold()
+
+
+def aplicar_definicao_cp_linha(
+    session: Session,
+    linha: Dict[str, Any],
+    cache: Optional[Dict[str, Dict[str, float]]] = None,
+) -> Dict[str, Dict[str, float]]:
+    if not linha:
+        return cache or {}
+    nome = linha.get("def_peca") or linha.get("descricao")
+    if not nome:
+        return cache or {}
+    mapa = cache or svc_def_pecas.mapa_por_nome(session)
+    chave = _normalize_token(nome)
+    definicao = mapa.get(chave)
+    if not definicao:
+        return mapa
+    for campo in CP_VALUE_KEYS:
+        valor = definicao.get(campo)
+        if valor is not None:
+            linha[campo] = float(valor)
+    return mapa
 
 
 GROUP_LOOKUP: Dict[str, Dict[str, str]] = {}
@@ -462,6 +496,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "CNC (5 Min)"},
             {"label": "CNC (15 Min)"},
             {"label": "COLAGEM SANDWICH (M2)"},
+            {"label": "EMBALAGEM (M3)"},
         ],
     },
     {
@@ -579,6 +614,11 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "FUNDO ALUMINIO 2", "group": "Fundo Aluminio 2"},
                     {"label": "FUNDO PLASTICO FRIGORIFICO", "group": "Fundo Plastico Frigorifico"},
                     {"label": "SALVA SIFAO", "group": "Salva Sifao"},
+                    {"label": "FERRAGENS DIVERSAS 1", "group": "Ferragens Diversas 1"},
+                    {"label": "FERRAGENS DIVERSAS 2", "group": "Ferragens Diversas 2"},
+                    {"label": "FERRAGENS DIVERSAS 3", "group": "Ferragens Diversas 3"},
+                    {"label": "FERRAGENS DIVERSAS 4", "group": "Ferragens Diversas 4"},
+                    {"label": "FERRAGENS DIVERSAS 5", "group": "Ferragens Diversas 5"},
                 ],
             },
             {
@@ -588,16 +628,6 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "VARAO TROMBONE", "group": "Varao Trombone"},
                     {"label": "VARAO EXTENSIVEL", "group": "Varao Extensivel"},
                     {"label": "GRELHA VELUDO", "group": "Grelha Veludo"},
-                ],
-            },
-            {
-                "label": "FERRAGENS DIVERSAS {FERRAGENS}",
-                "children": [
-                    {"label": "FERRAGENS DIVERSAS 1", "group": "Ferragens Diversas 1"},
-                    {"label": "FERRAGENS DIVERSAS 2", "group": "Ferragens Diversas 2"},
-                    {"label": "FERRAGENS DIVERSAS 3", "group": "Ferragens Diversas 3"},
-                    {"label": "FERRAGENS DIVERSAS 4", "group": "Ferragens Diversas 4"},
-                    {"label": "FERRAGENS DIVERSAS 5", "group": "Ferragens Diversas 5"},
                 ],
             },
             {
@@ -625,13 +655,6 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "ACESSORIO 4 CORRER", "group": "Acessorio 4"},
                     {"label": "ACESSORIO 5 CORRER", "group": "Acessorio 5"},
                     {"label": "ACESSORIO 6 CORRER", "group": "Acessorio 6"},
-                ],
-            },
-            {
-                "label": "FERRAGENS DIVERSAS {SISTEMAS CORRER}",
-                "children": [
-                    {"label": "ACESSORIO 7 SPP", "group": "Acessorio 7 SPP"},
-                    {"label": "ACESSORIO 8 SPP", "group": "Acessorio 8 SPP"},
                 ],
             },
         ],
@@ -712,7 +735,7 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "soma_custo_orla_total", "label": "Soma_Custo_Orla_Total", "type": "numeric", "editable": False, "format": "two"},
     {"key": "soma_custo_und", "label": "Soma_Custo_und", "type": "numeric", "editable": False, "format": "two"},
     {"key": "soma_custo_total", "label": "Soma_Custo_Total", "type": "numeric", "editable": False, "format": "two"},
-    {"key": "soma_custo_acb", "label": "Soma_Custo_ACB", "type": "numeric", "editable": False, "format": "two"},
+    {"key": "soma_custo_acb", "label": "Soma_Custo_ACB", "type": "numeric", "editable": False, "format": "money"},
 ]
 
 
@@ -1617,6 +1640,15 @@ def _registro_precisa_recalculo(reg: CusteioItem) -> bool:
     return False
 
 
+def _registro_precisa_recalculo_acabamento(reg: CusteioItem) -> bool:
+    has_sup = bool(_normalise_string(getattr(reg, "acabamento_sup", None)))
+    has_inf = bool(_normalise_string(getattr(reg, "acabamento_inf", None)))
+    valor = getattr(reg, "soma_custo_acb", None)
+    if has_sup or has_inf:
+        return valor is None
+    return valor not in (None, "", 0)
+
+
 def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[int]) -> List[Dict[str, Any]]:
     if not item_id:
         return []
@@ -1635,8 +1667,16 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         atualizar_orlas_custeio(session, orcamento_id, item_id)
         registros = session.execute(stmt).scalars().all()
 
+    if any(_registro_precisa_recalculo_acabamento(reg) for reg in registros):
+        try:
+            ctx_recalc = svc_dados_items.carregar_contexto(session, orcamento_id, item_id=item_id)
+        except Exception:
+            ctx_recalc = None
+        _recalcular_custos_acabamento(session, ctx_recalc, registros)
+
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)
+    cp_cache = svc_def_pecas.mapa_por_nome(session)
     ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
     for registro in registros:
         linha = _empty_row()
@@ -1691,6 +1731,13 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         else:
             linha["spp_ml_und"] = None
         linhas.append(linha)
+        linha["_nst_manual_override"] = bool(linha.get("_nst_manual_override", False))
+        if "_nst_source" not in linha:
+            base_nst = linha.get("nst")
+            if base_nst in (None, ""):
+                linha["_nst_source"] = None
+            else:
+                linha["_nst_source"] = _coerce_checkbox_to_bool(base_nst)
 
     return linhas
 
@@ -1710,8 +1757,9 @@ def salvar_custeio_items(
     )
     session.flush()
 
+    acabamento_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+
     for ordem, linha in enumerate(linhas):
-        # debug: ver o que chega para os booleanos
         logger.debug(
             "Salvar Custeio - ordem=%s id=%s bools: mps=%r mo=%r orla=%r blk=%r nst=%r",
             ordem,
@@ -1770,10 +1818,19 @@ def salvar_custeio_items(
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
                 coerced_bool = _coerce_checkbox_to_bool(valor)
-                # garante que armazenamos 0/1 na BD (compatibilidade com schema existente)
                 setattr(registro, key, 1 if coerced_bool else 0)
             else:
                 setattr(registro, key, _normalise_string(valor))
+
+        valor_acb = _calcular_custo_acabamento_para_registro(session, ctx, registro, acabamento_cache)
+        if valor_acb is None:
+            linha["soma_custo_acb"] = None
+        else:
+            try:
+                linha["soma_custo_acb"] = float(valor_acb)
+            except Exception:
+                linha["soma_custo_acb"] = None
+
         session.add(registro)
 
     if dimensoes is not None:
@@ -1799,6 +1856,7 @@ def gerar_linhas_para_selecoes(
 ) -> List[Dict[str, Any]]:
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)
+    cp_cache = svc_def_pecas.mapa_por_nome(session)
     for selecao in selecoes:
         parts = [p.strip() for p in selecao.split(">") if p.strip()]
         if not parts:
@@ -1829,8 +1887,14 @@ def gerar_linhas_para_selecoes(
 
         linha["_child_tokens"] = child_tokens
         linha["_parent_label"] = parent_label
+        linha["_nst_manual_override"] = False
+        if linha.get("nst") in (None, ""):
+            linha["_nst_source"] = None
+        else:
+            linha["_nst_source"] = _coerce_checkbox_to_bool(linha.get("nst"))
 
         _aplicar_orla_espessuras(linha, orla_lookup)
+        aplicar_definicao_cp_linha(session, linha, cp_cache)
         linhas.append(linha)
 
         if child_tokens:
@@ -1888,7 +1952,14 @@ def gerar_linhas_para_selecoes(
                     if inherited_comp:
                         child_row["comp"] = inherited_comp
 
+                child_row["_nst_manual_override"] = False
+                if child_row.get("nst") in (None, ""):
+                    child_row["_nst_source"] = None
+                else:
+                    child_row["_nst_source"] = _coerce_checkbox_to_bool(child_row.get("nst"))
+
                 _aplicar_orla_espessuras(child_row, orla_lookup)
+                aplicar_definicao_cp_linha(session, child_row, cp_cache)
                 linhas.append(child_row)
 
     return linhas
@@ -1946,6 +2017,156 @@ def _preencher_linha_com_material(
     linha["spp_ml_und"] = _decimal_to_float(getattr(material, "spp_ml_und", None))
     linha["custo_mp_und"] = _decimal_to_float(getattr(material, "custo_mp_und", None))
     linha["custo_mp_total"] = _decimal_to_float(getattr(material, "custo_mp_total", None))
+
+
+def _coerce_percent_fraction(value: Any) -> Decimal:
+    if value in (None, "", False):
+        return Decimal("0")
+    try:
+        dec = Decimal(str(value))
+    except Exception:
+        parsed = _parse_float_value(value)
+        if parsed is None:
+            return Decimal("0")
+        dec = Decimal(str(parsed))
+    if getattr(dec, "is_nan", lambda: False)():
+        return Decimal("0")
+    if abs(dec) >= Decimal("1"):
+        dec = dec / Decimal("100")
+    try:
+        return dec.quantize(Decimal("0.0001"))
+    except Exception:
+        return Decimal("0")
+
+
+def obter_info_acabamento(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    nome: Optional[str],
+    cache: Optional[Dict[str, Optional[Dict[str, Any]]]] = None,
+) -> Optional[Dict[str, Any]]:
+    if ctx is None:
+        return None
+    if nome in (None, ""):
+        return None
+    texto = _normalise_string(nome)
+    if not texto:
+        return None
+
+    token = _normalize_token(texto)
+    if cache is not None and token in cache:
+        return cache[token]
+
+    registro = _buscar_material_por_menu(session, ctx, svc_dados_items.MENU_ACABAMENTOS, texto)
+    if registro is None:
+        resultado: Optional[Dict[str, Any]] = None
+    else:
+        preco_liq = _parse_float_value(getattr(registro, "preco_liq", None)) or 0.0
+        desp_fraction = _coerce_percent_fraction(getattr(registro, "desp", None))
+        resultado = {
+            "preco_liq": preco_liq,
+            "desp_fraction": float(desp_fraction),
+            "desp_percent": float(desp_fraction * Decimal("100")),
+            "grupo": getattr(registro, "grupo_acabamento", None),
+            "descricao": getattr(registro, "descricao", None),
+            "und": getattr(registro, "und", None),
+        }
+
+    if cache is not None:
+        cache[token] = resultado
+    return resultado
+
+
+def _calcular_custo_acabamento_unit(area_m2: Optional[Decimal], info: Optional[Dict[str, Any]]) -> Decimal:
+    if area_m2 in (None,):
+        return Decimal("0")
+    try:
+        area_decimal = Decimal(str(area_m2))
+    except Exception:
+        return Decimal("0")
+    if area_decimal <= Decimal("0"):
+        return Decimal("0")
+
+    if not info:
+        return Decimal("0")
+
+    preco_liq = info.get("preco_liq") or 0.0
+    try:
+        preco_decimal = Decimal(str(preco_liq))
+    except Exception:
+        return Decimal("0")
+    if preco_decimal <= Decimal("0"):
+        return Decimal("0")
+
+    desp_fraction = info.get("desp_fraction", 0.0) or 0.0
+    try:
+        desp_decimal = Decimal(str(desp_fraction))
+    except Exception:
+        desp_decimal = Decimal("0")
+    fator = Decimal("1") + desp_decimal
+    if fator <= Decimal("0"):
+        fator = Decimal("1")
+
+    return (area_decimal * preco_decimal * fator).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def _calcular_custo_acabamento_para_registro(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    registro: CusteioItem,
+    cache: Optional[Dict[str, Optional[Dict[str, Any]]]] = None,
+) -> Optional[Decimal]:
+    sup_nome = _normalise_string(getattr(registro, "acabamento_sup", None))
+    inf_nome = _normalise_string(getattr(registro, "acabamento_inf", None))
+    tem_acabamento = bool(sup_nome or inf_nome)
+
+    area_val = getattr(registro, "area_m2_und", None)
+    if area_val in ("", False):
+        area_val = None
+
+    info_sup = obter_info_acabamento(session, ctx, sup_nome, cache=cache) if sup_nome else None
+    info_inf = obter_info_acabamento(session, ctx, inf_nome, cache=cache) if inf_nome else None
+
+    custo_sup_unit = _calcular_custo_acabamento_unit(area_val, info_sup)
+    custo_inf_unit = _calcular_custo_acabamento_unit(area_val, info_inf)
+
+    if not tem_acabamento:
+        registro.soma_custo_acb = None
+        return None
+
+    qt_total_val = getattr(registro, "qt_total", None)
+    if qt_total_val in (None, "", False):
+        qt_total_decimal = Decimal("0")
+    elif isinstance(qt_total_val, Decimal):
+        qt_total_decimal = qt_total_val
+    else:
+        try:
+            qt_total_decimal = Decimal(str(qt_total_val))
+        except Exception:
+            qt_total_decimal = Decimal("0")
+
+    soma_total = (custo_sup_unit + custo_inf_unit) * qt_total_decimal
+    soma_total = soma_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    registro.soma_custo_acb = soma_total
+    return soma_total
+
+
+def _recalcular_custos_acabamento(
+    session: Session,
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    registros: Sequence[CusteioItem],
+) -> None:
+    if ctx is None or not registros:
+        return
+    cache: Dict[str, Optional[Dict[str, Any]]] = {}
+    alterado = False
+    for reg in registros:
+        valor_atual = getattr(reg, "soma_custo_acb", None)
+        novo_valor = _calcular_custo_acabamento_para_registro(session, ctx, reg, cache)
+        if (valor_atual or Decimal("0")) != (novo_valor or Decimal("0")):
+            alterado = True
+    if alterado:
+        session.flush()
 
 def carregar_contexto(
     session: Session,

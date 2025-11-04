@@ -11,6 +11,7 @@ from Martelo_Orcamentos_V2.app.services.materias_primas import (
 )
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
+from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 
 
 KEY_BASE_PATH = "base_path_orcamentos"
@@ -32,6 +33,21 @@ class SettingsPage(QtWidgets.QWidget):
         "Valor Producao Serie",
         "Resumo da Descricao",
     ]
+    DEF_PECAS_HEADERS = [
+        "ID",
+        "Tipo_Peca_Principal",
+        "Subgrupo_Peca",
+        "Nome_da_Peca",
+        "CP01_SEC",
+        "CP02_ORL",
+        "CP03_CNC",
+        "CP04_ABD",
+        "CP05_PRENSA",
+        "CP06_ESQUAD",
+        "CP07_EMBALAGEM",
+        "CP08_MAO_DE_OBRA",
+    ]
+    DEF_PECAS_NUMERIC_COLUMNS = {4, 5, 6, 7, 8, 9, 10, 11}
 
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
@@ -52,6 +68,8 @@ class SettingsPage(QtWidgets.QWidget):
             }
 
         self._producao_dirty: bool = True
+        self._def_pecas_dirty: bool = True
+        self._def_pecas_loading: bool = False
 
         main_layout = QtWidgets.QVBoxLayout(self)
         self.tabs = QtWidgets.QTabWidget()
@@ -60,6 +78,7 @@ class SettingsPage(QtWidgets.QWidget):
 
         self._init_general_tab()
         self._init_producao_tab()
+        self._init_def_pecas_tab()
 
     # ------------------------------------------------------------------ Geral
     def _init_general_tab(self) -> None:
@@ -249,12 +268,225 @@ class SettingsPage(QtWidgets.QWidget):
         self.btn_producao_reset.setEnabled(enabled)
         self.btn_producao_refresh.setEnabled(enabled)
 
-    def _on_tab_changed(self, index: int) -> None:
-        if getattr(self, "tab_producao", None) is None:
+    def _init_def_pecas_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        self.tab_def_pecas = tab
+        layout = QtWidgets.QVBoxLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        self.lbl_def_pecas_info = QtWidgets.QLabel(
+            "Tabela de referência para o cálculo das linhas do custeio. Altere ou acrescente peças conforme necessário."
+        )
+        self.lbl_def_pecas_info.setWordWrap(True)
+        layout.addWidget(self.lbl_def_pecas_info)
+
+        buttons_layout = QtWidgets.QHBoxLayout()
+        self.btn_def_pecas_add = QtWidgets.QPushButton("Adicionar Linha")
+        self.btn_def_pecas_add.clicked.connect(self._on_def_pecas_add_row)
+        buttons_layout.addWidget(self.btn_def_pecas_add)
+
+        self.btn_def_pecas_remove = QtWidgets.QPushButton("Remover Selecionadas")
+        self.btn_def_pecas_remove.clicked.connect(self._on_def_pecas_remove_rows)
+        buttons_layout.addWidget(self.btn_def_pecas_remove)
+
+        self.btn_def_pecas_refresh = QtWidgets.QPushButton("Atualizar")
+        self.btn_def_pecas_refresh.clicked.connect(lambda: self._load_def_pecas_table(force=True))
+        buttons_layout.addWidget(self.btn_def_pecas_refresh)
+
+        self.btn_def_pecas_save = QtWidgets.QPushButton("Gravar Definições")
+        self.btn_def_pecas_save.clicked.connect(self._on_def_pecas_save)
+        buttons_layout.addWidget(self.btn_def_pecas_save)
+        buttons_layout.addStretch(1)
+        layout.addLayout(buttons_layout)
+
+        self.tbl_def_pecas = QtWidgets.QTableWidget(0, len(self.DEF_PECAS_HEADERS))
+        self.tbl_def_pecas.setHorizontalHeaderLabels(self.DEF_PECAS_HEADERS)
+        header = self.tbl_def_pecas.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        header.setMinimumSectionSize(120)
+        self.tbl_def_pecas.verticalHeader().setVisible(False)
+        self.tbl_def_pecas.setAlternatingRowColors(True)
+        self.tbl_def_pecas.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_def_pecas.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.tbl_def_pecas.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.tbl_def_pecas.itemChanged.connect(self._on_def_pecas_item_changed)
+        layout.addWidget(self.tbl_def_pecas, 1)
+
+        self.tabs.addTab(tab, "Definições Peças")
+        self._set_def_pecas_controls_enabled(True)
+
+    def _set_def_pecas_controls_enabled(self, enabled: bool) -> None:
+        for widget in (
+            getattr(self, "tbl_def_pecas", None),
+            getattr(self, "btn_def_pecas_add", None),
+            getattr(self, "btn_def_pecas_remove", None),
+            getattr(self, "btn_def_pecas_refresh", None),
+            getattr(self, "btn_def_pecas_save", None),
+        ):
+            if widget is not None:
+                widget.setEnabled(enabled)
+
+    def _clear_def_pecas_table(self) -> None:
+        if getattr(self, "tbl_def_pecas", None) is None:
             return
+        self.tbl_def_pecas.blockSignals(True)
+        self.tbl_def_pecas.setRowCount(0)
+        self.tbl_def_pecas.blockSignals(False)
+
+    def _load_def_pecas_table(self, force: bool = False) -> None:
+        if self._def_pecas_loading:
+            return
+        if not force and not self._def_pecas_dirty:
+            return
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
+        try:
+            self._def_pecas_loading = True
+            dados = svc_def_pecas.listar_definicoes(self.db)
+        except Exception as exc:
+            self._def_pecas_loading = False
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar definições de peças: {exc}")
+            self._set_def_pecas_controls_enabled(False)
+            return
+
+        self._populate_def_pecas_table(dados)
+        self._def_pecas_loading = False
+        self._def_pecas_dirty = False
+        self._set_def_pecas_controls_enabled(True)
+
+    def _populate_def_pecas_table(self, dados: List[Dict[str, Optional[str]]]) -> None:
+        field_map = {
+            "ID": "id",
+            "Tipo_Peca_Principal": "tipo_peca_principal",
+            "Subgrupo_Peca": "subgrupo_peca",
+            "Nome_da_Peca": "nome_da_peca",
+            "CP01_SEC": "cp01_sec",
+            "CP02_ORL": "cp02_orl",
+            "CP03_CNC": "cp03_cnc",
+            "CP04_ABD": "cp04_abd",
+            "CP05_PRENSA": "cp05_prensa",
+            "CP06_ESQUAD": "cp06_esquad",
+            "CP07_EMBALAGEM": "cp07_embalagem",
+            "CP08_MAO_DE_OBRA": "cp08_mao_de_obra",
+        }
+        self.tbl_def_pecas.blockSignals(True)
+        self.tbl_def_pecas.setRowCount(len(dados))
+        for row_idx, reg in enumerate(dados):
+            for col_idx, header in enumerate(self.DEF_PECAS_HEADERS):
+                key = field_map[header]
+                valor = reg.get(key)
+                if header == "ID":
+                    texto = str(int(valor)) if valor not in (None, "") else ""
+                elif col_idx in self.DEF_PECAS_NUMERIC_COLUMNS and valor not in (None, ""):
+                    texto = f"{float(valor):.4f}".rstrip("0").rstrip(".")
+                    if not texto:
+                        texto = "0"
+                else:
+                    texto = str(valor) if valor not in (None, "") else ""
+                item = QtWidgets.QTableWidgetItem(texto)
+                if header == "ID":
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                    item.setTextAlignment(QtCore.Qt.AlignCenter)
+                elif col_idx in self.DEF_PECAS_NUMERIC_COLUMNS:
+                    item.setTextAlignment(QtCore.Qt.AlignCenter)
+                else:
+                    item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+                self.tbl_def_pecas.setItem(row_idx, col_idx, item)
+        self.tbl_def_pecas.blockSignals(False)
+
+    def _collect_def_pecas_rows(self) -> List[Dict[str, Optional[str]]]:
+        field_map = {
+            "ID": "id",
+            "Tipo_Peca_Principal": "tipo_peca_principal",
+            "Subgrupo_Peca": "subgrupo_peca",
+            "Nome_da_Peca": "nome_da_peca",
+            "CP01_SEC": "cp01_sec",
+            "CP02_ORL": "cp02_orl",
+            "CP03_CNC": "cp03_cnc",
+            "CP04_ABD": "cp04_abd",
+            "CP05_PRENSA": "cp05_prensa",
+            "CP06_ESQUAD": "cp06_esquad",
+            "CP07_EMBALAGEM": "cp07_embalagem",
+            "CP08_MAO_DE_OBRA": "cp08_mao_de_obra",
+        }
+        linhas: List[Dict[str, Optional[str]]] = []
+        for row in range(self.tbl_def_pecas.rowCount()):
+            linha: Dict[str, Optional[str]] = {}
+            nome = ""
+            for col_idx, header in enumerate(self.DEF_PECAS_HEADERS):
+                item = self.tbl_def_pecas.item(row, col_idx)
+                texto = item.text().strip() if item else ""
+                chave = field_map[header]
+                linha[chave] = texto or None
+                if chave == "nome_da_peca":
+                    nome = texto
+            if nome:
+                linhas.append(linha)
+        return linhas
+
+    def _on_def_pecas_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if self._def_pecas_loading:
+            return
+        self._def_pecas_dirty = True
+        if item.column() in self.DEF_PECAS_NUMERIC_COLUMNS:
+            texto = item.text().strip()
+            if texto:
+                try:
+                    valor = float(texto.replace(",", "."))
+                except ValueError:
+                    valor = 0.0
+                item.setText(f"{valor:.4f}".rstrip("0").rstrip(".") or "0")
+            else:
+                item.setText("0")
+
+    def _on_def_pecas_add_row(self) -> None:
+        row = self.tbl_def_pecas.rowCount()
+        self.tbl_def_pecas.insertRow(row)
+        for col_idx in range(len(self.DEF_PECAS_HEADERS)):
+            if col_idx == 0:
+                item = QtWidgets.QTableWidgetItem("")
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+            else:
+                default_text = "0" if col_idx in self.DEF_PECAS_NUMERIC_COLUMNS else ""
+                item = QtWidgets.QTableWidgetItem(default_text)
+                if col_idx in self.DEF_PECAS_NUMERIC_COLUMNS:
+                    item.setTextAlignment(QtCore.Qt.AlignCenter)
+                else:
+                    item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            self.tbl_def_pecas.setItem(row, col_idx, item)
+        self._def_pecas_dirty = True
+
+    def _on_def_pecas_remove_rows(self) -> None:
+        selection = self.tbl_def_pecas.selectionModel()
+        if not selection:
+            return
+        rows = sorted({index.row() for index in selection.selectedRows()}, reverse=True)
+        if not rows:
+            return
+        for row in rows:
+            self.tbl_def_pecas.removeRow(row)
+        self._def_pecas_dirty = True
+
+    def _on_def_pecas_save(self) -> None:
+        try:
+            linhas = self._collect_def_pecas_rows()
+            svc_def_pecas.guardar_definicoes(self.db, linhas)
+            self._def_pecas_dirty = False
+            self._load_def_pecas_table(force=True)
+            QtWidgets.QMessageBox.information(self, "Sucesso", "Definições de peças gravadas.")
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar definições de peças: {exc}")
+
+    def _on_tab_changed(self, index: int) -> None:
         widget = self.tabs.widget(index)
-        if widget is self.tab_producao and self._producao_ctx and self._producao_dirty:
+        if getattr(self, "tab_producao", None) is not None and widget is self.tab_producao and self._producao_ctx and self._producao_dirty:
             self._load_producao_table()
+        if getattr(self, "tab_def_pecas", None) is not None and widget is self.tab_def_pecas and self._def_pecas_dirty:
+            self._load_def_pecas_table(force=True)
 
     def _clear_producao_table(self) -> None:
         self.tbl_producao.setRowCount(0)
