@@ -1,5 +1,6 @@
 ﻿from typing import Optional
 
+import logging
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 
@@ -11,6 +12,9 @@ from .pages.dados_gerais import DadosGeraisPage
 from .pages.dados_items import DadosItemsPage
 from .pages.custeio_items import CusteioItemsPage
 from .pages.settings import SettingsPage
+
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -176,6 +180,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_production_mode_changed(self, modo: str):
         self.pg_settings.update_producao_mode_display(modo)
+        if hasattr(self.pg_custeio, "on_production_mode_changed"):
+            try:
+                self.pg_custeio.on_production_mode_changed(modo)
+            except Exception as exc:
+                logger.exception("Falha ao atualizar modo de producao no custeio: %s", exc)
 
     def _reset_all_nav_item_styles(self) -> None:
         def reset_item(item: QtWidgets.QTreeWidgetItem) -> None:
