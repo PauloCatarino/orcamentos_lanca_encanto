@@ -669,9 +669,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         qt_total_val = self._coerce_numeric(row_data.get("qt_total")) or 0.0
         total_val = self._coerce_numeric(row_data.get("soma_custo_acb"))
 
-        lines: List[str] = ["Acabamentos - detalhes do c├ílculo"]
+        lines: List[str] = ["Acabamentos - detalhes do c\u00E1lculo"]
         if area_val is not None:
-            lines.append(f"├ürea por unidade: {area_val:.4f} m┬▓")
+            lines.append(f"\u00C1rea por unidade: {area_val:.4f} m\u00B2")
         if qt_total_val:
             qt_display = self._format_result_number(qt_total_val) or f"{qt_total_val:.2f}"
             lines.append(f"Qt_total: {qt_display}")
@@ -683,7 +683,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             nonlocal unit_sum, has_formula_values
             info = self._get_acabamento_info(nome)
             if not info:
-                lines.append(f"{label}: {nome} (sem dados dispon├¡veis na tabela de acabamentos)")
+                lines.append(f"{label}: {nome} (sem dados dispon\u00EDveis na tabela de acabamentos)")
                 return
 
             preco = info.get("preco_liq") or 0.0
@@ -695,7 +695,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             lines.append(f"{label}: {nome}")
             lines.append(
-                f"  Pre├ºo l├¡q.: {_fmt_currency(preco)} €/m┬▓ | Desperd├¡cio: {desp_percent:.2f}% (fator {fator:.3f})"
+                f"  Pre\u00E7o l\u00EDq.: {_fmt_currency(preco)} \u20AC/m\u00B2 | Desperd\u00EDcio: {desp_percent:.2f}% (fator {fator:.3f})"
             )
 
             if area_val is not None and preco:
@@ -704,10 +704,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 unit_sum += unit_sum_local
                 has_formula_values = True
                 lines.append(
-                    f"  Custo unit├írio: {area_val:.4f} m┬▓ x {_fmt_currency(preco)} €/m┬▓ x {fator:.3f} = {_fmt_currency(unit_sum_local)} €/und"
+                    f"  Custo unit\u00E1rio: {area_val:.4f} m\u00B2 x {_fmt_currency(preco)} \u20AC/m\u00B2 x {fator:.3f} = {_fmt_currency(unit_sum_local)} \u20AC/und"
                 )
             else:
-                lines.append("  Custo unit├írio: insuficiente (├írea/pre├ºo em falta)")
+                lines.append("  Custo unit\u00E1rio: insuficiente (\u00E1rea/pre\u00E7o em falta)")
 
         if sup_nome:
             _append_info("Superior", sup_nome)
@@ -717,17 +717,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if not has_formula_values and total_val is not None and qt_total_val:
             unit_sum = round(total_val / qt_total_val, 6)
         unit_sum = round(unit_sum, 2)
-        lines.append(f"Soma unit├íria (calculada): {_fmt_currency(unit_sum)} €/und")
+        lines.append(f"Soma unit\u00E1ria (calculada): {_fmt_currency(unit_sum)} \u20AC/und")
 
         if total_val is not None:
             total_display = _fmt_currency(total_val)
             if qt_total_val:
                 qt_display = self._format_result_number(qt_total_val) or f"{qt_total_val:.2f}"
                 lines.append(
-                    f"Custo total registado: {total_display} € (= {_fmt_currency(unit_sum)} €/und x {qt_display})"
+                    f"Custo total registado: {total_display} \u20AC (= {_fmt_currency(unit_sum)} \u20AC/und x {qt_display})"
                 )
             else:
-                lines.append(f"Custo total registado: {total_display} €")
+                lines.append(f"Custo total registado: {total_display} \u20AC")
         else:
             lines.append("Custo total registado: -")
 
@@ -1344,6 +1344,18 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         if role == QtCore.Qt.ToolTipRole and key == "cp05_prensa_und":
             tooltip = row_data.get("_cp05_prensa_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "cp06_esquad_und":
+            tooltip = row_data.get("_cp06_esquad_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "cp07_embalagem_und":
+            tooltip = row_data.get("_cp07_embalagem_und_tooltip")
             if tooltip:
                 return tooltip
             return None
@@ -2309,12 +2321,20 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         cnc_hour_info: Optional[Dict[str, float]] = None
         abd_rate_info: Optional[Dict[str, float]] = None
         prensa_rate_info: Optional[Dict[str, float]] = None
+        esquad_rate_info: Optional[Dict[str, float]] = None
+        embal_rate_info: Optional[Dict[str, float]] = None
         cnc_rate_low: Optional[float] = None
         cnc_rate_medium: Optional[float] = None
         cnc_rate_high: Optional[float] = None
         cnc_rate_hour: Optional[float] = None
         abd_rate_value: Optional[float] = None
         prensa_rate_value: Optional[float] = None
+        esquad_rate_value: Optional[float] = None
+        esquad_rate_std: Optional[float] = None
+        esquad_rate_serie: Optional[float] = None
+        embal_rate_value: Optional[float] = None
+        embal_rate_std: Optional[float] = None
+        embal_rate_serie: Optional[float] = None
         if page_ref is not None and hasattr(page_ref, "production_mode"):
             try:
                 production_mode = page_ref.production_mode()
@@ -2381,6 +2401,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 prensa_rate_info = page_ref.get_production_rate_info("EUROS_HORA_PRENSA")
             except Exception:
                 prensa_rate_info = None
+            try:
+                esquad_rate_info = page_ref.get_production_rate_info("EUROS_HORA_ESQUAD")
+            except Exception:
+                esquad_rate_info = None
+            try:
+                embal_rate_info = page_ref.get_production_rate_info("EUROS_EMBALAGEM_M3")
+            except Exception:
+                embal_rate_info = None
 
             cnc_rate_low = _select_rate(cnc_low_info)
             cnc_rate_medium = _select_rate(cnc_medium_info)
@@ -2388,6 +2416,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             cnc_rate_hour = _select_rate(cnc_hour_info)
             abd_rate_value = _select_rate(abd_rate_info)
             prensa_rate_value = _select_rate(prensa_rate_info)
+            esquad_rate_value = _select_rate(esquad_rate_info)
+            if esquad_rate_info:
+                esquad_rate_std = _float_or_none(esquad_rate_info.get("valor_std"))
+                esquad_rate_serie = _float_or_none(esquad_rate_info.get("valor_serie"))
+            embal_rate_value = _select_rate(embal_rate_info)
+            if embal_rate_info:
+                embal_rate_std = _float_or_none(embal_rate_info.get("valor_std"))
+                embal_rate_serie = _float_or_none(embal_rate_info.get("valor_serie"))
 
 
         divisor = 1.0
@@ -3166,6 +3202,114 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     production_cost_changed = True
                 row["cp05_prensa_und"] = cp05_new_value
             row["_cp05_prensa_und_tooltip"] = tooltip_cp05
+
+            cp06_prev_val = self._coerce_numeric(row.get("cp06_esquad_und"))
+            cp06_factor = self._coerce_numeric(row.get("cp06_esquad"))
+            tooltip_cp06: Optional[str] = None
+            cp06_new_value: Optional[float] = None
+            rate_esquad: Optional[float] = None
+            if (
+                row_type not in {"division", "separator"}
+                and cp06_factor is not None
+                and cp06_factor > 0
+                and esquad_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_esquad = float(esquad_rate_value)
+                    cp06_new_value = round(cp06_factor * (rate_esquad / 60.0), 2)
+                except Exception:
+                    cp06_new_value = None
+                if cp06_new_value is not None and rate_esquad is not None:
+                    tooltip_lines_cp06 = [
+                        f"Modo: {production_mode}",
+                        f"CP06_ESQUAD: {cp06_factor:.2f}",
+                        f"Tarifa EUROS_HORA_ESQUAD: {rate_esquad:.4f} €/hora",
+                        f"Calculo: {cp06_factor:.2f} x ({rate_esquad:.4f} €/hora / 60) = {cp06_new_value:.2f} €",
+                    ]
+                    if esquad_rate_std is not None and esquad_rate_serie is not None:
+                        tooltip_lines_cp06.append(
+                            f"STD: {esquad_rate_std:.4f} €/hora | SERIE: {esquad_rate_serie:.4f} €/hora"
+                        )
+                    tooltip_cp06 = "\n".join(tooltip_lines_cp06)
+            if cp06_new_value is None:
+                if cp06_prev_val is not None:
+                    production_cost_changed = True
+                row["cp06_esquad_und"] = None
+                if tooltip_cp06 is None and cp06_factor not in (None, 0):
+                    tooltip_cp06 = "Tarifa nao disponivel para calcular ESQUADREJADORA"
+            else:
+                if cp06_prev_val is None or not _float_almost_equal(cp06_prev_val, cp06_new_value, tol=1e-4):
+                    production_cost_changed = True
+                row["cp06_esquad_und"] = cp06_new_value
+            row["_cp06_esquad_und_tooltip"] = tooltip_cp06
+
+            cp07_prev_val = self._coerce_numeric(row.get("cp07_embalagem_und"))
+            cp07_factor = self._coerce_numeric(row.get("cp07_embalagem"))
+            tooltip_cp07: Optional[str] = None
+            cp07_new_value: Optional[float] = None
+            qt_total_calc = self._coerce_numeric(row.get("qt_total"))
+            comp_res = self._coerce_numeric(row.get("comp_res"))
+            larg_res = self._coerce_numeric(row.get("larg_res"))
+            esp_res = self._coerce_numeric(row.get("esp_res"))
+            volume_m3: Optional[float] = None
+            has_dimensions = (
+                qt_total_calc not in (None, 0)
+                and comp_res not in (None, 0)
+                and larg_res not in (None, 0)
+                and esp_res not in (None, 0)
+            )
+            if (
+                row_type not in {"division", "separator"}
+                and cp07_factor is not None
+                and cp07_factor > 0
+                and has_dimensions
+                and embal_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_embal = float(embal_rate_value)
+                    volume_m3 = (
+                        float(qt_total_calc)
+                        * float(comp_res)
+                        * float(larg_res)
+                        * float(esp_res)
+                    ) / 1_000_000_000.0
+                    cp07_new_value = round(cp07_factor * volume_m3 * rate_embal, 2)
+                except Exception:
+                    cp07_new_value = None
+                if cp07_new_value is not None and volume_m3 is not None:
+                    tooltip_lines_cp07 = [
+                        f"Modo: {production_mode}",
+                        f"CP07_EMBALAGEM: {cp07_factor:.2f}",
+                    ]
+                    tooltip_lines_cp07.append(
+                        "Dimensoes (mm): "
+                        f"Qt_total {qt_total_calc:.2f} x {comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f}"
+                    )
+                    tooltip_lines_cp07.append(
+                        f"Volume total: {volume_m3:.6f} m\u00B3"
+                    )
+                    tooltip_lines_cp07.append(
+                        f"Tarifa EUROS_EMBALAGEM_M3: {rate_embal:.4f} \u20AC/m\u00B3"
+                    )
+                    tooltip_lines_cp07.append(
+                        f"Calculo: {cp07_factor:.2f} x {volume_m3:.6f} m\u00B3 x {rate_embal:.4f} \u20AC/m\u00B3 = {cp07_new_value:.2f} \u20AC"
+                    )
+                    if embal_rate_std is not None and embal_rate_serie is not None:
+                        tooltip_lines_cp07.append(
+                            f"STD: {embal_rate_std:.4f} \u20AC/m\u00B3 | SERIE: {embal_rate_serie:.4f} \u20AC/m\u00B3"
+                        )
+                    tooltip_cp07 = "\n".join(tooltip_lines_cp07)
+            if cp07_new_value is None:
+                if cp07_prev_val is not None:
+                    production_cost_changed = True
+                row["cp07_embalagem_und"] = None
+                if tooltip_cp07 is None and cp07_factor not in (None, 0):
+                    tooltip_cp07 = "Volume ou tarifa nao disponivel para calcular EMBALAGEM"
+            else:
+                if cp07_prev_val is None or not _float_almost_equal(cp07_prev_val, cp07_new_value, tol=1e-4):
+                    production_cost_changed = True
+                row["cp07_embalagem_und"] = cp07_new_value
+            row["_cp07_embalagem_und_tooltip"] = tooltip_cp07
 
             if row.get("esp_mp") not in (None, "") and not expr_esp:
 
