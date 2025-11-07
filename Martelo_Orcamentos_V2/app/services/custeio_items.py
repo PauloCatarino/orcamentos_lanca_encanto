@@ -37,6 +37,19 @@ CP_VALUE_KEYS: Tuple[str, ...] = (
     "cp07_embalagem",
     "cp08_mao_de_obra",
 )
+SPP_WASTE_FRACTION = Decimal("0.06")
+DEFAULT_MP_DESP_FRACTION = Decimal("0.18")
+PRODUCTION_CP_SUM_FIELDS: Tuple[str, ...] = (
+    "cp01_sec_und",
+    "cp02_orl_und",
+    "cp03_cnc_und",
+    "cp04_abd_und",
+    "cp05_prensa_und",
+    "cp06_esquad_und",
+    "cp07_embalagem_und",
+    "cp08_mao_de_obra_und",
+)
+_COLUMN_VISIBILITY_TEMPLATE = "custeio:hidden_columns:user:{user_id}"
 
 ACABAMENTO_DEFAULTS = [
     "Lacar Face Sup",
@@ -50,6 +63,8 @@ ACABAMENTO_DEFAULTS = [
     "Acabamento Face Inf 1",
     "Acabamento Face Inf 2",
 ]
+
+COLAGEM_REVESTIMENTO_LABEL = "COLAGEM/REVESTIMENTO (M2)"
 
 DIMENSION_KEY_ORDER: Sequence[str] = (
     "H",
@@ -495,7 +510,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "CNC (Min)"},
             {"label": "CNC (5 Min)"},
             {"label": "CNC (15 Min)"},
-            {"label": "COLAGEM SANDWICH (M2)"},
+            {"label": COLAGEM_REVESTIMENTO_LABEL},
             {"label": "EMBALAGEM (M3)"},
         ],
     },
@@ -730,6 +745,7 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "cp07_embalagem_und", "label": "CP07_EMBALAGEM_und", "type": "numeric", "editable": True, "format": "two"},
     {"key": "cp08_mao_de_obra", "label": "CP08_MAO_DE_OBRA", "type": "numeric", "editable": True, "format": "two"},
     {"key": "cp08_mao_de_obra_und", "label": "CP08_MAO_DE_OBRA_und", "type": "numeric", "editable": True, "format": "two"},
+    {"key": "cp09_colagem_und", "label": "CP09_COLAGEM_und", "type": "numeric", "editable": True, "format": "two"},
     {"key": "custo_mp_und", "label": "CUSTO_MP_und", "type": "numeric", "editable": False, "format": "two"},
     {"key": "custo_mp_total", "label": "CUSTO_MP_Total", "type": "numeric", "editable": False, "format": "two"},
     {"key": "soma_custo_orla_total", "label": "Soma_Custo_Orla_Total", "type": "numeric", "editable": False, "format": "two"},
@@ -1153,6 +1169,38 @@ def set_auto_dimension_enabled(session: Session, user_id: Optional[int], enabled
     set_setting(session, _auto_dimensions_setting_key(user_id), value)
 
 
+def _column_visibility_key(user_id: Optional[int]) -> Optional[str]:
+    if not user_id:
+        return None
+    return _COLUMN_VISIBILITY_TEMPLATE.format(user_id=user_id)
+
+
+def carregar_colunas_ocultas(session: Session, user_id: Optional[int]) -> Set[str]:
+    key = _column_visibility_key(user_id)
+    if key is None:
+        return set()
+    raw = get_setting(session, key, "[]") or "[]"
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return set()
+    if not isinstance(data, list):
+        return set()
+    resultado: Set[str] = set()
+    for entrada in data:
+        if isinstance(entrada, str) and entrada:
+            resultado.add(entrada)
+    return resultado
+
+
+def guardar_colunas_ocultas(session: Session, user_id: Optional[int], colunas: Set[str]) -> None:
+    key = _column_visibility_key(user_id)
+    if key is None:
+        return
+    payload = sorted({str(coluna) for coluna in colunas if isinstance(coluna, str) and coluna})
+    set_setting(session, key, json.dumps(payload))
+
+
 def _normalize_def_peca_for_auto(def_peca: Optional[str]) -> str:
     if not def_peca:
         return ""
@@ -1511,8 +1559,12 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
         comp_res_mm = Decimal(str(comp_res_val)) if comp_res_val is not None else Decimal("0")
         larg_res_mm = Decimal(str(larg_res_val)) if larg_res_val is not None else Decimal("0")
         esp_res = esp_res_val or 0.0
+        und_val = (getattr(reg, "und", None) or "").strip().upper()
         comp_m = (comp_res_mm / Decimal("1000")).quantize(Decimal("0.0001"))
         larg_m = (larg_res_mm / Decimal("1000")).quantize(Decimal("0.0001"))
+        mps_flag = _coerce_checkbox_to_bool(getattr(reg, "mps", None))
+        mo_flag = _coerce_checkbox_to_bool(getattr(reg, "mo", None))
+        orla_flag = _coerce_checkbox_to_bool(getattr(reg, "orla", None))
 
         if _is_divisao_def(reg.def_peca):
             reg.area_m2_und = None
@@ -1523,16 +1575,79 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
             reg.area_m2_und = area_decimal.quantize(Decimal("0.0001"))
             reg.perimetro_und = perimetro_decimal.quantize(Decimal("0.0001"))
 
+        spp_decimal_precise: Optional[Decimal] = None
         if _is_divisao_def(reg.def_peca):
             reg.spp_ml_und = None
-        elif _is_spp_context(getattr(reg, "und", None), getattr(reg, "def_peca", None)):
+        elif _is_spp_context(und_val, getattr(reg, "def_peca", None)):
             if comp_res_val is not None:
-                spp_decimal = (Decimal(str(comp_res_val)) / Decimal("1000")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                reg.spp_ml_und = spp_decimal
+                base_ml = Decimal(str(comp_res_val)) / Decimal("1000")
+                spp_decimal_precise = base_ml * (Decimal("1") + SPP_WASTE_FRACTION)
+                reg.spp_ml_und = spp_decimal_precise.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
             else:
                 reg.spp_ml_und = None
         else:
             reg.spp_ml_und = None
+
+        if _is_divisao_def(reg.def_peca):
+            reg.custo_mp_und = None
+            reg.custo_mp_total = None
+            reg.soma_custo_und = None
+            reg.soma_custo_total = None
+        else:
+            desp_fraction = _coerce_percent_fraction(getattr(reg, "desp", None))
+            if desp_fraction is None or desp_fraction <= Decimal("0"):
+                desp_fraction = Decimal(str(DEFAULT_MP_DESP_FRACTION))
+            fator_desp = Decimal("1") + desp_fraction
+            pliq_val = _parse_float_value(getattr(reg, "pliq", None))
+            pliq_decimal = Decimal(str(pliq_val)) if pliq_val not in (None, 0) else None
+            qt_total_decimal = _to_decimal(getattr(reg, "qt_total", None)) or Decimal("0")
+            base_decimal: Optional[Decimal] = None
+            if und_val == "M2" and area_decimal > Decimal("0"):
+                base_decimal = area_decimal
+            elif und_val == "ML" and spp_decimal_precise:
+                base_decimal = spp_decimal_precise
+            elif und_val == "UND":
+                base_decimal = Decimal("1")
+
+            if mps_flag:
+                custo_mp_und_decimal = Decimal("0.00")
+                reg.custo_mp_und = custo_mp_und_decimal
+            elif base_decimal is not None and base_decimal > Decimal("0") and pliq_decimal not in (None, Decimal("0")):
+                custo_mp_und_decimal = (base_decimal * fator_desp * pliq_decimal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                reg.custo_mp_und = custo_mp_und_decimal
+            else:
+                custo_mp_und_decimal = None
+                reg.custo_mp_und = None
+
+            if mps_flag:
+                custo_mp_total_decimal = Decimal("0.00")
+                reg.custo_mp_total = custo_mp_total_decimal
+            elif custo_mp_und_decimal is not None and qt_total_decimal > Decimal("0"):
+                custo_mp_total_decimal = (custo_mp_und_decimal * qt_total_decimal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                reg.custo_mp_total = custo_mp_total_decimal
+            else:
+                custo_mp_total_decimal = None
+                reg.custo_mp_total = None
+
+            soma_custo_und_decimal = Decimal("0")
+            for field in PRODUCTION_CP_SUM_FIELDS:
+                valor_field = _to_decimal(getattr(reg, field, None))
+                if valor_field is not None:
+                    soma_custo_und_decimal += valor_field
+            if mo_flag:
+                soma_custo_und_decimal = Decimal("0.00")
+            reg.soma_custo_und = soma_custo_und_decimal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            maquinas_total_decimal = Decimal("0")
+            if not mo_flag and qt_total_decimal > Decimal("0"):
+                maquinas_total_decimal = (soma_custo_und_decimal * qt_total_decimal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            custo_total_orla_decimal = _to_decimal(getattr(reg, "custo_total_orla", None)) or Decimal("0")
+            if orla_flag:
+                custo_total_orla_decimal = Decimal("0.00")
+            custo_mp_total_component = custo_mp_total_decimal if custo_mp_total_decimal is not None else Decimal("0")
+            soma_total_decimal = maquinas_total_decimal + custo_total_orla_decimal + custo_mp_total_component
+            reg.soma_custo_total = soma_total_decimal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         soma_ml = Decimal("0")
         soma_custos = Decimal("0")
@@ -1617,7 +1732,7 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
             soma_custos += custo_val
 
         reg.soma_total_ml_orla = soma_ml.quantize(Decimal("0.0001"))
-        reg.custo_total_orla = soma_custos.quantize(Decimal("0.0001"))
+        reg.custo_total_orla = Decimal("0.0000") if orla_flag else soma_custos.quantize(Decimal("0.0001"))
 
     session.flush()
 
@@ -1884,6 +1999,12 @@ def gerar_linhas_para_selecoes(
             linha["qt_mod"] = 1
         if linha.get("qt_und") in (None, 0):
             linha["qt_und"] = 1
+
+        def_peca_norm = (raw_def or "").strip().casefold()
+        if def_peca_norm == "cnc (5 min)".casefold():
+            linha["qt_und"] = 5
+        elif def_peca_norm == "cnc (15 min)".casefold():
+            linha["qt_und"] = 15
 
         linha["_child_tokens"] = child_tokens
         linha["_parent_label"] = parent_label

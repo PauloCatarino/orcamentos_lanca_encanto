@@ -45,8 +45,13 @@ COLUNAS_DADOS_DEF_PECAS = [
     'area_m2_und', 'spp_ml_und', 'cp09_custo_mp', 'custo_mp_und', 'custo_mp_total', 'acb_sup', 'acb_inf', 'acb_sup_und',
     'acb_inf_und', 'cp01_sec', 'cp01_sec_und', 'cp02_orl', 'cp02_orl_und', 'cp03_cnc', 'cp03_cnc_und', 'cp04_abd',
     'cp04_abd_und', 'cp05_prensa', 'cp05_prensa_und', 'cp06_esquad', 'cp06_esquad_und', 'cp07_embalagem',
-    'cp07_embalagem_und', 'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'soma_custo_und', 'soma_custo_total', 'soma_custo_acb'
+    'cp07_embalagem_und', 'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'cp09_colagem_und',
+    'soma_custo_und', 'soma_custo_total', 'soma_custo_acb'
 ]
+
+MANUAL_DEF_CNC = {"cnc (min)", "cnc (5 min)", "cnc (15 min)"}
+MANUAL_DEF_MO = {"mao obra (min)"}
+MANUAL_DEF_COLAGEM = {"colagem/revestimento (m2)"}
 
 # Helpers de normalização para filtros por orçamento/versão
 def _to_ver_str(v) -> str:
@@ -312,21 +317,35 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
     numeric_cols = [
         'cp01_sec', 'cp01_sec_und', 'cp02_orl', 'cp02_orl_und', 'cp03_cnc', 'cp03_cnc_und', 'cp04_abd', 'cp04_abd_und',
         'cp05_prensa', 'cp05_prensa_und', 'cp06_esquad', 'cp06_esquad_und', 'cp07_embalagem', 'cp07_embalagem_und',
-        'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'qt_total', 'comp_res', 'larg_res', 'orla_c1', 'orla_c2',
-        'orla_l1', 'orla_l2', 'ml_c1', 'ml_c2', 'ml_l1', 'ml_l2'
+        'cp08_mao_de_obra', 'cp08_mao_de_obra_und', 'cp09_colagem_und', 'qt_total', 'comp_res', 'larg_res', 'orla_c1',
+        'orla_c2', 'orla_l1', 'orla_l2', 'ml_c1', 'ml_c2', 'ml_l1', 'ml_l2'
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     def get_cost(df_filtered, cost_col, qty_col='qt_total'):
         return (df_filtered[cost_col] * df_filtered[qty_col]).sum().round(2)
+    def_series = df.get('def_peca')
+    if def_series is not None:
+        def_norm = def_series.astype(str).str.strip().str.casefold()
+    else:
+        def_norm = pd.Series("", index=df.index)
+    manual_cnc_mask = def_norm.isin(MANUAL_DEF_CNC)
+    manual_mo_mask = def_norm.isin(MANUAL_DEF_MO)
+    manual_colagem_mask = def_norm.isin(MANUAL_DEF_COLAGEM)
     custo_corte = get_cost(df.loc[df['cp01_sec'] >= 1], 'cp01_sec_und')
     custo_orladora = get_cost(df.loc[df['cp02_orl'] >= 1], 'cp02_orl_und')
-    custo_cnc = get_cost(df.loc[df['cp03_cnc'] >= 1], 'cp03_cnc_und')
+    custo_cnc_auto = get_cost(df.loc[(df['cp03_cnc'] >= 1) & ~manual_cnc_mask], 'cp03_cnc_und')
+    custo_cnc_manual = round(df.loc[manual_cnc_mask, 'cp03_cnc_und'].fillna(0).sum(), 2)
+    custo_cnc = round(custo_cnc_auto + custo_cnc_manual, 2)
     custo_abd = get_cost(df.loc[df['cp04_abd'] >= 1], 'cp04_abd_und')
     custo_prensa = get_cost(df.loc[df['cp05_prensa'] >= 1], 'cp05_prensa_und')
     custo_esquad = get_cost(df.loc[df['cp06_esquad'] >= 1], 'cp06_esquad_und')
     custo_embal = get_cost(df.loc[df['cp07_embalagem'] >= 1], 'cp07_embalagem_und')
-    custo_mo = get_cost(df.loc[df['cp08_mao_de_obra'] >= 1], 'cp08_mao_de_obra_und')
+    custo_mo_auto = get_cost(df.loc[(df['cp08_mao_de_obra'] >= 1) & ~manual_mo_mask], 'cp08_mao_de_obra_und')
+    custo_mo_manual = round(df.loc[manual_mo_mask, 'cp08_mao_de_obra_und'].fillna(0).sum(), 2)
+    custo_mo = round(custo_mo_auto + custo_mo_manual, 2)
+    custo_colagem = round(df.loc[manual_colagem_mask, 'cp09_colagem_und'].fillna(0).sum(), 2)
+    custo_colagem = get_cost(df.loc[df['cp09_colagem_und'] > 0], 'cp09_colagem_und')
     # Cálculo dos metros lineares e nº peças (Corte e Orlagem)
     df_corte = df.loc[df['cp01_sec'] >= 1]
     ml_corte = ((df_corte['comp_res'] * 2 + df_corte['larg_res'] * 2) * df_corte['qt_total'] / 1000).sum().round(2)
@@ -352,7 +371,8 @@ def resumo_maquinas_mo(pecas: pd.DataFrame, num_orc, versao):
         {"Operação": "Prensa (Montagem)", "Custo Total (€)": custo_prensa},
         {"Operação": "Esquadrejadora (Cortes Manuais)", "Custo Total (€)": custo_esquad},
         {"Operação": "Embalamento (Paletização)", "Custo Total (€)": custo_embal},
-        {"Operação": "Mão de Obra (MO geral)", "Custo Total (€)": custo_mo}
+        {"Operação": "Mão de Obra (MO geral)", "Custo Total (€)": custo_mo},
+        {"Operação": "Colagem/Revestimento", "Custo Total (€)": custo_colagem}
     ]
     return pd.DataFrame(rows, columns=cols_esperadas).fillna('')
 

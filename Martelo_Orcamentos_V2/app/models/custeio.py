@@ -108,6 +108,7 @@ class CusteioItem(CusteioContextMixin, Base):
     cp07_embalagem_und = Column(Numeric(18, 4), nullable=True)
     cp08_mao_de_obra = Column(Numeric(18, 4), nullable=True)
     cp08_mao_de_obra_und = Column(Numeric(18, 4), nullable=True)
+    cp09_colagem_und = Column(Numeric(18, 4), nullable=True)
     custo_mp_und = Column(Numeric(18, 4), nullable=True)
     custo_mp_total = Column(Numeric(18, 4), nullable=True)
     soma_custo_orla_total = Column(Numeric(18, 4), nullable=True)

@@ -50,9 +50,10 @@ CNC_PRECO_PECA_ALTO = 1.50           # €/peça se AREA_M2_und >= 1
 VALOR_ABD = 0.60                     # €/peça para a máquina ABD
 EUROS_HORA_CNC = 53.0                # €/hora para a máquina CNC
 EUROS_HORA_PRENSA = 50.0             # €/hora para a máquina Prensa
-EUROS_HORA_ESQUAD = 20.0              # €/hora para a máquina Esquadrejadora
-EUROS_EMBALAGEM_M3 = 50.0             # €/M³ para Embalagem
-EUROS_HORA_MO = 17.5                   # €/hora para Mão de Obra
+EUROS_HORA_ESQUAD = 20.0             # €/hora para a máquina Esquadrejadora
+EUROS_EMBALAGEM_M3 = 50.0            # €/M³ para Embalagem
+EUROS_HORA_MO = 17.5                 # €/hora para Mão de Obra
+DESPERDICIO_SPP_PADRAO = 0.06        # 6% para cálculo de SPP_ML_und (ML)
 MODO_PRODUCAO = "STD"                  # Modo de produção padrão (STD, SERIE, etc.)
 
 def aplicar_valores_maquinas(modo="STD", num_orc=None, ver_orc=None):
@@ -117,31 +118,7 @@ IDX_PLIQ = 21                # Preço Líquido (€)
 IDX_DESP_PECA = 25           # Desperdício da peça principal (%)
 IDX_BLK = 12                 # Checkbox BLK - Bloqueia atualização automática
 
-# Índices de colunas de resultados/dados calculados por outros módulos ou importados
-IDX_COMP_RES = 50            # Resultado do Comprimento (mm)
-IDX_LARG_RES = 51            # Resultado da Largura (mm)
-IDX_ESP_RES = 52             # Resultado da Espessura (mm) da peça
-IDX_QT_TOTAL = 49            # Quantidade Total (Qt_mod * Qt_und)
-IDX_ML_C1 = 41               # Metros Lineares Orla C1 (por unidade)
-IDX_ML_C2 = 42               # Metros Lineares Orla C2 (por unidade)
-IDX_ML_L1 = 43               # Metros Lineares Orla L1 (por unidade)
-IDX_ML_L2 = 44               # Metros Lineares Orla L2 (por unidade)
-IDX_CUSTO_ML_C1 = 45         # Custo ML Orla C1 (por unidade)
-IDX_CUSTO_ML_C2 = 46         # Custo ML Orla C2 (por unidade)
-IDX_CUSTO_ML_L1 = 47         # Custo ML Orla L1 (por unidade)
-IDX_CUSTO_ML_L2 = 48         # Custo ML Orla L2 (por unidade)
-
-# Índices das colunas CPxx base (lidos do Excel)
-IDX_CP01_SEC_BASE = 63       # CP01_SEC (do Excel)
-IDX_CP02_ORL_BASE = 65       # CP02_ORL (do Excel)
-IDX_CP03_CNC_BASE = 67       # CP03_CNC (do Excel)
-IDX_CP04_ABD_BASE = 69       # CP04_ABD (do Excel)
-IDX_CP05_PRENSA_BASE = 71    # CP05_PRENSA (do Excel)
-IDX_CP06_ESQUAD_BASE = 73    # CP06_ESQUAD (do Excel)
-IDX_CP07_EMBALAGEM_BASE = 75 # CP07_EMBALAGEM (do Excel)
-IDX_CP08_MAO_DE_OBRA_BASE = 77 # CP08_MAO_DE_OBRA (do Excel)
-
-# Índices das colunas de resultados dos cálculos (a serem preenchidas)
+# ?ndices das colunas de resultados dos c?lculos (a serem preenchidas)
 IDX_AREA_M2 = 54             # AREA_M2_und
 IDX_SPP_ML_UND = 55          # SPP_ML_und
 IDX_CP09_CUSTO_MP = 56       # CP09_CUSTO_MP (Flag 0 ou 1)
@@ -159,14 +136,12 @@ IDX_CP05_PRENSA_UND = 72     # CP05_PRENSA_und
 IDX_CP06_ESQUAD_UND = 74     # CP06_ESQUAD_und
 IDX_CP07_EMBALAGEM_UND = 76  # CP07_EMBALAGEM_und
 IDX_CP08_MAO_DE_OBRA_UND = 78 # CP08_MAO_DE_OBRA_und
-IDX_SOMA_CUSTO_UND = 79      # Soma_Custo_und (Soma dos CPxx_und das máquinas)
+IDX_SOMA_CUSTO_UND = 79      # Soma_Custo_und (Soma dos CPxx_und das m?quinas)
 IDX_SOMA_CUSTO_TOTAL = 80    # Soma_Custo_Total (Soma_Custo_und + Custo_MP_Total + Custo_Orlas_Total) * Qt_Total
 IDX_SOMA_CUSTO_ACB = 81      # Soma_Custo_ACB (ACB_SUP_und + ACB_INF_und) * Qt_Total
 
 
 # --- Mapeamento de colunas CP base do Excel para colunas na tabela UI ---
-# Chave: Nome da coluna no DataFrame do Excel (após header=4, ex: 'CP01_SEC')
-# Valor: Índice da coluna correspondente na tab_def_pecas
 MAP_EXCEL_CP_TO_UI = {
     'CP01_SEC': IDX_CP01_SEC_BASE,
     'CP02_ORL': IDX_CP02_ORL_BASE,
@@ -216,7 +191,7 @@ def calcular_area_m2_para_linha(table, row):
     return area
 
 # --- Função auxiliar: calcular ML SPP ---
-def calcular_spp_ml_para_linha(table, row):
+def calcular_spp_ml_para_linha(table, row, desp_frac: float = DESPERDICIO_SPP_PADRAO):
     """
     Calcula os Metros Lineares SPP (Superfície por Perfil?) para a linha especificada.
 
@@ -239,7 +214,8 @@ def calcular_spp_ml_para_linha(table, row):
 
     spp_ml = 0.0
     if und_val == "ML" and comp_res > 0:
-        spp_ml = comp_res / 1000.0 # Converte mm para m
+        fator_desp = 1 + max(desp_frac or 0.0, 0.0)
+        spp_ml = (comp_res / 1000.0) * fator_desp
 
     # print(f"  [DEBUG] Linha {row+1}: SPP_ML calculado ({und_val}, {comp_res}) = {spp_ml:.2f} m") # Debug
     return spp_ml
@@ -290,6 +266,7 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     # Obter valores atuais de pliq e desp da tabela (serão usados nos cálculos)
     pliq = converter_texto_para_valor(safe_item_text(table, row, IDX_PLIQ), "moeda")
     desp_peca_fracao = converter_texto_para_valor(safe_item_text(table, row, IDX_DESP_PECA), "percentual")
+    desp_spp_fracao = DESPERDICIO_SPP_PADRAO
 
     # Obter valores de orla da tabela (calculados previamente)
     ml_c1 = converter_texto_para_valor(safe_item_text(table, row, IDX_ML_C1), "moeda")
@@ -345,36 +322,40 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
         # Se a linha está bloqueada, os valores CPxx base nas colunas 63, 65, etc.,
         # já existentes na tabela serão usados pelos cálculos abaixo.
 
-
-    # --- 2. Calcular indicadores e custos unitários (colunas 54-78) ---
-    
     # AREA_M2_und (col 54)
     area_m2 = calcular_area_m2_para_linha(table, row)
-    set_item(table, row, IDX_AREA_M2, f"{area_m2:.2f}") # Formata com 2 decimais para área
-    # Tooltip Área (mantido do código original, pode ser ajustado)
+    set_item(table, row, IDX_AREA_M2, f"{area_m2:.2f}")  # Formata com 2 casas decimais
     tooltip_area = (
         "<html><body>"
-        "<p><b>Fórmula:</b> (Comp_res/1000) * (Larg_res/1000)</p>"
-        f"<p>= ({comp_res:.2f}/1000) * ({larg_res:.2f}/1000) = {area_m2:.2f} m²</p>"
+        "<p><b>Formula:</b> (Comp_res/1000) * (Larg_res/1000)</p>"
+        f"<p>= ({comp_res:.2f}/1000) * ({larg_res:.2f}/1000) = {area_m2:.2f} m\u00b2</p>"
         "</body></html>"
     )
-    set_item(table, row, IDX_AREA_M2, f"{area_m2:.2f}")
-    item_area = table.item(row, IDX_AREA_M2) # Get item after setting text
-    if item_area: item_area.setToolTip(tooltip_area)
-    
+    item_area = table.item(row, IDX_AREA_M2)
+    if item_area:
+        item_area.setToolTip(tooltip_area)
 
     # SPP_ML_und (col 55)
-    spp_ml = calcular_spp_ml_para_linha(table, row)
+    spp_ml = calcular_spp_ml_para_linha(table, row, desp_spp_fracao)
     set_item(table, row, IDX_SPP_ML_UND, f"{spp_ml:.2f}")
-    # Tooltip SPP_ML (mantido)
-    tooltip_spp_ml = (
-        "<html><body>"
-        "<p><b>Fórmula:</b> SPP_ML_und = Comp_res / 1000 (Se und='ML')</p>"
-        f"<p>= ({comp_res:.2f}) / 1000 = {spp_ml:.2f}</p>"
-        "</body></html>"
-    )
+    # Tooltip SPP_ML
+    if und_val == "ML" and comp_res > 0:
+        tooltip_spp_ml = (
+            "<html><body>"
+            "<p><b>Formula:</b> SPP_ML_und = (Comp_res / 1000) * (1 + Desp_SPP)</p>"
+            f"<p>= ({comp_res:.2f} mm / 1000) * (1 + {desp_spp_fracao:.2%}) = {spp_ml:.4f} ML</p>"
+            "<p>Desp_SPP padrao: 6% para conversao em ML.</p>"
+            "</body></html>"
+        )
+    else:
+        tooltip_spp_ml = (
+            "<html><body>"
+            "<p>Disponivel apenas quando a unidade e ML e Comp_res &gt; 0.</p>"
+            "</body></html>"
+        )
     item_spp = table.item(row, IDX_SPP_ML_UND)
-    if item_spp: item_spp.setToolTip(tooltip_spp_ml)
+    if item_spp:
+        item_spp.setToolTip(tooltip_spp_ml)
 
 
     # CP09_CUSTO_MP (col 56) - Flag 0 ou 1 para Custo MP
@@ -387,62 +368,66 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
             custo_mp_flag = 1
     set_item(table, row, IDX_CP09_CUSTO_MP, str(custo_mp_flag)) # Exibe como string "0" ou "1"
     item_cp09 = table.item(row, IDX_CP09_CUSTO_MP)
-    if item_cp09: item_cp09.setToolTip("Fórmula: 1 se Und in [M2, ML, UND] E Mat_Default != TAB_ACABAMENTOS_12; 0 caso contrário.")
+    if item_cp09: item_cp09.setToolTip("Formula: 1 se Und in [M2, ML, UND] e Mat_Default != TAB_ACABAMENTOS_12; 0 caso contrario.")
 
     # CUSTO_MP_und (col 57) - Custo de Matéria-Prima por unidade
     # Regra: Depende de und, usando AREA_M2, SPP_ML, PliQ, Desp_Peca. É 0 se CP09_CUSTO_MP < 1 ou MPs checkbox ativo.
-    cp09_val_numeric = converter_texto_para_valor(safe_item_text(table, row, IDX_CP09_CUSTO_MP), "moeda") # Pega o valor 0/1 como número
+    cp09_val_numeric = converter_texto_para_valor(safe_item_text(table, row, IDX_CP09_CUSTO_MP), "moeda")  # Pega o valor 0/1 como número
 
     custo_mp_und = 0.0
     formula_exp = "0"
-    formula_valores = ""
-    formula_final = "0.00€"
+    formula_valores = "-"
 
-    if cp09_val_numeric >= 1:
-        if und_val == "M2":
-            custo_mp_und = area_m2 * (1 + desp_peca_fracao) * pliq
-            formula_exp = "AREA_M2_und * (1 + Desp_Peca) * PliQ"
-            formula_valores = f"{area_m2:.3f} * (1 + {desp_peca_fracao:.2f}) * {pliq:.2f}"
-        elif und_val == "ML":
-            custo_mp_und = spp_ml * (1 + desp_peca_fracao) * pliq
-            formula_exp = "SPP_ML_und * (1 + Desp_Peca) * PliQ"
-            formula_valores = f"{spp_ml:.3f} * (1 + {desp_peca_fracao:.2f}) * {pliq:.2f}"
-        elif und_val == "UND":
-            custo_mp_und = pliq * (1 + desp_peca_fracao)
-            formula_exp = "PliQ * (1 + Desp_Peca)"
-            formula_valores = f"{pliq:.2f} * (1 + {desp_peca_fracao:.2f})"
-        formula_final = f"{custo_mp_und:.2f}€"
-
-    # Se o checkbox MPs (coluna 9) estiver ativo, custo é 0
     item_mps_chk = table.item(row, 9)
-    if item_mps_chk and item_mps_chk.checkState() == Qt.Checked:
-        custo_mp_und = 0.0
-        formula_exp = "0 (MPs checkbox ativo)"
-        formula_valores = ""
-        formula_final = "0.00€"
+    mps_ativo = bool(item_mps_chk and item_mps_chk.checkState() == Qt.Checked)
 
-    # Gravar o custo e o novo tooltip
+    if not mps_ativo and cp09_val_numeric >= 1 and pliq not in (None, 0):
+        fator_desp = 1 + max(desp_peca_fracao or 0.0, 0.0)
+        if und_val == "M2" and area_m2 > 0:
+            custo_mp_und = area_m2 * fator_desp * pliq
+            formula_exp = "CUSTO_MP_und = AREA_M2_und * (1 + Desp) * PliQ"
+            formula_valores = f"{area_m2:.4f} m\u00b2 * (1 + {desp_peca_fracao:.2%}) * {pliq:.2f} \u20ac"
+        elif und_val == "ML" and spp_ml > 0:
+            custo_mp_und = spp_ml * fator_desp * pliq
+            formula_exp = "CUSTO_MP_und = SPP_ML_und * (1 + Desp) * PliQ"
+            formula_valores = f"{spp_ml:.4f} ML * (1 + {desp_peca_fracao:.2%}) * {pliq:.2f} \u20ac"
+        elif und_val == "UND":
+            custo_mp_und = fator_desp * pliq
+            formula_exp = "CUSTO_MP_und = (1 + Desp) * PliQ"
+            formula_valores = f"(1 + {desp_peca_fracao:.2%}) * {pliq:.2f} \u20ac"
+        else:
+            formula_exp = "Unidade sem formula configurada"
+    elif mps_ativo:
+        formula_exp = "0 (MPs selecionado)"
+    elif cp09_val_numeric < 1:
+        formula_exp = "0 (CP09_CUSTO_MP = 0)"
+    else:
+        formula_exp = "0 (PliQ vazio ou zero)"
+
     set_item(table, row, IDX_CUSTO_MP_UND, formatar_valor_moeda(round(custo_mp_und, 2)))
     item_custo_mp_und = table.item(row, IDX_CUSTO_MP_UND)
     if item_custo_mp_und:
         tooltip = (
-            f"<b>Fórmula:</b> {formula_exp}<br>"
-            f"<b>Valores:</b> {formula_valores}<br>"
-            f"<b>Resultado:</b> {formula_final}"
+            "<html><body>"
+            f"<p><b>Formula:</b> {formula_exp}</p>"
+            f"<p><b>Valores:</b> {formula_valores}</p>"
+            f"<p><b>Resultado:</b> {custo_mp_und:.2f} \u20ac</p>"
+            "</body></html>"
         )
         item_custo_mp_und.setToolTip(tooltip)
-
-
     # CUSTO_MP_Total (col 58) = CUSTO_MP_und * Qt_Total
-    # Este cálculo usa o CUSTO_MP_und JÁ CALCULADO/AJUSTADO acima
     custo_mp_total = custo_mp_und * qt_total
-    set_item(table, row, IDX_CUSTO_MP_TOTAL, formatar_valor_moeda(round(custo_mp_total, 2))) # Formata como moeda
+    set_item(table, row, IDX_CUSTO_MP_TOTAL, formatar_valor_moeda(round(custo_mp_total, 2)))
     item_custo_mp_total = table.item(row, IDX_CUSTO_MP_TOTAL)
-    if item_custo_mp_total: # Garante que o item existe
-        item_custo_mp_total.setToolTip(f"Fórmula: CUSTO_MP_und * Qt_Total\n= {round(custo_mp_und, 2):.2f}€ * {qt_total:.0f} = {round(custo_mp_total, 2):.2f}€")
+    if item_custo_mp_total:
+        item_custo_mp_total.setToolTip(
+            "<html><body>"
+            f"<p><b>Formula:</b> CUSTO_MP_und * Qt_Total</p>"
+            f"<p>= {custo_mp_und:.2f} \u20ac * {qt_total:.2f} = {custo_mp_total:.2f} \u20ac</p>"
+            "</body></html>"
+        )
 
-
-    # --- Cálculos de Custo de Máquinas por unidade (colunas 64-78) ---
+    # --- Cálculos de Custo de Máquinas    # --- Cálculos de Custo de Máquinas por unidade (colunas 64-78) ---
     # Estes cálculos usam os valores CPxx base (lidos do Excel e preenchidos acima)
     # e as dimensões/quantidades/variáveis fixas (ex: VALOR_SECCIONADORA).
 
@@ -618,9 +603,7 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     set_item(table, row, IDX_CP08_MAO_DE_OBRA_UND, formatar_valor_moeda(round(mo_und, 2)))
     item_mo_und = table.item(row, IDX_CP08_MAO_DE_OBRA_UND)
     if item_mo_und: item_mo_und.setToolTip(mo_formula_tooltip)
-
-    # --- Cálculos de Soma Unitária e Total ---
-    # Soma_Custo_und (col 79) - Soma dos custos unitários das máquinas
+    # --- Calculos de Soma Unitaria e Total ---
     sec_cost = converter_texto_para_valor(safe_item_text(table, row, IDX_CP01_SEC_UND), "moeda")
     orl_cost = converter_texto_para_valor(safe_item_text(table, row, IDX_CP02_ORL_UND), "moeda")
     cnc_cost = converter_texto_para_valor(safe_item_text(table, row, IDX_CP03_CNC_UND), "moeda")
@@ -630,50 +613,63 @@ def processar_calculos_para_linha(ui, row, df_excel_cp):
     embal_cost = converter_texto_para_valor(safe_item_text(table, row, IDX_CP07_EMBALAGEM_UND), "moeda")
     mao_cost = converter_texto_para_valor(safe_item_text(table, row, IDX_CP08_MAO_DE_OBRA_UND), "moeda")
 
-    soma_custo_und_maquinas = sec_cost + orl_cost + cnc_cost + abd_cost + prensa_cost + esquad_cost + embal_cost + mao_cost
+    custos_unidade = [
+        ("CP01_SEC", sec_cost),
+        ("CP02_ORL", orl_cost),
+        ("CP03_CNC", cnc_cost),
+        ("CP04_ABD", abd_cost),
+        ("CP05_PRENSA", prensa_cost),
+        ("CP06_ESQUAD", esquad_cost),
+        ("CP07_EMBALAGEM", embal_cost),
+        ("CP08_MAO_DE_OBRA", mao_cost),
+    ]
 
-    # NOVA VERIFICAÇÃO: Se o checkbox MO (coluna 10) estiver marcado, Soma_Custo_und (soma das máquinas) passa a ser 0.
+    soma_custo_und_maquinas = sum(valor for _, valor in custos_unidade)
+
     item_mo_chk = table.item(row, 10)
-    if item_mo_chk and item_mo_chk.checkState() == Qt.Checked:
+    mo_checkbox_ativo = item_mo_chk and item_mo_chk.checkState() == Qt.Checked
+
+    if mo_checkbox_ativo:
         soma_custo_und_maquinas = 0.0
-        mo_formula_tooltip = "0 (MO checkbox ativo)"
+        tooltip_soma_und = "<html><body><p>SOMA_CUSTO_und = 0 porque o checkbox MO esta ativo.</p></body></html>"
     else:
-            mo_formula_tooltip = (
-                "Soma Custos Máquinas Unitários = CP01_SEC_und + ... + CP08_MAO_DE_OBRA_und\n"
-                f"= {sec_cost:.2f} + {orl_cost:.2f} + {cnc_cost:.2f} + {abd_cost:.2f} + {prensa_cost:.2f} + {esquad_cost:.2f} + {embal_cost:.2f} + {mao_cost:.2f} = {round(soma_custo_und_maquinas, 2):.2f}€"
-            )
+        detalhes = "".join(
+            f"<li>{label}: {valor:.2f} \u20ac</li>" for label, valor in custos_unidade
+        )
+        tooltip_soma_und = (
+            "<html><body>"
+            "<p><b>Formula:</b> SOMA_CUSTO_und = CP01_SEC + ... + CP08_MAO_DE_OBRA</p>"
+            f"<ul>{detalhes}</ul>"
+            f"<p><b>Resultado:</b> {soma_custo_und_maquinas:.2f} \u20ac</p>"
+            "</body></html>"
+        )
 
-    set_item(table, row, IDX_SOMA_CUSTO_UND, formatar_valor_moeda(round(soma_custo_und_maquinas, 2))) # Formata como moeda
-    item_soma_und = table.item(row, IDX_SOMA_CUSTO_UND) # Obtém item
-    if item_soma_und: item_soma_und.setToolTip(mo_formula_tooltip) # Tooltip da MO (se checkbox ativo)
+    set_item(table, row, IDX_SOMA_CUSTO_UND, formatar_valor_moeda(round(soma_custo_und_maquinas, 2)))
+    item_soma_und = table.item(row, IDX_SOMA_CUSTO_UND)
+    if item_soma_und:
+        item_soma_und.setToolTip(tooltip_soma_und)
 
-
-    # Custo TOTAL das orlas por unidade de peça (Soma dos CUSTO_ML_xx, col 45-48)
-    # Estes já estão em € por UNIDADE de peça
     custo_orla_total_und = custo_ml_c1 + custo_ml_c2 + custo_ml_l1 + custo_ml_l2
     if orla_checkbox_ativo:
         custo_orla_total_und = 0.0
 
-    # Soma_Custo_Total (col 80) = (Soma_Custo_und (máquinas) + CUSTO_MP_und + Custo_Orla_Total_und) * Qt_Total
-    # NOTA: O CUSTO_MP_und (col 57) JÁ FOI CALCULADO E AJUSTADO (respeitando CP09 e MPs checkbox)
-    custo_mp_und_calculado = converter_texto_para_valor(safe_item_text(table, row, IDX_CUSTO_MP_UND), "moeda")
+    custo_total_orla = custo_orla_total_und * qt_total
+    custo_total_maquinas = soma_custo_und_maquinas * qt_total
+    soma_custo_total_calculado = custo_total_maquinas + custo_total_orla + custo_mp_total
 
-    soma_custo_und_total = soma_custo_und_maquinas + custo_mp_und_calculado + custo_orla_total_und # Soma dos custos UNITÁRIOS (máquinas + MP + orla)
-    soma_custo_total_calculado = soma_custo_und_total * qt_total # Custo TOTAL para o ITEM (por peça * quantidade)
-
-    set_item(table, row, IDX_SOMA_CUSTO_TOTAL, formatar_valor_moeda(round(soma_custo_total_calculado, 2))) # Formata como moeda
-    #item_soma_total = table.item(row, IDX_SOMA_CUSTO_TOTAL)
+    set_item(table, row, IDX_SOMA_CUSTO_TOTAL, formatar_valor_moeda(round(soma_custo_total_calculado, 2)))
     tooltip_soma_total = (
         "<html><body>"
-        "<p><b>Fórmula:</b> (Soma_Custo_Und_Máquinas + CUSTO_MP_und + Custo_Orla_Total_und) * Qt_Total</p>"
-        f"<p>= ({round(soma_custo_und_maquinas,2):.2f}€ + {round(custo_mp_und_calculado,2):.2f}€ + {round(custo_orla_total_und,2):.2f}€) * {qt_total:.0f}</p>"
-        f"<p>= {round(soma_custo_und_total, 2):.2f}€/Und * {qt_total:.0f} = {round(soma_custo_total_calculado, 2):.2f}€</p>"
+        "<p><b>Formula:</b> SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total)</p>"
+        f"<p>SOMA_CUSTO_und * Qt_Total = {soma_custo_und_maquinas:.2f} \u20ac * {qt_total:.2f} = {custo_total_maquinas:.2f} \u20ac</p>"
+        f"<p>CUSTO_TOTAL_ORLA = {custo_orla_total_und:.2f} \u20ac/und * {qt_total:.2f} = {custo_total_orla:.2f} \u20ac</p>"
+        f"<p>CUSTO_MP_und * Qt_Total = {custo_mp_und:.2f} \u20ac * {qt_total:.2f} = {custo_mp_total:.2f} \u20ac</p>"
+        f"<p><b>Resultado:</b> {soma_custo_total_calculado:.2f} \u20ac</p>"
         "</body></html>"
     )
-    item_soma_total = table.item(row, IDX_SOMA_CUSTO_TOTAL) # Obtém item
-    if item_soma_total: item_soma_total.setToolTip(tooltip_soma_total)
-
-
+    item_soma_total = table.item(row, IDX_SOMA_CUSTO_TOTAL)
+    if item_soma_total:
+        item_soma_total.setToolTip(tooltip_soma_total)
     # --- Cálculos de Acabamentos ---
 
     # ACB_SUP_und (col 61) e ACB_INF_und (col 62)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 
 
+from functools import partial
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 import logging
 import ast
@@ -36,6 +37,60 @@ SPECIAL_MAT_DEFAULTS = {
     "travessa": "Travessas",
     "prumo": "Prumos",
 }
+
+COLAGEM_LABEL = getattr(svc_custeio, "COLAGEM_REVESTIMENTO_LABEL", "COLAGEM/REVESTIMENTO (M2)")
+_COLAGEM_LABEL_ALIASES = {
+    COLAGEM_LABEL.strip().casefold(),
+    "COLAGEM SANDWICH (M2)".casefold(),
+    "SERVICOS COLAGEM (M2)".casefold(),
+}
+COLAGEM_INFO_TEXT = (
+    "Para Colagens ou Revestimentos o preço é calculado por área (m²) e por face. "
+    "Mantenha QT_und = 1; para aplicar em 2 faces mantenha QT_und = 1 e indique COMP e LARG "
+    "para permitir o cálculo em m²."
+)
+
+EMBALAGEM_LABEL = "EMBALAGEM (M3)"
+_EMBALAGEM_LABEL_ALIASES = {
+    EMBALAGEM_LABEL.strip().casefold(),
+}
+EMBALAGEM_INFO_TEXT = (
+    "Para Embalagem (M3) o cálculo usa o volume (COMP x LARG x ESP). "
+    "Preencha COMP, LARG e ESP (> 0 mm) para permitir o cálculo correto."
+)
+
+
+def _is_colagem_label(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    return value.strip().casefold() in _COLAGEM_LABEL_ALIASES
+
+
+def _is_embalagem_label(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    return value.strip().casefold() in _EMBALAGEM_LABEL_ALIASES
+
+
+DEF_LABEL_MAO_OBRA_MIN = "MAO OBRA (Min)"
+DEF_LABEL_CNC_MIN = "CNC (Min)"
+DEF_LABEL_CNC_5_MIN = "CNC (5 Min)"
+DEF_LABEL_CNC_15_MIN = "CNC (15 Min)"
+DEF_LABEL_EMBALAGEM = EMBALAGEM_LABEL
+DEF_LABEL_COLAGEM = COLAGEM_LABEL
+
+DEF_LABEL_MAO_OBRA_MIN_NORM = DEF_LABEL_MAO_OBRA_MIN.casefold()
+DEF_LABEL_CNC_MIN_NORM = DEF_LABEL_CNC_MIN.casefold()
+DEF_LABEL_CNC_5_MIN_NORM = DEF_LABEL_CNC_5_MIN.casefold()
+DEF_LABEL_CNC_15_MIN_NORM = DEF_LABEL_CNC_15_MIN.casefold()
+DEF_LABEL_EMBALAGEM_NORM = DEF_LABEL_EMBALAGEM.casefold()
+DEF_LABEL_COLAGEM_NORM = DEF_LABEL_COLAGEM.casefold()
+MANUAL_CNC_LABELS = {
+    DEF_LABEL_CNC_MIN_NORM,
+    DEF_LABEL_CNC_5_MIN_NORM,
+    DEF_LABEL_CNC_15_MIN_NORM,
+}
+
 
 def _special_default_for_row(row: Mapping[str, Any]) -> Optional[str]:
     def_text = (row.get("def_peca") or row.get("_child_source") or "").strip()
@@ -152,50 +207,52 @@ COLUMN_WIDTH_DEFAULTS = {
     "icon_hint": 36,
     "def_peca": 170,
     "descricao": 200,
-    "qt_mod": 110,
-    "qt_und": 90,
-    "comp": 70,
-    "larg": 70,
-    "esp": 70,
-    "mps": 55,
-    "mo": 55,
-    "orla": 55,
-    "blk": 50,
-    "nst": 55,
+    "qt_mod": 60,
+    "qt_und": 50,
+    "comp": 40,
+    "larg": 40,
+    "esp": 40,
+    "mps": 40,
+    "mo": 40,
+    "orla": 40,
+    "blk": 40,
+    "nst": 40,
     "mat_default": 150,
     "acabamento_sup": 150,
     "acabamento_inf": 150,
-    "qt_total": 90,
-    "comp_res": 80,
-    "larg_res": 80,
-    "esp_res": 80,
-    "ref_le": 120,
+    "qt_total": 50,
+    "comp_res": 50,
+    "larg_res": 50,
+    "esp_res": 50,
+    "ref_le": 70,
     "descricao_no_orcamento": 200,
-    "pliq": 90,
-    "und": 70,
-    "desp": 80,
-    "orl_0_4": 130,
-    "orl_1_0": 130,
-    "tipo": 120,
-    "familia": 120,
-    "comp_mp": 90,
-    "larg_mp": 90,
-    "esp_mp": 90,
-    "orl_c1": 70,
-    "orl_c2": 70,
-    "orl_l1": 70,
-    "orl_l2": 70,
-    "ml_orl_c1": 100,
-    "ml_orl_c2": 100,
-    "ml_orl_l1": 100,
-    "ml_orl_l2": 100,
-    "custo_orl_c1": 110,
-    "custo_orl_c2": 110,
-    "custo_orl_l1": 110,
-    "custo_orl_l2": 110,
+    "pliq": 50,
+    "und": 30,
+    "desp": 40,
+    "orl_0_4": 70,
+    "orl_1_0": 70,
+    "tipo": 100,
+    "familia": 100,
+    "comp_mp": 70,
+    "larg_mp": 70,
+    "esp_mp": 70,
+    "orl_c1": 50,
+    "orl_c2": 50,
+    "orl_l1": 50,
+    "orl_l2": 50,
+    "ml_orl_c1": 70,
+    "ml_orl_c2": 70,
+    "ml_orl_l1": 70,
+    "ml_orl_l2": 70,
+    "custo_orl_c1": 70,
+    "custo_orl_c2": 70,
+    "custo_orl_l1": 70,
+    "custo_orl_l2": 70,
     "area_m2_und": 90,
-    "perimetro_und": 90,
+    "perimetro_und": 100,
 }
+
+LOCKED_COLUMN_KEYS: Set[str] = {"id", "def_peca", "descricao", "qt_mod", "qt_und", "qt_total"}
 
 ORLA_ML_KEYS: Set[str] = {"ml_orl_c1", "ml_orl_c2", "ml_orl_l1", "ml_orl_l2"}
 ORLA_COST_KEYS: Set[str] = {"custo_orl_c1", "custo_orl_c2", "custo_orl_l1", "custo_orl_l2"}
@@ -209,9 +266,26 @@ PRODUCTION_COST_UND_KEYS: Set[str] = {
     "cp06_esquad_und",
     "cp07_embalagem_und",
     "cp08_mao_de_obra_und",
+    "cp09_colagem_und",
 }
+PRODUCTION_CP_SUM_KEYS: Tuple[Tuple[str, str], ...] = (
+    ("cp01_sec_und", "CP01_SEC_und"),
+    ("cp02_orl_und", "CP02_ORL_und"),
+    ("cp03_cnc_und", "CP03_CNC_und"),
+    ("cp04_abd_und", "CP04_ABD_und"),
+    ("cp05_prensa_und", "CP05_PRENSA_und"),
+    ("cp06_esquad_und", "CP06_ESQUAD_und"),
+    ("cp07_embalagem_und", "CP07_EMBALAGEM_und"),
+    ("cp08_mao_de_obra_und", "CP08_MAO_DE_OBRA_und"),
+)
+SPP_WASTE_PERCENT: float = 0.06
+DEFAULT_MP_DESP_FRACTION: float = 0.18
 UNIT_ML_KEYS: Set[str] = ORLA_ML_KEYS | {"soma_total_ml_orla", "perimetro_und", "spp_ml_und"}
-UNIT_EURO_KEYS: Set[str] = ORLA_COST_KEYS | {"custo_total_orla"} | PRODUCTION_COST_UND_KEYS
+UNIT_EURO_KEYS: Set[str] = (
+    ORLA_COST_KEYS
+    | {"custo_total_orla", "custo_mp_und", "custo_mp_total", "soma_custo_und", "soma_custo_total"}
+    | PRODUCTION_COST_UND_KEYS
+)
 UNIT_M2_KEYS: Set[str] = {"area_m2_und"}
 CENTER_ALIGN_KEYS: Set[str] = (
     UNIT_ML_KEYS
@@ -572,6 +646,32 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             return float(value)
         except (TypeError, ValueError):
             return None
+
+
+    @staticmethod
+    def _coerce_percent(value: Any) -> Optional[float]:
+        if value in (None, "", False):
+            return None
+        if isinstance(value, (int, float)):
+            num = float(value)
+        else:
+            try:
+                text_val = str(value).strip().replace('%', '').replace(',', '.')
+            except Exception:
+                return None
+            if not text_val:
+                return None
+            try:
+                num = float(text_val)
+            except (TypeError, ValueError):
+                return None
+        if abs(num) > 1:
+            num /= 100.0
+        return num
+
+    @staticmethod
+    def _coerce_checked(value: Any) -> bool:
+        return svc_custeio._coerce_checkbox_to_bool(value)
 
     def _ensure_orla_info(self, row_data: Dict[str, Any], side: str) -> Tuple[Optional[float], Optional[float], Optional[str]]:
         """Garante que os campos orl_pliq e orl_desp para o lado indicado est├úo preenchidos a partir da Materia Prima."""
@@ -1170,6 +1270,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 if row_type == "child" and value:
                     return ROW_CHILD_INDENT + value.lstrip()
                 return value
+            if role == QtCore.Qt.ToolTipRole:
+                tooltip_value = row_data.get("def_peca") or ""
+                if _is_colagem_label(tooltip_value):
+                    return COLAGEM_INFO_TEXT
+                if _is_embalagem_label(tooltip_value):
+                    return EMBALAGEM_INFO_TEXT
+                return tooltip_value or None
 
 
         if role == QtCore.Qt.ToolTipRole and key in ORLA_ML_KEYS:
@@ -1360,6 +1467,42 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return tooltip
             return None
 
+        if role == QtCore.Qt.ToolTipRole and key == "cp08_mao_de_obra_und":
+            tooltip = row_data.get("_cp08_mao_de_obra_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "cp09_colagem_und":
+            tooltip = row_data.get("_cp09_colagem_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "custo_mp_und":
+            tooltip = row_data.get("_custo_mp_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "custo_mp_total":
+            tooltip = row_data.get("_custo_mp_total_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "soma_custo_und":
+            tooltip = row_data.get("_soma_custo_und_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
+        if role == QtCore.Qt.ToolTipRole and key == "soma_custo_total":
+            tooltip = row_data.get("_soma_custo_total_tooltip")
+            if tooltip:
+                return tooltip
+            return None
+
         if role == QtCore.Qt.ToolTipRole and key == "spp_ml_und":
             tooltip = row_data.get("_spp_ml_und_tooltip")
             if tooltip:
@@ -1539,6 +1682,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
 
         if role == QtCore.Qt.ToolTipRole and key in ORLA_TOTAL_KEYS:
+            if self._coerce_checked(row_data.get("orla")):
+                return "Custo das orlas = 0 € (checkbox Orla ativo)."
             parts: List[str] = []
             for side in ("c1", "c2", "l1", "l2"):
                 ml_side = row_data.get(f"ml_orl_{side}") or 0
@@ -2323,6 +2468,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         prensa_rate_info: Optional[Dict[str, float]] = None
         esquad_rate_info: Optional[Dict[str, float]] = None
         embal_rate_info: Optional[Dict[str, float]] = None
+        colagem_rate_info: Optional[Dict[str, float]] = None
+        mo_rate_info: Optional[Dict[str, float]] = None
         cnc_rate_low: Optional[float] = None
         cnc_rate_medium: Optional[float] = None
         cnc_rate_high: Optional[float] = None
@@ -2335,6 +2482,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         embal_rate_value: Optional[float] = None
         embal_rate_std: Optional[float] = None
         embal_rate_serie: Optional[float] = None
+        colagem_rate_value: Optional[float] = None
+        colagem_rate_std: Optional[float] = None
+        colagem_rate_serie: Optional[float] = None
+        mo_rate_value: Optional[float] = None
+        mo_rate_std: Optional[float] = None
+        mo_rate_serie: Optional[float] = None
         if page_ref is not None and hasattr(page_ref, "production_mode"):
             try:
                 production_mode = page_ref.production_mode()
@@ -2409,6 +2562,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 embal_rate_info = page_ref.get_production_rate_info("EUROS_EMBALAGEM_M3")
             except Exception:
                 embal_rate_info = None
+            try:
+                colagem_rate_info = page_ref.get_production_rate_info("COLAGEM/REVESTIMENTO")
+            except Exception:
+                colagem_rate_info = None
+            try:
+                mo_rate_info = page_ref.get_production_rate_info("EUROS_HORA_MO")
+            except Exception:
+                mo_rate_info = None
 
             cnc_rate_low = _select_rate(cnc_low_info)
             cnc_rate_medium = _select_rate(cnc_medium_info)
@@ -2424,6 +2585,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if embal_rate_info:
                 embal_rate_std = _float_or_none(embal_rate_info.get("valor_std"))
                 embal_rate_serie = _float_or_none(embal_rate_info.get("valor_serie"))
+            colagem_rate_value = _select_rate(colagem_rate_info)
+            if colagem_rate_info:
+                colagem_rate_std = _float_or_none(colagem_rate_info.get("valor_std"))
+                colagem_rate_serie = _float_or_none(colagem_rate_info.get("valor_serie"))
+            mo_rate_value = _select_rate(mo_rate_info)
+            if mo_rate_info:
+                mo_rate_std = _float_or_none(mo_rate_info.get("valor_std"))
+                mo_rate_serie = _float_or_none(mo_rate_info.get("valor_serie"))
 
 
         divisor = 1.0
@@ -2648,6 +2817,21 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             row["larg"] = expr_larg
             expr_esp = self._prepare_formula_expression(row.get("esp"))
             row["esp"] = expr_esp
+
+            def_peca_value = (row.get("def_peca") or "").strip()
+            def_peca_norm = def_peca_value.casefold()
+
+            manual_cnc_override = None
+            if def_peca_norm == DEF_LABEL_CNC_5_MIN_NORM:
+                qt_und_manual = self._coerce_numeric(row.get("qt_und"))
+                if qt_und_manual not in (None, 0):
+                    manual_cnc_override = qt_und_manual * 5.0
+            elif def_peca_norm == DEF_LABEL_CNC_15_MIN_NORM:
+                qt_und_manual = self._coerce_numeric(row.get("qt_und"))
+                if qt_und_manual not in (None, 0):
+                    manual_cnc_override = qt_und_manual * 15.0
+            if manual_cnc_override is not None:
+                row["qt_total"] = manual_cnc_override
 
             if row.get("_row_type") == "division":
                 division_env: Dict[str, Optional[float]] = dict(global_context_base)
@@ -2951,13 +3135,27 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 perimetro_val = round(2 * (comp_m + larg_m), 4)
             row["area_m2_und"] = area_val
             row["perimetro_und"] = perimetro_val
+            spp_precise_value: Optional[float] = None
+            custo_mp_und_value: Optional[float] = None
+            custo_mp_total_value: Optional[float] = None
+            mp_tooltip: Optional[str] = None
+            mp_total_tooltip: Optional[str] = None
+            qt_total_numeric = self._coerce_numeric(row.get("qt_total"))
+
+            mps_checked = self._coerce_checked(row.get("mps"))
+            mo_checked = self._coerce_checked(row.get("mo"))
+            orla_checked = self._coerce_checked(row.get("orla"))
+
             if self._is_spp_row(row):
                 if comp_float is not None:
-                    spp_value = round(comp_float / 1000.0, 2)
-                    row["spp_ml_und"] = spp_value
                     comp_m_val = comp_float / 1000.0
+                    spp_precise_value = comp_m_val * (1.0 + SPP_WASTE_PERCENT)
+                    row["spp_ml_und"] = round(spp_precise_value, 2)
                     row["_spp_ml_und_tooltip"] = (
-                        f"Comprimento residual: {comp_float:.2f} mm -> {comp_m_val:.4f} ML"
+                        "SPP calculado com desperdicio padrao\n"
+                        f"COMP_res: {comp_float:.2f} mm -> {comp_m_val:.4f} ML\n"
+                        f"Desp_SPP: {SPP_WASTE_PERCENT * 100:.2f}% (fator {1.0 + SPP_WASTE_PERCENT:.3f})\n"
+                        f"Calculo: {comp_m_val:.4f} ML * (1 + {SPP_WASTE_PERCENT * 100:.2f}%) = {spp_precise_value:.4f} ML"
                     )
                 else:
                     row["spp_ml_und"] = None
@@ -2965,6 +3163,89 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             else:
                 row["spp_ml_und"] = None
                 row["_spp_ml_und_tooltip"] = None
+
+            if mps_checked:
+                custo_mp_und_value = 0.0
+                row["custo_mp_und"] = 0.0
+                mp_tooltip = "CUSTO_MP_und = 0 € (checkbox MPs ativo)."
+            elif row_type not in {"division", "separator"}:
+                pliq_value = self._coerce_numeric(row.get("pliq"))
+                desp_fraction = self._coerce_percent(row.get("desp"))
+                if desp_fraction is None:
+                    desp_fraction = DEFAULT_MP_DESP_FRACTION
+                fator_desp = 1.0 + max(desp_fraction, 0.0)
+                und_text = (row.get("und") or "").strip().upper()
+                base_value: Optional[float] = None
+                base_label: Optional[str] = None
+                if und_text == "M2" and area_val not in (None, 0):
+                    base_value = area_val
+                    base_label = "AREA_M2_und"
+                elif und_text == "ML" and spp_precise_value not in (None, 0):
+                    base_value = spp_precise_value
+                    base_label = "SPP_ML_und"
+                elif und_text == "UND":
+                    base_value = 1.0
+                    base_label = "UND"
+
+                if base_value is not None and pliq_value not in (None, 0):
+                    custo_mp_und_value = round(base_value * fator_desp * pliq_value, 2)
+                    row["custo_mp_und"] = custo_mp_und_value
+                    desp_percent = desp_fraction * 100.0
+                    base_desc = (
+                        f"{base_label}: {base_value:.4f} {'m2' if base_label == 'AREA_M2_und' else ('ML' if base_label == 'SPP_ML_und' else 'und')}"
+                    )
+                    mp_tooltip = "\n".join(
+                        [
+                            "Custo Materias Primas (por unidade)",
+                            f"Und: {und_text or '-'}",
+                            base_desc,
+                            f"PliQ: {pliq_value:.2f} €",
+                            f"Desperdicio: {desp_percent:.2f}% (fator {fator_desp:.3f})",
+                            f"Calculo: {base_value:.4f} x (1 + {desp_percent:.2f}%) x {pliq_value:.2f} € = {custo_mp_und_value:.2f} €",
+                        ]
+                    )
+                else:
+                    row["custo_mp_und"] = None
+                    if pliq_value in (None, 0):
+                        mp_tooltip = "CUSTO_MP_und indisponivel: PliQ sem valor."
+                    elif base_label is None:
+                        mp_tooltip = "CUSTO_MP_und indisponivel: dimensoes/und sem base valida."
+                    else:
+                        mp_tooltip = "CUSTO_MP_und indisponivel."
+            else:
+                row["custo_mp_und"] = None
+
+            if mps_checked:
+                custo_mp_total_value = 0.0
+                row["custo_mp_total"] = 0.0
+                mp_total_tooltip = "CUSTO_MP_Total = 0 € (checkbox MPs ativo)."
+            elif (
+                custo_mp_und_value is not None
+                and qt_total_numeric not in (None, 0)
+            ):
+                custo_mp_total_value = round(custo_mp_und_value * qt_total_numeric, 2)
+                row["custo_mp_total"] = custo_mp_total_value
+                mp_total_tooltip = "\n".join(
+                    [
+                        "Custo Materias Primas (total)",
+                        f"CUSTO_MP_und: {custo_mp_und_value:.2f} €",
+                        f"Qt_Total: {qt_total_numeric:.2f}",
+                        f"Calculo: {custo_mp_und_value:.2f} € * {qt_total_numeric:.2f} = {custo_mp_total_value:.2f} €",
+                    ]
+                )
+            elif row_type in {"division", "separator"}:
+                row["custo_mp_total"] = None
+                mp_total_tooltip = None
+            else:
+                row["custo_mp_total"] = None
+                if custo_mp_und_value is None:
+                    mp_total_tooltip = "CUSTO_MP_Total depende do valor unitario."
+                elif qt_total_numeric in (None, 0):
+                    mp_total_tooltip = "CUSTO_MP_Total indisponivel: Qt_Total sem valor."
+                else:
+                    mp_total_tooltip = None
+            row["_custo_mp_und_tooltip"] = mp_tooltip
+            row["_custo_mp_total_tooltip"] = mp_total_tooltip
 
             cp_prev_val = self._coerce_numeric(row.get("cp01_sec_und"))
             cp_factor = self._coerce_numeric(row.get("cp01_sec"))
@@ -2987,12 +3268,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                         f"Modo: {production_mode}",
                         f"CP01_SEC: {cp_factor:.2f}",
                         f"Perimetro_und: {perimetro_calc:.2f} ML",
-                        f"Tarifa {production_mode}: {sec_rate_value:.4f} â‚¬/ML",
-                        f"Calculo: {cp_factor:.2f} x {perimetro_calc:.2f} x {sec_rate_value:.4f} = {new_cp_value:.2f} â‚¬",
+                        f"Tarifa {production_mode}: {sec_rate_value:.4f} \u20AC/ML",
+                        f"Calculo: {cp_factor:.2f} x {perimetro_calc:.2f} x {sec_rate_value:.4f} = {new_cp_value:.2f} \u20AC",
                     ]
                     if sec_rate_std is not None and sec_rate_serie is not None:
                         tooltip_lines.append(
-                            f"STD: {sec_rate_std:.4f} â‚¬/ML | SERIE: {sec_rate_serie:.4f} â‚¬/ML"
+                            f"STD: {sec_rate_std:.4f} \u20AC/ML | SERIE: {sec_rate_serie:.4f} \u20AC/ML"
                         )
                     tooltip_text = "\n".join(tooltip_lines)
             else:
@@ -3042,12 +3323,12 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                         f"SOMA_TOTAL_ML_ORLA: {(soma_ml_total or 0):.2f} ML",
                         f"QT_total: {(qt_total_val or 0):.2f}",
                         f"ML por unidade: {ml_per_piece:.4f} ML",
-                        f"Tarifa {production_mode}: {orl_rate_value:.4f} â‚¬/ML",
-                        f"Calculo: {cp02_factor:.2f} x {ml_per_piece:.4f} x {orl_rate_value:.4f} = {cp02_new_value:.2f} â‚¬",
+                        f"Tarifa {production_mode}: {orl_rate_value:.4f} \u20AC/ML",
+                        f"Calculo: {cp02_factor:.2f} x {ml_per_piece:.4f} x {orl_rate_value:.4f} = {cp02_new_value:.2f} \u20AC",
                     ]
                     if orl_rate_std is not None and orl_rate_serie is not None:
                         tooltip_lines_cp02.append(
-                            f"STD: {orl_rate_std:.4f} â‚¬/ML | SERIE: {orl_rate_serie:.4f} â‚¬/ML"
+                            f"STD: {orl_rate_std:.4f} \u20AC/ML | SERIE: {orl_rate_serie:.4f} \u20AC/ML"
                         )
                     tooltip_cp02 = "\n".join(tooltip_lines_cp02)
             else:
@@ -3067,8 +3348,35 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             cp03_factor = self._coerce_numeric(row.get("cp03_cnc"))
             tooltip_cp03: Optional[str] = None
             cp03_new_value: Optional[float] = None
+            manual_cnc_applied = False
+            manual_cnc_minutes = None
+            if def_peca_norm in MANUAL_CNC_LABELS:
+                manual_cnc_minutes = self._coerce_numeric(row.get("qt_total"))
             if (
-                row_type not in {"division", "separator"}
+                manual_cnc_minutes not in (None, 0)
+                and cnc_rate_hour not in (None, 0)
+                and row_type not in {"division", "separator"}
+                and def_peca_norm in MANUAL_CNC_LABELS
+            ):
+                try:
+                    rate_hour_val = float(cnc_rate_hour)
+                    per_minute = rate_hour_val / 60.0
+                    cp03_new_value = round(manual_cnc_minutes * per_minute, 2)
+                except Exception:
+                    cp03_new_value = None
+                if cp03_new_value is not None:
+                    tooltip_lines_cp03 = [
+                        f"Modo: {production_mode}",
+                        f"Qt_total (min): {manual_cnc_minutes:.2f}",
+                        f"Tarifa EUROS_HORA_CNC: {rate_hour_val:.4f} €/hora",
+                        f"Calculo: {manual_cnc_minutes:.2f} min x ({rate_hour_val:.4f} €/hora / 60) = {cp03_new_value:.2f} €",
+                    ]
+                    tooltip_cp03 = "\n".join(tooltip_lines_cp03)
+                    row["cp03_cnc"] = manual_cnc_minutes
+                    manual_cnc_applied = True
+            if (
+                not manual_cnc_applied
+                and row_type not in {"division", "separator"}
                 and cp03_factor is not None
                 and cp03_factor > 0
                 and cp02_factor is not None
@@ -3258,8 +3566,43 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 and larg_res not in (None, 0)
                 and esp_res not in (None, 0)
             )
+            manual_embalagem_applied = False
             if (
-                row_type not in {"division", "separator"}
+                def_peca_norm == DEF_LABEL_EMBALAGEM_NORM
+                and row_type not in {"division", "separator"}
+                and has_dimensions
+                and embal_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_embal = float(embal_rate_value)
+                    volume_m3 = (
+                        float(qt_total_calc)
+                        * float(comp_res)
+                        * float(larg_res)
+                        * float(esp_res)
+                    ) / 1_000_000_000.0
+                    cp07_new_value = round(volume_m3 * rate_embal, 2)
+                except Exception:
+                    cp07_new_value = None
+                if cp07_new_value is not None and volume_m3 is not None:
+                    tooltip_lines_cp07 = [
+                        f"Modo: {production_mode}",
+                        f"Qt_total: {qt_total_calc:.2f}",
+                        f"Dimensoes (mm): {comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f}",
+                        f"Volume total: {volume_m3:.6f} m\u00B3",
+                        f"Tarifa EUROS_EMBALAGEM_M3: {rate_embal:.4f} \u20AC/m\u00B3",
+                        f"Calculo: {qt_total_calc:.2f} x ({comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f} mm / 1e9) x {rate_embal:.4f} \u20AC/m\u00B3 = {cp07_new_value:.2f} \u20AC",
+                    ]
+                    if embal_rate_std is not None and embal_rate_serie is not None:
+                        tooltip_lines_cp07.append(
+                            f"STD: {embal_rate_std:.4f} \u20AC/m\u00B3 | SERIE: {embal_rate_serie:.4f} \u20AC/m\u00B3"
+                        )
+                    tooltip_cp07 = "\n".join(tooltip_lines_cp07)
+                    row["cp07_embalagem"] = max(qt_total_calc or 0, 1.0)
+                    manual_embalagem_applied = True
+            if (
+                not manual_embalagem_applied
+                and row_type not in {"division", "separator"}
                 and cp07_factor is not None
                 and cp07_factor > 0
                 and has_dimensions
@@ -3310,6 +3653,198 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     production_cost_changed = True
                 row["cp07_embalagem_und"] = cp07_new_value
             row["_cp07_embalagem_und_tooltip"] = tooltip_cp07
+
+            cp08_prev_val = self._coerce_numeric(row.get("cp08_mao_de_obra_und"))
+            cp08_factor = self._coerce_numeric(row.get("cp08_mao_de_obra"))
+            tooltip_cp08: Optional[str] = None
+            cp08_new_value: Optional[float] = None
+            rate_mo: Optional[float] = None
+            manual_mo_applied = False
+            if (
+                def_peca_norm == DEF_LABEL_MAO_OBRA_MIN_NORM
+                and row_type not in {"division", "separator"}
+                and qt_total_calc not in (None, 0)
+                and mo_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_mo = float(mo_rate_value)
+                    per_minute_mo = rate_mo / 60.0
+                    cp08_new_value = round(float(qt_total_calc) * per_minute_mo, 2)
+                except Exception:
+                    cp08_new_value = None
+                if cp08_new_value is not None and rate_mo is not None:
+                    tooltip_lines_cp08 = [
+                        f"Modo: {production_mode}",
+                        f"Qt_total (min): {qt_total_calc:.2f}",
+                        f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
+                        f"Calculo: {qt_total_calc:.2f} min x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
+                    ]
+                    if mo_rate_std is not None and mo_rate_serie is not None:
+                        tooltip_lines_cp08.append(
+                            f"STD: {mo_rate_std:.4f} \u20AC/hora | SERIE: {mo_rate_serie:.4f} \u20AC/hora"
+                        )
+                    tooltip_cp08 = "\n".join(tooltip_lines_cp08)
+                    row["cp08_mao_de_obra"] = qt_total_calc
+                    manual_mo_applied = True
+            if (
+                not manual_mo_applied
+                and row_type not in {"division", "separator"}
+                and cp08_factor is not None
+                and cp08_factor > 0
+                and mo_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_mo = float(mo_rate_value)
+                    per_minute_mo = rate_mo / 60.0
+                    cp08_new_value = round(cp08_factor * per_minute_mo, 2)
+                except Exception:
+                    cp08_new_value = None
+                if cp08_new_value is not None and rate_mo is not None:
+                    tooltip_lines_cp08 = [
+                        f"Modo: {production_mode}",
+                        f"CP08_MAO_DE_OBRA: {cp08_factor:.2f}",
+                        f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
+                        f"Calculo: {cp08_factor:.2f} x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
+                    ]
+                    if mo_rate_std is not None and mo_rate_serie is not None:
+                        tooltip_lines_cp08.append(
+                            f"STD: {mo_rate_std:.4f} \u20AC/hora | SERIE: {mo_rate_serie:.4f} \u20AC/hora"
+                        )
+                    tooltip_cp08 = "\n".join(tooltip_lines_cp08)
+            if cp08_new_value is None:
+                if cp08_prev_val is not None:
+                    production_cost_changed = True
+                row["cp08_mao_de_obra_und"] = None
+                if tooltip_cp08 is None and cp08_factor not in (None, 0):
+                    tooltip_cp08 = "Tarifa nao disponivel para calcular MAO DE OBRA"
+            else:
+                if cp08_prev_val is None or not _float_almost_equal(cp08_prev_val, cp08_new_value, tol=1e-4):
+                    production_cost_changed = True
+                row["cp08_mao_de_obra_und"] = cp08_new_value
+            row["_cp08_mao_de_obra_und_tooltip"] = tooltip_cp08
+
+            cp09_prev_val = self._coerce_numeric(row.get("cp09_colagem_und"))
+            tooltip_cp09: Optional[str] = None
+            cp09_new_value: Optional[float] = None
+            if (
+                def_peca_norm == DEF_LABEL_COLAGEM_NORM
+                and row_type not in {"division", "separator"}
+                and qt_total_calc not in (None, 0)
+                and comp_res not in (None, 0)
+                and larg_res not in (None, 0)
+                and colagem_rate_value not in (None, 0)
+            ):
+                try:
+                    rate_colagem = float(colagem_rate_value)
+                    area_m2 = (float(comp_res) * float(larg_res)) / 1_000_000.0
+                    total_area = area_m2 * float(qt_total_calc)
+                    cp09_new_value = round(total_area * rate_colagem, 2)
+                except Exception:
+                    cp09_new_value = None
+                if cp09_new_value is not None:
+                    tooltip_lines_cp09 = [
+                        f"Modo: {production_mode}",
+                        f"Qt_total: {qt_total_calc:.2f}",
+                        f"Dimensoes (mm): {comp_res:.2f} x {larg_res:.2f}",
+                        f"Area total: {total_area:.6f} m\u00B2",
+                        f"Tarifa COLAGEM/REVESTIMENTO: {rate_colagem:.4f} \u20AC/m\u00B2",
+                        f"Calculo: {qt_total_calc:.2f} x ({comp_res:.2f} x {larg_res:.2f} mm / 1e6) x {rate_colagem:.4f} \u20AC/m\u00B2 = {cp09_new_value:.2f} \u20AC",
+                    ]
+                    if colagem_rate_std is not None and colagem_rate_serie is not None:
+                        tooltip_lines_cp09.append(
+                            f"STD: {colagem_rate_std:.4f} \u20AC/m\u00B2 | SERIE: {colagem_rate_serie:.4f} \u20AC/m\u00B2"
+                        )
+                    tooltip_cp09 = "\n".join(tooltip_lines_cp09)
+            if cp09_new_value is None:
+                if cp09_prev_val is not None:
+                    production_cost_changed = True
+                row["cp09_colagem_und"] = None
+            else:
+                if cp09_prev_val is None or not _float_almost_equal(cp09_prev_val, cp09_new_value, tol=1e-4):
+                    production_cost_changed = True
+                row["cp09_colagem_und"] = cp09_new_value
+            row["_cp09_colagem_und_tooltip"] = tooltip_cp09
+
+            if row_type not in {"division", "separator"}:
+                cp_cost_pairs: List[Tuple[str, float]] = []
+                soma_custo_und_float = 0.0
+                for key, label in PRODUCTION_CP_SUM_KEYS:
+                    cp_value = self._coerce_numeric(row.get(key)) or 0.0
+                    cp_cost_pairs.append((label, cp_value))
+                    soma_custo_und_float += cp_value
+                base_soma_value = round(soma_custo_und_float, 2)
+                soma_custo_und_value = 0.0 if mo_checked else base_soma_value
+                row["soma_custo_und"] = soma_custo_und_value
+                soma_lines = ["SOMA_CUSTO_und = CP01_SEC_und + ... + CP08_MAO_DE_OBRA_und"]
+                soma_lines.extend(f"{label}: {value:.2f} €" for label, value in cp_cost_pairs)
+                if mo_checked:
+                    soma_lines.append("Resultado: 0.00 € (checkbox MO ativo)")
+                else:
+                    soma_lines.append(f"Resultado: {soma_custo_und_value:.2f} €")
+                row["_soma_custo_und_tooltip"] = "\n".join(soma_lines)
+
+                if qt_total_numeric not in (None, 0) and not mo_checked:
+                    maquinas_total_value: Optional[float] = round(soma_custo_und_value * qt_total_numeric, 2)
+                elif mo_checked:
+                    maquinas_total_value = 0.0
+                else:
+                    maquinas_total_value = None
+
+                custo_total_orla_value = self._coerce_numeric(row.get("custo_total_orla"))
+                if custo_total_orla_value is None:
+                    custo_total_orla_value = 0.0
+                if orla_checked:
+                    custo_total_orla_value = 0.0
+                    row["custo_total_orla"] = 0.0
+
+                if mps_checked:
+                    mp_component_total = 0.0
+                else:
+                    mp_component_total = custo_mp_total_value if custo_mp_total_value is not None else 0.0
+
+                soma_custo_total_value = (maquinas_total_value or 0.0) + custo_total_orla_value + mp_component_total
+                soma_custo_total_value = round(soma_custo_total_value, 2)
+                row["soma_custo_total"] = soma_custo_total_value
+
+                if mo_checked:
+                    maquinas_line = "SOMA_CUSTO_und * Qt_Total = 0.00 € (checkbox MO ativo)"
+                elif qt_total_numeric not in (None, 0) and maquinas_total_value is not None:
+                    maquinas_line = (
+                        f"SOMA_CUSTO_und * Qt_Total = {soma_custo_und_value:.2f} € * {qt_total_numeric:.2f} = {maquinas_total_value:.2f} €"
+                    )
+                else:
+                    maquinas_line = "SOMA_CUSTO_und * Qt_Total: Qt_Total sem valor"
+
+                if mps_checked:
+                    mp_line = "CUSTO_MP_und * Qt_Total = 0.00 € (checkbox MPs ativo)"
+                elif custo_mp_und_value is not None and qt_total_numeric not in (None, 0) and custo_mp_total_value is not None:
+                    mp_line = (
+                        f"CUSTO_MP_und * Qt_Total = {custo_mp_und_value:.2f} € * {qt_total_numeric:.2f} = {custo_mp_total_value:.2f} €"
+                    )
+                elif custo_mp_und_value is None:
+                    mp_line = "CUSTO_MP_und * Qt_Total: valor unitario indisponivel"
+                else:
+                    mp_line = "CUSTO_MP_und * Qt_Total: Qt_Total sem valor"
+
+                custo_orla_line = (
+                    f"CUSTO_TOTAL_ORLA = {custo_total_orla_value:.2f} € (checkbox Orla ativo)"
+                    if orla_checked
+                    else f"CUSTO_TOTAL_ORLA = {custo_total_orla_value:.2f} €"
+                )
+
+                soma_total_lines = [
+                    "SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total)",
+                    maquinas_line,
+                    custo_orla_line,
+                    mp_line,
+                    f"Resultado: {soma_custo_total_value:.2f} €",
+                ]
+                row["_soma_custo_total_tooltip"] = "\n".join(soma_total_lines)
+            else:
+                row["soma_custo_und"] = None
+                row["soma_custo_total"] = None
+                row["_soma_custo_und_tooltip"] = None
+                row["_soma_custo_total_tooltip"] = None
 
             if row.get("esp_mp") not in (None, "") and not expr_esp:
 
@@ -3764,6 +4299,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model._page = self
 
+        self._hidden_column_keys: Set[str] = set()
+        self._column_visibility_dirty = False
+        if self.current_user_id:
+            try:
+                stored_hidden = svc_custeio.carregar_colunas_ocultas(self.session, self.current_user_id)
+            except Exception as exc:
+                logger.exception("Falha ao carregar colunas ocultas: %s", exc)
+                stored_hidden = set()
+            self._hidden_column_keys = {key for key in stored_hidden if key not in LOCKED_COLUMN_KEYS}
+        else:
+            self._hidden_column_keys = set()
+        self._column_actions: Dict[str, QtGui.QAction] = {}
+
         self._collapsed_groups: Set[str] = set()
         self._rows_dirty = False
         self._nst_override_snapshot: List[bool] = []
@@ -4066,6 +4614,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         controls_layout.addWidget(self.chk_selected_only)
 
+        self.btn_columns = QtWidgets.QToolButton()
+        self.btn_columns.setText("Colunas")
+        self.btn_columns.setToolTip("Ocultar/mostrar colunas da tabela")
+        self.btn_columns.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.menu_columns = QtWidgets.QMenu(self.btn_columns)
+        self.menu_columns.aboutToShow.connect(self._sync_column_menu_checks)
+        self.btn_columns.setMenu(self.menu_columns)
+        controls_layout.addWidget(self.btn_columns)
+
 
 
         controls_layout.addStretch(1)
@@ -4321,6 +4878,99 @@ class CusteioItemsPage(QtWidgets.QWidget):
             if width:
                 self.table_view.setColumnWidth(index, width)
 
+        self._apply_column_visibility()
+        self._rebuild_columns_menu()
+        self._update_columns_button_label()
+
+
+    def _apply_column_visibility(self) -> None:
+        if not hasattr(self, "table_view"):
+            return
+        valid_hidden: Set[str] = set()
+        for key, idx in self.table_model._column_index.items():
+            if key in LOCKED_COLUMN_KEYS:
+                self.table_view.setColumnHidden(idx, False)
+                continue
+            hidden = key in self._hidden_column_keys
+            if hidden:
+                valid_hidden.add(key)
+            self.table_view.setColumnHidden(idx, hidden)
+        if valid_hidden != self._hidden_column_keys:
+            self._hidden_column_keys = valid_hidden
+        self._update_columns_button_label()
+
+
+    def _rebuild_columns_menu(self) -> None:
+        if not hasattr(self, "menu_columns"):
+            return
+        self.menu_columns.clear()
+        self._column_actions.clear()
+        for spec in self.table_model.columns:
+            key = spec["key"]
+            label = spec.get("label") or key.upper()
+            action = QtGui.QAction(label, self.menu_columns)
+            action.setCheckable(True)
+            if key in LOCKED_COLUMN_KEYS:
+                action.setChecked(True)
+                action.setEnabled(False)
+            else:
+                action.setChecked(key not in self._hidden_column_keys)
+                action.toggled.connect(partial(self._handle_column_toggle, key))
+            self.menu_columns.addAction(action)
+            self._column_actions[key] = action
+        self.menu_columns.addSeparator()
+        show_all_action = QtGui.QAction("Mostrar todas as colunas", self.menu_columns)
+        show_all_action.triggered.connect(self._show_all_columns)
+        self.menu_columns.addAction(show_all_action)
+
+
+    def _sync_column_menu_checks(self) -> None:
+        for key, action in self._column_actions.items():
+            if key in LOCKED_COLUMN_KEYS:
+                action.setChecked(True)
+                continue
+            desired = key not in self._hidden_column_keys
+            if action.isChecked() != desired:
+                block = action.blockSignals(True)
+                action.setChecked(desired)
+                action.blockSignals(block)
+
+
+    def _handle_column_toggle(self, key: str, checked: bool) -> None:
+        if key in LOCKED_COLUMN_KEYS:
+            return
+        if checked:
+            if key in self._hidden_column_keys:
+                self._hidden_column_keys.remove(key)
+        else:
+            self._hidden_column_keys.add(key)
+        idx = self.table_model._column_index.get(key)
+        if idx is not None:
+            self.table_view.setColumnHidden(idx, not checked)
+        self._column_visibility_dirty = True
+        self._update_columns_button_label()
+        self._update_save_button_text()
+
+
+    def _show_all_columns(self) -> None:
+        if not self._hidden_column_keys:
+            return
+        self._hidden_column_keys.clear()
+        self._apply_column_visibility()
+        self._column_visibility_dirty = True
+        self._update_columns_button_label()
+        self._rebuild_columns_menu()
+        self._update_save_button_text()
+
+
+    def _update_columns_button_label(self) -> None:
+        if hasattr(self, "btn_columns"):
+            hidden_count = len(self._hidden_column_keys)
+            if hidden_count:
+                self.btn_columns.setText(f"Colunas ({hidden_count})")
+            else:
+                self.btn_columns.setText("Colunas")
+
 
 
     def _format_dimension_value(self, value: Optional[float]) -> str:
@@ -4451,7 +5101,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     def is_dirty(self) -> bool:
 
-        return bool(self._rows_dirty or self._dimensions_dirty)
+        return bool(self._rows_dirty or self._dimensions_dirty or self._column_visibility_dirty)
 
 
     def _update_save_button_text(self) -> None:
@@ -4540,7 +5190,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         item.setCheckable(True)
 
-        item.setToolTip(label)
+        if _is_colagem_label(label):
+            item.setToolTip(COLAGEM_INFO_TEXT)
+        elif _is_embalagem_label(label):
+            item.setToolTip(EMBALAGEM_INFO_TEXT)
+        else:
+            item.setToolTip(label)
 
         item.setCheckState(QtCore.Qt.Unchecked)
 
@@ -4989,9 +5644,23 @@ class CusteioItemsPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nao foi possivel gerar dados para as selecoes.")
 
             return
+        added_colagem = any(_is_colagem_label(linha.get("def_peca")) for linha in novas_linhas)
+        added_embalagem = any(_is_embalagem_label(linha.get("def_peca")) for linha in novas_linhas)
         self.table_model.append_rows(novas_linhas)
 
         self.table_model.recalculate_all()
+        if added_colagem:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Colagem/Revestimento",
+                COLAGEM_INFO_TEXT,
+            )
+        if added_embalagem:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Embalagem (M3)",
+                EMBALAGEM_INFO_TEXT,
+            )
 
         self._update_table_placeholder_visibility()
 
@@ -5021,6 +5690,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return False
 
         self.table_model.recalculate_all()
+        if not self._validate_special_rows():
+            return False
 
         dimensoes = self._collect_dimension_payload()
 
@@ -5057,6 +5728,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._set_rows_dirty(False)
 
+        if not auto and self._column_visibility_dirty:
+            try:
+                svc_custeio.guardar_colunas_ocultas(self.session, self.current_user_id, self._hidden_column_keys)
+            except Exception as exc:
+                logger.exception("Falha ao guardar colunas ocultas: %s", exc)
+            else:
+                self._column_visibility_dirty = False
+
         self._reload_custeio_rows()
 
         self._apply_updates_from_items()
@@ -5068,6 +5747,77 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_save_button_text()
 
         return True
+
+    def _validate_special_rows(self) -> bool:
+        if not getattr(self, "table_model", None):
+            return True
+        rows = getattr(self.table_model, "rows", [])
+        if not rows:
+            return True
+        colagem_issues: List[str] = []
+        embalagem_issues: List[str] = []
+        for idx, row in enumerate(rows, start=1):
+            def_peca = row.get("def_peca")
+            if _is_colagem_label(def_peca):
+                comp_val = self._coerce_dimension_value(row.get("comp_res"))
+                larg_val = self._coerce_dimension_value(row.get("larg_res"))
+                qt_und_val = self._coerce_dimension_value(row.get("qt_und"))
+                missing_dims = (
+                    comp_val is None
+                    or comp_val <= 0
+                    or larg_val is None
+                    or larg_val <= 0
+                )
+                invalid_qt = qt_und_val is None or abs(qt_und_val - 1.0) > 1e-6
+                if missing_dims or invalid_qt:
+                    desc = (
+                        row.get("descricao_livre")
+                        or row.get("descricao")
+                        or def_peca
+                        or f"Linha {idx}"
+                    )
+                    parts: List[str] = []
+                    if missing_dims:
+                        parts.append("preencher COMP e LARG (> 0 mm)")
+                    if invalid_qt:
+                        parts.append("manter QT_und = 1")
+                    colagem_issues.append(f"- Linha {idx} ({desc}): {', '.join(parts)}")
+            elif _is_embalagem_label(def_peca):
+                comp_val = self._coerce_dimension_value(row.get("comp_res"))
+                larg_val = self._coerce_dimension_value(row.get("larg_res"))
+                esp_val = self._coerce_dimension_value(row.get("esp_res"))
+                missing_dims = (
+                    comp_val is None
+                    or comp_val <= 0
+                    or larg_val is None
+                    or larg_val <= 0
+                    or esp_val is None
+                    or esp_val <= 0
+                )
+                if missing_dims:
+                    desc = (
+                        row.get("descricao_livre")
+                        or row.get("descricao")
+                        or def_peca
+                        or f"Linha {idx}"
+                    )
+                    embalagem_issues.append(
+                        f"- Linha {idx} ({desc}): preencher COMP, LARG e ESP (> 0 mm)"
+                    )
+        if not colagem_issues and not embalagem_issues:
+            return True
+
+        parts: List[str] = []
+        if colagem_issues:
+            parts.append(COLAGEM_INFO_TEXT + "\n\n" + "\n".join(colagem_issues))
+        if embalagem_issues:
+            parts.append(EMBALAGEM_INFO_TEXT + "\n\n" + "\n".join(embalagem_issues))
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Validação de peças especiais",
+            "\n\n".join(parts),
+        )
+        return False
 
 
     def _on_save_custeio(self) -> None:

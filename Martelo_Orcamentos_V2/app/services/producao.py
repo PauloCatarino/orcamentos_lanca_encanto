@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from Martelo_Orcamentos_V2.app.models.custeio_producao import (
     CusteioProducaoValor,
 )
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento
+from Martelo_Orcamentos_V2.app.db import SessionLocal
 
 
 DEFAULT_PRODUCTION_VALUES: Sequence[Mapping[str, object]] = (
@@ -93,13 +94,25 @@ DEFAULT_PRODUCTION_VALUES: Sequence[Mapping[str, object]] = (
         "resumo": "€/hora para Mão de Obra",
     },
     {
-        "descricao_equipamento": "SERVICOS COLAGEM",
-        "abreviatura": "SANDWICH COLAGEM",
-        "valor_std": Decimal("10"),
-        "valor_serie": Decimal("8"),
-        "resumo": "€/M2 para Colagem de Painéis",
+        "descricao_equipamento": "COLAGEM/REVESTIMENTO",
+        "abreviatura": "COLAGEM",
+        "valor_std": Decimal("3"),
+        "valor_serie": Decimal("2.5"),
+        "resumo": "€/M2 para Colagem/Revestimento por face",
     },
 )
+
+_COLAGEM_LEGACY_NAMES: Tuple[str, ...] = (
+    "SERVICOS COLAGEM",
+    "COLAGEM SANDWICH (M2)",
+    "SERVICOS COLAGEM (M2)",
+)
+_COLAGEM_TARGET_NAME = "COLAGEM/REVESTIMENTO"
+_COLAGEM_TARGET_ABBR = "COLAGEM"
+_COLAGEM_STD = Decimal("3")
+_COLAGEM_SERIE = Decimal("2.5")
+_COLAGEM_RESUMO = "€/M2 para Colagem/Revestimento por face"
+_COLAGEM_MIGRATION_DONE = False
 
 
 @dataclass(frozen=True)
@@ -200,11 +213,59 @@ def load_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConfig
 
 
 def ensure_default_values(session: Session, config: CusteioProducaoConfig) -> bool:
+    if _migrate_colagem_records_once():
+        for valor in config.valores:
+            if valor.descricao_equipamento in _COLAGEM_LEGACY_NAMES:
+                session.expire(
+                    valor,
+                    attribute_names=[
+                        "descricao_equipamento",
+                        "abreviatura",
+                        "valor_std",
+                        "valor_serie",
+                        "resumo",
+                    ],
+                )
     existing: Dict[str, CusteioProducaoValor] = {
         valor.descricao_equipamento: valor for valor in config.valores
     }
     ordem_counter = max((valor.ordem or 0 for valor in config.valores), default=0) + 1
     added = False
+    updated = False
+
+    def _decimal_equals(value: Optional[Decimal], target: str) -> bool:
+        try:
+            return Decimal(value or 0) == Decimal(str(target))
+        except Exception:
+            return False
+
+    colagem_entry = existing.get("COLAGEM/REVESTIMENTO")
+    legacy_entry = existing.get("SERVICOS COLAGEM")
+    target_entry = colagem_entry or legacy_entry
+    if target_entry:
+        needs_update = False
+        if target_entry.descricao_equipamento != "COLAGEM/REVESTIMENTO":
+            target_entry.descricao_equipamento = "COLAGEM/REVESTIMENTO"
+            needs_update = True
+            existing["COLAGEM/REVESTIMENTO"] = target_entry
+            if legacy_entry:
+                existing.pop("SERVICOS COLAGEM", None)
+        if (target_entry.abreviatura or "").strip().upper() != "COLAGEM":
+            target_entry.abreviatura = "COLAGEM"
+            needs_update = True
+        # Ajusta apenas quando ainda está com os valores antigos (10/8)
+        if (
+            _decimal_equals(target_entry.valor_std, "10")
+            and _decimal_equals(target_entry.valor_serie, "8")
+        ):
+            target_entry.valor_std = _to_decimal("3")
+            target_entry.valor_serie = _to_decimal("2.5")
+            needs_update = True
+        if needs_update:
+            target_entry.resumo = "€/M2 para Colagem/Revestimento por face"
+            session.add(target_entry)
+            updated = True
+
     for row in DEFAULT_PRODUCTION_VALUES:
         desc = str(row["descricao_equipamento"])
         if desc in existing:
@@ -222,9 +283,42 @@ def ensure_default_values(session: Session, config: CusteioProducaoConfig) -> bo
         session.add(valor)
         config.valores.append(valor)
         added = True
-    if added:
+    if added or updated:
         session.flush()
-    return added
+    return added or updated
+
+
+def _migrate_colagem_records_once() -> bool:
+    global _COLAGEM_MIGRATION_DONE
+    if _COLAGEM_MIGRATION_DONE:
+        return False
+    _COLAGEM_MIGRATION_DONE = True
+
+    session = SessionLocal()
+    try:
+        registros = (
+            session.query(CusteioProducaoValor)
+            .filter(CusteioProducaoValor.descricao_equipamento.in_(_COLAGEM_LEGACY_NAMES))
+            .all()
+        )
+        if not registros:
+            session.commit()
+            return False
+        changed = False
+        for registro in registros:
+            registro.descricao_equipamento = _COLAGEM_TARGET_NAME
+            registro.abreviatura = _COLAGEM_TARGET_ABBR
+            registro.valor_std = _COLAGEM_STD
+            registro.valor_serie = _COLAGEM_SERIE
+            registro.resumo = _COLAGEM_RESUMO
+            changed = True
+        session.commit()
+        return changed
+    except Exception:
+        session.rollback()
+        return False
+    finally:
+        session.close()
 
 
 def load_values(session: Session, ctx: ProducaoContext) -> List[dict]:

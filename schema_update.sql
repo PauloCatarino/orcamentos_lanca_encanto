@@ -39,3 +39,7 @@ CREATE TABLE IF NOT EXISTS definicoes_pecas (
     cp08_mao_de_obra DECIMAL(12,4) NULL,
     UNIQUE KEY u_definicoes_pecas_nome (nome_da_peca)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Adicionar coluna CP09_COLAGEM_und à tabela custeio_items (compatibilidade com builds antigos)
+ALTER TABLE custeio_items
+    ADD COLUMN IF NOT EXISTS cp09_colagem_und DECIMAL(18,4) NULL AFTER cp08_mao_de_obra_und;
