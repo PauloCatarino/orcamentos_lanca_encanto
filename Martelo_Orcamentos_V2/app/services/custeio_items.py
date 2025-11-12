@@ -157,6 +157,13 @@ _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
     _normalize_token("PÉS"): {"tipo": "PES", "familia": "FERRAGENS"},
     _normalize_token("DOBRADICA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
     _normalize_token("DOBRADIÇA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
+    _normalize_token("RODAPE PVC/ALUMINIO"): {"tipo": "Rodape PVC SPP", "familia": "FERRAGENS"},
+    _normalize_token("FUNDO GAVETA [0022]"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
+    _normalize_token("FUNDO GAVETA"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
+    _normalize_token("TRASEIRA GAVETA [2000]"): {"tipo": "Gaveta Caixa", "familia": "FERRAGENS"},
+    _normalize_token("LATERAL GAVETA [2202]"): {"tipo": "Gaveta Caixa", "familia": "FERRAGENS"},
+    _normalize_token("PAINEL CORRER"): {"tipo": "Painel Porta Correr 1", "familia": "SISTEMAS CORRER"},
+    _normalize_token("PAINEL ESPELHO"): {"tipo": "Painel Espelho Correr 1", "familia": "SISTEMAS CORRER"},
 }
 
 _FERRAGEM_TIPO_KEYWORDS: Dict[str, Sequence[str]] = {
@@ -464,11 +471,11 @@ TREE_DEFINITION: List[TreeNode] = [
         "label": "GAVETAS",
         "group": "Gavetas",
         "children": [
-            {"label": "FRENTE GAVETA [2222]"},
-            {"label": "FRENTE GAVETA [2222] + PUXADOR"},
-            {"label": "LATERAL GAVETA [2202]"},
-            {"label": "TRASEIRA GAVETA [2000]"},
-            {"label": "FUNDO GAVETA [0022]"},
+            {"label": "FRENTE GAVETA [2222]", "group": "Gaveta Frente"},
+            {"label": "FRENTE GAVETA [2222] + PUXADOR", "group": "Gaveta Frente"},
+            {"label": "LATERAL GAVETA [2202]", "group": "Gaveta Caixa"},
+            {"label": "TRASEIRA GAVETA [2000]", "group": "Gaveta Caixa"},
+            {"label": "FUNDO GAVETA [0022]", "group": "Gaveta Fundo"},
         ],
     },
     {
@@ -481,7 +488,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "RODAPE AGL [0000]", "group": "Rodape AGL"},
             {"label": "RODAPE AGL [2200]", "group": "Rodape AGL"},
             {"label": "RODAPE AGL [2222]", "group": "Rodape AGL"},
-            {"label": "RODAPE PVC/ALUMINIO", "group": "Rodape PVC/Aluminio"},
+            {"label": "RODAPE PVC/ALUMINIO", "group": "Rodape PVC SPP"},
             {"label": "ENCHIMENTO GUARNICAO [2000]", "group": "Enchimentos Guarnicoes"},
             {"label": "GUARNICAO PRODUZIDA [2222]", "group": "Guarnicoes Produzidas"},
             {"label": "GUARNICAO COMPRA L", "group": "Guarnicoes Compra"},
@@ -498,9 +505,9 @@ TREE_DEFINITION: List[TreeNode] = [
     {
         "label": "PORTAS CORRER",
         "children": [
-            {"label": "PAINEL CORRER [0000]", "group": "Paineis"},
-            {"label": "PAINEL CORRER [2222]", "group": "Paineis"},
-            {"label": "PAINEL ESPELHO [2222]", "group": "Paineis"},
+            {"label": "PAINEL CORRER [0000]", "group": "Painel Porta Correr 1"},
+            {"label": "PAINEL CORRER [2222]", "group": "Painel Porta Correr 1"},
+            {"label": "PAINEL ESPELHO [2222]", "group": "Painel Espelho Correr 1"},
         ],
     },
     {
@@ -541,8 +548,6 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "VARAO {SPP}", "group": "Varao SPP"},
                     {"label": "PERFIL LAVA LOUCA {SPP}", "group": "Perfil Lava Louca SPP"},
                     {"label": "RODAPE PVC {SPP}", "group": "Rodape PVC SPP"},
-                    {"label": "PUXADOR GOLA C {SPP}", "group": "Puxador Gola C SPP"},
-                    {"label": "PUXADOR GOLA J {SPP}", "group": "Puxador Gola J SPP"},
                     {"label": "PUXADOR PERFIL {SPP} 1", "group": "Puxador Perfil SPP 1"},
                     {"label": "PUXADOR PERFIL {SPP} 2", "group": "Puxador Perfil SPP 2"},
                     {"label": "PUXADOR PERFIL {SPP} 3", "group": "Puxador Perfil SPP 3"},
@@ -594,7 +599,6 @@ TREE_DEFINITION: List[TreeNode] = [
                 "children": [
                     {"label": "AVENTOS 1", "group": "Aventos 1"},
                     {"label": "AVENTOS 2", "group": "Aventos 2"},
-                    {"label": "AMORTECEDOR", "group": "Amortecedor"},
                     {"label": "SISTEMA BASCULANTE 1", "group": "Sistema Basculante 1"},
                     {"label": "SISTEMA BASCULANTE 2", "group": "Sistema Basculante 2"},
                 ],
@@ -619,7 +623,6 @@ TREE_DEFINITION: List[TreeNode] = [
                 "label": "COZINHAS",
                 "children": [
                     {"label": "BALDE LIXO", "group": "Balde Lixo"},
-                    {"label": "CESTO CANTO FEIJAO 1", "group": "Cesto Canto Feijao"},
                     {"label": "CANTO COZINHA 1", "group": "Canto Cozinha 1"},
                     {"label": "CANTO COZINHA 2", "group": "Canto Cozinha 2"},
                     {"label": "PORTA TALHERES", "group": "Porta Talheres"},
@@ -868,6 +871,37 @@ def _group_keywords_for_tipo(tipo: Optional[str]) -> Sequence[str]:
     return tuple(word for word in key.split() if word)
 
 
+def _score_group_match(grupo: Optional[str], tipo: Optional[str]) -> int:
+    if not grupo or not tipo:
+        return 0
+    token = _normalize_token(grupo)
+    tipo_token = _normalize_token(tipo)
+    if not token or not tipo_token:
+        return 0
+    score = 0
+    if token == tipo_token:
+        score += 150
+    if token.startswith(tipo_token):
+        score += 60
+    if tipo_token in token:
+        score += 100
+    for kw in _group_keywords_for_tipo(tipo):
+        if kw and kw in token:
+            score += 20
+    return score
+
+
+def _sort_groups_by_tipo(options: Sequence[str], tipo: Optional[str]) -> List[str]:
+    if not tipo:
+        return list(options)
+    ranked = []
+    for idx, texto in enumerate(options):
+        score = _score_group_match(texto, tipo)
+        ranked.append((-score, idx, texto))
+    ranked.sort()
+    return [texto for _, _, texto in ranked]
+
+
 def _buscar_ferragem_por_tipo(
     session: Session,
     ctx: svc_dados_items.DadosItemsContext,
@@ -894,8 +928,20 @@ def _buscar_ferragem_por_tipo(
         if familia_text:
             stmt = stmt.where(func.lower(DadosItemsFerragem.familia) == familia_text.lower())
 
-    stmt = stmt.order_by(DadosItemsFerragem.linha, DadosItemsFerragem.grupo_ferragem).limit(1)
-    return session.execute(stmt).scalar_one_or_none()
+    stmt = stmt.order_by(DadosItemsFerragem.linha, DadosItemsFerragem.grupo_ferragem)
+    registros = session.execute(stmt).scalars().all()
+    if not registros:
+        return None
+    if len(registros) == 1:
+        return registros[0]
+    melhor = registros[0]
+    melhor_score = _score_group_match(_grupo_label_from_material(melhor), tipo_text)
+    for candidato in registros[1:]:
+        score = _score_group_match(_grupo_label_from_material(candidato), tipo_text)
+        if score > melhor_score:
+            melhor_score = score
+            melhor = candidato
+    return melhor
 
 
 def obter_ferragem_por_tipo(
@@ -981,7 +1027,7 @@ def lista_mat_default_ferragens(
         resultado.append(texto)
 
     if resultado:
-        return resultado
+        return _sort_groups_by_tipo(resultado, tipo_text)
 
     defaults = svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_FERRAGENS, ())
     keywords = _group_keywords_for_tipo(tipo_text)
@@ -996,7 +1042,7 @@ def lista_mat_default_ferragens(
             vistos.add(token)
             resultado.append(texto)
 
-    return resultado
+    return _sort_groups_by_tipo(resultado, tipo_text) if resultado else []
 
 
 def _collect_group_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:

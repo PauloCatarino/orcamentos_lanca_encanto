@@ -2595,6 +2595,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         }
 
         fields = self.svc.MENU_FIELDS.get(key, ())
+        field_set = set(fields)
         field_types = self.svc.MENU_FIELD_TYPES.get(key, {})
         kind_map = {kind: set(values) for kind, values in field_types.items()}
         primary = self.svc.MENU_PRIMARY_FIELD.get(key)
@@ -2638,7 +2639,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 )
             )
 
-        model_cls = MateriaisTableModel if key == self.svc.MENU_MATERIAIS else DadosGeraisTableModel
+        needs_preco_liq = {"preco_tab", "preco_liq", "margem", "desconto"}.issubset(field_set)
+        model_cls = MateriaisTableModel if needs_preco_liq else DadosGeraisTableModel
         model = model_cls(columns=columns, parent=self)
         setattr(model, "svc", self.svc)
         return model

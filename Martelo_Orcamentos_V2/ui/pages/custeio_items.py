@@ -15,8 +15,8 @@ import unicodedata
 import uuid
 
 
-
 from PySide6 import QtCore, QtGui, QtWidgets
+import shiboken6
 
 
 
@@ -36,6 +36,56 @@ SPECIAL_MAT_DEFAULTS = {
     "divisoria": "Divisorias",
     "travessa": "Travessas",
     "prumo": "Prumos",
+}
+PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Painel Porta Correr 1",
+    "Painel Porta Correr 2",
+    "Painel Porta Correr 3",
+    "Painel Porta Correr 4",
+    "Painel Porta Correr 5",
+    "Painel Espelho Correr 1",
+    "Painel Espelho Correr 2",
+    "Painel Espelho Correr 3",
+)
+COZINHAS_SPECIAL_DEFS: Tuple[str, ...] = (
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta Talheres",
+    "Tulha 1",
+    "Tulha 2",
+    "Fundo Aluminio 1",
+    "Fundo Aluminio 2",
+    "Fundo Plastico Frigorifico",
+    "Salva Sifao",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+)
+COZINHAS_MAT_DEFAULT_OPTIONS: Tuple[str, ...] = (
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta talheres",
+    "Porta calcas",
+    "Tulha",
+    "Fundo aluminio",
+    "Grelha Veludo",
+    "Acessorio cozinha 1",
+    "Acessorio cozinha 2",
+    "Acessorio cozinha 3",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+    "Ferragens Diversas 6 SPP",
+    "Ferragens Diversas 7 SPP",
+)
+COZINHAS_SPECIAL_TOKENS: Set[str] = {
+    svc_custeio._normalize_token(name) for name in COZINHAS_SPECIAL_DEFS
 }
 
 COLAGEM_LABEL = getattr(svc_custeio, "COLAGEM_REVESTIMENTO_LABEL", "COLAGEM/REVESTIMENTO (M2)")
@@ -321,7 +371,8 @@ class CusteioTableView(QtWidgets.QTableView):
 
             if top_editor and top_editor.parent() is self.viewport():
                 self.commitData(top_editor)
-                self.closeEditor(top_editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+                if shiboken6.isValid(top_editor):
+                    self.closeEditor(top_editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
             next_index = self.moveCursor(QtWidgets.QAbstractItemView.MoveRight, QtCore.Qt.NoModifier)
             if next_index.isValid():
                 self.setCurrentIndex(next_index)
@@ -941,6 +992,36 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         normalized = unicodedata.normalize("NFKD", text)
         cleaned = "".join(ch for ch in normalized if not unicodedata.combining(ch))
         return cleaned.upper()
+
+    @staticmethod
+    def _extract_child_tokens(def_peca: Optional[str]) -> List[str]:
+        if not def_peca or "+" not in def_peca:
+            return []
+        tokens: List[str] = []
+        for part in def_peca.split("+")[1:]:
+            normalized = CusteioTableModel._normalize_def_peca(part)
+            if normalized:
+                tokens.append(normalized)
+        return tokens
+
+    @staticmethod
+    def _match_expected_child(normalized_child: str, expected_tokens: List[str]) -> bool:
+        if not normalized_child or not expected_tokens:
+            return False
+        stripped = normalized_child.lstrip("_")
+        candidates = {normalized_child, stripped}
+        for idx, token in enumerate(expected_tokens):
+            if not token:
+                continue
+            token_clean = token.lstrip("_")
+            token_match = any(
+                cand == token_clean or cand.startswith(f"{token_clean}_")
+                for cand in candidates
+            )
+            if token_match:
+                expected_tokens.pop(idx)
+                return True
+        return False
 
     def _is_division_row(self, row: Mapping[str, Any]) -> bool:
         return self._normalize_def_peca(row.get("def_peca")) == "DIVISAO INDEPENDENTE"
@@ -2600,8 +2681,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         current_group_uid = str(uuid.uuid4())
 
         current_parent_row: Optional[Dict[str, Any]] = None
-
         current_parent_uid: Optional[str] = None
+        current_parent_child_tokens: List[str] = []
+        current_parent_has_explicit_children = False
 
         current_local_dimensions: Dict[str, Optional[float]] = {"HM": None, "LM": None, "PM": None}
 
@@ -2701,6 +2783,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             row["esp_res"] = None
 
             def_peca = row.get("def_peca") or ""
+            normalized_def_peca = self._normalize_def_peca(def_peca)
 
             if not def_peca.strip():
 
@@ -2721,6 +2804,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 current_parent_row = None
 
                 current_parent_uid = None
+                current_parent_child_tokens = []
+                current_parent_has_explicit_children = False
 
                 continue
 
@@ -2763,6 +2848,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 current_parent_uid = None
 
                 row["_regra_nome"] = None
+                current_parent_child_tokens = []
+                current_parent_has_explicit_children = False
 
             elif "+" in def_peca:
 
@@ -2778,12 +2865,23 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 current_parent_uid = row["_uid"]
 
                 row["_regra_nome"] = None
+                current_parent_child_tokens = self._extract_child_tokens(def_peca)
+                current_parent_has_explicit_children = bool(current_parent_child_tokens)
 
             else:
 
                 regra_nome = svc_custeio.identificar_regra(def_peca, rules)
-
+                attach_to_parent = False
                 if regra_nome and current_parent_row is not None:
+                    if current_parent_has_explicit_children:
+                        attach_to_parent = self._match_expected_child(
+                            normalized_def_peca,
+                            current_parent_child_tokens,
+                        )
+                    else:
+                        attach_to_parent = True
+
+                if attach_to_parent:
 
                     row["_row_type"] = "child"
                     row["_is_associated"] = True
@@ -2805,6 +2903,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     current_parent_uid = None
 
                     row["_regra_nome"] = None
+                    current_parent_child_tokens = []
+                    current_parent_has_explicit_children = False
 
             expr_comp = self._prepare_formula_expression(row.get("comp"))
             row["comp"] = expr_comp
@@ -3082,6 +3182,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     formatted = self._format_result_number(inherited_comp)
                     expr_for_tooltip = (row.get("comp") or formatted or "").strip()
                     row["_comp_tooltip"] = self._build_formula_tooltip(expr_for_tooltip, inherited_comp, None, substitutions=formatted or None)
+
+                if current_parent_has_explicit_children and not current_parent_child_tokens:
+                    current_parent_row = None
+                    current_parent_uid = None
+                    current_parent_has_explicit_children = False
 
             else:
 
@@ -3802,7 +3907,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 else:
                     mp_component_total = custo_mp_total_value if custo_mp_total_value is not None else 0.0
 
-                soma_custo_total_value = (maquinas_total_value or 0.0) + custo_total_orla_value + mp_component_total
+                cp09_total_value = self._coerce_numeric(row.get("cp09_colagem_und"))
+                if cp09_total_value is None:
+                    cp09_total_value = 0.0
+
+                soma_custo_total_value = (
+                    (maquinas_total_value or 0.0)
+                    + custo_total_orla_value
+                    + mp_component_total
+                    + cp09_total_value
+                )
                 soma_custo_total_value = round(soma_custo_total_value, 2)
                 row["soma_custo_total"] = soma_custo_total_value
 
@@ -3832,11 +3946,14 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     else f"CUSTO_TOTAL_ORLA = {custo_total_orla_value:.2f} €"
                 )
 
+                cp09_line = f"CP09_COLAGEM_und = {cp09_total_value:.2f} €"
+
                 soma_total_lines = [
-                    "SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total)",
+                    "SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total) + CP09_COLAGEM_und",
                     maquinas_line,
                     custo_orla_line,
                     mp_line,
+                    cp09_line,
                     f"Resultado: {soma_custo_total_value:.2f} €",
                 ]
                 row["_soma_custo_total_tooltip"] = "\n".join(soma_total_lines)
@@ -4030,43 +4147,50 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
             row = {}
 
         familia_val = (row.get("familia") or "").strip()
+        familia_norm = familia_val.casefold() if familia_val else ""
+        normalized_def = (row.get("_normalized_def") or "").strip().casefold()
+        normalized_child = (row.get("_normalized_child") or "").strip().casefold()
+        tipo_norm = (row.get("tipo") or "").strip().casefold()
 
-        row_type = (row or {}).get("_row_type")
-
-        info_ferragem = None
-        is_ferragens = False
-
-        if row_type == "child":
-
-            info_ferragem = svc_custeio.inferir_ferragem_info(row) if row else None
-
-            is_ferragens = bool(familia_val) and familia_val.casefold() == "ferragens"
-
-            if not is_ferragens and info_ferragem:
-
-                familia_info = (info_ferragem.get("familia") or "").strip()
-
-                if familia_info and familia_info.casefold() == "ferragens":
-
-                    is_ferragens = True
+        info_ferragem = svc_custeio.inferir_ferragem_info(row) if row else None
+        info_familia_norm = (
+            (info_ferragem.get("familia") or "").strip().casefold() if info_ferragem else ""
+        )
+        is_ferragens = familia_norm == "ferragens" or info_familia_norm == "ferragens"
 
         if is_ferragens:
-
             tipo_hint: Optional[str] = None
-
-            if info_ferragem and info_ferragem.get("tipo"):
-
-                tipo_hint = info_ferragem["tipo"]
-
-            elif row.get("tipo"):
-
+            if row.get("tipo"):
                 tipo_hint = row.get("tipo")
-
+            elif info_ferragem and info_ferragem.get("tipo"):
+                tipo_hint = info_ferragem["tipo"]
+            elif row.get("_child_source"):
+                tipo_hint = row.get("_child_source")
             options = svc_custeio.lista_mat_default_ferragens(session, context, tipo_hint)
-
             if options:
-
                 return options
+
+        painel_family = familia_norm == "sistemas correr" or info_familia_norm == "sistemas correr"
+        if painel_family and ("painel correr" in normalized_def or "painel" in tipo_norm):
+            options = svc_custeio.lista_mat_default(session, context, "PLACAS")
+            if options:
+                return options
+            return list(PAINEL_SIS_CORRER_OPTIONS)
+
+        cozinha_family = familia_norm == "cozinhas"
+        normalized_candidates = {
+            normalized_def,
+            normalized_child,
+            svc_custeio._normalize_token(row.get("def_peca")),
+            svc_custeio._normalize_token(row.get("_child_source")),
+            svc_custeio._normalize_token(row.get("descricao")),
+            svc_custeio._normalize_token(row.get("descricao_livre")),
+        }
+        if cozinha_family and any(token in COZINHAS_SPECIAL_TOKENS for token in normalized_candidates if token):
+            options = svc_custeio.lista_mat_default_ferragens(session, context, "FERRAGENS & ACESSORIOS")
+            if options:
+                return options
+            return list(COZINHAS_MAT_DEFAULT_OPTIONS)
 
         familia = row.get("familia") or row.get("mat_default")
 
