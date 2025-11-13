@@ -26,8 +26,143 @@ Funcionalidade:
 from PyQt5.QtWidgets import QComboBox, QTableWidgetItem, QMessageBox
 from PyQt5.QtCore import Qt
 import mysql.connector
+import unicodedata
 from db_connection import obter_cursor
 from utils import formatar_valor_moeda, formatar_valor_percentual
+
+TAB_SIS_CORRER_DB = "dados_items_sistemas_correr"
+TAB_SIS_CORRER_DEFAULT = "Tab_Sistemas_Correr_11"
+IDX_DEF_PECA_COL = 2  # Coluna fixa Def_Peca na tab_def_pecas
+
+
+def _normalize_key(value):
+    """Remove acentos, espaços extras e coloca em maiúsculas para comparação."""
+    if not value:
+        return ""
+    text = unicodedata.normalize("NFKD", str(value))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.strip().upper()
+
+
+def _build_special_configs():
+    """
+    Cria o mapeamento Def_Peca -> configuração especial.
+
+    Cada configuração indica que aquele Def_Peca deve usar os dados da
+    tabela de Sistemas Correr, filtrando pela linha correta (sistemas_correr),
+    família desejada e, opcionalmente, um material preferido a selecionar.
+    """
+    entries = [
+        # Grupo: SPP Ajustáveis (família ferragens - mostrar todos dessa linha)
+        ("CALHA SUPERIOR {SPP} 1 CORRER", "Calha Superior 1 SPP", "FERRAGENS", False),
+        ("CALHA SUPERIOR {SPP} 2 CORRER", "Calha Superior 2 SPP", "FERRAGENS", False),
+        ("CALHA INFERIOR {SPP} 1 CORRER", "Calha Inferior 1 SPP", "FERRAGENS", False),
+        ("CALHA INFERIOR {SPP} 2 CORRER", "Calha Inferior 2 SPP", "FERRAGENS", False),
+        ("PERFIL HORIZONTAL H {SPP}", "Perfil Horizontal H SPP", "FERRAGENS", False),
+        ("PERFIL HORIZONTAL U {SPP}", "Perfil Horizontal U SPP", "FERRAGENS", False),
+        ("PERFIL HORIZONTAL L {SPP}", "Perfil Horizontal L SPP", "FERRAGENS", False),
+        ("ACESSORIO {SPP} 7 CORRER", "Acessorio 7 SPP", "FERRAGENS", False),
+        ("ACESSORIO {SPP} 8 CORRER", "Acessorio 8 SPP", "FERRAGENS", False),
+        # Grupo: Sistemas correr principais (nomes coincidentes)
+        ("PUXADOR VERTICAL 1", "Puxador Vertical 1", "FERRAGENS", False),
+        ("PUXADOR VERTICAL 2", "Puxador Vertical 2", "FERRAGENS", False),
+        ("RODIZIO SUP 1", "Rodizio Sup 1", "FERRAGENS", False),
+        ("RODIZIO SUP 2", "Rodizio Sup 2", "FERRAGENS", False),
+        ("RODIZIO INF 1", "Rodizio Inf 1", "FERRAGENS", False),
+        ("RODIZIO INF 2", "Rodizio Inf 2", "FERRAGENS", False),
+        ("ACESSORIO 1 CORRER", "Acessorio 1", "FERRAGENS", False),
+        ("ACESSORIO 2 CORRER", "Acessorio 2", "FERRAGENS", False),
+        ("ACESSORIO 3 CORRER", "Acessorio 3", "FERRAGENS", False),
+        ("ACESSORIO 4 CORRER", "Acessorio 4", "FERRAGENS", False),
+        ("ACESSORIO 5 CORRER", "Acessorio 5", "FERRAGENS", False),
+        ("ACESSORIO 6 CORRER", "Acessorio 6", "FERRAGENS", False),
+        # Grupo: Painéis (família placas e seleção automática se vazio)
+        ("PAINEL CORRER [0000]", "Painel Porta Correr 1", "PLACAS", True),
+        ("PAINEL CORRER [2222]", "Painel Porta Correr 1", "PLACAS", True),
+        ("PAINEL ESPELHO [2222]", "Painel Espelho Correr 1", "PLACAS", True),
+    ]
+    config = {}
+    for def_peca, linha_sc, familia, auto_select in entries:
+        base = {
+            "db_table": TAB_SIS_CORRER_DB,
+            "id_column": "id_sc",
+            "use_id_filter": False,
+            "sistemas_correr": linha_sc,
+            "familia": familia,
+            "preferred_material": linha_sc,
+            "auto_select": auto_select,
+            "tab_default_override": TAB_SIS_CORRER_DEFAULT,
+        }
+        # Para os painéis, a lista deve mostrar toda a família PLACAS,
+        # mas a leitura de dados deve mapear especificamente para a linha indicada.
+        if familia == "PLACAS":
+            base["combo_filters"] = {"sistemas_correr": None, "familia": "PLACAS"}
+            base["data_filters"] = {"sistemas_correr": linha_sc, "familia": "PLACAS"}
+        config[_normalize_key(def_peca)] = base
+    return config
+
+
+SPECIAL_DEF_PECA_CONFIG = _build_special_configs()
+
+
+def _get_special_config(def_peca_text):
+    """Obtém (cópia) da configuração especial para o Def_Peca informado."""
+    key = _normalize_key(def_peca_text)
+    cfg = SPECIAL_DEF_PECA_CONFIG.get(key)
+    return dict(cfg) if cfg else None
+
+
+def _montar_filtros_sql(db_table, id_column, cfg, num_orc, ver_orc, valor_ids, context="combo"):
+    """
+    Constrói as cláusulas WHERE e a lista de parâmetros a partir do contexto atual
+    e de (eventual) configuração especial.
+    """
+    cfg = cfg or {}
+    context_filters = cfg.get(f"{context}_filters", {})
+    where_parts = ["`num_orc`=%s", "`ver_orc`=%s"]
+    params = [num_orc, ver_orc]
+
+    use_id_filter = context_filters.get("use_id_filter")
+    if use_id_filter is None:
+        use_id_filter = cfg.get("use_id_filter", True)
+
+    if use_id_filter and id_column:
+        where_parts.append(f"`{id_column}`=%s")
+        params.append(valor_ids)
+
+    if db_table == TAB_SIS_CORRER_DB:
+        sistemas_correr = context_filters.get("sistemas_correr")
+        if sistemas_correr is None:
+            sistemas_correr = cfg.get("sistemas_correr")
+        if sistemas_correr:
+            where_parts.append("UPPER(`sistemas_correr`)=%s")
+            params.append(sistemas_correr.upper())
+        familia = context_filters.get("familia")
+        if familia is None:
+            familia = cfg.get("familia")
+        if familia:
+            where_parts.append("UPPER(`familia`)=%s")
+            params.append(familia.upper())
+
+    return where_parts, params
+
+
+def _preparar_lista_material(materials, preferred=None):
+    """Remove duplicados preservando ordem e prioriza o material preferido, se existir."""
+    vistos = set()
+    lista = []
+    for material in materials:
+        if material is None:
+            continue
+        if material in vistos:
+            continue
+        lista.append(material)
+        vistos.add(material)
+
+    if preferred and preferred in lista:
+        lista.remove(preferred)
+        lista.insert(0, preferred)
+    return lista
 
 ##########################################################################
 # Função 1: aplicar_combobox_mat_default
@@ -70,39 +205,56 @@ def aplicar_combobox_mat_default(ui):
 
     for row in range(table.rowCount()):
         item_tab = table.item(row, 14) # Coluna Tab_Default
-        if not item_tab: continue
-        tab_default = item_tab.text().strip()
+        item_def = table.item(row, IDX_DEF_PECA_COL)
+        tab_default = item_tab.text().strip() if item_tab else ""
+        def_peca_text = item_def.text().strip() if item_def else ""
 
-        if tab_default not in db_mapping: continue
+        special_cfg = _get_special_config(def_peca_text) if def_peca_text else None
 
-        db_table = db_mapping[tab_default]
-        id_column = id_mapping[tab_default]
+        if special_cfg:
+            tab_override = special_cfg.get("tab_default_override")
+            if tab_override and tab_default != tab_override:
+                tab_default = tab_override
+                if item_tab is None:
+                    item_tab = QTableWidgetItem(tab_default)
+                    table.setItem(row, 14, item_tab)
+                else:
+                    item_tab.setText(tab_default)
+
+        db_table = db_mapping.get(tab_default)
+        id_column = id_mapping.get(tab_default)
+
+        if special_cfg:
+            db_table = special_cfg.get("db_table", db_table)
+            id_column = special_cfg.get("id_column", id_column)
+
+        if not db_table:
+            continue
 
         # Consulta à BD para obter materiais (usando obter_cursor)
         materials = []
         try:
-            # Utiliza o gestor de contexto
+            where_parts, params = _montar_filtros_sql(
+                db_table, id_column, special_cfg, valor_num_orc, valor_ver_orc, valor_ids, context="combo"
+            )
+            where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+
             with obter_cursor() as cursor:
-                # Query para obter materiais distintos
-                # Usar backticks para nomes de colunas/tabelas se contiverem caracteres especiais ou forem palavras reservadas
-                # Assumindo que 'material' é o nome correto da coluna
                 query = f"""
                     SELECT DISTINCT `material`
                     FROM `{db_table}`
-                    WHERE `num_orc`=%s AND `ver_orc`=%s AND `{id_column}`=%s
+                    WHERE {where_clause}
                     AND `material` IS NOT NULL AND `material` <> ''
                     ORDER BY `material`
                 """
-                cursor.execute(query, (valor_num_orc, valor_ver_orc, valor_ids))
-                # Extrai os resultados
+                cursor.execute(query, params)
                 materials = [r[0] for r in cursor.fetchall()]
-            # A conexão e o cursor são fechados automaticamente ao sair do bloco 'with'
+
+            if special_cfg:
+                materials = _preparar_lista_material(materials, special_cfg.get("preferred_material"))
 
         except mysql.connector.Error as db_err:
-            # Logar erro de BD sem interromper o loop para outras linhas
             print(f"[ERRO DB] Linha {row}: Erro ao consultar materiais para '{db_table}': {db_err}")
-            # Pode definir 'materials' como lista vazia ou manter o valor anterior?
-            # Por segurança, continuamos com a lista vazia neste caso.
             materials = []
         except Exception as e:
             print(f"[ERRO INESPERADO] Linha {row}: Erro ao consultar materiais: {e}")
@@ -118,6 +270,12 @@ def aplicar_combobox_mat_default(ui):
 
         item_mat = table.item(row, 13) # Coluna Mat_Default
         current_text = item_mat.text().strip() if item_mat else ""
+        should_auto_update = False
+        if special_cfg and special_cfg.get("auto_select") and not current_text:
+            preferred = special_cfg.get("preferred_material", "")
+            if preferred:
+                current_text = preferred
+                should_auto_update = True
 
         # Tenta definir o valor atual no ComboBox
         idx = combo.findText(current_text, Qt.MatchFixedString) # Busca exata
@@ -152,6 +310,9 @@ def aplicar_combobox_mat_default(ui):
 
         table.setCellWidget(row, 13, combo) # Define o ComboBox na célula
 
+        if should_auto_update and current_text:
+            on_mat_default_changed(ui, row, current_text)
+
     print("[INFO] Aplicação de ComboBox na coluna Mat_Default concluída.")
 
 ##########################################################################
@@ -180,10 +341,23 @@ def on_mat_default_changed(ui, row, new_value):
     # É mais seguro não depender do item subjacente aqui, pois o widget é o principal.
 
     item_tab = table.item(row, 14) # Coluna Tab_Default
-    if item_tab is None: return
-    tab_default = item_tab.text().strip()
+    tab_default = item_tab.text().strip() if item_tab else ""
+    item_def = table.item(row, IDX_DEF_PECA_COL)
+    def_peca_text = item_def.text().strip() if item_def else ""
+    special_cfg = _get_special_config(def_peca_text) if def_peca_text else None
 
-    if tab_default not in {"Tab_Material_11", "Tab_Ferragens_11", "Tab_Acabamentos_12", "Tab_Sistemas_Correr_11"}:
+    if special_cfg:
+        tab_override = special_cfg.get("tab_default_override")
+        if tab_override and tab_default != tab_override:
+            tab_default = tab_override
+            if item_tab is None:
+                item_tab = QTableWidgetItem(tab_default)
+                table.setItem(row, 14, item_tab)
+            else:
+                item_tab.setText(tab_default)
+
+    tabs_validos = {"Tab_Material_11", "Tab_Ferragens_11", "Tab_Acabamentos_12", "Tab_Sistemas_Correr_11"}
+    if tab_default not in tabs_validos and not special_cfg:
         print(f"[AVISO] Linha {row}: Tab_Default '{tab_default}' inválido para atualização via Mat_Default.")
         return
 
@@ -199,7 +373,13 @@ def on_mat_default_changed(ui, row, new_value):
     db_table = db_mapping.get(tab_default)
     id_column = id_mapping.get(tab_default)
 
-    if not db_table or not id_column: return # Segurança adicional
+    if special_cfg:
+        db_table = special_cfg.get("db_table", db_table)
+        id_column = special_cfg.get("id_column", id_column)
+
+    if not db_table:
+        print(f"[AVISO] Linha {row}: Sem mapeamento de tabela para Tab_Default '{tab_default}'.")
+        return # Segurança adicional
 
     valor_num_orc = ui.lineEdit_num_orcamento.text().strip()
     valor_ver_orc = ui.lineEdit_versao_orcamento.text().strip()
@@ -209,12 +389,20 @@ def on_mat_default_changed(ui, row, new_value):
     try:
         # Usa obter_cursor para a consulta
         with obter_cursor() as cursor:
-            query = (
-                "SELECT descricao, ref_le, descricao_no_orcamento, ptab, pliq, desc1_plus, desc2_minus, und, desp, "
-                "corres_orla_0_4, corres_orla_1_0, tipo, familia, comp_mp, larg_mp, esp_mp "
-                f"FROM `{db_table}` WHERE `num_orc`=%s AND `ver_orc`=%s AND `{id_column}`=%s AND `material`=%s"
+            where_parts, params = _montar_filtros_sql(
+                db_table, id_column, special_cfg, valor_num_orc, valor_ver_orc, valor_ids, context="data"
             )
-            cursor.execute(query, (valor_num_orc, valor_ver_orc, valor_ids, new_value))
+            where_parts.append("`material`=%s")
+            params.append(new_value)
+            where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+
+            query = f"""
+                SELECT descricao, ref_le, descricao_no_orcamento, ptab, pliq, desc1_plus, desc2_minus, und, desp,
+                       corres_orla_0_4, corres_orla_1_0, tipo, familia, comp_mp, larg_mp, esp_mp
+                FROM `{db_table}`
+                WHERE {where_clause}
+            """
+            cursor.execute(query, params)
             resultado = cursor.fetchone()
 
         # Processa o resultado fora do 'with'

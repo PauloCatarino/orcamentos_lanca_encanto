@@ -105,7 +105,7 @@ class OrcamentoItem(Base):
 
     notas = Column(Text, nullable=True)
     extras = Column(JSON, nullable=True)
-    reservado_1 = Column(String(255), nullable=True)
+    custo_colagem = Column(String(255), nullable=True)
     reservado_2 = Column(String(255), nullable=True)
     reservado_3 = Column(String(255), nullable=True)
 

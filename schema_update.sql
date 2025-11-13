@@ -43,3 +43,8 @@ CREATE TABLE IF NOT EXISTS definicoes_pecas (
 -- Adicionar coluna CP09_COLAGEM_und à tabela custeio_items (compatibilidade com builds antigos)
 ALTER TABLE custeio_items
     ADD COLUMN IF NOT EXISTS cp09_colagem_und DECIMAL(18,4) NULL AFTER cp08_mao_de_obra_und;
+
+-- Renomear coluna reservado_1 para custo_colagem na tabela orcamento_items
+ALTER TABLE orcamento_items
+    CHANGE COLUMN reservado_1 custo_colagem VARCHAR(255) NULL;
+

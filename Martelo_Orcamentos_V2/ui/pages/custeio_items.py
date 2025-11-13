@@ -36,6 +36,7 @@ SPECIAL_MAT_DEFAULTS = {
     "divisoria": "Divisorias",
     "travessa": "Travessas",
     "prumo": "Prumos",
+    "fundo aluminio 1": "Fundo aluminio",
 }
 PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
     "Painel Porta Correr 1",
@@ -46,6 +47,69 @@ PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
     "Painel Espelho Correr 1",
     "Painel Espelho Correr 2",
     "Painel Espelho Correr 3",
+)
+SPP_DEF_LABELS: Tuple[str, ...] = (
+    "PUXADOR VERTICAL 1",
+    "PUXADOR VERTICAL 2",
+    "CALHA SUPERIOR {SPP} 1 CORRER",
+    "CALHA SUPERIOR {SPP} 2 CORRER",
+    "CALHA INFERIOR {SPP} 1 CORRER",
+    "CALHA INFERIOR {SPP} 2 CORRER",
+    "PERFIL HORIZONTAL H {SPP}",
+    "PERFIL HORIZONTAL U {SPP}",
+    "PERFIL HORIZONTAL L {SPP}",
+    "ACESSORIO {SPP} 7 CORRER",
+    "ACESSORIO {SPP} 8 CORRER",
+)
+SPP_DEF_TOKENS: Set[str] = {
+    svc_custeio._normalize_token(label) for label in SPP_DEF_LABELS
+}
+SPP_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Puxador Vertical 1",
+    "Puxador Vertical 2",
+    "Calha Superior 1 SPP",
+    "Calha Superior 2 SPP",
+    "Calha Inferior 1 SPP",
+    "Calha Inferior 2 SPP",
+    "Perfil Horizontal H SPP",
+    "Perfil Horizontal U SPP",
+    "Perfil Horizontal L SPP",
+    "Acessorio 7 SPP",
+    "Acessorio 8 SPP",
+)
+RODIZIO_DEF_LABELS: Tuple[str, ...] = (
+    "RODIZIO SUP 1",
+    "RODIZIO SUP 2",
+    "RODIZIO INF 1",
+    "RODIZIO INF 2",
+)
+RODIZIO_DEF_TOKENS: Set[str] = {
+    svc_custeio._normalize_token(label) for label in RODIZIO_DEF_LABELS
+}
+RODIZIO_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Rodizio Sup 1",
+    "Rodizio Sup 2",
+    "Rodizio Inf 1",
+    "Rodizio Inf 2",
+)
+ACESSORIO_CORRER_LABELS: Tuple[str, ...] = (
+    "ACESSORIO 1 CORRER",
+    "ACESSORIO 2 CORRER",
+    "ACESSORIO 3 CORRER",
+    "ACESSORIO 4 CORRER",
+    "ACESSORIO 5 CORRER",
+    "ACESSORIO 6 CORRER",
+)
+ACESSORIO_CORRER_TOKENS: Set[str] = {
+    svc_custeio._normalize_token(label) for label in ACESSORIO_CORRER_LABELS
+}
+ACESSORIO_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Acessorio 1",
+    "Acessorio 2",
+    "Acessorio 3",
+    "Acessorio 4",
+    "Acessorio 5",
+    "Acessorio 6",
 )
 COZINHAS_SPECIAL_DEFS: Tuple[str, ...] = (
     "Balde Lixo",
@@ -87,6 +151,13 @@ COZINHAS_MAT_DEFAULT_OPTIONS: Tuple[str, ...] = (
 COZINHAS_SPECIAL_TOKENS: Set[str] = {
     svc_custeio._normalize_token(name) for name in COZINHAS_SPECIAL_DEFS
 }
+COZINHAS_TYPE_HINTS: Tuple[str, ...] = (
+    "FERRAGENS & ACESSORIOS",
+    "FERRAGENS OU ACESSORIOS",
+    "FERRAGENS E ACESSORIOS",
+    "FERRAGENS",
+    "ACESSORIOS",
+)
 
 COLAGEM_LABEL = getattr(svc_custeio, "COLAGEM_REVESTIMENTO_LABEL", "COLAGEM/REVESTIMENTO (M2)")
 _COLAGEM_LABEL_ALIASES = {
@@ -4152,6 +4223,48 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
         normalized_child = (row.get("_normalized_child") or "").strip().casefold()
         tipo_norm = (row.get("tipo") or "").strip().casefold()
 
+        normalized_candidates = {
+            normalized_def,
+            normalized_child,
+            svc_custeio._normalize_token(row.get("def_peca")),
+            svc_custeio._normalize_token(row.get("_child_source")),
+            svc_custeio._normalize_token(row.get("descricao")),
+            svc_custeio._normalize_token(row.get("descricao_livre")),
+        }
+        spp_match = any(token in SPP_DEF_TOKENS for token in normalized_candidates if token)
+        rodizio_match = any(token in RODIZIO_DEF_TOKENS for token in normalized_candidates if token)
+        if rodizio_match:
+            options = svc_custeio.lista_mat_default_sis_correr(
+                session,
+                context,
+                grupos=RODIZIO_SIS_CORRER_OPTIONS,
+            )
+            if options:
+                return options
+            return list(RODIZIO_SIS_CORRER_OPTIONS)
+
+        acessorio_match = any(token in ACESSORIO_CORRER_TOKENS for token in normalized_candidates if token)
+        if acessorio_match:
+            options = svc_custeio.lista_mat_default_sis_correr(
+                session,
+                context,
+                grupos=ACESSORIO_CORRER_OPTIONS,
+            )
+            if options:
+                return options
+            return list(ACESSORIO_CORRER_OPTIONS)
+
+        if spp_match:
+            options = svc_custeio.lista_mat_default_sis_correr(
+                session,
+                context,
+                "FERRAGENS",
+                grupos=SPP_SIS_CORRER_OPTIONS,
+            )
+            if options:
+                return options
+            return list(SPP_SIS_CORRER_OPTIONS)
+
         info_ferragem = svc_custeio.inferir_ferragem_info(row) if row else None
         info_familia_norm = (
             (info_ferragem.get("familia") or "").strip().casefold() if info_ferragem else ""
@@ -4170,26 +4283,38 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
             if options:
                 return options
 
+        painel_match = any(
+            token in {
+                svc_custeio._normalize_token("PAINEL CORRER [0000]"),
+                svc_custeio._normalize_token("PAINEL CORRER [2222]"),
+                svc_custeio._normalize_token("PAINEL ESPELHO [2222]"),
+                svc_custeio._normalize_token("PAINEL CORRER"),
+                svc_custeio._normalize_token("PAINEL ESPELHO"),
+                svc_custeio._normalize_token("PAINEL"),
+            }
+            for token in normalized_candidates
+            if token
+        )
         painel_family = familia_norm == "sistemas correr" or info_familia_norm == "sistemas correr"
-        if painel_family and ("painel correr" in normalized_def or "painel" in tipo_norm):
-            options = svc_custeio.lista_mat_default(session, context, "PLACAS")
+        if painel_family or painel_match:
+            options = svc_custeio.lista_mat_default_sis_correr(
+                session,
+                context,
+                "PLACAS",
+                grupos=PAINEL_SIS_CORRER_OPTIONS,
+            )
             if options:
                 return options
             return list(PAINEL_SIS_CORRER_OPTIONS)
 
-        cozinha_family = familia_norm == "cozinhas"
-        normalized_candidates = {
-            normalized_def,
-            normalized_child,
-            svc_custeio._normalize_token(row.get("def_peca")),
-            svc_custeio._normalize_token(row.get("_child_source")),
-            svc_custeio._normalize_token(row.get("descricao")),
-            svc_custeio._normalize_token(row.get("descricao_livre")),
-        }
-        if cozinha_family and any(token in COZINHAS_SPECIAL_TOKENS for token in normalized_candidates if token):
-            options = svc_custeio.lista_mat_default_ferragens(session, context, "FERRAGENS & ACESSORIOS")
+        cozinha_match = any(token in COZINHAS_SPECIAL_TOKENS for token in normalized_candidates if token)
+        if cozinha_match:
+            options = svc_custeio.lista_mat_default_ferragens_multi(session, context, COZINHAS_TYPE_HINTS)
             if options:
                 return options
+            generic = svc_custeio.lista_mat_default(session, context, "FERRAGENS")
+            if generic:
+                return generic
             return list(COZINHAS_MAT_DEFAULT_OPTIONS)
 
         familia = row.get("familia") or row.get("mat_default")
@@ -4412,6 +4537,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.current_item_id: Optional[int] = None
         self._current_item_obj: Optional[OrcamentoItem] = None
+        self._ordered_item_ids: List[int] = []
+        self._current_item_index: int = -1
 
 
 
@@ -4846,9 +4973,23 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_save = QtWidgets.QPushButton("Guardar Dados Custeio")
         self._save_button_base_text = self.btn_save.text()
 
+        self.btn_prev_item = QtWidgets.QToolButton()
+        self.btn_prev_item.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowUp))
+        self.btn_prev_item.setToolTip("Item anterior")
+        self.btn_prev_item.setEnabled(False)
+        self.btn_prev_item.clicked.connect(self._on_prev_item_clicked)
+
+        self.btn_next_item = QtWidgets.QToolButton()
+        self.btn_next_item.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowDown))
+        self.btn_next_item.setToolTip("Item seguinte")
+        self.btn_next_item.setEnabled(False)
+        self.btn_next_item.clicked.connect(self._on_next_item_clicked)
+
         actions_layout.addWidget(self.btn_refresh)
 
         actions_layout.addWidget(self.btn_save)
+        actions_layout.addWidget(self.btn_prev_item)
+        actions_layout.addWidget(self.btn_next_item)
 
         actions_layout.addStretch(1)
 
@@ -6444,11 +6585,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
         familia = row.get("familia") or row.get("mat_default")
 
         material = svc_custeio.obter_material_por_familia(self.session, self.context, familia, selection)
+        if not material:
+            material = svc_custeio.obter_material_por_grupo(self.session, self.context, selection, familia)
+
+        row["mat_default"] = selection
 
         if not material:
+            def _warn():
+                QtWidgets.QMessageBox.warning(self, "Aviso", f"Nao foi possivel localizar dados para '{selection}'.")
 
-            QtWidgets.QMessageBox.warning(self, "Aviso", f"Nao foi possivel localizar dados para '{selection}'.")
-
+            QtCore.QTimer.singleShot(0, _warn)
+            self.table_model.update_row_fields(row_index, {"mat_default": selection})
+            self.table_model.recalculate_all()
+            self._update_table_placeholder_visibility()
             return
 
         updates = svc_custeio.dados_material(material)
@@ -6457,8 +6606,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         orla_updates = svc_custeio.calcular_espessuras_orla(self.session, row)
         self.table_model.update_row_fields(row_index, orla_updates)
-
-        row["mat_default"] = selection
 
         self.table_model.recalculate_all()
 
@@ -6715,6 +6862,102 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         return self._save_custeio(auto=True)
 
+    def _refresh_item_sequence(self, orcamento_id: Optional[int]) -> None:
+
+        if not orcamento_id:
+
+            self._ordered_item_ids = []
+            self._current_item_index = -1
+            self._update_item_nav_buttons()
+            return
+
+        try:
+
+            stmt = (
+                select(OrcamentoItem.id_item)
+                .where(OrcamentoItem.id_orcamento == orcamento_id)
+                .order_by(OrcamentoItem.item_ord, OrcamentoItem.id_item)
+            )
+            ids = self.session.execute(stmt).scalars().all()
+        except Exception as exc:
+
+            logger.exception("Falha ao obter lista de itens do orçamento %s: %s", orcamento_id, exc)
+            ids = []
+
+        self._ordered_item_ids = [int(value) for value in ids if value is not None]
+        self._recalculate_nav_index()
+
+    def _recalculate_nav_index(self) -> None:
+
+        if not self._ordered_item_ids or self.current_item_id is None:
+
+            self._current_item_index = -1
+            self._update_item_nav_buttons()
+            return
+
+        try:
+            current_id = int(self.current_item_id)
+        except (TypeError, ValueError):
+            current_id = self.current_item_id
+
+        try:
+            self._current_item_index = self._ordered_item_ids.index(current_id)
+        except ValueError:
+            self._current_item_index = -1
+
+        self._update_item_nav_buttons()
+
+    def _update_item_nav_buttons(self) -> None:
+
+        has_items = bool(self._ordered_item_ids)
+        idx = self._current_item_index
+
+        if not has_items:
+            prev_enabled = False
+            next_enabled = False
+        elif idx < 0:
+            prev_enabled = False
+            next_enabled = True
+        else:
+            prev_enabled = idx > 0
+            next_enabled = idx < len(self._ordered_item_ids) - 1
+
+        if hasattr(self, "btn_prev_item"):
+            self.btn_prev_item.setEnabled(prev_enabled)
+        if hasattr(self, "btn_next_item"):
+            self.btn_next_item.setEnabled(next_enabled)
+
+    def _navigate_item(self, step: int) -> None:
+
+        if not step or not self.current_orcamento_id or not self._ordered_item_ids:
+
+            return
+
+        if not self.auto_save_if_dirty():
+
+            return
+
+        idx = self._current_item_index
+        if idx is None or idx < 0:
+            idx = 0 if step > 0 else len(self._ordered_item_ids) - 1
+
+        new_idx = max(0, min(idx + step, len(self._ordered_item_ids) - 1))
+
+        if new_idx == self._current_item_index:
+
+            return
+
+        target_id = self._ordered_item_ids[new_idx]
+
+        self.load_item(self.current_orcamento_id, target_id)
+
+    def _on_prev_item_clicked(self) -> None:
+
+        self._navigate_item(-1)
+
+    def _on_next_item_clicked(self) -> None:
+
+        self._navigate_item(1)
 
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
 
@@ -6743,6 +6986,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 pass
 
         self.current_item_id = normalized_item_id
+        self._refresh_item_sequence(orcamento_id)
 
         self._collapsed_groups.clear()
 
@@ -6770,6 +7014,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.context = None
 
             self._reset_header()
+
+            self._refresh_item_sequence(None)
 
             return
 
@@ -6852,6 +7098,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.current_item_id = None
 
         self._current_item_obj = None
+        self._ordered_item_ids = []
+        self._current_item_index = -1
+        self._update_item_nav_buttons()
 
         self._clear_dimension_values()
 

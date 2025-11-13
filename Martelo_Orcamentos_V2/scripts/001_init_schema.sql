@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS orcamento_items (
   valor_mao_obra DECIMAL(14,2) DEFAULT 0,
   notas LONGTEXT,
   extras JSON,
-  reservado_1 VARCHAR(255),
+  custo_colagem VARCHAR(255),
   reservado_2 VARCHAR(255),
   reservado_3 VARCHAR(255),
   created_by BIGINT NULL,

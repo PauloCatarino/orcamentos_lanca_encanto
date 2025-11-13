@@ -234,7 +234,7 @@ class ItensPage(QtWidgets.QWidget):
             ("Valor Margem MP_Orlas (?)", "valor_mp_orlas", _fmt_int),
             ("Margem Mao_Obra (%)", "margem_mao_obra_perc", _fmt_int),
             ("Valor Margem Mao_Obra (?)", "valor_mao_obra", _fmt_int),
-            ("reservado_1", "reservado_1"),
+            ("Custo Colagem", "custo_colagem"),
             ("reservado_2", "reservado_2"),
             ("reservado_3", "reservado_3"),
         ]
@@ -267,7 +267,7 @@ class ItensPage(QtWidgets.QWidget):
             "Margem_Acabamentos(%)": 160, "Valor Margem_Acabamentos (?)": 190,
             "Margem MP_Orlas (%)": 160, "Valor Margem MP_Orlas (?)": 190,
             "Margem Mao_Obra (%)": 160, "Valor Margem Mao_Obra (?)": 190,
-            "reservado_1": 120, "reservado_2": 120, "reservado_3": 120,
+            "Custo Colagem": 120, "reservado_2": 120, "reservado_3": 120,
         }
         for i, col_def in enumerate(table_columns):
             w = column_widths.get(col_def[0])

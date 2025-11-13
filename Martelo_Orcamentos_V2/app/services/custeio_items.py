@@ -162,6 +162,7 @@ _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
     _normalize_token("FUNDO GAVETA"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
     _normalize_token("TRASEIRA GAVETA [2000]"): {"tipo": "Gaveta Caixa", "familia": "FERRAGENS"},
     _normalize_token("LATERAL GAVETA [2202]"): {"tipo": "Gaveta Caixa", "familia": "FERRAGENS"},
+    _normalize_token("FUNDO ALUMINIO 1"): {"tipo": "Fundo aluminio", "familia": "FERRAGENS"},
     _normalize_token("PAINEL CORRER"): {"tipo": "Painel Porta Correr 1", "familia": "SISTEMAS CORRER"},
     _normalize_token("PAINEL ESPELHO"): {"tipo": "Painel Espelho Correr 1", "familia": "SISTEMAS CORRER"},
 }
@@ -628,7 +629,7 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "PORTA TALHERES", "group": "Porta Talheres"},
                     {"label": "TULHA 1", "group": "Tulha 1"},
                     {"label": "TULHA 2", "group": "Tulha 2"},
-                    {"label": "FUNDO ALUMINIO 1", "group": "Fundo Aluminio 1"},
+                    {"label": "FUNDO ALUMINIO 1", "group": "Fundo aluminio"},
                     {"label": "FUNDO ALUMINIO 2", "group": "Fundo Aluminio 2"},
                     {"label": "FUNDO PLASTICO FRIGORIFICO", "group": "Fundo Plastico Frigorifico"},
                     {"label": "SALVA SIFAO", "group": "Salva Sifao"},
@@ -774,6 +775,11 @@ _FAMILIA_MENU_ALIASES_RAW = {
     "PLACA": svc_dados_items.MENU_MATERIAIS,
     "FERRAGENS": svc_dados_items.MENU_FERRAGENS,
     "FERRAGEM": svc_dados_items.MENU_FERRAGENS,
+    "FERRAGENS & ACESSORIOS": svc_dados_items.MENU_FERRAGENS,
+    "FERRAGENS E ACESSORIOS": svc_dados_items.MENU_FERRAGENS,
+    "FERRAGENS OU ACESSORIOS": svc_dados_items.MENU_FERRAGENS,
+    "COZINHAS": svc_dados_items.MENU_FERRAGENS,
+    "COZINHA": svc_dados_items.MENU_FERRAGENS,
     "SISTEMAS CORRER": svc_dados_items.MENU_SIS_CORRER,
     "SISTEMA CORRER": svc_dados_items.MENU_SIS_CORRER,
     "SIST CORRER": svc_dados_items.MENU_SIS_CORRER,
@@ -1002,20 +1008,22 @@ def lista_mat_default_ferragens(
         return []
 
     stmt = (
-        select(DadosItemsFerragem.grupo_ferragem)
+        select(DadosItemsFerragem.grupo_ferragem, DadosItemsFerragem.tipo)
         .where(
             DadosItemsFerragem.orcamento_id == ctx.orcamento_id,
             DadosItemsFerragem.item_id == ctx.item_id,
-            func.lower(DadosItemsFerragem.tipo) == tipo_text.lower(),
         )
         .order_by(DadosItemsFerragem.linha, DadosItemsFerragem.grupo_ferragem)
     )
 
-    valores = session.execute(stmt).scalars().all()
+    registros = session.execute(stmt).all()
+    tipo_token = _normalize_token(tipo)
     vistos: Set[str] = set()
     resultado: List[str] = []
-    for valor in valores:
+    for valor, tipo_reg in registros:
         if not valor:
+            continue
+        if tipo_token and _normalize_token(tipo_reg) != tipo_token:
             continue
         texto = str(valor).strip()
         if not texto:
@@ -1045,7 +1053,32 @@ def lista_mat_default_ferragens(
     return _sort_groups_by_tipo(resultado, tipo_text) if resultado else []
 
 
-def _collect_group_options(session: Session, ctx: svc_dados_items.DadosItemsContext, menu: str) -> List[str]:
+def lista_mat_default_ferragens_multi(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    tipos: Sequence[str],
+) -> List[str]:
+    vistos: Set[str] = set()
+    resultado: List[str] = []
+    for tipo in tipos:
+        if not tipo:
+            continue
+        for valor in lista_mat_default_ferragens(session, ctx, tipo):
+            token = _normalize_token(valor)
+            if token in vistos:
+                continue
+            vistos.add(token)
+            resultado.append(valor)
+    return resultado
+
+
+def _collect_group_options(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    menu: str,
+    *,
+    extra_filters: Optional[Mapping[str, Any]] = None,
+) -> List[str]:
     model = svc_dados_items.MODEL_MAP.get(menu)
     if not model:
         return []
@@ -1058,6 +1091,22 @@ def _collect_group_options(session: Session, ctx: svc_dados_items.DadosItemsCont
         model.orcamento_id == ctx.orcamento_id,
         model.item_id == ctx.item_id,
     )
+
+    if extra_filters:
+        for field, value in extra_filters.items():
+            if value in (None, "", False):
+                continue
+            model_column = getattr(model, field, None)
+            if model_column is None:
+                continue
+            if isinstance(value, (list, tuple, set, frozenset)):
+                prepared = [str(v).strip().upper() for v in value if str(v).strip()]
+                if prepared:
+                    stmt = stmt.where(func.upper(model_column).in_(prepared))
+            else:
+                text = str(value).strip()
+                if text:
+                    stmt = stmt.where(func.upper(model_column) == text.upper())
 
     ordem_column = getattr(model, "ordem", None)
     if ordem_column is not None:
@@ -2359,19 +2408,44 @@ def lista_mat_default(
     session: Optional[Session] = None,
     ctx: Optional[svc_dados_items.DadosItemsContext] = None,
     familia: Optional[str] = None,
+    *,
+    menu_override: Optional[str] = None,
+    extra_filters: Optional[Mapping[str, Any]] = None,
 ) -> List[str]:
-    if session and ctx:
-        menu = _menu_for_familia(familia)
-        if menu:
-            valores = _collect_group_options(session, ctx, menu)
-            if valores:
-                return valores
+    menu = menu_override or _menu_for_familia(familia)
+    if session and ctx and menu:
+        valores = _collect_group_options(session, ctx, menu, extra_filters=extra_filters)
+        if valores:
+            return valores
 
-    menu = _menu_for_familia(familia)
     if menu:
         return list(svc_dados_items.MENU_FIXED_GROUPS.get(menu, ()))
 
     return list(svc_dados_items.MENU_FIXED_GROUPS.get(svc_dados_items.MENU_MATERIAIS, ()))
+
+
+def lista_mat_default_sis_correr(
+    session: Optional[Session] = None,
+    ctx: Optional[svc_dados_items.DadosItemsContext] = None,
+    familia: Optional[str] = None,
+    *,
+    grupos: Optional[Sequence[str]] = None,
+    tipo: Optional[str] = None,
+) -> List[str]:
+    filters: Dict[str, Any] = {}
+    if familia:
+        filters["familia"] = familia
+    if grupos:
+        filters["grupo_sistema"] = list(grupos)
+    if tipo:
+        filters["tipo"] = tipo
+    return lista_mat_default(
+        session,
+        ctx,
+        familia,
+        menu_override=svc_dados_items.MENU_SIS_CORRER,
+        extra_filters=filters or None,
+    )
 
 
 def lista_acabamento(
