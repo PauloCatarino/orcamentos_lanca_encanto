@@ -4504,6 +4504,8 @@ class AcabamentoDelegate(QtWidgets.QStyledItemDelegate):
 
 class CusteioItemsPage(QtWidgets.QWidget):
 
+    item_context_changed = QtCore.Signal(object)
+
     CATEGORY_ROLE = QtCore.Qt.UserRole + 1
 
 
@@ -5954,8 +5956,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return False
 
+        save_button = getattr(self, "btn_save", None)
+        should_disable_button = bool(save_button) and not auto
+        if should_disable_button:
+            save_button.setDisabled(True)
+
         self.table_model.recalculate_all()
         if not self._validate_special_rows():
+            if should_disable_button:
+                save_button.setEnabled(True)
             return False
 
         dimensoes = self._collect_dimension_payload()
@@ -5980,14 +5989,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 f"Falha ao guardar Dados Custeio: {exc}",
 
             )
+            if should_disable_button:
+                save_button.setEnabled(True)
 
             return False
 
         self._nst_override_snapshot = snapshot if any(snapshot) else []
-
-        if not auto:
-
-            QtWidgets.QMessageBox.information(self, "Sucesso", "Dados de custeio guardados.")
 
         self._dimensions_dirty = False
 
@@ -6010,6 +6017,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_table_placeholder_visibility()
 
         self._update_save_button_text()
+
+        if should_disable_button:
+            save_button.setEnabled(True)
 
         return True
 
@@ -6927,6 +6937,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if hasattr(self, "btn_next_item"):
             self.btn_next_item.setEnabled(next_enabled)
 
+    def _emit_item_context_changed(self) -> None:
+        try:
+            self.item_context_changed.emit(self.current_item_id)
+        except Exception:
+            logger.debug("Falha ao emitir item_context_changed", exc_info=True)
+
     def _navigate_item(self, step: int) -> None:
 
         if not step or not self.current_orcamento_id or not self._ordered_item_ids:
@@ -6987,6 +7003,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.current_item_id = normalized_item_id
         self._refresh_item_sequence(orcamento_id)
+        self._emit_item_context_changed()
 
         self._collapsed_groups.clear()
 
@@ -7118,5 +7135,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_model.clear()
 
         self._update_table_placeholder_visibility()
+        self._emit_item_context_changed()
 
 

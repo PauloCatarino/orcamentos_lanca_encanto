@@ -85,6 +85,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_dados = DadosGeraisPage(current_user=self.current_user)
         self.pg_dados_items = DadosItemsPage(current_user=self.current_user)
         self.pg_custeio = CusteioItemsPage(current_user=self.current_user)
+        self.pg_custeio.item_context_changed.connect(self.on_custeio_item_changed)
 
         self.stack.addWidget(self.pg_orc)
         self.stack.addWidget(self.pg_itens)
@@ -185,6 +186,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.pg_custeio.on_production_mode_changed(modo)
             except Exception as exc:
                 logger.exception("Falha ao atualizar modo de producao no custeio: %s", exc)
+
+    def on_custeio_item_changed(self, item_id: Optional[int]):
+        if self.current_orcamento_id is None:
+            return
+        changed = item_id != self.current_item_id
+        self.current_item_id = item_id
+        if changed or self.stack.currentIndex() == 5:
+            self.pg_dados_items.load_item(self.current_orcamento_id, item_id)
+        if self.pg_itens and hasattr(self.pg_itens, "focus_item"):
+            self.pg_itens.focus_item(item_id)
 
     def _reset_all_nav_item_styles(self) -> None:
         def reset_item(item: QtWidgets.QTreeWidgetItem) -> None:

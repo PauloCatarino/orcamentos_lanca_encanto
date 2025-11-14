@@ -46,5 +46,15 @@ ALTER TABLE custeio_items
 
 -- Renomear coluna reservado_1 para custo_colagem na tabela orcamento_items
 ALTER TABLE orcamento_items
-    CHANGE COLUMN reservado_1 custo_colagem VARCHAR(255) NULL;
+    CHANGE COLUMN reservado_1 custo_colagem DECIMAL(14,2) NOT NULL DEFAULT 0;
+
+
+-- Ajustar precisões das colunas percentuais e de custo na tabela orcamento_items
+ALTER TABLE orcamento_items
+    MODIFY COLUMN margem_lucro_perc DECIMAL(6,2) DEFAULT 0,
+    MODIFY COLUMN custos_admin_perc DECIMAL(6,2) DEFAULT 0,
+    MODIFY COLUMN margem_acabamentos_perc DECIMAL(6,2) DEFAULT 0,
+    MODIFY COLUMN margem_mp_orlas_perc DECIMAL(6,2) DEFAULT 0,
+    MODIFY COLUMN margem_mao_obra_perc DECIMAL(6,2) DEFAULT 0,
+    MODIFY COLUMN custo_colagem DECIMAL(14,2) DEFAULT 0;
 

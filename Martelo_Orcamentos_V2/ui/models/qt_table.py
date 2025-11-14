@@ -44,7 +44,15 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             header = col[0] if len(col) > 0 else ""
             attr = col[1] if len(col) > 1 else None
             formatter = col[2] if len(col) > 2 else None
-            return {"header": header, "attr": attr, "formatter": formatter, "type": None, "editable": True}
+            tooltip = col[3] if len(col) > 3 else None
+            return {
+                "header": header,
+                "attr": attr,
+                "formatter": formatter,
+                "type": None,
+                "editable": True,
+                "tooltip": tooltip,
+            }
 
         if isinstance(col, dict):
             header = col.get("header") or col.get("label") or ""
@@ -54,7 +62,15 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             editable = col.get("editable")
             if editable is None:
                 editable = not col.get("readonly", False)
-            return {"header": header, "attr": attr, "formatter": formatter, "type": col_type, "editable": editable}
+            tooltip = col.get("tooltip") or col.get("help")
+            return {
+                "header": header,
+                "attr": attr,
+                "formatter": formatter,
+                "type": col_type,
+                "editable": editable,
+                "tooltip": tooltip,
+            }
 
         # Objetos (ex.: dataclasses)
         header = getattr(col, "header", getattr(col, "label", str(col)))
@@ -66,7 +82,15 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         editable_attr = getattr(col, "editable", None)
         if editable_attr is None:
             editable_attr = not getattr(col, "readonly", False)
-        return {"header": header, "attr": attr, "formatter": formatter, "type": col_type, "editable": editable_attr}
+        tooltip = getattr(col, "tooltip", getattr(col, "help_text", None))
+        return {
+            "header": header,
+            "attr": attr,
+            "formatter": formatter,
+            "type": col_type,
+            "editable": editable_attr,
+            "tooltip": tooltip,
+        }
 
     # -------- Qt Model API ----------
     def rowCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
@@ -103,6 +127,22 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                 return ""
             if role == QtCore.Qt.EditRole:
                 return int_to_bool(val)
+
+        if role == QtCore.Qt.ToolTipRole:
+            tooltip = spec.get("tooltip")
+            if not tooltip:
+                return None
+            if val in (None, ""):
+                return tooltip
+            formatted = None
+            if formatter:
+                try:
+                    formatted = formatter(val)
+                except Exception:
+                    formatted = None
+            if formatted is None:
+                formatted = str(val)
+            return f"{tooltip}\nValor atual: {formatted}"
 
         # display / edit role
         if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
@@ -196,15 +236,19 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         return flags
 
     def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: int = QtCore.Qt.DisplayRole):
-        if role != QtCore.Qt.DisplayRole:
-            return None
         if orientation == QtCore.Qt.Horizontal:
             if section >= len(self._columns):
-                return ""
+                return "" if role == QtCore.Qt.DisplayRole else None
             col = self._columns[section]
             spec = self._col_spec(col)
-            return spec.get("header", "")
-        return str(section + 1)
+            if role == QtCore.Qt.DisplayRole:
+                return spec.get("header", "")
+            if role == QtCore.Qt.ToolTipRole:
+                return spec.get("tooltip")
+            return None
+        if role == QtCore.Qt.DisplayRole:
+            return str(section + 1)
+        return None
 
     # ---------- utilitarios ----------
     def sort(self, column: int, order: QtCore.Qt.SortOrder = QtCore.Qt.SortOrder.AscendingOrder) -> None:

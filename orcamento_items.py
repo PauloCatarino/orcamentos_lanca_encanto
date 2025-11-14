@@ -96,7 +96,7 @@ from tab_modulo_medidas_formatacao import aplicar_formatacao # Importa a funçã
 _editando_programaticamente = False
 # --- Constantes para índices das colunas na tableWidget_artigos (0-based) ---
 # Estas constantes são usadas para aceder às colunas da tableWidget_artigos de forma legível.
-# Total de 26 colunas de dados (índices 0 a 25)
+# Total de 27 colunas de dados (índices 0 a 26)
 COL_ID_ITEM = 0  # Esta coluna é oculta na UI
 COL_ITEM_NUM = 1
 COL_CODIGO = 2
@@ -113,16 +113,58 @@ COL_CUSTO_ORLAS = 12
 COL_CUSTO_MO = 13
 COL_CUSTO_MP = 14
 COL_CUSTO_ACABAMENTOS = 15
-COL_MARGEM_PERC = 16
-COL_MARGEM_VALOR = 17
-COL_CUSTOS_ADMIN_PERC = 18
-COL_CUSTOS_ADMIN_VALOR = 19
-COL_MARGEM_ACAB_PERC = 20
-COL_VALOR_ACAB = 21
-COL_MARGEM_MP_ORLAS_PERC = 22
-COL_VALOR_MP_ORLAS = 23
-COL_MARGEM_MAO_OBRA_PERC = 24
-COL_VALOR_MAO_OBRA = 25  # Última coluna, total de 26 colunas (0-25)
+COL_CUSTO_COLAGEM = 16
+COL_MARGEM_PERC = 17
+COL_MARGEM_VALOR = 18
+COL_CUSTOS_ADMIN_PERC = 19
+COL_CUSTOS_ADMIN_VALOR = 20
+COL_MARGEM_ACAB_PERC = 21
+COL_VALOR_ACAB = 22
+COL_MARGEM_MP_ORLAS_PERC = 23
+COL_VALOR_MP_ORLAS = 24
+COL_MARGEM_MAO_OBRA_PERC = 25
+COL_VALOR_MAO_OBRA = 26  # Última coluna, total de 27 colunas (0-26)
+
+ARTIGOS_HEADER_LABELS = [
+    "ID",
+    "Item",
+    "Código",
+    "Descrição",
+    "Altura (mm)",
+    "Largura (mm)",
+    "Profundidade (mm)",
+    "Unidade",
+    "Quantidade",
+    "Preço Unitário (€)",
+    "Preço Total (€)",
+    "Custo Produzido (€)",
+    "Custo Total Orlas (€)",
+    "Custo Total Mão de Obra (€)",
+    "Custo Total Matéria Prima (€)",
+    "Custo Total Acabamentos (€)",
+    "Custo Colagem (€)",
+    "Margem de Lucro (%)",
+    "Valor da Margem (€)",
+    "Custos Administrativos (%)",
+    "Valor Custos Administrativos (€)",
+    "Margem Acabamentos (%)",
+    "Valor Margem Acabamentos (€)",
+    "Margem MP/Orlas (%)",
+    "Valor Margem MP/Orlas (€)",
+    "Margem Mão de Obra (%)",
+    "Valor Margem Mão de Obra (€)",
+]
+
+
+def _ensure_artigos_headers(tbl):
+    if tbl.columnCount() != len(ARTIGOS_HEADER_LABELS):
+        tbl.setColumnCount(len(ARTIGOS_HEADER_LABELS))
+    for idx, text in enumerate(ARTIGOS_HEADER_LABELS):
+        header_item = tbl.horizontalHeaderItem(idx)
+        if header_item is None:
+            header_item = QTableWidgetItem()
+            tbl.setHorizontalHeaderItem(idx, header_item)
+        header_item.setText(text)
 
 # --- Constantes para índices das colunas na dados_def_pecas (na DB) ---
 # Estes correspondem às colunas na tabela 'dados_def_pecas'
@@ -898,6 +940,7 @@ def criar_tabela_orcamento_items():
             "custo_total_mao_obra": "DOUBLE NULL DEFAULT 0.0",
             "custo_total_materia_prima": "DOUBLE NULL DEFAULT 0.0",
             "custo_total_acabamentos": "DOUBLE NULL DEFAULT 0.0",
+            "custo_colagem": "DECIMAL(14,2) NULL DEFAULT 0.0",
             "margem_lucro_perc": "DOUBLE NULL DEFAULT 0.0",
             "valor_margem": "DOUBLE NULL DEFAULT 0.0",
             "custos_admin_perc": "DOUBLE NULL DEFAULT 0.0",
@@ -1108,7 +1151,7 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                 SELECT id_item, item, codigo, descricao, altura, largura, profundidade,
                        und, qt, preco_unitario, preco_total, custo_produzido,
                        custo_total_orlas, custo_total_mao_obra, custo_total_materia_prima,
-                       custo_total_acabamentos, margem_lucro_perc, valor_margem,
+                       custo_total_acabamentos, custo_colagem, margem_lucro_perc, valor_margem,
                        custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
                        valor_acabamentos, margem_mp_orlas_perc, valor_mp_orlas,
                        margem_mao_obra_perc, valor_mao_obra
@@ -1156,16 +1199,17 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
             COL_CUSTO_MO: 13,
             COL_CUSTO_MP: 14,
             COL_CUSTO_ACABAMENTOS: 15,
-            COL_MARGEM_PERC: 16,
-            COL_MARGEM_VALOR: 17,
-            COL_CUSTOS_ADMIN_PERC: 18,
-            COL_CUSTOS_ADMIN_VALOR: 19,
-            COL_MARGEM_ACAB_PERC: 20,
-            COL_VALOR_ACAB: 21,
-            COL_MARGEM_MP_ORLAS_PERC: 22,
-            COL_VALOR_MP_ORLAS: 23,
-            COL_MARGEM_MAO_OBRA_PERC: 24,
-            COL_VALOR_MAO_OBRA: 25
+            COL_CUSTO_COLAGEM: 16,
+            COL_MARGEM_PERC: 17,
+            COL_MARGEM_VALOR: 18,
+            COL_CUSTOS_ADMIN_PERC: 19,
+            COL_CUSTOS_ADMIN_VALOR: 20,
+            COL_MARGEM_ACAB_PERC: 21,
+            COL_VALOR_ACAB: 22,
+            COL_MARGEM_MP_ORLAS_PERC: 23,
+            COL_VALOR_MP_ORLAS: 24,
+            COL_MARGEM_MAO_OBRA_PERC: 25,
+            COL_VALOR_MAO_OBRA: 26
         }
 
         for row_data in registros:
@@ -1182,6 +1226,7 @@ def carregar_itens_orcamento(ui, id_orcamento: int):
                     # Formata colunas de preço
                     if col_ui_idx in [COL_PRECO_UNIT, COL_PRECO_TOTAL, COL_CUSTO_PRODUZIDO,  # Adicionado Custo Produzido
                                       COL_CUSTO_ORLAS, COL_CUSTO_MO, COL_CUSTO_MP, COL_CUSTO_ACABAMENTOS,
+                                      COL_CUSTO_COLAGEM,
                                       COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_VALOR_ACAB, COL_VALOR_MP_ORLAS,
                                       COL_VALOR_MAO_OBRA]:
                         texto_item = formatar_valor_moeda(valor)
@@ -1647,6 +1692,7 @@ def handle_item_editado(ui, item):
         COL_CUSTO_MO: "custo_total_mao_obra",
         COL_CUSTO_MP: "custo_total_materia_prima",
         COL_CUSTO_ACABAMENTOS: "custo_total_acabamentos",
+        COL_CUSTO_COLAGEM: "custo_colagem",
         COL_MARGEM_PERC: "margem_lucro_perc",
         COL_MARGEM_VALOR: "valor_margem",
         COL_CUSTOS_ADMIN_PERC: "custos_admin_perc",
@@ -1788,16 +1834,18 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
     id_item_orcamento_str = _get_cell_text(tbl, row_idx, COL_ITEM_NUM)
     num_orc_str = ui.lineEdit_num_orcamento.text().strip()
     ver_orc_str = ui.lineEdit_versao_orcamento.text().strip()
+    id_orc_str = ui.lineEdit_id.text().strip()
 
     # print(f"[DEBUG CalcLinha {row_idx+1}] Iniciando cálculo para Item '{id_item_orcamento_str}' (Orc: {num_orc_str}, Ver: {ver_orc_str})...")
 
-    if not all([id_item_db_val_str, id_item_orcamento_str, num_orc_str, ver_orc_str]):
+    if not all([id_item_db_val_str, id_item_orcamento_str, num_orc_str, ver_orc_str, id_orc_str]):
         print(
-            f"[AVISO] Linha {row_idx+1}: Dados de identificação do item incompletos (DB ID, Item, Num_Orc, Ver_Orc). Saltando cálculo de custos detalhados.")
+            f"[AVISO] Linha {row_idx+1}: Dados de identificação do item incompletos (DB ID, Item, Num_Orc, Ver_Orc, ID_Orçamento). Saltando cálculo de custos detalhados.")
         # Limpar os campos de custo para evitar valores antigos
         _editando_programaticamente = True
         try:
             for col_idx in [COL_CUSTO_PRODUZIDO, COL_CUSTO_ORLAS, COL_CUSTO_MO, COL_CUSTO_MP, COL_CUSTO_ACABAMENTOS,
+                            COL_CUSTO_COLAGEM,
                             COL_MARGEM_VALOR, COL_CUSTOS_ADMIN_VALOR, COL_VALOR_ACAB, COL_VALOR_MP_ORLAS, COL_VALOR_MAO_OBRA,
                             COL_PRECO_UNIT, COL_PRECO_TOTAL]:
                 set_item(tbl, row_idx, col_idx, formatar_valor_moeda(0.0))
@@ -1810,37 +1858,43 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
 
     # --- 1. Obter dados de `dados_def_pecas` para este item do orçamento ---
     # Soma dos custos de todas as peças (`def_peca`) que compõem este item do orçamento.
+    try:
+        id_item_db_val = int(id_item_db_val_str)
+        id_orcamento_int = int(id_orc_str)
+    except ValueError:
+        print(f"[AVISO] Linha {row_idx+1}: IDs inválidos para item/ orçamento. Saltando cálculo.")
+        return
+
     total_orlas = 0.0
     total_mao_obra = 0.0
     total_materia_prima = 0.0
     total_acabamentos = 0.0
+    total_colagem = 0.0
 
     try:
         with obter_cursor() as cursor:
-            # Query para somar os custos relevantes da tabela dados_def_pecas
-            # O critério de busca é ids (item do orcamento), num_orc (numero orcamento), ver_orc (versao orcamento)
-            query = f"""
-                SELECT SUM((CUSTO_ML_C1 + CUSTO_ML_C2 + CUSTO_ML_L1 + CUSTO_ML_L2) * QT_Total),
-                       SUM(Soma_Custo_und * QT_Total),
-                       SUM(CUSTO_MP_Total),
-                       SUM(Soma_Custo_ACB)
-                FROM dados_def_pecas
-                WHERE ids=%s AND num_orc=%s AND ver_orc=%s
+            query = """
+                SELECT
+                    SUM(COALESCE(custo_total_orla, 0)),
+                    SUM(COALESCE(soma_custo_und, 0)),
+                    SUM(COALESCE(custo_mp_total, 0)),
+                    SUM(COALESCE(soma_custo_acb, 0)),
+                    SUM(COALESCE(cp09_colagem_und, 0))
+                FROM custeio_items
+                WHERE orcamento_id=%s AND item_id=%s AND versao=%s
             """
-            cursor.execute(query, (id_item_orcamento_str,
-                           num_orc_str, ver_orc_str))
+            cursor.execute(query, (id_orcamento_int, id_item_db_val, ver_orc_str))
             res = cursor.fetchone()
 
-            if res and res[0] is not None:  # Verifica se há resultados válidos
-                # Os valores retornados já consideram a multiplicação por QT_Total na query.
-                total_orlas = float(res[0]) if res[0] is not None else 0.0
-                total_mao_obra = float(res[1]) if res[1] is not None else 0.0
-                total_materia_prima = float(res[2]) if res[2] is not None else 0.0
-                total_acabamentos = float(res[3]) if res[3] is not None else 0.0
-                # print(f"[DEBUG] Custos DB para item {id_item_orcamento_str}: Orlas={total_orlas:.2f}, MO={total_mao_obra:.2f}, MP={total_materia_prima:.2f}, Acab={total_acabamentos:.2f}")
+            if res:
+                total_orlas = float(res[0] or 0.0)
+                total_mao_obra = float(res[1] or 0.0)
+                total_materia_prima = float(res[2] or 0.0)
+                total_acabamentos = float(res[3] or 0.0)
+                total_colagem = float(res[4] or 0.0)
             else:
                 print(
-                    f"[INFO] Nenhum dado de peça encontrado na dados_def_pecas para Item: {id_item_orcamento_str}, Orc: {num_orc_str}, Ver: {ver_orc_str}. Custos serão 0.")
+                    f"[INFO] Nenhum dado encontrado na custeio_items para Item (ID DB): {id_item_db_val}.")
 
     except mysql.connector.Error as err:
         print(
@@ -1971,7 +2025,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
         # Bloqueia sinais da tabela enquanto atualiza programaticamente
         tbl.blockSignals(True)
         # Atualiza Custo Produzido
-        tooltip_custo_produzido = f"Custo Produzido = Custo Total Orlas ({total_orlas:.2f}€) + Custo Total Mão de Obra ({total_mao_obra:.2f}€) + Custo Total Matéria Prima ({total_materia_prima:.2f}€) + Custo Total Acabamentos ({total_acabamentos:.2f}€) = {custo_produzido_calculado:.2f}€"
+        tooltip_custo_produzido = f"Custo Produzido = Custo Total Orlas ({total_orlas:.2f}€) + Custo Total Mão de Obra ({total_mao_obra:.2f}€) + Custo Total Matéria Prima ({total_materia_prima:.2f}€) + Custo Total Acabamentos ({total_acabamentos:.2f}€) + Custo Colagem ({total_colagem:.2f}€) = {custo_produzido_calculado:.2f}€"
         set_item(tbl, row_idx, COL_CUSTO_PRODUZIDO,
                  formatar_valor_moeda(custo_produzido_calculado))
         if tbl.item(row_idx, COL_CUSTO_PRODUZIDO):
@@ -1979,29 +2033,35 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                 tooltip_custo_produzido)
 
         # Atualiza colunas de custos e valores em euros com tooltips
-        tooltip_orlas = f"Soma dos custos de orlas de todas as peças deste item: {total_orlas:.2f}€"
+        tooltip_orlas = f"Soma da coluna CUSTO_TOTAL_ORLA (Custeio dos Itens) para este item: {total_orlas:.2f}€"
         set_item(tbl, row_idx, COL_CUSTO_ORLAS,
                  formatar_valor_moeda(total_orlas))
         if tbl.item(row_idx, COL_CUSTO_ORLAS):
             tbl.item(row_idx, COL_CUSTO_ORLAS).setToolTip(tooltip_orlas)
 
-        tooltip_mo = f"Soma dos custos de Mão de Obra e máquinas de todas as peças deste item: {total_mao_obra:.2f}€"
+        tooltip_mo = f"Soma da coluna Soma_Custo_und (Custeio dos Itens) para este item: {total_mao_obra:.2f}€"
         set_item(tbl, row_idx, COL_CUSTO_MO,
                  formatar_valor_moeda(total_mao_obra))
         if tbl.item(row_idx, COL_CUSTO_MO):
             tbl.item(row_idx, COL_CUSTO_MO).setToolTip(tooltip_mo)
 
-        tooltip_mp = f"Soma dos custos de Matéria Prima de todas as peças deste item: {total_materia_prima:.2f}€"
+        tooltip_mp = f"Soma da coluna Custo_MP_Total (Custeio dos Itens) para este item: {total_materia_prima:.2f}€"
         set_item(tbl, row_idx, COL_CUSTO_MP,
                  formatar_valor_moeda(total_materia_prima))
         if tbl.item(row_idx, COL_CUSTO_MP):
             tbl.item(row_idx, COL_CUSTO_MP).setToolTip(tooltip_mp)
 
-        tooltip_acab = f"Soma dos custos de Acabamentos de todas as peças deste item: {total_acabamentos:.2f}€"
+        tooltip_acab = f"Soma da coluna Soma_Custo_ACB (Custeio dos Itens) para este item: {total_acabamentos:.2f}€"
         set_item(tbl, row_idx, COL_CUSTO_ACABAMENTOS,
                  formatar_valor_moeda(total_acabamentos))
         if tbl.item(row_idx, COL_CUSTO_ACABAMENTOS):
             tbl.item(row_idx, COL_CUSTO_ACABAMENTOS).setToolTip(tooltip_acab)
+
+        tooltip_colagem = f"Soma da coluna CP09_COLAGEM_und (Custeio dos Itens) para este item: {total_colagem:.2f}€"
+        set_item(tbl, row_idx, COL_CUSTO_COLAGEM,
+                 formatar_valor_moeda(total_colagem))
+        if tbl.item(row_idx, COL_CUSTO_COLAGEM):
+            tbl.item(row_idx, COL_CUSTO_COLAGEM).setToolTip(tooltip_colagem)
 
         # Margem de Lucro Percentual (já tratada acima para force_global_margin_update)
         tooltip_margem_perc = f"Percentagem de Margem de Lucro: {margem_lucro_perc*100:.2f}%"
@@ -2086,7 +2146,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
                 tooltip_valor_mao_obra)
 
         # Atualizar Preco_Unit e Preco_Total na UI
-        tooltip_preco_unit = f"Preço Unitário: (Custo Produzido ({custo_produzido_calculado:.2f}€) + Margem ({valor_margem:.2f}€) + Admin ({valor_custos_admin:.2f}€) + Acab ({valor_acabamentos:.2f}€) + MP/Orlas ({valor_mp_orlas:.2f}€) + MO ({valor_mao_obra:.2f}€)) = {preco_unit_calculado:.2f}€"
+        tooltip_preco_unit = f"Preço Unitário: (Custo Produzido ({custo_produzido_calculado:.2f}€) + Margem ({valor_margem:.2f}€) + Admin ({valor_custos_admin:.2f}€) + Acab ({valor_acabamentos:.2f}€) + Custo Colagem ({total_colagem:.2f}€) + MP/Orlas ({valor_mp_orlas:.2f}€) + MO ({valor_mao_obra:.2f}€)) = {preco_unit_calculado:.2f}€"
         set_item(tbl, row_idx, COL_PRECO_UNIT,
                  formatar_valor_moeda(preco_unit_calculado))
         if tbl.item(row_idx, COL_PRECO_UNIT):
@@ -2111,14 +2171,13 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
 
         # Salvar todos os valores calculados para o banco de dados
         # O id_item_db_val é o ID real da linha na orcamento_items
-        id_item_db_val = int(id_item_db_val_str)
 
         with obter_cursor() as cursor:
             update_query = """
                 UPDATE orcamento_items SET
                     preco_unitario=%s, preco_total=%s,custo_produzido=%s,
                     custo_total_orlas=%s, custo_total_mao_obra=%s, custo_total_materia_prima=%s,
-                    custo_total_acabamentos=%s, margem_lucro_perc=%s, valor_margem=%s,
+                    custo_total_acabamentos=%s, custo_colagem=%s, margem_lucro_perc=%s, valor_margem=%s,
                     custos_admin_perc=%s, valor_custos_admin=%s, margem_acabamentos_perc=%s,
                     valor_acabamentos=%s, margem_mp_orlas_perc=%s, valor_mp_orlas=%s,
                     margem_mao_obra_perc=%s, valor_mao_obra=%s
@@ -2126,7 +2185,7 @@ def calcular_e_atualizar_linha_artigo(ui, row_idx, force_global_margin_update=Fa
             """
             cursor.execute(update_query, (
                 preco_unit_calculado, preco_total_calculado, custo_produzido_calculado,
-                total_orlas, total_mao_obra, total_materia_prima, total_acabamentos,
+                total_orlas, total_mao_obra, total_materia_prima, total_acabamentos, total_colagem,
                 # Salva o valor que foi efetivamente usado no cálculo (pode ser o manual ou o global)
                 margem_lucro_perc, valor_margem,
                 custos_admin_perc, valor_custos_admin, margem_acabamentos_perc,
@@ -2700,6 +2759,7 @@ def mover_linha_artigo(ui, direcao: int):
     e mantém a seleção do mesmo registro (via id_item).
     """
     tbl = ui.tableWidget_artigos
+    _ensure_artigos_headers(tbl)
     row_sel = tbl.currentRow()
     if row_sel < 0:
         QMessageBox.information(ui.tabWidget_orcamento, "Mover Linha", "Nenhuma linha selecionada.")

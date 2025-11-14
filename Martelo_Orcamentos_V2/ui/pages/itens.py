@@ -112,6 +112,29 @@ def _fmt_int(value):
         return str(value)
 
 
+def _fmt_two_decimals(value):
+    if value in (None, ""):
+        return ""
+    try:
+        num = Decimal(str(value))
+        return f"{num.quantize(Decimal('0.01')):.2f}"
+    except Exception:
+        try:
+            return f"{float(value):.2f}"
+        except Exception:
+            return str(value)
+
+
+def _fmt_percent(value):
+    text = _fmt_two_decimals(value)
+    return f"{text}%" if text else ""
+
+
+def _fmt_currency(value):
+    text = _fmt_two_decimals(value)
+    return f"{text}€" if text else ""
+
+
 class ItensPage(QtWidgets.QWidget):
     item_selected = Signal(object)
     production_mode_changed = Signal(str)
@@ -144,6 +167,31 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_mode_std.clicked.connect(lambda: self._on_mode_clicked("STD"))
         self.btn_mode_serie.clicked.connect(lambda: self._on_mode_clicked("SERIE"))
         self._production_mode = "STD"
+
+        self.btn_update_costs = QtWidgets.QPushButton("Atualizar Custos")
+        self.btn_update_costs.setToolTip("Soma os custos do Custeio dos Items e atualiza esta tabela.")
+        self.btn_update_costs.setEnabled(False)
+        self.btn_update_costs.clicked.connect(self._on_update_item_costs_clicked)
+
+        buttons_layout = getattr(self, "buttonsLayout", None)
+        if isinstance(buttons_layout, QtWidgets.QHBoxLayout):
+            buttons_layout.removeWidget(self.btn_mode_std)
+            buttons_layout.removeWidget(self.btn_mode_serie)
+            container = QtWidgets.QWidget(self)
+            container_layout = QtWidgets.QVBoxLayout(container)
+            container_layout.setContentsMargins(0, 0, 0, 0)
+            container_layout.setSpacing(4)
+            self.btn_mode_std.setParent(container)
+            self.btn_mode_serie.setParent(container)
+            self.btn_update_costs.setParent(container)
+            container_layout.addWidget(self.btn_mode_std)
+            container_layout.addWidget(self.btn_mode_serie)
+            container_layout.addWidget(self.btn_update_costs)
+            buttons_layout.insertWidget(0, container, 0, QtCore.Qt.AlignTop)
+            self._mode_buttons_container = container
+        else:
+            self.btn_update_costs.setParent(self)
+
         self._update_mode_buttons()
         self.btn_add.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder))
         self.btn_add.setToolTip("Inserir um novo item no orçamento.")
@@ -209,34 +257,63 @@ class ItensPage(QtWidgets.QWidget):
         table_columns = [
             ("ID", "id_item"),
             ("Item", "item_nome"),
-            ("Codigo", "codigo"),
-            ("Descricao", "descricao"),
-            ("Altura", "altura", _fmt_int),
-            ("Largura", "largura", _fmt_int),
-            ("Profundidade", "profundidade", _fmt_int),
-            ("Und", "und"),
-            ("QT", "qt", _fmt_int),
-            ("Preco_Unit", "preco_unitario", _fmt_int),
-            ("Preco_Total", "preco_total", _fmt_int),
-            ("Custo Produzido", "custo_produzido", _fmt_int),
-            ("Ajuste", "ajuste", _fmt_int),
-            ("Custo Total Orlas (?)", "custo_total_orlas", _fmt_int),
-            ("Custo Total M?o de Obra (?)", "custo_total_mao_obra", _fmt_int),
-            ("Custo Total Mat?ria Prima (?)", "custo_total_materia_prima", _fmt_int),
-            ("Custo Total Acabamentos (?)", "custo_total_acabamentos", _fmt_int),
-            ("Margem de Lucro (%)", "margem_lucro_perc", _fmt_int),
-            ("Valor da Margem (?)", "valor_margem", _fmt_int),
-            ("Custos Administrativos (%)", "custos_admin_perc", _fmt_int),
-            ("Valor Custos Admin. (?)", "valor_custos_admin", _fmt_int),
-            ("Margem_Acabamentos(%)", "margem_acabamentos_perc", _fmt_int),
-            ("Valor Margem_Acabamentos (?)", "valor_acabamentos", _fmt_int),
-            ("Margem MP_Orlas (%)", "margem_mp_orlas_perc", _fmt_int),
-            ("Valor Margem MP_Orlas (?)", "valor_mp_orlas", _fmt_int),
-            ("Margem Mao_Obra (%)", "margem_mao_obra_perc", _fmt_int),
-            ("Valor Margem Mao_Obra (?)", "valor_mao_obra", _fmt_int),
-            ("Custo Colagem", "custo_colagem"),
-            ("reservado_2", "reservado_2"),
-            ("reservado_3", "reservado_3"),
+            ("Código", "codigo"),
+            ("Descrição", "descricao"),
+            ("Altura (mm)", "altura", _fmt_int),
+            ("Largura (mm)", "largura", _fmt_int),
+            ("Profundidade (mm)", "profundidade", _fmt_int),
+            ("Unidade", "und"),
+            ("Qt", "qt", _fmt_int),
+            ("Preço Unitário (€)", "preco_unitario", _fmt_currency),
+            ("Preço Total (€)", "preco_total", _fmt_currency),
+            (
+                "Custo Produzido (€)",
+                "custo_produzido",
+                _fmt_currency,
+                "Custo Total Orlas + Custo Total Mão de Obra + Custo Total Matéria Prima + "
+                "Custo Total Acabamentos + Custo Colagem (valores importados do Custeio dos Items).",
+            ),
+            ("Ajuste (€)", "ajuste", _fmt_currency),
+            (
+                "Custo Total Orlas (€)",
+                "custo_total_orlas",
+                _fmt_currency,
+                "Somatório de CUSTEIO_ITEMS.CUSTO_TOTAL_ORLA para o item/versão selecionado no Custeio dos Items.",
+            ),
+            (
+                "Custo Total Mão de Obra (€)",
+                "custo_total_mao_obra",
+                _fmt_currency,
+                "Somatório de CUSTEIO_ITEMS.SOMA_CUSTO_UND do item em Custeio dos Items.",
+            ),
+            (
+                "Custo Total Matéria Prima (€)",
+                "custo_total_materia_prima",
+                _fmt_currency,
+                "Somatório de CUSTEIO_ITEMS.CUSTO_MP_TOTAL do item em Custeio dos Items.",
+            ),
+            (
+                "Custo Total Acabamentos (€)",
+                "custo_total_acabamentos",
+                _fmt_currency,
+                "Somatório de CUSTEIO_ITEMS.SOMA_CUSTO_ACB do item em Custeio dos Items.",
+            ),
+            ("Margem de Lucro (%)", "margem_lucro_perc", _fmt_percent),
+            ("Valor da Margem (€)", "valor_margem", _fmt_currency),
+            ("Custos Administrativos (%)", "custos_admin_perc", _fmt_percent),
+            ("Valor Custos Administrativos (€)", "valor_custos_admin", _fmt_currency),
+            ("Margem Acabamentos (%)", "margem_acabamentos_perc", _fmt_percent),
+            ("Valor Margem Acabamentos (€)", "valor_acabamentos", _fmt_currency),
+            ("Margem MP/Orlas (%)", "margem_mp_orlas_perc", _fmt_percent),
+            ("Valor Margem MP/Orlas (€)", "valor_mp_orlas", _fmt_currency),
+            ("Margem Mão de Obra (%)", "margem_mao_obra_perc", _fmt_percent),
+            ("Valor Margem Mão de Obra (€)", "valor_mao_obra", _fmt_currency),
+            (
+                "Custo Colagem (€)",
+                "custo_colagem",
+                _fmt_currency,
+                "Somatório de CUSTEIO_ITEMS.CP09_COLAGEM_UND para o item/versão em Custeio dos Items.",
+            ),
         ]
 
         self.model = SimpleTableModel(columns=table_columns)
@@ -254,21 +331,20 @@ class ItensPage(QtWidgets.QWidget):
         f.setBold(True)
         header.setFont(f)
         header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self._suppress_selection_signal = False
 
         # Larguras iniciais (podes ajustar no runtime/UI)
         column_widths = {
-            "ID": 50, "Item": 60, "Codigo": 110, "Descricao": 320,
-            "Altura": 80, "Largura": 80, "Profundidade": 100, "Und": 60, "QT": 60,
-            "Preco_Unit": 110, "Preco_Total": 120, "Custo Produzido": 130, "Ajuste": 110,
-            "Custo Total Orlas (?)": 150, "Custo Total M?o de Obra (?)": 170,
-            "Custo Total Mat?ria Prima (?)": 190, "Custo Total Acabamentos (?)": 180,
-            "Margem de Lucro (%)": 150, "Valor da Margem (?)": 150,
-            "Custos Administrativos (%)": 160, "Valor Custos Admin. (?)": 170,
-            "Margem_Acabamentos(%)": 160, "Valor Margem_Acabamentos (?)": 190,
-            "Margem MP_Orlas (%)": 160, "Valor Margem MP_Orlas (?)": 190,
-            "Margem Mao_Obra (%)": 160, "Valor Margem Mao_Obra (?)": 190,
-            "Custo Colagem": 120, "reservado_2": 120, "reservado_3": 120,
+            "id_item": 50,"item_nome": 60,"codigo": 110,"descricao": 320,
+            "altura": 80,"largura": 80,"profundidade": 100,"und": 60,"qt": 60,
+            "preco_unitario": 110,"preco_total": 120,"custo_produzido": 130,"ajuste": 110,
+            "custo_total_orlas": 150,"custo_total_mao_obra": 170,"custo_total_materia_prima": 190,"custo_total_acabamentos": 180,
+            "margem_lucro_perc": 150,"valor_margem": 150,"custos_admin_perc": 160,"valor_custos_admin": 170,
+            "margem_acabamentos_perc": 160,"valor_acabamentos": 190,"margem_mp_orlas_perc": 160,"valor_mp_orlas": 190,
+            "margem_mao_obra_perc": 160,"valor_mao_obra": 190,
+            "custo_colagem": 120,"reservado_2": 120,"reservado_3": 120,
         }
+
         for i, col_def in enumerate(table_columns):
             w = column_widths.get(col_def[0])
             if w:
@@ -324,6 +400,7 @@ class ItensPage(QtWidgets.QWidget):
                 return _txt(v)
 
         self._orc_id = orc_id
+        self._update_cost_button_state()
         cliente_nome = ""
         ano_txt = ""
         num_txt = ""
@@ -373,6 +450,7 @@ class ItensPage(QtWidgets.QWidget):
         select_id: Optional[int] = None,
     ):
         """Atualiza a tabela; se vazia, prepara pr?ximo item."""
+        self._update_cost_button_state()
         if not self._orc_id:
             self.model.set_rows([])
             self._clear_form()
@@ -413,6 +491,51 @@ class ItensPage(QtWidgets.QWidget):
         row = self.model.get_row(idx.row())
         return getattr(row, "id_item", None)
 
+    def focus_item(self, item_id: Optional[int]) -> None:
+        if not getattr(self, "table", None) or not getattr(self, "model", None):
+            return
+        if item_id in (None, ""):
+            selection_model = self.table.selectionModel()
+            if selection_model is None:
+                return
+            self._suppress_selection_signal = True
+            try:
+                selection_model.clearSelection()
+            finally:
+                self._suppress_selection_signal = False
+            return
+        row_count = self.model.rowCount()
+        if row_count <= 0:
+            return
+        try:
+            target_id = int(item_id)
+        except (TypeError, ValueError):
+            target_id = item_id
+        row_to_select: Optional[int] = None
+        for row_idx in range(row_count):
+            try:
+                row = self.model.get_row(row_idx)
+            except Exception:
+                continue
+            row_id = getattr(row, "id_item", None) or getattr(row, "id_item_fk", None)
+            if row_id == target_id:
+                row_to_select = row_idx
+                break
+        if row_to_select is None or row_to_select < 0:
+            return
+        index = self.model.index(row_to_select, 0)
+        if not index.isValid():
+            return
+        selection_model = self.table.selectionModel()
+        if selection_model is None:
+            return
+        self._suppress_selection_signal = True
+        try:
+            self.table.selectRow(row_to_select)
+        finally:
+            self._suppress_selection_signal = False
+        self.table.scrollTo(index, QtWidgets.QAbstractItemView.PositionAtCenter)
+
     def _current_user_id(self) -> Optional[int]:
         return getattr(self.current_user, "id", None)
 
@@ -437,6 +560,22 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_mode_serie.setChecked(mode == "SERIE")
         self.btn_mode_std.blockSignals(False)
         self.btn_mode_serie.blockSignals(False)
+        self._update_cost_button_state()
+
+    def _update_cost_button_state(self) -> None:
+        if hasattr(self, "btn_update_costs"):
+            self.btn_update_costs.setEnabled(bool(self._orc_id))
+
+    def _show_toast(self, widget: Optional[QtWidgets.QWidget], text: str, timeout_ms: int = 2500) -> None:
+        if not widget or not text:
+            return
+        try:
+            rect = widget.rect()
+            center = rect.center()
+            global_pos = widget.mapToGlobal(center)
+            QtWidgets.QToolTip.showText(global_pos, text, widget, rect, timeout_ms)
+        except Exception:
+            QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), text)
 
     def _load_production_mode(self) -> None:
         ctx = self._production_context()
@@ -455,6 +594,65 @@ class ItensPage(QtWidgets.QWidget):
         self._production_mode = mode
         self._update_mode_buttons()
         self.production_mode_changed.emit(mode)
+
+    def _on_update_item_costs_clicked(self) -> None:
+        if not self._orc_id:
+            QtWidgets.QMessageBox.information(self, "Atualizar Custos", "Nenhum orçamento carregado.")
+            return
+
+        button = getattr(self, "btn_update_costs", None)
+        if button:
+            button.setDisabled(True)
+
+        selected_item_id = self.selected_id()
+        try:
+            self.db.flush()
+        except Exception:
+            pass
+        try:
+            self.db.expire_all()
+        except Exception:
+            pass
+
+        current_index = self.table.currentIndex()
+        current_row = current_index.row() if current_index.isValid() else None
+
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        try:
+            atualizados = svc_custeio.atualizar_resumo_custos_orcamento(self.db, self._orc_id)
+            self.db.commit()
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QApplication.restoreOverrideCursor()
+            logger.exception("Itens._on_update_item_costs_clicked failed: %s", exc)
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Atualizar Custos",
+                f"Não foi possível atualizar os custos a partir do Custeio dos Items:\n{exc}",
+            )
+            if button:
+                button.setEnabled(True)
+            return
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+
+        try:
+            self.db.expire_all()
+        except Exception:
+            pass
+
+        self.refresh(select_row=current_row, select_id=selected_item_id)
+
+        if button:
+            button.setEnabled(True)
+
+        if atualizados:
+            self._show_toast(button or self.table, f"Custos atualizados para {atualizados} item(s).")
+        else:
+            self._show_toast(
+                button or self.table,
+                "Custeio dos Items sem dados para este orçamento/versão.",
+            )
 
     def _on_mode_clicked(self, mode: str) -> None:
         mode_norm = (mode or "").upper()
@@ -914,19 +1112,23 @@ class ItensPage(QtWidgets.QWidget):
 
     def on_selection_changed(self, selected, deselected):
         idx = self.table.currentIndex()
+        suppress_emit = getattr(self, "_suppress_selection_signal", False)
         if not idx.isValid():
             self._prepare_next_item()
-            self.item_selected.emit(None)
+            if not suppress_emit:
+                self.item_selected.emit(None)
             return
         try:
             row = self.model.get_row(idx.row())
         except Exception:
             self._prepare_next_item()
-            self.item_selected.emit(None)
+            if not suppress_emit:
+                self.item_selected.emit(None)
             return
         self._populate_form(row)
         item_id = getattr(row, "id_item", None) or getattr(row, "id_item_fk", None)
-        self.item_selected.emit(item_id)
+        if not suppress_emit:
+            self.item_selected.emit(item_id)
 
     def _next_item_number(self, orc_id: int, versao: str) -> int:
         total = self.db.execute(

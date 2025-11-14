@@ -2448,6 +2448,83 @@ def lista_mat_default_sis_correr(
     )
 
 
+def _coerce_decimal_two(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0.00")
+    if isinstance(value, Decimal):
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        return Decimal("0.00")
+
+
+def atualizar_resumo_custos_orcamento(session: Session, orcamento_id: Optional[int]) -> int:
+    """
+    Copia os custos agregados do custeio (custeio_items) para a tabela de orcamento_items.
+    Retorna o número de itens atualizados.
+    """
+    if not orcamento_id:
+        return 0
+
+    itens = (
+        session.execute(
+            select(OrcamentoItem).where(OrcamentoItem.id_orcamento == orcamento_id)
+        )
+        .scalars()
+        .all()
+    )
+
+    atualizados = 0
+    for item in itens:
+        if _aplicar_resumo_custos_item(session, item):
+            atualizados += 1
+
+    session.flush()
+    return atualizados
+
+
+def _aplicar_resumo_custos_item(session: Session, item: Optional[OrcamentoItem]) -> bool:
+    if item is None or getattr(item, "id_item", None) is None:
+        return False
+
+    versao = (getattr(item, "versao", "") or "").strip() or "01"
+
+    stmt = (
+        select(
+            func.coalesce(func.sum(CusteioItem.custo_total_orla), 0),
+            func.coalesce(func.sum(CusteioItem.soma_custo_und), 0),
+            func.coalesce(func.sum(CusteioItem.custo_mp_total), 0),
+            func.coalesce(func.sum(CusteioItem.soma_custo_acb), 0),
+            func.coalesce(func.sum(CusteioItem.cp09_colagem_und), 0),
+        )
+        .where(
+            CusteioItem.orcamento_id == item.id_orcamento,
+            CusteioItem.item_id == item.id_item,
+            CusteioItem.versao == versao,
+        )
+    )
+
+    res = session.execute(stmt).one()
+    if not res:
+        res = (0, 0, 0, 0, 0)
+
+    total_orlas, total_mo, total_mp, total_acab, total_colagem = (
+        _coerce_decimal_two(value) for value in res
+    )
+
+    item.custo_total_orlas = total_orlas
+    item.custo_total_mao_obra = total_mo
+    item.custo_total_materia_prima = total_mp
+    item.custo_total_acabamentos = total_acab
+    item.custo_colagem = total_colagem
+    item.custo_produzido = (
+        total_orlas + total_mo + total_mp + total_acab + total_colagem
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return True
+
+
 def lista_acabamento(
     session: Optional[Session] = None,
     ctx: Optional[svc_dados_items.DadosItemsContext] = None,
