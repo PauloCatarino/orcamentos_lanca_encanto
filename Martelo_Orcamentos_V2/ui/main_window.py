@@ -11,6 +11,7 @@ from .pages.clientes import ClientesPage
 from .pages.dados_gerais import DadosGeraisPage
 from .pages.dados_items import DadosItemsPage
 from .pages.custeio_items import CusteioItemsPage
+from .pages.relatorios import RelatoriosPage
 from .pages.settings import SettingsPage
 
 
@@ -86,6 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_dados_items = DadosItemsPage(current_user=self.current_user)
         self.pg_custeio = CusteioItemsPage(current_user=self.current_user)
         self.pg_custeio.item_context_changed.connect(self.on_custeio_item_changed)
+        self.pg_relatorios = RelatoriosPage(current_user=self.current_user)
 
         self.stack.addWidget(self.pg_orc)
         self.stack.addWidget(self.pg_itens)
@@ -94,7 +96,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.addWidget(self.pg_dados)
         self.stack.addWidget(self.pg_dados_items)
         self.stack.addWidget(self.pg_custeio)
-        self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
+        self.stack.addWidget(self.pg_relatorios)
         self.pg_settings = SettingsPage(current_user=self.current_user)
         self.pg_settings.margens_updated.connect(self.pg_itens.refresh_margem_defaults)
         self.stack.addWidget(self.pg_settings)
@@ -122,6 +124,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_dados_items.load_item(orcamento_id, None)
         self.pg_custeio.load_item(orcamento_id, None)
         self.pg_settings.set_orcamento_context(orcamento_id)
+        self.pg_relatorios.set_orcamento(orcamento_id)
 
         target_item = self._nav_items.get("items")
         if target_item and self.nav.currentItem() is not target_item:
@@ -167,6 +170,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pg_dados_items.load_item(self.current_orcamento_id, self.current_item_id)
         elif index == 6 and self.current_orcamento_id:
             self.pg_custeio.load_item(self.current_orcamento_id, self.current_item_id)
+        elif index == 7 and self.current_orcamento_id:
+            self.pg_relatorios.refresh_preview()
         elif index == 8 and self.current_orcamento_id:
             self.pg_settings.refresh_producao_mode()
 

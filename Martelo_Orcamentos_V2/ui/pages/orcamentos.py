@@ -38,6 +38,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             ("Nº Orçamento", "num_orcamento"),
             ("Versão", "versao"),
             ("Cliente", "cliente"),
+            ("Ref. Cliente", "ref_cliente"),
             ("Data", "data"),
             ("Preço", "preco"),
             ("Utilizador", "utilizador"),
@@ -78,6 +79,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.lbl_user.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.cb_status = QtWidgets.QComboBox(); self.cb_status.addItems(["Falta Orçamentar", "Enviado", "Adjudicado", "Sem Interesse", "Não Adjudicado"])
         self.ed_enc_phc = QtWidgets.QLineEdit()
+        self.ed_ref_cliente = QtWidgets.QLineEdit()
         self.ed_obra = QtWidgets.QLineEdit()
         self.ed_preco = QtWidgets.QLineEdit()
         self.ed_desc = QtWidgets.QTextEdit(); self.ed_desc.setFixedHeight(60)
@@ -96,6 +98,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         form.addRow(label_with_icon("Utilizador", QStyle.SP_DirIcon), self.lbl_user)
         form.addRow(label_with_icon("Estado", QStyle.SP_MessageBoxInformation), self.cb_status)
         form.addRow(label_with_icon("Enc PHC", QStyle.SP_DesktopIcon), self.ed_enc_phc)
+        form.addRow(label_with_icon("Ref. Cliente", QStyle.SP_FileDialogInfoView), self.ed_ref_cliente)
         form.addRow(label_with_icon("Obra", QStyle.SP_FileDialogListView), self.ed_obra)
         form.addRow(label_with_icon("Preço Orçamento", QStyle.SP_DriveHDIcon), self.ed_preco)
         form.addRow(label_with_icon("Descrição Orçamento", QStyle.SP_FileIcon), self.ed_desc)
@@ -224,6 +227,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             self.ed_data.setDate(QDate.currentDate())
         self.cb_status.setCurrentText(o.status or "Falta Orçamentar")
         self.ed_enc_phc.setText(o.enc_phc or "")
+        self.ed_ref_cliente.setText(o.ref_cliente or "")
         self.ed_obra.setText(o.obra or "")
         if o.preco_total is None:
             self.ed_preco.clear()
@@ -280,7 +284,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.cb_cliente.blockSignals(False)
 
         # Limpar restantes campos editáveis
-        for w in [self.ed_enc_phc, self.ed_obra, self.ed_preco, self.ed_loc]:
+        for w in [self.ed_enc_phc, self.ed_ref_cliente, self.ed_obra, self.ed_preco, self.ed_loc]:
             w.clear()
         self.ed_desc.clear()
         self.ed_info1.clear()
@@ -348,6 +352,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             o.data = self.ed_data.date().toString("yyyy-MM-dd")
             o.status = self.cb_status.currentText()
             o.enc_phc = self.ed_enc_phc.text().strip() or None
+            o.ref_cliente = self.ed_ref_cliente.text().strip() or None
             o.obra = self.ed_obra.text().strip() or None
             o.preco_total = float(self.ed_preco.text().replace(',', '.')) if self.ed_preco.text().strip() else None
             o.descricao_orcamento = self.ed_desc.toPlainText() or None

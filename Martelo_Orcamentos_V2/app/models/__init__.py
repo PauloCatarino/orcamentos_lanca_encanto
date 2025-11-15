@@ -23,3 +23,4 @@ from .dados_gerais import (
 from .custeio import CusteioItem
 from .custeio_producao import CusteioProducaoConfig, CusteioProducaoValor
 from .definicao_peca import DefinicaoPeca
+from .descricao_predefinida import DescricaoPredefinida

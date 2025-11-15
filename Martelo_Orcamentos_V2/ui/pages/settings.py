@@ -16,7 +16,9 @@ from Martelo_Orcamentos_V2.app.services import margens as svc_margens
 
 
 KEY_BASE_PATH = "base_path_orcamentos"
+KEY_ORC_DB_BASE = "base_path_dados_orcamento"
 DEFAULT_BASE_PATH = r"\\server_le\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\MARTELO_ORCAMENTOS_V2"
+DEFAULT_BASE_DADOS_ORC = r"\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Base_Dados_Orcamento"
 
 AUTO_DIMS_HELP_TEXT = (
     "Quando ativo, o Martelo preenche automaticamente as colunas COMP e LARG "
@@ -169,6 +171,14 @@ class SettingsPage(QtWidgets.QWidget):
         h_mp.addWidget(btn_mp_browse)
         lay.addRow("Pasta Materias Primas", h_mp)
 
+        self.ed_base_dados = QtWidgets.QLineEdit()
+        btn_db_browse = QtWidgets.QPushButton("Procurar...")
+        btn_db_browse.clicked.connect(lambda: self._choose_directory(self.ed_base_dados))
+        h_db = QtWidgets.QHBoxLayout()
+        h_db.addWidget(self.ed_base_dados, 1)
+        h_db.addWidget(btn_db_browse)
+        lay.addRow("Pasta Base Dados Orçamento", h_db)
+
         btn_rules = QtWidgets.QPushButton("Configurar Regras de Quantidade")
         btn_rules.clicked.connect(self._open_rules_dialog)
         lay.addRow(btn_rules)
@@ -220,6 +230,7 @@ class SettingsPage(QtWidgets.QWidget):
         # load defaults
         self.ed_base.setText(get_setting(self.db, KEY_BASE_PATH, DEFAULT_BASE_PATH))
         self.ed_materias.setText(get_setting(self.db, KEY_MATERIAS_BASE_PATH, DEFAULT_MATERIAS_BASE_PATH))
+        self.ed_base_dados.setText(get_setting(self.db, KEY_ORC_DB_BASE, DEFAULT_BASE_DADOS_ORC))
         self._refresh_auto_dims_summary()
 
     def _choose_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
@@ -231,8 +242,10 @@ class SettingsPage(QtWidgets.QWidget):
         try:
             base_path = self.ed_base.text().strip() or DEFAULT_BASE_PATH
             materias_path = self.ed_materias.text().strip() or DEFAULT_MATERIAS_BASE_PATH
+            base_dados = self.ed_base_dados.text().strip() or DEFAULT_BASE_DADOS_ORC
             set_setting(self.db, KEY_BASE_PATH, base_path)
             set_setting(self.db, KEY_MATERIAS_BASE_PATH, materias_path)
+            set_setting(self.db, KEY_ORC_DB_BASE, base_dados)
             if self._current_user_id is not None:
                 svc_custeio.set_auto_dimension_enabled(self.db, self._current_user_id, self.btn_auto_dims.isChecked())
             self.db.commit()

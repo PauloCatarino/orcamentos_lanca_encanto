@@ -29,6 +29,7 @@ class OrcamentoResumo:
     localizacao: str
     info_1: str
     info_2: str
+    ref_cliente: str
 
 
 def _format_versao(value: Optional[str]) -> str:
@@ -98,6 +99,7 @@ def _select_orcamentos():
             Orcamento.localizacao.label("localizacao"),
             Orcamento.info_1.label("info_1"),
             Orcamento.info_2.label("info_2"),
+            Orcamento.ref_cliente.label("ref_cliente"),
         )
         .select_from(Orcamento)
         .outerjoin(Client, Orcamento.client_id == Client.id)
@@ -126,6 +128,7 @@ def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
                 localizacao=row.localizacao or "",
                 info_1=row.info_1 or "",
                 info_2=row.info_2 or "",
+                ref_cliente=row.ref_cliente or "",
             )
         )
     return parsed

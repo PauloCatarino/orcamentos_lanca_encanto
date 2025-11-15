@@ -35,6 +35,7 @@ from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from Martelo_Orcamentos_V2.app.services import margens as svc_margens
+from Martelo_Orcamentos_V2.ui.dialogs.descricoes_predefinidas import DescricoesPredefinidasDialog
 from ..models.qt_table import SimpleTableModel
 from ..utils.header import apply_highlight_text, init_highlight_label
 from ..workers.custeio_batch import CusteioBatchWorker
@@ -62,6 +63,38 @@ DIMENSION_COLOR_MAP: Dict[str, QtGui.QColor] = {}
 for color, group in zip(DIMENSION_GROUP_COLORS, DIMENSION_GROUPS):
     for key in group:
         DIMENSION_COLOR_MAP[key] = color
+
+
+class DescricaoHighlighter(QtGui.QSyntaxHighlighter):
+    """Aplica estilo nas linhas de descrição com prefixos especiais."""
+
+    def __init__(self, document: QtGui.QTextDocument):
+        super().__init__(document)
+        self._dash_format = QtGui.QTextCharFormat()
+        self._dash_format.setFontItalic(True)
+
+        self._star_format = QtGui.QTextCharFormat(self._dash_format)
+        self._star_format.setBackground(QtGui.QColor("#d8f5d2"))
+        self._star_format.setFontItalic(True)
+
+    def highlightBlock(self, text: str) -> None:  # type: ignore[override]
+        if not text:
+            return
+        stripped = text.lstrip()
+        if not stripped:
+            return
+        marker = stripped[0]
+        if marker not in "-*":
+            return
+        prefix_length = len(text) - len(stripped)
+        start = prefix_length + 1
+        while start < len(text) and text[start] in {" ", "\t"}:
+            start += 1
+        length = len(text) - start
+        if length <= 0:
+            return
+        fmt = self._dash_format if marker == "-" else self._star_format
+        self.setFormat(start, length, fmt)
 
 
 # ---------- helper para carregar .ui e expor widgets por objectName ----------
@@ -337,6 +370,20 @@ class ItensPage(QtWidgets.QWidget):
             "soma": Decimal("0.00"),
         }
         self._margens_loading = False
+
+        # Campo de descrição com formatação automática e menu personalizado
+        self._descricao_update_block = False
+        if hasattr(self, "edit_descricao"):
+            self._descricao_highlighter = DescricaoHighlighter(self.edit_descricao.document())
+            self.edit_descricao.textChanged.connect(self._on_descricao_text_changed)
+            icon = QtGui.QIcon.fromTheme(
+                "view-list-text",
+                self.style().standardIcon(QtWidgets.QStyle.SP_FileDialogDetailedView),
+            )
+            self._descricao_menu_action = QtGui.QAction(icon, "Descrições Pré-Definidas", self)
+            self._descricao_menu_action.triggered.connect(self._open_descricoes_predef_dialog)
+            self.edit_descricao.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            self.edit_descricao.customContextMenuRequested.connect(self._on_descricao_context_menu)
 
         self._margem_panel = QtWidgets.QGroupBox("Margens e Ajustes", self)
         self._margem_panel.setMinimumWidth(360)
@@ -1771,6 +1818,121 @@ class ItensPage(QtWidgets.QWidget):
         self.edit_item.setReadOnly(True)
         self._edit_item_id = None
         self._clear_dimension_values(enable=bool(self._orc_id))
+
+    # ======================================================================
+    # Descrição - regras de formatação e menu auxiliar
+    # ======================================================================
+    def _apply_descricao_header_rule(self) -> None:
+        if getattr(self, "_descricao_update_block", False):
+            return
+        self._descricao_update_block = True
+        try:
+            self._ensure_descricao_header_capitalized()
+        finally:
+            self._descricao_update_block = False
+
+    def _on_descricao_text_changed(self) -> None:
+        self._apply_descricao_header_rule()
+
+    def _ensure_descricao_header_capitalized(self) -> None:
+        if not hasattr(self, "edit_descricao"):
+            return
+        doc = self.edit_descricao.document()
+        block = doc.firstBlock()
+        if not block.isValid():
+            return
+        text = block.text()
+        idx = None
+        for pos, ch in enumerate(text):
+            if ch.strip():
+                idx = pos
+                break
+        if idx is None:
+            return
+        char = text[idx]
+        if not char.isalpha():
+            return
+        upper = char.upper()
+        if char == upper:
+            return
+        user_cursor = self.edit_descricao.textCursor()
+        user_anchor = user_cursor.anchor()
+        user_pos = user_cursor.position()
+        cursor = QtGui.QTextCursor(doc)
+        cursor.beginEditBlock()
+        cursor.setPosition(block.position() + idx)
+        cursor.movePosition(QtGui.QTextCursor.NextCharacter, QtGui.QTextCursor.KeepAnchor)
+        cursor.insertText(upper)
+        cursor.endEditBlock()
+        restore = QtGui.QTextCursor(doc)
+        restore.setPosition(user_anchor)
+        restore.setPosition(user_pos, QtGui.QTextCursor.KeepAnchor)
+        self.edit_descricao.setTextCursor(restore)
+
+    def _on_descricao_context_menu(self, pos: QtCore.QPoint) -> None:
+        if not hasattr(self, "edit_descricao"):
+            return
+        menu = self.edit_descricao.createStandardContextMenu()
+        menu.addSeparator()
+        menu.addAction(self._descricao_menu_action)
+        menu.exec(self.edit_descricao.mapToGlobal(pos))
+
+    def _open_descricoes_predef_dialog(self) -> None:
+        user_id = self._current_user_id()
+        if not user_id:
+            QtWidgets.QMessageBox.information(self, "Descrições", "Utilizador não identificado para carregar descrições.")
+            return
+        dialog = DescricoesPredefinidasDialog(parent=self, user_id=user_id)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        entries = dialog.checked_entries()
+        if not entries:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Descrições",
+                "Marque as caixas das descrições que pretende inserir.",
+            )
+            return
+        self._insert_predefined_descriptions(entries)
+
+    def _insert_predefined_descriptions(self, entries) -> None:
+        if not hasattr(self, "edit_descricao") or not entries:
+            return
+        lines = []
+        for entry in entries:
+            texto_raw: Optional[str]
+            if hasattr(entry, "texto"):
+                texto_raw = getattr(entry, "texto")
+            elif isinstance(entry, dict):
+                texto_raw = entry.get("texto")
+            else:
+                texto_raw = str(entry)
+            texto = (texto_raw or "").strip()
+            if not texto:
+                continue
+            if hasattr(entry, "tipo"):
+                tipo_raw = getattr(entry, "tipo")
+            elif isinstance(entry, dict):
+                tipo_raw = entry.get("tipo")
+            else:
+                tipo_raw = "-"
+            tipo = tipo_raw if tipo_raw in {"-", "*"} else "-"
+            lines.append(f"\t{tipo} {texto}")
+        if not lines:
+            return
+        insertion = "\n".join(lines)
+        cursor = self.edit_descricao.textCursor()
+        cursor.beginEditBlock()
+        try:
+            cursor.movePosition(QtGui.QTextCursor.End)
+            existing = self.edit_descricao.toPlainText()
+            if existing.strip() and not existing.endswith("\n"):
+                cursor.insertText("\n")
+            cursor.insertText(insertion)
+        finally:
+            cursor.endEditBlock()
+        self.edit_descricao.setTextCursor(cursor)
+        self._apply_descricao_header_rule()
 
     # ==========================================================================
     # Tabela: altura das linhas
