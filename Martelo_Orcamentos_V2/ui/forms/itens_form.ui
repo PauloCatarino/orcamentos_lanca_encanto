@@ -549,7 +549,7 @@
         </property>
        </spacer>
       </item>
-      <item row="1" column="2" colspan="10">
+      <item row="1" column="2" colspan="7">
        <widget class="QTextEdit" name="edit_descricao">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -574,11 +574,50 @@
         </property>
        </widget>
       </item>
+      <item row="1" column="9" colspan="4">
+       <widget class="QWidget" name="margens_placeholder">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>320</width>
+          <height>120</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>550</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <layout class="QVBoxLayout" name="margens_placeholder_layout">
+         <property name="spacing">
+          <number>6</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+        </layout>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="layout_dims_actions" stretch="1,0">
+    <layout class="QHBoxLayout" name="layout_dims_actions" stretch="2,3">
      <property name="spacing">
       <number>12</number>
      </property>

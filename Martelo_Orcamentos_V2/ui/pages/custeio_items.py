@@ -5900,7 +5900,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             try:
 
-                svc_custeio.aplicar_dimensoes_automaticas(novas_linhas)
+                rules = svc_custeio.get_auto_dimension_rules(self.session, self.current_user_id)
+                svc_custeio.aplicar_dimensoes_automaticas(novas_linhas, rules=rules)
 
             except Exception:
 

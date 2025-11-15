@@ -96,6 +96,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.stack.addWidget(self.pg_custeio)
         self.stack.addWidget(QtWidgets.QLabel("Página Relatórios (em construção)", alignment=Qt.AlignCenter))
         self.pg_settings = SettingsPage(current_user=self.current_user)
+        self.pg_settings.margens_updated.connect(self.pg_itens.refresh_margem_defaults)
         self.stack.addWidget(self.pg_settings)
 
         self.nav.currentItemChanged.connect(self.on_nav_changed)

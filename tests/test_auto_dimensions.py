@@ -48,6 +48,30 @@ def test_aplicar_dimensoes_automaticas_prefills_expected():
     assert rows[6]["larg"] is None or rows[6]["larg"] == ""
 
 
+def test_auto_dimension_prefix_selection(db_session):
+    user_id = 99
+    defaults = svc_custeio.list_available_auto_dimension_rules()
+    selected = [defaults[0][0], defaults[2][0]]
+
+    svc_custeio.save_auto_dimension_prefixes(db_session, user_id, selected)
+    rules = svc_custeio.get_auto_dimension_rules(db_session, user_id)
+    assert [rule[0] for rule in rules] == selected
+
+    rows = [
+        {"def_peca": f"{selected[0]} TESTE", "comp": None, "larg": None},
+        {"def_peca": "PORTA ABRIR", "comp": None, "larg": None},
+    ]
+
+    svc_custeio.aplicar_dimensoes_automaticas(rows, rules=rules)
+
+    assert rows[0]["comp"] == defaults[0][1]
+    assert rows[0]["larg"] == defaults[0][2]
+
+    # PORTA ABRIR não está selecionada, logo permanece vazio
+    assert rows[1]["comp"] in (None, "")
+    assert rows[1]["larg"] in (None, "")
+
+
 def test_atualizar_orlas_custeio_sets_spp_and_skips_division(db_session):
     from Martelo_Orcamentos_V2.app.models.custeio import CusteioItem
     from decimal import Decimal

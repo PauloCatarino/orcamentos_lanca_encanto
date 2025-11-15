@@ -6,7 +6,7 @@
 # -----------------------------------------------------------------------------
 
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Mapping
 from pathlib import Path
 import logging
 
@@ -34,8 +34,10 @@ from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
+from Martelo_Orcamentos_V2.app.services import margens as svc_margens
 from ..models.qt_table import SimpleTableModel
 from ..utils.header import apply_highlight_text, init_highlight_label
+from ..workers.custeio_batch import CusteioBatchWorker
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,135 @@ def _fmt_currency(value):
     return f"{text}€" if text else ""
 
 
+class ItensTableModel(SimpleTableModel):
+    MARGEM_TOOLTIP_MAP = {
+        "margem_lucro_perc": ("margem_lucro_perc", "valor_margem", "Margem de Lucro"),
+        "valor_margem": ("margem_lucro_perc", "valor_margem", "Margem de Lucro"),
+        "custos_admin_perc": ("custos_admin_perc", "valor_custos_admin", "Custos Administrativos"),
+        "valor_custos_admin": ("custos_admin_perc", "valor_custos_admin", "Custos Administrativos"),
+        "margem_acabamentos_perc": ("margem_acabamentos_perc", "valor_acabamentos", "Margem Acabamentos"),
+        "valor_acabamentos": ("margem_acabamentos_perc", "valor_acabamentos", "Margem Acabamentos"),
+        "margem_mp_orlas_perc": ("margem_mp_orlas_perc", "valor_mp_orlas", "Margem MP/Orlas"),
+        "valor_mp_orlas": ("margem_mp_orlas_perc", "valor_mp_orlas", "Margem MP/Orlas"),
+        "margem_mao_obra_perc": ("margem_mao_obra_perc", "valor_mao_obra", "Margem Mão de Obra"),
+        "valor_mao_obra": ("margem_mao_obra_perc", "valor_mao_obra", "Margem Mão de Obra"),
+    }
+
+    def __init__(self, columns):
+        super().__init__(columns=columns)
+
+    def _extract_value(self, row_obj, attr: str):
+        try:
+            if isinstance(row_obj, dict):
+                return row_obj.get(attr)
+            return getattr(row_obj, attr, None)
+        except Exception:
+            return None
+
+    def data(self, index: QtCore.QModelIndex, role: int = QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        col = self._columns[index.column()]
+        spec = self._col_spec(col)
+        attr = spec.get("attr")
+
+        if role == QtCore.Qt.ToolTipRole and attr == "custo_produzido":
+            row_obj = self._rows[index.row()]
+            parts = [
+                ("Custo Total Orlas", "custo_total_orlas"),
+                ("Custo Total Mão de Obra", "custo_total_mao_obra"),
+                ("Custo Total Matéria Prima", "custo_total_materia_prima"),
+                ("Custo Total Acabamentos", "custo_total_acabamentos"),
+                ("Custo Colagem", "custo_colagem"),
+            ]
+            lines = ["Custo Produzido = soma dos componentes:"]
+            subtotal = 0.0
+            for label, key in parts:
+                value = self._extract_value(row_obj, key)
+                try:
+                    num = float(value)
+                except (TypeError, ValueError):
+                    num = 0.0
+                subtotal += num
+                lines.append(f" - {label}: {_fmt_currency(num)}")
+            total_val = self._extract_value(row_obj, "custo_produzido")
+            try:
+                total_num = float(total_val)
+            except (TypeError, ValueError):
+                total_num = subtotal
+            lines.append(f"Total: {_fmt_currency(total_num)}")
+            return "\n".join(lines)
+
+        if role == QtCore.Qt.ToolTipRole and attr == "preco_unitario":
+            row_obj = self._rows[index.row()]
+            components = [
+                ("Custo Produzido", "custo_produzido"),
+                ("Margem Lucro (€)", "valor_margem"),
+                ("Custos Administrativos (€)", "valor_custos_admin"),
+                ("Margem Acabamentos (€)", "valor_acabamentos"),
+                ("Margem MP/Orlas (€)", "valor_mp_orlas"),
+                ("Margem Mão de Obra (€)", "valor_mao_obra"),
+                ("Ajuste (€)", "ajuste"),
+            ]
+            lines = ["Preço Unitário (€) = soma dos componentes:"]
+            total_dec = Decimal("0.00")
+            for label, key in components:
+                value = self._extract_value(row_obj, key) or 0
+                try:
+                    dec = Decimal(str(value))
+                except Exception:
+                    dec = Decimal("0.00")
+                total_dec += dec
+                lines.append(f" - {label}: {_fmt_currency(dec)}")
+            unit_val = self._extract_value(row_obj, "preco_unitario")
+            try:
+                unit_dec = Decimal(str(unit_val))
+            except Exception:
+                unit_dec = total_dec
+            lines.append(f"Total: {_fmt_currency(unit_dec)}")
+            lines.append("Fórmula: Custo + Margens (€) + Ajuste (€)")
+            return "\n".join(lines)
+
+        if role == QtCore.Qt.ToolTipRole and attr == "preco_total":
+            row_obj = self._rows[index.row()]
+            qt_val = self._extract_value(row_obj, "qt") or 0
+            unit_val = self._extract_value(row_obj, "preco_unitario") or 0
+            total_val = self._extract_value(row_obj, "preco_total") or 0
+            qt_txt = _fmt_int(qt_val) or str(qt_val)
+            unit_txt = _fmt_currency(unit_val) or "0,00 €"
+            total_txt = _fmt_currency(total_val) or "0,00 €"
+            lines = [
+                f"Preço Total (€) = Qt ({qt_txt}) x Preço Unitário ({unit_txt})",
+                f"Resultado: {total_txt}",
+            ]
+            return "\n".join(lines)
+
+        if role == QtCore.Qt.ToolTipRole and attr in self.MARGEM_TOOLTIP_MAP:
+            row_obj = self._rows[index.row()]
+            perc_attr, value_attr, label = self.MARGEM_TOOLTIP_MAP.get(attr)
+            tooltip = self._build_margin_tooltip(row_obj, perc_attr, value_attr, label)
+            if tooltip:
+                return tooltip
+
+        return super().data(index, role)
+
+    def _build_margin_tooltip(self, row_obj, perc_attr: Optional[str], value_attr: Optional[str], label: str) -> Optional[str]:
+        if perc_attr is None or value_attr is None:
+            return None
+        base_val = self._extract_value(row_obj, "custo_produzido") or 0
+        perc_val = self._extract_value(row_obj, perc_attr) or 0
+        valor = self._extract_value(row_obj, value_attr) or 0
+        try:
+            base_dec = Decimal(str(base_val))
+            perc_dec = Decimal(str(perc_val))
+            valor_dec = Decimal(str(valor))
+        except Exception:
+            return None
+        return (
+            f"{label}: {base_dec:.2f} € x ({perc_dec:.2f}%) = {valor_dec:.2f} €"
+        )
+
+
 class ItensPage(QtWidgets.QWidget):
     item_selected = Signal(object)
     production_mode_changed = Signal(str)
@@ -144,6 +275,8 @@ class ItensPage(QtWidgets.QWidget):
         self.db = SessionLocal()
         self._orc_id: Optional[int] = None
         self._edit_item_id: Optional[int] = None
+        self._custeio_thread: Optional[QtCore.QThread] = None
+        self._custeio_worker: Optional[CusteioBatchWorker] = None
 
         # ------------------------------------------------------------------
         # 1) Carregar o .ui (QUiLoader em vez de uic.loadUi)
@@ -160,37 +293,158 @@ class ItensPage(QtWidgets.QWidget):
         self._mode_button_group.addButton(self.btn_mode_serie)
         self._style = self.style() or QtWidgets.QApplication.style()
         style = self._style
-        self.btn_mode_std.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
-        self.btn_mode_serie.setIcon(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload))
+        for btn in (self.btn_mode_std, self.btn_mode_serie):
+            btn.setIcon(QtGui.QIcon())
+            btn.setText(btn.text().upper())
+            font = btn.font()
+            font.setBold(True)
+            btn.setFont(font)
+            btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+            btn.setMinimumWidth(90)
         self.btn_mode_std.setToolTip("Usar dados STD (standard) no custeio.")
-        self.btn_mode_serie.setToolTip("Usar dados em serie no custeio.")
+        self.btn_mode_serie.setToolTip("Usar dados em série no custeio.")
         self.btn_mode_std.clicked.connect(lambda: self._on_mode_clicked("STD"))
         self.btn_mode_serie.clicked.connect(lambda: self._on_mode_clicked("SERIE"))
+        self.btn_mode_std.setProperty("modeToggle", True)
+        self.btn_mode_serie.setProperty("modeToggle", True)
+        self.btn_mode_std.setProperty("modePosition", "left")
+        self.btn_mode_serie.setProperty("modePosition", "right")
         self._production_mode = "STD"
 
         self.btn_update_costs = QtWidgets.QPushButton("Atualizar Custos")
+        self.btn_update_costs.setObjectName("btnUpdateCostsPrimary")
         self.btn_update_costs.setToolTip("Soma os custos do Custeio dos Items e atualiza esta tabela.")
         self.btn_update_costs.setEnabled(False)
         self.btn_update_costs.clicked.connect(self._on_update_item_costs_clicked)
+        self.btn_update_costs.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.btn_update_costs.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        cost_font = self.btn_update_costs.font()
+        cost_font.setBold(True)
+        cost_font.setPointSize(cost_font.pointSize() + 1)
+        self.btn_update_costs.setFont(cost_font)
 
-        buttons_layout = getattr(self, "buttonsLayout", None)
-        if isinstance(buttons_layout, QtWidgets.QHBoxLayout):
-            buttons_layout.removeWidget(self.btn_mode_std)
-            buttons_layout.removeWidget(self.btn_mode_serie)
-            container = QtWidgets.QWidget(self)
-            container_layout = QtWidgets.QVBoxLayout(container)
-            container_layout.setContentsMargins(0, 0, 0, 0)
-            container_layout.setSpacing(4)
-            self.btn_mode_std.setParent(container)
-            self.btn_mode_serie.setParent(container)
-            self.btn_update_costs.setParent(container)
-            container_layout.addWidget(self.btn_mode_std)
-            container_layout.addWidget(self.btn_mode_serie)
-            container_layout.addWidget(self.btn_update_costs)
-            buttons_layout.insertWidget(0, container, 0, QtCore.Qt.AlignTop)
-            self._mode_buttons_container = container
-        else:
-            self.btn_update_costs.setParent(self)
+        self.lbl_custeio_status = QtWidgets.QLabel("", self)
+        self.lbl_custeio_status.setObjectName("lbl_custeio_status")
+        self.lbl_custeio_status.setStyleSheet("color: #666; font-size: 11px;")
+        self.lbl_custeio_status.setWordWrap(True)
+        self.lbl_custeio_status.hide()
+
+        self._margens_dirty = False
+        self._margem_inputs: Dict[str, QtWidgets.QDoubleSpinBox] = {}
+        self._current_margem_config: Dict[str, Decimal] = {
+            "percent": svc_margens.load_margens(self.db),
+            "objetivo": Decimal("0.00"),
+            "soma": Decimal("0.00"),
+        }
+        self._margens_loading = False
+
+        self._margem_panel = QtWidgets.QGroupBox("Margens e Ajustes", self)
+        self._margem_panel.setMinimumWidth(360)
+        self._margem_panel.setMaximumWidth(520)
+        margem_layout = QtWidgets.QGridLayout(self._margem_panel)
+        margem_layout.setContentsMargins(10, 10, 10, 10)
+        margem_layout.setHorizontalSpacing(12)
+        margem_layout.setVerticalSpacing(6)
+
+        for idx, spec in enumerate(svc_margens.MARGEM_FIELDS):
+            key = str(spec["key"])
+            label_widget = QtWidgets.QLabel(str(spec["label"]))
+            spin = QtWidgets.QDoubleSpinBox(self._margem_panel)
+            spin.setDecimals(2)
+            spin.setRange(0.0, 500.0)
+            spin.setSingleStep(0.25)
+            spin.setSuffix(" %")
+            spin.setAlignment(QtCore.Qt.AlignRight)
+            spin.valueChanged.connect(lambda _=0.0, k=key: self._on_margem_spin_changed(k))
+            col = idx % 2
+            row = idx // 2
+            margem_layout.addWidget(label_widget, row, col * 2)
+            margem_layout.addWidget(spin, row, col * 2 + 1)
+            self._margem_inputs[key] = spin
+
+        objetivo_label = QtWidgets.QLabel("Atingir Objetivo Preço Final (€)")
+        self.spin_objetivo = QtWidgets.QDoubleSpinBox(self._margem_panel)
+        self.spin_objetivo.setDecimals(2)
+        self.spin_objetivo.setRange(0.0, 1_000_000_000.0)
+        self.spin_objetivo.setSingleStep(50.0)
+        self.spin_objetivo.setSuffix(" €")
+        self.spin_objetivo.setAlignment(QtCore.Qt.AlignRight)
+        self.spin_objetivo.valueChanged.connect(lambda: self._on_margem_spin_changed("_objetivo"))
+        objetivo_row = (len(svc_margens.MARGEM_FIELDS) + 1) // 2
+        margem_layout.addWidget(objetivo_label, objetivo_row, 0)
+        margem_layout.addWidget(self.spin_objetivo, objetivo_row, 1)
+
+        soma_label = QtWidgets.QLabel("Soma Preço Final Orçamento (€)")
+        self.lbl_soma_preco = QtWidgets.QLabel("0,00 €")
+        font = self.lbl_soma_preco.font()
+        font.setBold(True)
+        self.lbl_soma_preco.setFont(font)
+        self.lbl_soma_preco.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        margem_layout.addWidget(soma_label, objetivo_row, 2)
+        margem_layout.addWidget(self.lbl_soma_preco, objetivo_row, 3)
+
+        update_row = objetivo_row + 1
+        margem_layout.addWidget(self.btn_update_costs, update_row, 0, 1, 4)
+        margem_layout.addWidget(self.lbl_custeio_status, update_row + 1, 0, 1, 4)
+
+        self.btn_objetivo_apply = QtWidgets.QPushButton("Ajustar Margens (Objetivo)", self._margem_panel)
+        self.btn_objetivo_apply.setToolTip(
+            "Ajusta as margens (Lucro, Custos Adm., MP/Orlas e Mão de Obra) até atingir o objetivo definido "
+            "com tolerância de ±0,50 €."
+        )
+        self.btn_objetivo_apply.clicked.connect(self._on_apply_objetivo_clicked)
+        objetivo_actions = QtWidgets.QHBoxLayout()
+        objetivo_actions.setContentsMargins(0, 4, 0, 0)
+        objetivo_actions.addStretch(1)
+        objetivo_actions.addWidget(self.btn_objetivo_apply)
+        margem_layout.addLayout(objetivo_actions, update_row + 2, 0, 1, 4)
+
+        button_row = QtWidgets.QHBoxLayout()
+        button_row.setContentsMargins(0, 4, 0, 0)
+        self.btn_margens_save = QtWidgets.QPushButton("Guardar Margens", self._margem_panel)
+        self.btn_margens_save.clicked.connect(self._on_save_margens_clicked)
+        self.btn_margens_save.setEnabled(False)
+        self.btn_margens_reset = QtWidgets.QPushButton("Repor Valores Padrão", self._margem_panel)
+        self.btn_margens_reset.clicked.connect(self._on_reset_margens_clicked)
+        button_row.addWidget(self.btn_margens_save)
+        button_row.addWidget(self.btn_margens_reset)
+        button_row.addStretch(1)
+        margem_layout.addLayout(button_row, update_row + 3, 0, 1, 4)
+
+        self._top_right_panel = self._margem_panel
+        placeholder_layout = getattr(self, "margens_placeholder_layout", None)
+        if placeholder_layout is None:
+            placeholder_widget = getattr(self, "margens_placeholder", None)
+            if isinstance(placeholder_widget, QtWidgets.QWidget):
+                placeholder_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred)
+                placeholder_layout = placeholder_widget.layout()
+        added_margem_panel = False
+        if isinstance(placeholder_layout, QtWidgets.QLayout):
+            placeholder_layout.addWidget(self._top_right_panel)
+            added_margem_panel = True
+
+        grid_layout = getattr(self, "gridLayout", None)
+        if not added_margem_panel and isinstance(grid_layout, QtWidgets.QGridLayout):
+            grid_layout.addWidget(self._top_right_panel, 1, 12, 1, 4)
+        if isinstance(grid_layout, QtWidgets.QGridLayout):
+            grid_layout.setColumnStretch(2, 4)
+            grid_layout.setColumnStretch(3, 1)
+            grid_layout.setColumnStretch(9, 1)
+            grid_layout.setColumnStretch(10, 1)
+            grid_layout.setColumnStretch(11, 1)
+        self._set_margens_panel_enabled(False)
+        main_layout = getattr(self, "verticalLayoutMain", None)
+        if isinstance(main_layout, QtWidgets.QVBoxLayout):
+            main_layout.setStretch(0, 0)
+            main_layout.setStretch(1, 0)
+            main_layout.setStretch(2, 0)
+            main_layout.setStretch(3, 0)
+            main_layout.setStretch(4, 1)
+        dims_actions_layout = getattr(self, "layout_dims_actions", None)
+        if isinstance(dims_actions_layout, QtWidgets.QHBoxLayout):
+            dims_actions_layout.setStretch(0, 2)
+            dims_actions_layout.setStretch(1, 3)
+        self.refresh_margem_defaults()
 
         self._update_mode_buttons()
         self.btn_add.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder))
@@ -206,6 +460,81 @@ class ItensPage(QtWidgets.QWidget):
         if hasattr(self, "btn_toggle_rows"):
             self.btn_toggle_rows.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
             self.btn_toggle_rows.setToolTip("Expandir descrições longas na tabela.")
+
+        action_buttons = [
+            getattr(self, "btn_add", None),
+            getattr(self, "btn_save", None),
+            getattr(self, "btn_del", None),
+            getattr(self, "btn_toggle_rows", None),
+            getattr(self, "btn_up", None),
+            getattr(self, "btn_dn", None),
+            getattr(self, "btn_objetivo_apply", None),
+            getattr(self, "btn_margens_save", None),
+            getattr(self, "btn_margens_reset", None),
+        ]
+        for btn in action_buttons:
+            if btn is None:
+                continue
+            btn.setProperty("actionButton", True)
+            btn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+
+        button_stylesheet = """
+        QPushButton[actionButton="true"] {
+            background-color: #f8f8f8;
+            border: 1px solid #d5d5d5;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        QPushButton[actionButton="true"]:hover {
+            background-color: #ffffff;
+            border-color: #b5b5b5;
+        }
+        QPushButton[actionButton="true"]:pressed {
+            background-color: #e0e0e0;
+        }
+        QPushButton[actionButton="true"]:disabled {
+            color: #9a9a9a;
+            border-color: #e0e0e0;
+            background-color: #f3f3f3;
+        }
+        QPushButton[modeToggle="true"] {
+            border: 1px solid #4c6ef5;
+            padding: 6px 18px;
+            border-radius: 3px;
+            background-color: #ffffff;
+            color: #4c6ef5;
+            font-weight: 700;
+        }
+        QPushButton[modeToggle="true"]:checked {
+            background-color: #4c6ef5;
+            color: #ffffff;
+        }
+        QPushButton[modeToggle="true"]:disabled {
+            color: #a7a7a7;
+            border-color: #d0d0d0;
+            background-color: #f6f6f6;
+        }
+        QPushButton#btnUpdateCostsPrimary {
+            background-color: #1e80ff;
+            color: #ffffff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+        }
+        QPushButton#btnUpdateCostsPrimary:hover {
+            background-color: #166ad1;
+        }
+        QPushButton#btnUpdateCostsPrimary:disabled {
+            background-color: #8fb7ff;
+            color: #f0f0f0;
+        }
+        """
+        existing_stylesheet = self.styleSheet()
+        if existing_stylesheet:
+            self.setStyleSheet(f"{existing_stylesheet}\n{button_stylesheet}")
+        else:
+            self.setStyleSheet(button_stylesheet)
         if hasattr(self, "lbl_highlight"):
             init_highlight_label(self.lbl_highlight)
         info_labels = [
@@ -254,61 +583,136 @@ class ItensPage(QtWidgets.QWidget):
         # ------------------------------------------------------------------
         # 3) Model da tabela
         # ------------------------------------------------------------------
+        def _col(header: str, attr: str, formatter=None, tooltip: Optional[str] = None, *, editable: bool = False):
+            return {
+                "header": header,
+                "attr": attr,
+                "formatter": formatter,
+                "tooltip": tooltip or header,
+                "editable": editable,
+            }
+
         table_columns = [
-            ("ID", "id_item"),
-            ("Item", "item_nome"),
-            ("Código", "codigo"),
-            ("Descrição", "descricao"),
-            ("Altura (mm)", "altura", _fmt_int),
-            ("Largura (mm)", "largura", _fmt_int),
-            ("Profundidade (mm)", "profundidade", _fmt_int),
-            ("Unidade", "und"),
-            ("Qt", "qt", _fmt_int),
-            ("Preço Unitário (€)", "preco_unitario", _fmt_currency),
-            ("Preço Total (€)", "preco_total", _fmt_currency),
-            (
+            _col("ID", "id_item", tooltip="Identificador interno do item no orçamento."),
+            _col("Item", "item_nome", tooltip="Referência sequencial apresentada ao utilizador."),
+            _col("Código", "codigo", tooltip="Código do catálogo/dados do item."),
+            _col("Descrição", "descricao", tooltip="Descrição resumida do item."),
+            _col("Altura (mm)", "altura", _fmt_int, "Altura principal em milímetros."),
+            _col("Largura (mm)", "largura", _fmt_int, "Largura principal em milímetros."),
+            _col("Profundidade (mm)", "profundidade", _fmt_int, "Profundidade principal em milímetros."),
+            _col("Unidade", "und", tooltip="Unidade de medida (ex.: und, par, m²)."),
+            _col("Qt", "qt", _fmt_int, "Quantidade a produzir para este item."),
+            _col(
+                "Preço Unitário (€)",
+                "preco_unitario",
+                _fmt_currency,
+                "Cálculo: Custo Produzido + margens em € + Ajuste (por unidade).",
+            ),
+            _col(
+                "Preço Total (€)",
+                "preco_total",
+                _fmt_currency,
+                "Resultado final da linha (Qt x Preço Unitário).",
+            ),
+            _col(
                 "Custo Produzido (€)",
                 "custo_produzido",
                 _fmt_currency,
                 "Custo Total Orlas + Custo Total Mão de Obra + Custo Total Matéria Prima + "
-                "Custo Total Acabamentos + Custo Colagem (valores importados do Custeio dos Items).",
+                "Custo Total Acabamentos + Custo Colagem (importado do Custeio dos Items).",
             ),
-            ("Ajuste (€)", "ajuste", _fmt_currency),
-            (
+            _col(
+                "Ajuste (€)",
+                "ajuste",
+                _fmt_currency,
+                "Correção manual em € aplicada apenas a este item.",
+                editable=True,
+            ),
+            _col(
                 "Custo Total Orlas (€)",
                 "custo_total_orlas",
                 _fmt_currency,
                 "Somatório de CUSTEIO_ITEMS.CUSTO_TOTAL_ORLA para o item/versão selecionado no Custeio dos Items.",
             ),
-            (
+            _col(
                 "Custo Total Mão de Obra (€)",
                 "custo_total_mao_obra",
                 _fmt_currency,
                 "Somatório de CUSTEIO_ITEMS.SOMA_CUSTO_UND do item em Custeio dos Items.",
             ),
-            (
+            _col(
                 "Custo Total Matéria Prima (€)",
                 "custo_total_materia_prima",
                 _fmt_currency,
                 "Somatório de CUSTEIO_ITEMS.CUSTO_MP_TOTAL do item em Custeio dos Items.",
             ),
-            (
+            _col(
                 "Custo Total Acabamentos (€)",
                 "custo_total_acabamentos",
                 _fmt_currency,
                 "Somatório de CUSTEIO_ITEMS.SOMA_CUSTO_ACB do item em Custeio dos Items.",
             ),
-            ("Margem de Lucro (%)", "margem_lucro_perc", _fmt_percent),
-            ("Valor da Margem (€)", "valor_margem", _fmt_currency),
-            ("Custos Administrativos (%)", "custos_admin_perc", _fmt_percent),
-            ("Valor Custos Administrativos (€)", "valor_custos_admin", _fmt_currency),
-            ("Margem Acabamentos (%)", "margem_acabamentos_perc", _fmt_percent),
-            ("Valor Margem Acabamentos (€)", "valor_acabamentos", _fmt_currency),
-            ("Margem MP/Orlas (%)", "margem_mp_orlas_perc", _fmt_percent),
-            ("Valor Margem MP/Orlas (€)", "valor_mp_orlas", _fmt_currency),
-            ("Margem Mão de Obra (%)", "margem_mao_obra_perc", _fmt_percent),
-            ("Valor Margem Mão de Obra (€)", "valor_mao_obra", _fmt_currency),
-            (
+            _col(
+                "Margem de Lucro (%)",
+                "margem_lucro_perc",
+                _fmt_percent,
+                "Percentual de margem de lucro aplicado sobre o custo produzido.",
+            ),
+            _col(
+                "Valor da Margem (€)",
+                "valor_margem",
+                _fmt_currency,
+                "Valor em € correspondente à Margem de Lucro (%).",
+            ),
+            _col(
+                "Custos Administrativos (%)",
+                "custos_admin_perc",
+                _fmt_percent,
+                "Percentual destinado aos custos administrativos.",
+            ),
+            _col(
+                "Valor Custos Administrativos (€)",
+                "valor_custos_admin",
+                _fmt_currency,
+                "Valor em € calculado a partir dos Custos Administrativos (%).",
+            ),
+            _col(
+                "Margem Acabamentos (%)",
+                "margem_acabamentos_perc",
+                _fmt_percent,
+                "Percentual aplicado às margens de acabamentos.",
+            ),
+            _col(
+                "Valor Margem Acabamentos (€)",
+                "valor_acabamentos",
+                _fmt_currency,
+                "Valor em € correspondente à margem de acabamentos.",
+            ),
+            _col(
+                "Margem MP/Orlas (%)",
+                "margem_mp_orlas_perc",
+                _fmt_percent,
+                "Percentual aplicado para matérias-primas e orlas.",
+            ),
+            _col(
+                "Valor Margem MP/Orlas (€)",
+                "valor_mp_orlas",
+                _fmt_currency,
+                "Valor em € correspondente à Margem MP/Orlas (%).",
+            ),
+            _col(
+                "Margem Mão de Obra (%)",
+                "margem_mao_obra_perc",
+                _fmt_percent,
+                "Percentual aplicado à mão de obra.",
+            ),
+            _col(
+                "Valor Margem Mão de Obra (€)",
+                "valor_mao_obra",
+                _fmt_currency,
+                "Valor em € correspondente à Margem de Mão de Obra (%).",
+            ),
+            _col(
                 "Custo Colagem (€)",
                 "custo_colagem",
                 _fmt_currency,
@@ -316,13 +720,29 @@ class ItensPage(QtWidgets.QWidget):
             ),
         ]
 
-        self.model = SimpleTableModel(columns=table_columns)
+        self.model = ItensTableModel(columns=table_columns)
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setWordWrap(True)
         self.table.setTextElideMode(Qt.ElideNone)
+        self.table.setMouseTracking(True)
+        self.table.setEditTriggers(
+            QtWidgets.QAbstractItemView.SelectedClicked | QtWidgets.QAbstractItemView.EditKeyPressed
+        )
+        self.table.setStyleSheet(
+            """
+            QTableView::item:selected {
+                background-color: #d0d0d0;
+                color: #202020;
+            }
+            QTableView::item:hover {
+                background-color: #c3c3c3;
+            }
+            """
+        )
+        self.table.clicked.connect(self._on_table_clicked)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
@@ -335,20 +755,41 @@ class ItensPage(QtWidgets.QWidget):
 
         # Larguras iniciais (podes ajustar no runtime/UI)
         column_widths = {
-            "id_item": 50,"item_nome": 60,"codigo": 110,"descricao": 320,
-            "altura": 80,"largura": 80,"profundidade": 100,"und": 60,"qt": 60,
-            "preco_unitario": 110,"preco_total": 120,"custo_produzido": 130,"ajuste": 110,
-            "custo_total_orlas": 150,"custo_total_mao_obra": 170,"custo_total_materia_prima": 190,"custo_total_acabamentos": 180,
-            "margem_lucro_perc": 150,"valor_margem": 150,"custos_admin_perc": 160,"valor_custos_admin": 170,
-            "margem_acabamentos_perc": 160,"valor_acabamentos": 190,"margem_mp_orlas_perc": 160,"valor_mp_orlas": 190,
-            "margem_mao_obra_perc": 160,"valor_mao_obra": 190,
-            "custo_colagem": 120,"reservado_2": 120,"reservado_3": 120,
+            "id_item": 55,
+            "item_nome": 70,
+            "codigo": 110,
+            "descricao": 360,
+            "altura": 80,
+            "largura": 80,
+            "profundidade": 90,
+            "und": 70,
+            "qt": 60,
+            "preco_unitario": 140,
+            "preco_total": 150,
+            "custo_produzido": 140,
+            "ajuste": 110,
+            "custo_total_orlas": 150,
+            "custo_total_mao_obra": 170,
+            "custo_total_materia_prima": 180,
+            "custo_total_acabamentos": 170,
+            "margem_lucro_perc": 140,
+            "valor_margem": 140,
+            "custos_admin_perc": 150,
+            "valor_custos_admin": 150,
+            "margem_acabamentos_perc": 150,
+            "valor_acabamentos": 150,
+            "margem_mp_orlas_perc": 150,
+            "valor_mp_orlas": 150,
+            "margem_mao_obra_perc": 150,
+            "valor_mao_obra": 150,
+            "custo_colagem": 120,
         }
 
         for i, col_def in enumerate(table_columns):
-            w = column_widths.get(col_def[0])
-            if w:
-                header.resizeSection(i, w)
+            attr = col_def.get("attr")
+            width = column_widths.get(attr or "")
+            if width:
+                header.resizeSection(i, width)
 
         self._init_dimensions_ui()
 
@@ -382,6 +823,7 @@ class ItensPage(QtWidgets.QWidget):
 
         # Estado inicial
         self._clear_form()
+        self.destroyed.connect(lambda: self._stop_custeio_worker())
 
     # ==========================================================================
     # Carregamento do or?amento + refresh
@@ -441,6 +883,7 @@ class ItensPage(QtWidgets.QWidget):
             )
 
         self._load_production_mode()
+        self._load_orcamento_margem_config(self._orc_id)
         self.refresh()
 
     def refresh(
@@ -477,7 +920,8 @@ class ItensPage(QtWidgets.QWidget):
                     row_to_select = 0
             if row_to_select is not None:
                 logger.debug("Itens.refresh selecting row %s for select_id=%s", row_to_select, select_id)
-                self.table.selectRow(row_to_select)
+                self._select_table_row(row_to_select)
+                self._apply_selection_to_form()
         else:
             self._prepare_next_item(focus_codigo=False)
 
@@ -523,18 +967,8 @@ class ItensPage(QtWidgets.QWidget):
                 break
         if row_to_select is None or row_to_select < 0:
             return
-        index = self.model.index(row_to_select, 0)
-        if not index.isValid():
-            return
-        selection_model = self.table.selectionModel()
-        if selection_model is None:
-            return
-        self._suppress_selection_signal = True
-        try:
-            self.table.selectRow(row_to_select)
-        finally:
-            self._suppress_selection_signal = False
-        self.table.scrollTo(index, QtWidgets.QAbstractItemView.PositionAtCenter)
+        self._select_table_row(row_to_select)
+        self._apply_selection_to_form()
 
     def _current_user_id(self) -> Optional[int]:
         return getattr(self.current_user, "id", None)
@@ -565,6 +999,280 @@ class ItensPage(QtWidgets.QWidget):
     def _update_cost_button_state(self) -> None:
         if hasattr(self, "btn_update_costs"):
             self.btn_update_costs.setEnabled(bool(self._orc_id))
+
+    def _set_custeio_status(self, text: Optional[str], *, busy: bool = False) -> None:
+        label = getattr(self, "lbl_custeio_status", None)
+        if label is None:
+            return
+        if not text:
+            label.hide()
+            label.setText("")
+            return
+        prefix = "..." if busy else ""
+        label.setText(f"{prefix}{text}")
+        label.show()
+
+    def _set_margens_panel_enabled(self, enabled: bool) -> None:
+        for widget in list(self._margem_inputs.values()) + [getattr(self, "spin_objetivo", None)]:
+            if widget is not None:
+                widget.setEnabled(enabled)
+        if hasattr(self, "btn_margens_reset"):
+            self.btn_margens_reset.setEnabled(enabled)
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(enabled and self._margens_dirty)
+        if hasattr(self, "btn_objetivo_apply"):
+            self.btn_objetivo_apply.setEnabled(enabled)
+
+    def _set_margem_inputs(self, valores: Mapping[str, Decimal]) -> None:
+        self._margens_loading = True
+        for key, spin in self._margem_inputs.items():
+            valor = valores.get(key, Decimal("0"))
+            try:
+                flt = float(Decimal(str(valor)))
+            except Exception:
+                flt = 0.0
+            spin.blockSignals(True)
+            spin.setValue(flt)
+            spin.blockSignals(False)
+        self._margens_loading = False
+
+    def _collect_margem_inputs(self) -> Dict[str, Decimal]:
+        valores: Dict[str, Decimal] = {}
+        for key, spin in self._margem_inputs.items():
+            valores[key] = Decimal(f"{spin.value():.2f}")
+        return valores
+
+    def _on_margem_spin_changed(self, _key: str) -> None:
+        if getattr(self, "_margens_loading", False):
+            return
+        self._margens_dirty = True
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(bool(self._orc_id))
+
+    def _load_orcamento_margem_config(self, orc_id: Optional[int]) -> None:
+        if not hasattr(self, "_margem_inputs"):
+            return
+        config = svc_margens.load_orcamento_config(self.db, orc_id)
+        self._current_margem_config = config
+        self._set_margem_inputs(config["percent"])
+        objetivo = config.get("objetivo", Decimal("0.00"))
+        if hasattr(self, "spin_objetivo"):
+            self.spin_objetivo.blockSignals(True)
+            self.spin_objetivo.setValue(float(objetivo))
+            self.spin_objetivo.blockSignals(False)
+        soma = config.get("soma") or (svc_margens.somar_preco_total(self.db, orc_id) if orc_id else Decimal("0.00"))
+        self._current_margem_config["soma"] = soma
+        self._update_sum_preco_label(soma)
+        self._margens_dirty = False
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(False)
+        self._set_margens_panel_enabled(bool(orc_id))
+
+    def _update_sum_preco_label(self, total: Optional[Decimal]) -> None:
+        if not hasattr(self, "lbl_soma_preco"):
+            return
+        if total is None:
+            self.lbl_soma_preco.setText("0,00 €")
+            return
+        try:
+            text = f"{Decimal(str(total)).quantize(Decimal('0.01')):,.2f} €"
+        except Exception:
+            text = "0,00 €"
+        self.lbl_soma_preco.setText(text.replace(",", "X").replace(".", ",").replace("X", "."))
+
+    def refresh_margem_defaults(self) -> None:
+        if self._orc_id:
+            self._load_orcamento_margem_config(self._orc_id)
+        else:
+            valores = svc_margens.load_margens(self.db)
+            self._set_margem_inputs(valores)
+            self._update_sum_preco_label(Decimal("0.00"))
+            self._set_margens_panel_enabled(False)
+
+    def _persist_margens_config(self, *, auto: bool, commit: bool) -> Optional[Dict[str, Decimal]]:
+        if not self._orc_id:
+            return None
+        valores = self._collect_margem_inputs()
+        objetivo = Decimal(f"{self.spin_objetivo.value():.2f}")
+        try:
+            soma_atual = self._current_margem_config.get("soma")
+            svc_margens.save_orcamento_config(self.db, self._orc_id, valores, objetivo, soma=soma_atual)
+            if commit:
+                self.db.commit()
+            else:
+                self.db.flush()
+        except Exception as exc:
+            self.db.rollback()
+            if auto:
+                logger.exception("ItensPage: falha ao guardar margens: %s", exc)
+            else:
+                QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao guardar margens: {exc}")
+            return None
+        self._current_margem_config["percent"] = valores
+        self._current_margem_config["objetivo"] = objetivo
+        self._margens_dirty = False
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(False)
+        return self._current_margem_config
+
+    def _on_save_margens_clicked(self) -> None:
+        if not self._orc_id:
+            QtWidgets.QMessageBox.information(self, "Margens", "Selecione um orçamento antes de guardar.")
+            return
+        if self._persist_margens_config(auto=False, commit=True):
+            QtWidgets.QMessageBox.information(self, "Margens", "Margens guardadas.")
+
+    def _on_reset_margens_clicked(self) -> None:
+        valores = svc_margens.load_margens(self.db)
+        self._set_margem_inputs(valores)
+        if hasattr(self, "spin_objetivo"):
+            self.spin_objetivo.blockSignals(True)
+            self.spin_objetivo.setValue(0.0)
+            self.spin_objetivo.blockSignals(False)
+        self._margens_dirty = True
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(bool(self._orc_id))
+
+    def _on_apply_objetivo_clicked(self) -> None:
+        if not self._orc_id:
+            QtWidgets.QMessageBox.information(self, "Margens & Ajustes", "Selecione um orçamento antes de ajustar as margens.")
+            return
+        objetivo = Decimal(f"{self.spin_objetivo.value():.2f}")
+        if objetivo <= Decimal("0.00"):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Margens & Ajustes",
+                "Defina um valor positivo em 'Atingir Objetivo Preço Final (€)'.",
+            )
+            return
+
+        button = getattr(self, "btn_objetivo_apply", None)
+        if button is not None:
+            button.setDisabled(True)
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+
+        total_calculado: Optional[Decimal] = None
+        atingiu = False
+        try:
+            percentuais = self._collect_margem_inputs()
+            novos_percentuais, estimativa, atingiu = svc_margens.ajustar_percentuais_para_objetivo(
+                self.db, self._orc_id, percentuais, objetivo
+            )
+            self._set_margem_inputs(novos_percentuais)
+            self._margens_dirty = True
+            if self._persist_margens_config(auto=True, commit=False) is None:
+                raise RuntimeError("Não foi possível guardar as margens.")
+            total_calculado = self._apply_margens_to_items()
+            self.db.commit()
+        except ValueError as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.information(self, "Margens & Ajustes", str(exc))
+            return
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception("ItensPage: falha ao ajustar margens para objetivo: %s", exc)
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Margens & Ajustes",
+                f"Não foi possível ajustar as margens:\n{exc}",
+            )
+            return
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+            if button is not None:
+                button.setEnabled(True)
+
+        if total_calculado is not None:
+            self._update_sum_preco_label(total_calculado)
+        else:
+            self._update_sum_preco_label(None)
+
+        self.refresh(select_id=self.selected_id())
+        self._apply_selection_to_form()
+        if hasattr(self, "btn_margens_save"):
+            self.btn_margens_save.setEnabled(False)
+
+        toast_target = button or self._margem_panel
+        if atingiu:
+            message = "Objetivo alcançado dentro da tolerância (±0,50 €)."
+        else:
+            message = "Margens ajustadas. Objetivo fora da tolerância (±0,50 €)."
+        self._show_toast(toast_target, message)
+
+    def _apply_margens_to_items(self) -> Optional[Decimal]:
+        if not self._orc_id:
+            return None
+        valores = self._collect_margem_inputs()
+        total = svc_margens.aplicar_margens_orcamento(self.db, self._orc_id, valores)
+        svc_margens.update_sum_preco_final(self.db, self._orc_id, total)
+        self._current_margem_config["percent"] = valores
+        self._current_margem_config["soma"] = total
+        return total
+
+    def _start_custeio_batch_update(self, mode: str) -> None:
+        if not self._orc_id:
+            return
+        if self._custeio_thread and self._custeio_thread.isRunning():
+            self._set_custeio_status("Atualização em andamento...", busy=True)
+            return
+        worker = CusteioBatchWorker(
+            orcamento_id=self._orc_id,
+            versao=(self.lbl_ver_val.text() or "").strip() or "01",
+            production_mode=mode,
+            user_id=self._current_user_id(),
+        )
+        thread = QtCore.QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._on_custeio_batch_progress)
+        worker.finished.connect(self._on_custeio_batch_finished)
+        self._custeio_worker = worker
+        self._custeio_thread = thread
+        self._set_custeio_status("A atualizar custeio dos items...", busy=True)
+        thread.start()
+
+    @QtCore.Slot(int, int)
+    def _on_custeio_batch_progress(self, done: int, total: int) -> None:
+        if total <= 0:
+            self._set_custeio_status("A atualizar custeio...", busy=True)
+            return
+        self._set_custeio_status(f"A atualizar custeio ({done}/{total})...", busy=True)
+
+    @QtCore.Slot(bool, str)
+    def _on_custeio_batch_finished(self, success: bool, message: str) -> None:
+        worker = self._custeio_worker
+        thread = self._custeio_thread
+        self._custeio_worker = None
+        self._custeio_thread = None
+        if worker is not None:
+            worker.deleteLater()
+        if thread is not None:
+            thread.quit()
+            thread.wait()
+            thread.deleteLater()
+        if success:
+            self._set_custeio_status("Custeio atualizado.")
+            QtCore.QTimer.singleShot(3000, lambda: self._set_custeio_status(None))
+        else:
+            self._set_custeio_status(None)
+            if message and message != "cancelled":
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Custeio",
+                    f"Falha ao atualizar custeio: {message}",
+                )
+
+    def _stop_custeio_worker(self) -> None:
+        if self._custeio_worker:
+            self._custeio_worker.request_cancel()
+        if self._custeio_thread:
+            self._custeio_thread.quit()
+            self._custeio_thread.wait()
+            self._custeio_thread.deleteLater()
+            self._custeio_thread = None
+        if self._custeio_worker:
+            self._custeio_worker.deleteLater()
+            self._custeio_worker = None
 
     def _show_toast(self, widget: Optional[QtWidgets.QWidget], text: str, timeout_ms: int = 2500) -> None:
         if not widget or not text:
@@ -617,9 +1325,16 @@ class ItensPage(QtWidgets.QWidget):
         current_index = self.table.currentIndex()
         current_row = current_index.row() if current_index.isValid() else None
 
+        total_preco = None
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
+            if self._persist_margens_config(auto=True, commit=False) is None:
+                QtWidgets.QApplication.restoreOverrideCursor()
+                if button:
+                    button.setEnabled(True)
+                return
             atualizados = svc_custeio.atualizar_resumo_custos_orcamento(self.db, self._orc_id)
+            total_preco = self._apply_margens_to_items()
             self.db.commit()
         except Exception as exc:
             self.db.rollback()
@@ -642,6 +1357,9 @@ class ItensPage(QtWidgets.QWidget):
             pass
 
         self.refresh(select_row=current_row, select_id=selected_item_id)
+        self._apply_selection_to_form()
+        if total_preco is not None:
+            self._update_sum_preco_label(total_preco)
 
         if button:
             button.setEnabled(True)
@@ -672,6 +1390,7 @@ class ItensPage(QtWidgets.QWidget):
             self.db.commit()
             self._production_mode = mode_norm
             self.production_mode_changed.emit(mode_norm)
+            self._start_custeio_batch_update(mode_norm)
         except Exception as exc:
             self.db.rollback()
             QMessageBox.critical(self, "Erro", f"Falha ao definir modo de producao: {exc}")
@@ -1068,6 +1787,18 @@ class ItensPage(QtWidgets.QWidget):
                 vh.resizeSection(r, h)
         self._update_toggle_rows_button(getattr(self, "_rows_expanded", False))
 
+    def _on_table_clicked(self, index: QtCore.QModelIndex) -> None:
+        if not index or not index.isValid() or not hasattr(self, "model"):
+            return
+        try:
+            col_def = self.model.columns[index.column()]
+            spec = self.model._col_spec(col_def)
+        except Exception:
+            return
+        if spec.get("attr") != "ajuste":
+            return
+        QtCore.QTimer.singleShot(0, lambda idx=QtCore.QModelIndex(index): self.table.edit(idx))
+
     def _clear_table_selection(self):
         sm = self.table.selectionModel()
         if not sm:
@@ -1075,6 +1806,37 @@ class ItensPage(QtWidgets.QWidget):
         blocker = QtCore.QSignalBlocker(sm)
         sm.clearSelection()
         sm.setCurrentIndex(QtCore.QModelIndex(), QItemSelectionModel.Clear)
+
+    def _select_table_row(self, row_index: int) -> None:
+        selection_model = self.table.selectionModel()
+        if selection_model is None:
+            self.table.selectRow(row_index)
+            return
+        self._suppress_selection_signal = True
+        try:
+            selection_model.clearSelection()
+            index = self.model.index(row_index, 0)
+            if index.isValid():
+                selection_model.select(
+                    index,
+                    QtCore.QItemSelectionModel.Select
+                    | QtCore.QItemSelectionModel.Rows
+                    | QtCore.QItemSelectionModel.ClearAndSelect,
+                )
+                self.table.setCurrentIndex(index)
+                self.table.scrollTo(index, QtWidgets.QAbstractItemView.PositionAtCenter)
+        finally:
+            self._suppress_selection_signal = False
+
+    def _apply_selection_to_form(self) -> None:
+        idx = self.table.currentIndex()
+        if not idx.isValid():
+            return
+        try:
+            row = self.model.get_row(idx.row())
+        except Exception:
+            return
+        self._populate_form(row)
 
     def _update_toggle_rows_button(self, expanded: bool) -> None:
         if not hasattr(self, "btn_toggle_rows"):
@@ -1283,3 +2045,10 @@ class ItensPage(QtWidgets.QWidget):
     def on_toggle_rows(self, checked: bool):
         self._rows_expanded = checked
         self._apply_row_height()
+
+
+
+
+
+
+

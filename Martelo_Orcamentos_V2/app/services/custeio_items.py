@@ -86,8 +86,9 @@ DIMENSION_KEY_ORDER: Sequence[str] = (
 DIMENSION_ALLOWED_VARIABLES: Set[str] = set(DIMENSION_KEY_ORDER) | {"HM", "LM", "PM"}
 
 _AUTO_DIMENSION_SETTING_TEMPLATE = "custeio:auto_dims:user:{user_id}"
+_AUTO_DIMENSION_RULES_KEY_TEMPLATE = "custeio:auto_dims_rules:user:{user_id}"
 _AUTO_DIMENSION_TRUE_VALUES = {"1", "true", "yes", "on", "sim"}
-_AUTO_DIMENSION_RULES: Tuple[Tuple[str, str, str], ...] = (
+AUTO_DIMENSION_DEFAULT_RULES: Tuple[Tuple[str, str, str], ...] = (
     ("COSTA", "HM", "LM"),
     ("PORTA ABRIR", "HM", "LM"),
     ("LATERAL", "HM", "PM"),
@@ -1247,6 +1248,10 @@ def _auto_dimensions_setting_key(user_id: int) -> str:
     return _AUTO_DIMENSION_SETTING_TEMPLATE.format(user_id=user_id)
 
 
+def _auto_dimension_rules_key(user_id: int) -> str:
+    return _AUTO_DIMENSION_RULES_KEY_TEMPLATE.format(user_id=user_id)
+
+
 def is_auto_dimension_enabled(session: Session, user_id: Optional[int]) -> bool:
     if not user_id:
         return False
@@ -1262,6 +1267,64 @@ def set_auto_dimension_enabled(session: Session, user_id: Optional[int], enabled
         return
     value = "1" if enabled else "0"
     set_setting(session, _auto_dimensions_setting_key(user_id), value)
+
+
+def load_auto_dimension_prefixes(session: Session, user_id: Optional[int]) -> Optional[Set[str]]:
+    if not user_id:
+        return None
+    raw = get_setting(session, _auto_dimension_rules_key(user_id), None)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, list):
+        return None
+    normalized: Set[str] = set()
+    for item in data:
+        if isinstance(item, str) and item.strip():
+            normalized.add(_normalize_def_peca_for_auto(item))
+    return normalized or set()
+
+
+def save_auto_dimension_prefixes(
+    session: Session,
+    user_id: Optional[int],
+    prefixes: Optional[Sequence[str]],
+) -> None:
+    if not user_id:
+        return
+    key = _auto_dimension_rules_key(user_id)
+    if prefixes is None:
+        set_setting(session, key, None)
+        return
+    cleaned = sorted({_normalize_def_peca_for_auto(p) for p in prefixes if isinstance(p, str) and p.strip()})
+    set_setting(session, key, json.dumps(cleaned))
+
+
+def list_available_auto_dimension_rules() -> Tuple[Tuple[str, str, str], ...]:
+    return tuple(AUTO_DIMENSION_DEFAULT_RULES)
+
+
+def get_auto_dimension_rules(
+    session: Optional[Session],
+    user_id: Optional[int],
+) -> Tuple[Tuple[str, str, str], ...]:
+    base_map = {prefix: (prefix, comp, larg) for prefix, comp, larg in AUTO_DIMENSION_DEFAULT_RULES}
+    if not session or not user_id:
+        return tuple(base_map.values())
+    selected = load_auto_dimension_prefixes(session, user_id)
+    if selected is None:
+        return tuple(base_map.values())
+    if not selected:
+        return tuple()
+    rules: List[Tuple[str, str, str]] = []
+    for key in selected:
+        rule = base_map.get(key)
+        if rule:
+            rules.append(rule)
+    return tuple(rules)
 
 
 def _column_visibility_key(user_id: Optional[int]) -> Optional[str]:
@@ -1307,19 +1370,30 @@ def _normalize_def_peca_for_auto(def_peca: Optional[str]) -> str:
     return text
 
 
-def sugerir_dimensoes_automaticas(def_peca: Optional[str]) -> Optional[Tuple[str, str]]:
+def sugerir_dimensoes_automaticas(
+    def_peca: Optional[str],
+    rules: Optional[Sequence[Tuple[str, str, str]]] = None,
+) -> Optional[Tuple[str, str]]:
     normalized = _normalize_def_peca_for_auto(def_peca)
     if not normalized:
         return None
-    for prefix, comp_expr, larg_expr in _AUTO_DIMENSION_RULES:
+    active_rules = rules or AUTO_DIMENSION_DEFAULT_RULES
+    for prefix, comp_expr, larg_expr in active_rules:
         if normalized.startswith(prefix):
             return comp_expr, larg_expr
     return None
 
 
-def aplicar_dimensoes_automaticas(linhas: Sequence[Dict[str, Any]]) -> None:
+def aplicar_dimensoes_automaticas(
+    linhas: Sequence[Dict[str, Any]],
+    *,
+    rules: Optional[Sequence[Tuple[str, str, str]]] = None,
+) -> None:
+    active_rules = rules or AUTO_DIMENSION_DEFAULT_RULES
+    if not active_rules:
+        return
     for linha in linhas:
-        sugestao = sugerir_dimensoes_automaticas(linha.get("def_peca"))
+        sugestao = sugerir_dimensoes_automaticas(linha.get("def_peca"), active_rules)
         if not sugestao:
             continue
         comp_expr, larg_expr = sugestao

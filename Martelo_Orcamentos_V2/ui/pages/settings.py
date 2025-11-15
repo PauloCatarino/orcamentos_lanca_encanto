@@ -1,5 +1,5 @@
-from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional
+﻿from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtWidgets
 
@@ -12,6 +12,7 @@ from Martelo_Orcamentos_V2.app.services.materias_primas import (
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
+from Martelo_Orcamentos_V2.app.services import margens as svc_margens
 
 
 KEY_BASE_PATH = "base_path_orcamentos"
@@ -25,7 +26,72 @@ AUTO_DIMS_HELP_TEXT = (
 )
 
 
+class AutoDimensionPiecesDialog(QtWidgets.QDialog):
+    def __init__(
+        self,
+        parent: QtWidgets.QWidget,
+        available_rules: Sequence[Tuple[str, str, str]],
+        selected_prefixes: Sequence[str],
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Selecionar peças para COMP/LARG automático")
+        self.resize(520, 420)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        description = QtWidgets.QLabel(
+            "Escolha as peças padrão em que o preenchimento automático de COMP/LARG "
+            "deve ser aplicado quando a opção estiver ativa."
+        )
+        description.setWordWrap(True)
+        layout.addWidget(description)
+
+        self.list_widget = QtWidgets.QListWidget()
+        self.list_widget.setAlternatingRowColors(True)
+        self.list_widget.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        layout.addWidget(self.list_widget, 1)
+
+        selected = {str(prefix).upper() for prefix in selected_prefixes}
+        for prefix, comp_expr, larg_expr in available_rules:
+            item = QtWidgets.QListWidgetItem(prefix.title())
+            item.setData(QtCore.Qt.UserRole, prefix)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Checked if prefix in selected else QtCore.Qt.Unchecked)
+            item.setToolTip(f"COMP = {comp_expr} | LARG = {larg_expr}")
+            self.list_widget.addItem(item)
+
+        buttons_row = QtWidgets.QHBoxLayout()
+        self.btn_select_all = QtWidgets.QPushButton("Selecionar tudo")
+        self.btn_select_all.clicked.connect(lambda: self._set_all(QtCore.Qt.Checked))
+        self.btn_clear_all = QtWidgets.QPushButton("Limpar seleção")
+        self.btn_clear_all.clicked.connect(lambda: self._set_all(QtCore.Qt.Unchecked))
+        buttons_row.addWidget(self.btn_select_all)
+        buttons_row.addWidget(self.btn_clear_all)
+        buttons_row.addStretch(1)
+        layout.addLayout(buttons_row)
+
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _set_all(self, state: QtCore.Qt.CheckState) -> None:
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            item.setCheckState(state)
+
+    def selected_prefixes(self) -> List[str]:
+        prefixes: List[str] = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.checkState() == QtCore.Qt.Checked:
+                prefixes.append(str(item.data(QtCore.Qt.UserRole)))
+        return prefixes
+
+
 class SettingsPage(QtWidgets.QWidget):
+    margens_updated = QtCore.Signal()
     PRODUCAO_HEADERS = [
         "Descricao Equipamento",
         "Abreviatura",
@@ -79,6 +145,7 @@ class SettingsPage(QtWidgets.QWidget):
         self._init_general_tab()
         self._init_producao_tab()
         self._init_def_pecas_tab()
+        self._init_margens_tab()
 
     # ------------------------------------------------------------------ Geral
     def _init_general_tab(self) -> None:
@@ -127,13 +194,24 @@ class SettingsPage(QtWidgets.QWidget):
         self.btn_auto_dims_help.setToolTip(AUTO_DIMS_HELP_TEXT)
         self.btn_auto_dims_help.clicked.connect(self._show_auto_dims_help)
 
+        self.btn_auto_dims_config = QtWidgets.QPushButton("Selecionar peças…")
+        self.btn_auto_dims_config.clicked.connect(self._on_config_auto_dims_clicked)
+        if self._current_user_id is None:
+            self.btn_auto_dims_config.setEnabled(False)
+
         auto_layout = QtWidgets.QHBoxLayout()
         auto_layout.addWidget(self.btn_auto_dims)
+        auto_layout.addWidget(self.btn_auto_dims_config)
         auto_layout.addWidget(self.btn_auto_dims_help)
         auto_layout.addStretch(1)
         lay.addRow("Preencher COMP/LARG automaticamente", auto_layout)
 
-        btn_save = QtWidgets.QPushButton("Gravar Configuracoes")
+        self.lbl_auto_dims_summary = QtWidgets.QLabel()
+        self.lbl_auto_dims_summary.setWordWrap(True)
+        self.lbl_auto_dims_summary.setStyleSheet("color: #555555; font-size: 11px;")
+        lay.addRow("", self.lbl_auto_dims_summary)
+
+        btn_save = QtWidgets.QPushButton("Gravar Configurações")
         btn_save.clicked.connect(self.on_save)
         lay.addRow(btn_save)
 
@@ -142,6 +220,7 @@ class SettingsPage(QtWidgets.QWidget):
         # load defaults
         self.ed_base.setText(get_setting(self.db, KEY_BASE_PATH, DEFAULT_BASE_PATH))
         self.ed_materias.setText(get_setting(self.db, KEY_MATERIAS_BASE_PATH, DEFAULT_MATERIAS_BASE_PATH))
+        self._refresh_auto_dims_summary()
 
     def _choose_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Escolher pasta")
@@ -170,9 +249,179 @@ class SettingsPage(QtWidgets.QWidget):
         state = "ON" if checked else "OFF"
         self.btn_auto_dims.setText(f"Auto preenchimento: {state}")
         self.btn_auto_dims.setToolTip(f"{AUTO_DIMS_HELP_TEXT}\n\nEstado atual: {state}.")
+        self._refresh_auto_dims_summary()
+
+    def _refresh_auto_dims_summary(self) -> None:
+        label = getattr(self, "lbl_auto_dims_summary", None)
+        if label is None:
+            return
+        if self._current_user_id is None:
+            label.setText("Disponível apenas após autenticação.")
+            return
+        try:
+            available = svc_custeio.list_available_auto_dimension_rules()
+            selected = svc_custeio.load_auto_dimension_prefixes(self.db, self._current_user_id)
+        except Exception as exc:
+            label.setText(f"Não foi possível carregar as peças: {exc}")
+            return
+        total = len(available)
+        if selected is None or (total and len(selected) == total):
+            resumo = "todas as peças padrão."
+        elif not selected:
+            resumo = "nenhuma peça selecionada."
+        else:
+            order = [prefix for prefix, _, _ in available if prefix in selected]
+            preview = ", ".join(order[:6])
+            if len(order) > 6:
+                preview += f" … (+{len(order) - 6})"
+            resumo = preview
+        estado = "ativo" if self.btn_auto_dims.isChecked() else "inativo"
+        label.setText(f"Estado atual: {estado}. Peças configuradas: {resumo}")
+
+    def _on_config_auto_dims_clicked(self) -> None:
+        if self._current_user_id is None:
+            QtWidgets.QMessageBox.information(self, "Configuração", "Disponível apenas para utilizadores autenticados.")
+            return
+        try:
+            available = svc_custeio.list_available_auto_dimension_rules()
+            selected = svc_custeio.load_auto_dimension_prefixes(self.db, self._current_user_id)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Não foi possível carregar as peças: {exc}")
+            return
+        if selected is None:
+            selected = [prefix for prefix, _, _ in available]
+
+        dialog = AutoDimensionPiecesDialog(self, available, selected)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+
+        novos = dialog.selected_prefixes()
+        payload: Optional[Sequence[str]]
+        if len(novos) == len(available):
+            payload = None  # usa padrão
+        else:
+            payload = novos
+        try:
+            svc_custeio.save_auto_dimension_prefixes(self.db, self._current_user_id, payload)
+            self.db.commit()
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Erro",
+                f"Falha ao guardar as peças de preenchimento automático:\n{exc}",
+            )
+            return
+        self._refresh_auto_dims_summary()
 
     def _show_auto_dims_help(self) -> None:
         QtWidgets.QMessageBox.information(self, "Ajuda", AUTO_DIMS_HELP_TEXT, QtWidgets.QMessageBox.Ok)
+
+    def _load_margens_settings(self) -> None:
+        if not hasattr(self, "_margem_inputs"):
+            return
+        try:
+            valores = svc_margens.load_margens(self.db)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Aviso", f"Falha ao carregar margens: {exc}")
+            valores = svc_margens.default_values()
+        defaults = svc_margens.default_values()
+        for key, widget in self._margem_inputs.items():
+            value = valores.get(key, defaults.get(key))
+            if widget is None or value is None:
+                continue
+            widget.blockSignals(True)
+            widget.setValue(float(value))
+            widget.blockSignals(False)
+
+    def _collect_margens_inputs(self) -> Dict[str, Decimal]:
+        valores: Dict[str, Decimal] = {}
+        if not hasattr(self, "_margem_inputs"):
+            return valores
+        for key, widget in self._margem_inputs.items():
+            valores[key] = Decimal(f"{widget.value():.4f}")
+        return valores
+
+    def _on_margens_save(self) -> None:
+        valores = self._collect_margens_inputs()
+        try:
+            svc_margens.save_margens(self.db, valores)
+            self.db.commit()
+            QtWidgets.QMessageBox.information(self, "Sucesso", "Margens gravadas.")
+            self.margens_updated.emit()
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar margens: {exc}")
+
+    def _on_margens_reset(self) -> None:
+        defaults = svc_margens.default_values()
+        for key, widget in self._margem_inputs.items():
+            value = defaults.get(key, Decimal("0"))
+            widget.blockSignals(True)
+            widget.setValue(float(value))
+            widget.blockSignals(False)
+        self._on_margens_save()
+
+    def _init_margens_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        label = QtWidgets.QLabel(
+            "Configure os valores padrão das margens utilizadas no cálculo dos itens. "
+            "Estas percentagens podem ser ajustadas posteriormente por orçamento."
+        )
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(10)
+
+        group = QtWidgets.QGroupBox("Margens e Ajustes padrão")
+        group.setMaximumWidth(520)
+        grid = QtWidgets.QGridLayout(group)
+        grid.setContentsMargins(16, 16, 16, 16)
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(12)
+
+        self._margem_inputs = {}
+        for idx, spec in enumerate(svc_margens.MARGEM_FIELDS):
+            key = str(spec["key"])
+            label_widget = QtWidgets.QLabel(str(spec["label"]))
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setDecimals(2)
+            spin.setRange(0.0, 500.0)
+            spin.setSingleStep(0.25)
+            spin.setSuffix(" %")
+            spin.setAlignment(QtCore.Qt.AlignRight)
+            col = idx % 2
+            row = idx // 2
+            grid.addWidget(label_widget, row, col * 2)
+            grid.addWidget(spin, row, col * 2 + 1)
+            self._margem_inputs[key] = spin
+
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(3, 1)
+        container_layout.addWidget(group, alignment=QtCore.Qt.AlignHCenter)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.btn_margens_save = QtWidgets.QPushButton("Guardar Margens")
+        self.btn_margens_save.clicked.connect(self._on_margens_save)
+        self.btn_margens_reset = QtWidgets.QPushButton("Repor Valores Padrão")
+        self.btn_margens_reset.clicked.connect(self._on_margens_reset)
+        btn_layout.addWidget(self.btn_margens_save)
+        btn_layout.addWidget(self.btn_margens_reset)
+        btn_layout.addStretch(1)
+        container_layout.addLayout(btn_layout)
+
+        layout.addWidget(container, alignment=QtCore.Qt.AlignHCenter)
+        layout.addStretch(1)
+
+        self.tabs.addTab(tab, "Margens & Ajustes")
+        self._load_margens_settings()
 
     # -------------------------------------------------------- Dados produtivos
     def _init_producao_tab(self) -> None:
@@ -543,7 +792,7 @@ class SettingsPage(QtWidgets.QWidget):
             return
         ctx = self._producao_ctx
         info = (
-            f"Ano {ctx.ano} | Nº Orçamento {ctx.num_orcamento} | Versão {ctx.versao} | Modo atual: {self._producao_mode}"
+            f"Ano {ctx.ano} | N.º Orçamento {ctx.num_orcamento} | Versão {ctx.versao} | Modo atual: {self._producao_mode}"
         )
         self.lbl_producao_info.setText(info)
 
