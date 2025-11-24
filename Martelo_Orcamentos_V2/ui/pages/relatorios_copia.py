@@ -4,7 +4,6 @@ import html
 import re
 import shutil
 import tempfile
-import math
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -14,8 +13,6 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Qt
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.rich_text import CellRichText, TextBlock
-from Martelo_Orcamentos_V2.ui.pages import relatorios_copia as relatorios_full
-from utils_email import send_email
 from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, Side, PatternFill
 from openpyxl.drawing.image import Image as XLImage
@@ -266,55 +263,16 @@ class RelatoriosPage(QtWidgets.QWidget):
 
         actions_box = QtWidgets.QGroupBox("Ações")
         actions_layout = QtWidgets.QVBoxLayout(actions_box)
-
-        def _icon(theme_name: str, fallback: QtWidgets.QStyle.StandardPixmap) -> QtGui.QIcon:
-            icon = QtGui.QIcon.fromTheme(theme_name)
-            if icon.isNull():
-                icon = self.style().standardIcon(fallback)
-            return icon
-
-        def _letter_icon(text: str, color: QtGui.QColor) -> QtGui.QIcon:
-            size = 22
-            pm = QtGui.QPixmap(size, size)
-            pm.fill(QtCore.Qt.transparent)
-            painter = QtGui.QPainter(pm)
-            painter.setRenderHint(QtGui.QPainter.Antialiasing)
-            pen = QtGui.QPen(color)
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(QtGui.QBrush(color.lighter(180)))
-            painter.drawRoundedRect(1, 1, size - 2, size - 2, 4, 4)
-            font = QtGui.QFont(self.font())
-            font.setBold(True)
-            painter.setFont(font)
-            painter.setPen(QtCore.Qt.white)
-            painter.drawText(pm.rect(), QtCore.Qt.AlignCenter, text)
-            painter.end()
-            return QtGui.QIcon(pm)
-
-        def _bold_button(text: str) -> QtWidgets.QPushButton:
-            btn = QtWidgets.QPushButton(text)
-            f = btn.font()
-            f.setBold(True)
-            btn.setFont(f)
-            return btn
-
-        self.btn_send_email = _bold_button("Enviar Orçamento Email")
-        self.btn_send_email.setIcon(_letter_icon("@", QtGui.QColor("#2d7dd2")))
-
-        self.btn_export_excel = _bold_button("Exportar para Excel")
-        self.btn_export_excel.setIcon(_letter_icon("X", QtGui.QColor("#1d6f42")))
-
-        self.btn_export_pdf = _bold_button("Exportar para PDF")
-        self.btn_export_pdf.setIcon(_letter_icon("P", QtGui.QColor("#c62828")))
-
-        actions_layout.addWidget(self.btn_send_email)
+        self.btn_preview = QtWidgets.QPushButton("Gerar Orçamento Pre-Visualização")
+        self.btn_export_excel = QtWidgets.QPushButton("Exportar para Excel")
+        self.btn_export_pdf = QtWidgets.QPushButton("Exportar para PDF")
+        actions_layout.addWidget(self.btn_preview)
         actions_layout.addWidget(self.btn_export_excel)
         actions_layout.addWidget(self.btn_export_pdf)
         actions_layout.addStretch(1)
         top_row.addWidget(actions_box, 1)
 
-        self.btn_send_email.clicked.connect(self._on_send_email)
+        self.btn_preview.clicked.connect(self.refresh_preview)
         self.btn_export_excel.clicked.connect(self.export_to_excel)
         self.btn_export_pdf.clicked.connect(self.export_to_pdf)
 
@@ -618,16 +576,6 @@ class RelatoriosPage(QtWidgets.QWidget):
                 html_parts.append(f"<div>{safe_text}</div>")
         return "".join(html_parts)
 
-    @staticmethod
-    def _format_versao(versao: Optional[str]) -> str:
-        """Formata a versão como duas casas (ex.: '01'); devolve '-' se vazia."""
-        if versao in (None, "", "-"):
-            return "-"
-        try:
-            return f"{int(str(versao)) :02d}"
-        except Exception:
-            return str(versao).strip()
-
     def _clear_preview(self) -> None:
         for lbl in (
             self.lbl_cliente_nome,
@@ -650,28 +598,8 @@ class RelatoriosPage(QtWidgets.QWidget):
         self.lbl_iva.setText("IVA (23%): 0.00 €")
         self.lbl_total_geral.setText("Total Geral: 0.00 €")
 
-    def _format_description_pdf(self, text: Optional[str]) -> str:
-        """
-        Formatação HTML usada no PDF do orçamento (títulos em bold/maiusculas e bullets em itálico).
-        """
-        entries = self._parse_description(text)
-        if not entries:
-            return ""
-        parts: List[str] = []
-        for kind, content in entries:
-            safe = html.escape(content)
-            if kind in ("header", "header2"):
-                parts.append(f"<b>{safe.upper()}</b>")
-            elif kind == "dash":
-                parts.append(f"<i>- {safe}</i>")
-            elif kind == "star":
-                parts.append(f"<i><u><font color='#0a5c0a'>* {safe}</font></u></i>")
-            else:
-                parts.append(safe)
-        return "<br/>".join(parts)
-
     def _update_actions_enabled(self, enabled: bool) -> None:
-        self.btn_send_email.setEnabled(enabled)
+        self.btn_preview.setEnabled(enabled)
         self.btn_export_excel.setEnabled(enabled)
         self.btn_export_pdf.setEnabled(enabled)
 
@@ -847,6 +775,9 @@ class RelatoriosPage(QtWidgets.QWidget):
             area_placa = (comp_mp / 1000.0) * (larg_mp / 1000.0) if comp_mp and larg_mp else 0
             m2_total_pecas = float(ci.area_m2_und or 0) * qt_total
             m2_consumidos = m2_total_pecas * (1 + desp)
+            ratio = area_placa and m2_consumidos / area_placa or 0
+            qt_placas = int(ratio) if ratio and ratio.is_integer() else int(ratio) + 1 if ratio else 0
+            custo_placas_utilizadas = qt_placas * area_placa * pliq
             key = (ci.ref_le, ci.descricao_no_orcamento)
             if key not in placas_map:
                 placas_map[key] = {
@@ -865,28 +796,12 @@ class RelatoriosPage(QtWidgets.QWidget):
                     "custo_mp_total": 0.0,
                     "custo_placas_utilizadas": 0.0,
                 }
-            if area_placa > 0:
-                placas_map[key]["area_placa"] = area_placa
-            if pliq:
-                placas_map[key]["pliq"] = pliq
-            if desp:
-                placas_map[key]["desp"] = desp
+            placas_map[key]["qt_placas_utilizadas"] += qt_placas
             placas_map[key]["m2_consumidos"] += m2_consumidos
             placas_map[key]["m2_total_pecas"] += m2_total_pecas
             placas_map[key]["custo_mp_total"] += float(ci.custo_mp_total or 0)
-        placas_rows: List[dict] = []
-        for data in placas_map.values():
-            area = data.get("area_placa") or 0
-            total_m2 = data.get("m2_consumidos") or 0
-            if area > 0 and total_m2 > 0:
-                ratio = total_m2 / area
-                qt_placas = math.ceil(ratio)
-            else:
-                qt_placas = 0
-            data["qt_placas_utilizadas"] = float(qt_placas)
-            data["custo_placas_utilizadas"] = qt_placas * area * (data.get("pliq") or 0)
-            placas_rows.append(data)
-        result["placas"] = placas_rows
+            placas_map[key]["custo_placas_utilizadas"] += custo_placas_utilizadas
+        result["placas"] = list(placas_map.values())
 
         # ------------ Orlas ------------
         orlas_map: dict[tuple, dict] = {}
@@ -1094,22 +1009,12 @@ class RelatoriosPage(QtWidgets.QWidget):
         ml_fmt = fmt_unit("ml", 2)
         mm_fmt = fmt_unit("mm", 0)
 
-
-        def _percent(val: Any) -> str:
-            try:
-                num = float(val)
-            except Exception:
-                return "" if val in (None, "") else str(val)
-            if abs(num) < 1.0:
-                return f"{num:.0%}"
-            return f"{num:.0f} %"
-
         placas_cols = [
             ("Ref.", "ref_le"),
             ("Descrição", "descricao_no_orcamento"),
             ("P.Liq", "pliq", moedas),
             ("Und", "und"),
-            ("Desp.", "desp", _percent),
+            ("Desp.", "desp", fmt_auto),
             ("Comp.", "comp_mp", mm_fmt),
             ("Larg.", "larg_mp", mm_fmt),
             ("Esp.", "esp_mp", mm_fmt),
@@ -1128,21 +1033,12 @@ class RelatoriosPage(QtWidgets.QWidget):
             ("ML Tot.", "ml_total", ml_fmt),
             ("Custo Tot", "custo_total", moedas),
         ]
-        def _percent(val: Any) -> str:
-            try:
-                num = float(val)
-            except Exception:
-                return "" if val in (None, "") else str(val)
-            if abs(num) < 1.0:
-                return f"{num:.0%}"
-            return f"{num:.0f} %"
-
         ferr_cols = [
             ("Ref.", "ref_le"),
             ("Descrição", "descricao_no_orcamento"),
             ("P.Liq", "pliq", moedas),
             ("Und", "und"),
-            ("Desp.", "desp", _percent),
+            ("Desp.", "desp", fmt_auto),
             ("Comp.", "comp_mp", mm_fmt),
             ("Larg.", "larg_mp", mm_fmt),
             ("Esp.", "esp_mp", mm_fmt),
@@ -1652,123 +1548,6 @@ class RelatoriosPage(QtWidgets.QWidget):
 
         QtWidgets.QMessageBox.information(self, "Dashboard", f"Dashboard guardado em:\n{dest}")
 
-    # -- envio de email -------------------------------------------------
-    def _on_send_email(self) -> None:
-        if not self.current_orcamento_id:
-            QtWidgets.QMessageBox.information(self, "Email", "Selecione um orçamento antes de enviar.")
-            return
-        if not self._current_orcamento or not self._current_items:
-            self.refresh_preview()
-            if not self._current_orcamento or not self._current_items:
-                return
-
-        orc = self._current_orcamento
-        client = self._current_client
-        export_dir = self._determine_export_folder(orc, client)
-        try:
-            export_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Email", f"Falha ao preparar pasta do orçamento: {exc}")
-            return
-
-        pdf_path = export_dir / f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.pdf"
-        if not pdf_path.exists():
-            try:
-                # gera PDF e resumo custos
-                _build_pdf = getattr(self, "_build_pdf", None)
-                if callable(_build_pdf):
-                    _build_pdf(pdf_path)
-                _export_resumo_custos = globals().get("_export_resumo_custos")
-                if callable(_export_resumo_custos):
-                    _export_resumo_custos(self, export_dir, orc, client)
-            except Exception as exc:
-                QtWidgets.QMessageBox.critical(self, "Email", f"Falha ao gerar PDF: {exc}")
-                return
-
-        total = sum((it.preco_total or Decimal(0)) for it in self._current_items)
-        dialog = EmailOrcamentoDialog(
-            parent=self,
-            destinatario=getattr(client, "email", "") or "",
-            assunto=self._format_email_subject(orc),
-            corpo=self._default_email_body(total, orc, client),
-            anexos=[str(pdf_path)],
-            pasta_inicial=str(export_dir),
-        )
-        if dialog.exec() != QtWidgets.QDialog.Accepted:
-            return
-        try:
-            send_email(dialog.destinatario(), dialog.assunto(), dialog.corpo_html(), dialog.anexos())
-            self._marcar_enviado(orc.id)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Email", f"Falha ao enviar email: {exc}")
-            return
-        QtWidgets.QMessageBox.information(self, "Email", "Email enviado com sucesso.")
-
-    def _marcar_enviado(self, orc_id: int) -> None:
-        try:
-            with SessionLocal() as session:
-                orc = session.get(Orcamento, orc_id)
-                if not orc:
-                    return
-                orc.status = "Enviado"
-                session.commit()
-        except Exception:
-            pass
-
-    def _format_email_subject(self, orc: Orcamento) -> str:
-        num = orc.num_orcamento or ""
-        ver = self._format_versao(orc.versao)
-        ref = getattr(orc, "ref_cliente", "") or ""
-        obra = getattr(orc, "obra", "") or ""
-        parts = [f"{num}_{ver}"]
-        if ref:
-            parts.append(f"Ref. Cliente: {ref}")
-        if obra:
-            parts.append(f"Obra: {obra}")
-        return " | ".join(parts)
-
-    def _default_email_body(self, total: Decimal, orc: Orcamento, client: Optional[Client]) -> str:
-        total_fmt = f"{float(total):.2f}".replace('.', ',') if total is not None else ""
-        cliente_nome = getattr(client, "nome", "") or ""
-        obra = getattr(orc, "obra", "") or ""
-        ref = getattr(orc, "ref_cliente", "") or ""
-        header = "Orçamento"
-        if cliente_nome:
-            header = f"Orçamento {cliente_nome}"
-        return (
-            "<div style='font-family: Arial, sans-serif; color:#333;'>"
-            f"<h2 style='color:#8C6239;margin-bottom:4px;'>{header}</h2>"
-            "<p style='margin:0 0 12px;'>Exmo(a). Sr(a),</p>"
-            "<p style='margin:0 0 12px;'>Agradecemos o seu contacto.<br>"
-            "Em anexo segue o orçamento solicitado.</p>"
-            f"<p style='margin:0 0 12px;'><b>Valor sem IVA:</b> {total_fmt} €</p>"
-            + (f"<p style='margin:0 0 8px;'><b>Obra:</b> {html.escape(obra)}</p>" if obra else "")
-            + (f"<p style='margin:0 0 12px;'><b>Ref. Cliente:</b> {html.escape(ref)}</p>" if ref else "")
-            + "<p style='margin:0 0 16px;'>Se tiver alguma dúvida ou necessitar de mais informação, não hesite em contactar-nos.</p>"
-            "<p style='margin:0 0 4px;'>Com os melhores cumprimentos,</p>"
-            "<p style='margin:0;'>{{assinatura}}</p>"
-            "</div>"
-        )
-
-    # wrappers para helpers definidos abaixo (mant?m chamadas existentes)
-    def _build_workbook(self, output_path: Path):
-        builder = getattr(relatorios_full.RelatoriosPage, "_build_workbook", None)
-        if callable(builder):
-            return builder(self, output_path)
-        raise AttributeError("_build_workbook não disponível na relatorios_copia")
-
-    def _export_resumo_custos(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
-        exporter = getattr(relatorios_full.RelatoriosPage, "_export_resumo_custos", None)
-        if callable(exporter):
-            return exporter(self, export_dir, orc, client)
-        raise AttributeError("_export_resumo_custos não disponível na relatorios_copia")
-
-    def _export_excel_phc(self, export_dir: Path, orc: Orcamento) -> None:
-        exporter = getattr(relatorios_full.RelatoriosPage, "_export_excel_phc", None)
-        if callable(exporter):
-            return exporter(self, export_dir, orc)
-        raise AttributeError("_export_excel_phc não disponível na relatorios_copia")
-
     def _on_header_resized(self, section: int, _old: int, _new: int) -> None:
         if section == 2:
             QtCore.QTimer.singleShot(0, self._update_row_heights)
@@ -1793,13 +1572,37 @@ class RelatoriosPage(QtWidgets.QWidget):
             height = doc.size().height() + 24
             vh.resizeSection(row, max(70, int(height)))
 
-    # ---------------------- EXPORT HELPERS ----------------------
-    def _get_setting_value(self, key: str, default: str) -> str:
+    # ------------------------------------------------------------------ EXPORT
+    def export_to_excel(self) -> None:
+        if not self.current_orcamento_id:
+            QtWidgets.QMessageBox.information(self, "Relatórios", "Selecione um orçamento antes de exportar.")
+            return
+        if not self._current_orcamento or not self._current_items:
+            self.refresh_preview()
+            if not self._current_orcamento or not self._current_items:
+                return
+
+        orc = self._current_orcamento
+        client = self._current_client
+        num = orc.num_orcamento or "orcamento"
+        ver = self._format_versao(orc.versao)
+        default_name = f"{num}_{ver}.xlsx"
+        export_dir = self._determine_export_folder(orc, client)
         try:
-            with SessionLocal() as session:
-                return get_setting(session, key, default) or default
-        except Exception:
-            return default
+            export_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Exportar Excel", f"Falha ao preparar pasta do orçamento: {exc}")
+            return
+        file_path = export_dir / default_name
+        try:
+            self._build_workbook(file_path)
+            self._export_resumo_custos(file_path.parent, orc, client)
+            self._export_excel_phc(export_dir, orc)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Exportar Excel", f"Falha ao exportar: {exc}")
+            return
+
+        QtWidgets.QMessageBox.information(self, "Exportar Excel", f"Relatório guardado em:\n{file_path}")
 
     def _determine_export_folder(self, orc: Orcamento, client: Optional[Client]) -> Path:
         base_path = Path(self._get_setting_value(KEY_BASE_PATH, DEFAULT_BASE_PATH))
@@ -1810,44 +1613,35 @@ class RelatoriosPage(QtWidgets.QWidget):
         versao = self._format_versao(orc.versao)
         return base_path / ano / pasta / versao
 
+    def _get_setting_value(self, key: str, default: str) -> str:
+        try:
+            with SessionLocal() as session:
+                return get_setting(session, key, default) or default
+        except Exception:
+            return default
+
     def _resolve_logo_path(self) -> Optional[Path]:
         base = self._get_setting_value(KEY_ORC_DB_BASE, DEFAULT_BASE_DADOS_ORC)
         candidate = Path(base) / "LE_Logotipo.png"
         return candidate if candidate.exists() else None
 
-    # ---------------------- EXPORTAÇÃO SIMPLIFICADA ----------------------
-    def export_to_excel(self) -> None:
-        if not self.current_orcamento_id:
-            QtWidgets.QMessageBox.information(self, "Exportar Excel", "Selecione um orçamento antes de exportar.")
-            return
-        if not self._current_orcamento or not self._current_items:
-            self.refresh_preview()
-            if not self._current_orcamento or not self._current_items:
-                return
-        orc = self._current_orcamento
-        client = self._current_client
-        export_dir = self._determine_export_folder(orc, client)
+    @staticmethod
+    def _safe_number(value) -> float:
         try:
-            export_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Exportar Excel", f"Falha ao preparar pasta do orçamento: {exc}")
-            return
-        file_path = export_dir / f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.xlsx"
-        try:
-            self._build_workbook(file_path)
-            self._export_resumo_custos(export_dir, orc, client)
-            self._export_excel_phc(export_dir, orc)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Exportar Excel", f"Falha ao exportar: {exc}")
-            return
-        QtWidgets.QMessageBox.information(self, "Exportar Excel", f"Relatório guardado em:\n{file_path}")
+            return float(value)
+        except Exception:
+            return 0.0
 
     def export_to_pdf(self) -> None:
         if not REPORTLAB_AVAILABLE:
-            QtWidgets.QMessageBox.warning(self, "Exportar PDF", "Biblioteca reportlab não encontrada.")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Exportar PDF",
+                "Biblioteca reportlab não encontrada. Instale com 'pip install reportlab'.",
+            )
             return
         if not self.current_orcamento_id:
-            QtWidgets.QMessageBox.information(self, "Exportar PDF", "Selecione um orçamento antes de exportar.")
+            QtWidgets.QMessageBox.information(self, "Relatórios", "Selecione um orçamento antes de exportar.")
             return
         if not self._current_orcamento or not self._current_items:
             self.refresh_preview()
@@ -1863,470 +1657,1086 @@ class RelatoriosPage(QtWidgets.QWidget):
             return
         output_path = export_dir / f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.pdf"
         try:
-            builder = getattr(relatorios_full.RelatoriosPage, "_build_pdf", None)
-            if callable(builder):
-                builder(self, output_path)
-            else:
-                raise AttributeError("_build_pdf não disponível na relatorios_copia")
+            self._build_pdf(output_path)
             self._export_resumo_custos(export_dir, orc, client)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Exportar PDF", f"Falha ao exportar: {exc}")
             return
         QtWidgets.QMessageBox.information(self, "Exportar PDF", f"Relatório guardado em:\n{output_path}")
 
-        return None
+    def _export_excel_phc(self, export_dir: Path, orc: Orcamento) -> Path:
+        """
+        Gera um ficheiro Excel no formato esperado pelo PHC.
+        """
+        filename = f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}_PHC.xlsx"
+        dest = export_dir / filename
 
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "PHC"
+        headers = ["RefCliente", "Referencia", "Designacao", "XAltura", "YLargura", "ZEspessura", "Qtd", "Venda"]
+        ws.append(headers)
 
-class EmailOrcamentoDialog(QtWidgets.QDialog):
-    def __init__(
-        self,
-        parent=None,
-        *,
-        destinatario: str = "",
-        assunto: str = "",
-        corpo: str = "",
-        anexos: Optional[List[str]] = None,
-        pasta_inicial: Optional[str] = None,
-    ):
-        super().__init__(parent)
-        self.setWindowTitle("Enviar Orçamento por Email")
-        self.resize(820, 520)
-        self._pasta_inicial = pasta_inicial or ""
-
-        layout = QtWidgets.QVBoxLayout(self)
-
-        form = QtWidgets.QFormLayout()
-        self.ed_dest = QtWidgets.QLineEdit(destinatario)
-        self.ed_assunto = QtWidgets.QLineEdit(assunto)
-        form.addRow("Destinatário:", self.ed_dest)
-        form.addRow("Assunto:", self.ed_assunto)
-        layout.addLayout(form)
-
-        layout.addWidget(QtWidgets.QLabel("Corpo do Email:"))
-        self.txt_corpo = QtWidgets.QTextEdit()
-        self.txt_corpo.setAcceptRichText(True)
-        self.txt_corpo.setHtml(corpo or "")
-        layout.addWidget(self.txt_corpo, 1)
-
-        layout.addWidget(QtWidgets.QLabel("Anexos:"))
-        self.list_anexos = QtWidgets.QListWidget()
-        for path in anexos or []:
-            self.list_anexos.addItem(path)
-        layout.addWidget(self.list_anexos, 1)
-
-        btns_anexo = QtWidgets.QHBoxLayout()
-        self.btn_add = QtWidgets.QPushButton("Adicionar anexo(s)")
-        self.btn_remove = QtWidgets.QPushButton("Remover selecionado")
-        btns_anexo.addWidget(self.btn_add)
-        btns_anexo.addWidget(self.btn_remove)
-        layout.addLayout(btns_anexo)
-
-        self.btn_add.clicked.connect(self._on_add_anexo)
-        self.btn_remove.clicked.connect(self._on_remove_anexo)
-
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def _on_add_anexo(self) -> None:
-        start_dir = self._pasta_inicial or QtWidgets.QFileDialog.directory().path()
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(self, "Selecionar anexos", start_dir)
-        for f in files:
-            if not f:
-                continue
-            if not any(self.list_anexos.item(i).text() == f for i in range(self.list_anexos.count())):
-                self.list_anexos.addItem(f)
-
-    def _on_remove_anexo(self) -> None:
-        for item in self.list_anexos.selectedItems():
-            row = self.list_anexos.row(item)
-            self.list_anexos.takeItem(row)
-
-    def destinatario(self) -> str:
-        return self.ed_dest.text().strip()
-
-    def assunto(self) -> str:
-        return self.ed_assunto.text().strip()
-
-    def corpo_html(self) -> str:
-        return self.txt_corpo.toHtml()
-
-    def anexos(self) -> List[str]:
-        return [self.list_anexos.item(i).text() for i in range(self.list_anexos.count())]
-
-
-# ----------------------------------------------------------------------
-# Funções de exportação completas (restauradas)
-def _build_workbook(self, output_path: Path) -> None:
-    """
-    Gera o ficheiro Excel (usando xlsxwriter) com formatação semelhante ao PDF.
-    """
-    client = self._current_client
-    orc = self._current_orcamento
-    rows = self._current_items
-    if not orc:
-        raise ValueError("Nenhum orçamento disponível para exportar.")
-
-    import xlsxwriter
-    try:
-        from PIL import Image as PILImage
-        PIL_AVAILABLE = True
-    except Exception:
-        PIL_AVAILABLE = False
-
-    wb = xlsxwriter.Workbook(str(output_path))
-    ws = wb.add_worksheet("Relatório")
-
-    azul_escuro = '#184ca7'
-    fmt_title = wb.add_format({'bold': True, 'font_size': 15, 'align': 'center', 'valign': 'vcenter'})
-    fmt_cliente = wb.add_format({'bold': True, 'font_size': 12, 'align': 'left', 'valign': 'vcenter'})
-    fmt_info = wb.add_format({'bold': True, 'font_size': 12, 'align': 'right', 'valign': 'vcenter'})
-    fmt_small = wb.add_format({'font_size': 10, 'align': 'left', 'valign': 'vcenter'})
-
-    fmt_header = wb.add_format({'bold': True, 'bg_color': '#D9D9D9', 'align': 'center', 'border': 1, 'valign': 'vcenter', 'font_size': 9})
-    fmt_cell = wb.add_format({'align': 'center', 'font_size': 10, 'border': 1, 'valign': 'vcenter'})
-    fmt_descr_titulo = wb.add_format({'bold': True, 'font_size': 11, 'align': 'left', 'valign': 'top', 'border': 1})
-    fmt_descr_sub = wb.add_format({'italic': True, 'font_size': 10, 'align': 'left', 'valign': 'top', 'border': 1})
-    fmt_descr_container = wb.add_format({'border': 1, 'text_wrap': True, 'valign': 'top'})
-    fmt_number = wb.add_format({'num_format': '0.00', 'align': 'right', 'border': 1, 'valign': 'vcenter'})
-    fmt_money = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'valign': 'vcenter', 'border': 1})
-    fmt_money_bold = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'bold': True, 'valign': 'vcenter', 'border': 1})
-    fmt_row_border = wb.add_format({'border': 1})
-    fmt_total_label_nb = wb.add_format({'align': 'right', 'bold': True, 'font_size': 10, 'valign': 'vcenter', 'border': 0})
-    fmt_total_val_nb = wb.add_format({'align': 'right', 'bold': True, 'font_size': 11, 'color': '#002060', 'valign': 'vcenter', 'border': 0})
-    fmt_money_nb = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'valign': 'vcenter', 'border': 0})
-    fmt_date_right = wb.add_format({'font_size': 10, 'align': 'right', 'valign': 'vcenter', 'border': 0})
-
-    ws.set_margins(left=0.2, right=0.2, top=0.2, bottom=0.25)
-    ws.fit_to_pages(1, 0)
-    ws.set_row(1, 50)
-
-    logo_path = self._resolve_logo_path()
-    if logo_path:
-        try:
-            desired_w_cm = 13.32
-            desired_h_cm = 5.61
-            if PIL_AVAILABLE:
-                pil_img = PILImage.open(str(logo_path))
-                img_w_px, img_h_px = pil_img.size
-                dpi = 96.0
-                desired_w_px = (desired_w_cm / 2.54) * dpi
-                desired_h_px = (desired_h_cm / 2.54) * dpi
-                x_scale = desired_w_px / img_w_px
-                y_scale = desired_h_px / img_h_px
-                ws.insert_image(0, 0, str(logo_path), {
-                    'x_scale': x_scale, 'y_scale': y_scale, 'x_offset': 8, 'y_offset': 6, 'positioning': 1
-                })
-            else:
-                ws.insert_image(0, 0, str(logo_path), {
-                    'x_scale': 0.18, 'y_scale': 0.18, 'x_offset': 8, 'y_offset': 6, 'positioning': 1
-                })
-        except Exception:
-            pass
-
-    cliente_nome = (getattr(client, "nome", "") or "").upper()
-    ws.merge_range(2, 0, 2, 2, cliente_nome, fmt_cliente)
-    ws.merge_range(0, 3, 0, 9, "Relatório de Orçamento", fmt_title)
-    ws.merge_range(1, 3, 1, 9, f"Nº Orçamento: {orc.num_orcamento or ''}_{self._format_versao(orc.versao)}", fmt_info)
-    ws.merge_range(2, 3, 2, 9, f"Data: {orc.data or ''}", fmt_date_right)
-
-    ws.merge_range(3, 0, 3, 2, getattr(client, "morada", "") or "", fmt_small)
-    ws.merge_range(4, 0, 4, 2, getattr(client, "email", "") or "", fmt_small)
-    contactos = f"Telefone: {(getattr(client,'telefone','') or '')}  |  Telemóvel: {(getattr(client,'telemovel','') or '')}"
-    ws.merge_range(5, 0, 5, 2, contactos, fmt_small)
-    ws.merge_range(6, 0, 6, 2, f"Ref.: {orc.ref_cliente or '-'}", wb.add_format({'bold': True, 'font_size': 12, 'font_color': azul_escuro, 'border': 0}))
-    ws.merge_range(6, 3, 6, 9, f"Obra: {orc.obra or '-'}", wb.add_format({'bold': True, 'font_size': 12, 'font_color': 'red', 'align': 'right', 'border': 0}))
-
-    headers = ["Item", "Código", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preço Unit", "Preço Total"]
-    start_row = 9
-    for col, h in enumerate(headers):
-        ws.write(start_row, col, h, fmt_header)
-    col_widths = [6, 12, 44, 8, 8, 8, 6, 6, 14, 16]
-    for idx, w in enumerate(col_widths):
-        ws.set_column(idx, idx, w)
-
-    row = start_row + 1
-    for item in rows:
-        entries = self._parse_description(item.descricao)
-        text_lines = []
-        if entries:
-            text_lines.append(entries[0][1].upper())
-            for kind, text in entries[1:]:
-                if kind == 'dash':
-                    text_lines.append(f"- {text}")
-                elif kind == 'star':
-                    text_lines.append(f"* {text}")
-                elif kind == 'header2':
-                    text_lines.append(text.upper())
-                else:
-                    text_lines.append(text)
-        else:
-            text_lines = [""]
-        num_lines = max(1, len(text_lines))
-        line_height = max(20, 14 * num_lines)
-        ws.set_row(row, line_height)
-
-        ws.write(row, 0, item.item, fmt_cell)
-        ws.write(row, 1, item.codigo, fmt_cell)
-
-        if not entries:
-            ws.write(row, 2, "", fmt_descr_container)
-        else:
-            if len(entries) == 1:
-                ws.write(row, 2, entries[0][1].upper(), fmt_descr_titulo)
-            else:
-                rich_args = [fmt_descr_titulo, entries[0][1].upper()]
-                for kind, text in entries[1:]:
-                    rich_args.append('\n')
-                    if kind == 'dash':
-                        rich_args.extend([fmt_descr_sub, f"- {text}"])
-                    elif kind == 'star':
-                        rich_args.extend([fmt_descr_sub, f"* {text}"])
-                    elif kind == 'header2':
-                        rich_args.extend([fmt_descr_titulo, str(text).upper()])
-                    else:
-                        rich_args.extend([fmt_descr_sub, text])
-                try:
-                    ws.write_rich_string(row, 2, *rich_args, fmt_descr_container)
-                except Exception:
-                    joined = "\n".join(
-                        [entries[0][1].upper()]
-                        + [("- " + t) if k == 'dash' else ("* " + t) if k == 'star' else t for k, t in entries[1:]]
-                    )
-                    ws.write(row, 2, joined, fmt_descr_container)
-
-        ws.write_number(row, 3, float(item.altura) if item.altura is not None else None, fmt_cell)
-        ws.write_number(row, 4, float(item.largura) if item.largura is not None else None, fmt_cell)
-        ws.write_number(row, 5, float(item.profundidade) if item.profundidade is not None else None, fmt_cell)
-        ws.write(row, 6, item.unidade, fmt_cell)
-        ws.write_number(row, 7, float(item.qt) if item.qt is not None else 0.0, fmt_number)
-        ws.write_number(row, 8, float(item.preco_unitario) if item.preco_unitario is not None else 0.0, fmt_money)
-        ws.write_number(row, 9, float(item.preco_total) if item.preco_total is not None else 0.0, fmt_money_bold)
-        row += 1
-
-    totals_row = row + 1
-    total_qt = sum((item.qt or Decimal("0")) for item in rows)
-    subtotal = sum((item.preco_total or Decimal("0")) for item in rows)
-    iva = subtotal * IVA_RATE
-    total = subtotal + iva
-
-    ws.write(totals_row, 8, "Total Qt:", fmt_total_label_nb)
-    ws.write_number(totals_row, 9, float(total_qt), fmt_total_val_nb)
-    ws.write(totals_row + 1, 8, "SubTotal:", fmt_total_label_nb)
-    ws.write_number(totals_row + 1, 9, float(subtotal), fmt_total_val_nb)
-    ws.write(totals_row + 2, 8, "IVA (23%):", fmt_total_label_nb)
-    ws.write_number(totals_row + 2, 9, float(iva), fmt_total_val_nb)
-    ws.write(totals_row + 3, 8, "Total Geral:", fmt_total_label_nb)
-    ws.write_number(totals_row + 3, 9, float(total), fmt_money_nb)
-    wb.close()
-
-
-def _export_resumo_custos(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
-    """
-    Gera 'Resumo_Custos_<num>_<ver>.xlsx' a partir do modelo MODELO_Resumo_Custos.xlsx
-    preenchendo o separador 'Resumo Geral' com os registos de custeio_items.
-    """
-    col_order = [
-        "id",
-        "descricao_livre",
-        "def_peca",
-        "descricao",
-        "qt_total",
-        "comp_res",
-        "larg_res",
-        "esp_res",
-        "mps",
-        "mo",
-        "orla",
-        "blk",
-        "nst",
-        "mat_default",
-        "acabamento_sup",
-        "acabamento_inf",
-        "ref_le",
-        "descricao_no_orcamento",
-        "pliq",
-        "und",
-        "desp",
-        "orl_0_4",
-        "orl_1_0",
-        "tipo",
-        "familia",
-        "comp_mp",
-        "larg_mp",
-        "esp_mp",
-        "orl_c1",
-        "orl_c2",
-        "orl_l1",
-        "orl_l2",
-        "ml_orl_c1",
-        "ml_orl_c2",
-        "ml_orl_l1",
-        "ml_orl_l2",
-        "custo_orl_c1",
-        "custo_orl_c2",
-        "custo_orl_l1",
-        "custo_orl_l2",
-        "gravar_modulo",
-        "custo_total_orla",
-        "soma_total_ml_orla",
-        "area_m2_und",
-        "perimetro_und",
-        "spp_ml_und",
-        "cp01_sec",
-        "cp01_sec_und",
-        "cp02_orl",
-        "cp02_orl_und",
-        "cp03_cnc",
-        "cp03_cnc_und",
-        "cp04_abd",
-        "cp04_abd_und",
-        "cp05_prensa",
-        "cp05_prensa_und",
-        "cp06_esquad",
-        "cp06_esquad_und",
-        "cp07_embalagem",
-        "cp07_embalagem_und",
-        "cp08_mao_de_obra",
-        "cp08_mao_de_obra_und",
-        "cp09_colagem",
-        "cp09_colagem_und",
-        "custo_mp_und",
-        "custo_mp_total",
-        "soma_custo_orla_total",
-        "soma_custo_und",
-        "soma_custo_total",
-        "soma_custo_acb",
-    ]
-
-    base_dados_path = Path(self._get_setting_value(KEY_ORC_DB_BASE, DEFAULT_BASE_DADOS_ORC))
-    template_candidates = [
-        base_dados_path / "MODELO_Resumo_Custos.xlsx",
-        base_dados_path / "MODELO_Resumo_Custos_V2.xlsx",
-    ]
-    template_path = next((p for p in template_candidates if p.exists()), None)
-    if not template_path:
-        QtWidgets.QMessageBox.warning(self, "Resumo Custos", "Modelo não encontrado (MODELO_Resumo_Custos.xlsx).")
-        return
-
-    nome_base = f"Resumo_Custos_{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.xlsx"
-    destino = export_dir / nome_base
-    try:
-        shutil.copyfile(template_path, destino)
-    except Exception as exc:
-        QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao copiar modelo: {exc}")
-        return
-
-    try:
-        wb = load_workbook(destino)
-    except Exception as exc:
-        QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Não foi possível abrir o modelo: {exc}")
-        return
-
-    ws = wb["Resumo Geral"] if "Resumo Geral" in wb.sheetnames else wb.active
-    if ws.max_row > 1:
-        ws.delete_rows(2, ws.max_row)
-    for col_idx, name in enumerate(col_order, start=1):
-        ws.cell(row=1, column=col_idx, value=name)
-    if ws.max_column > len(col_order):
-        ws.delete_cols(len(col_order) + 1, ws.max_column - len(col_order))
-
-    try:
-        with SessionLocal() as session:
-            cust_rows = (
-                session.query(CusteioItem)
-                .filter(CusteioItem.orcamento_id == orc.id, CusteioItem.versao == orc.versao)
-                .order_by(CusteioItem.ordem)
-                .all()
-            )
-    except Exception as exc:
-        QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao carregar custeio: {exc}")
-        return
-
-    def _val(obj, attr):
-        v = getattr(obj, attr, None)
-        if isinstance(v, Decimal):
+        def _to_num(value):
+            conv = getattr(self, "_decimal_value", None)
+            if callable(conv):
+                return conv(value)
             try:
-                return float(v)
+                return float(value)
             except Exception:
                 return None
-        if isinstance(v, bool):
-            return 1 if v else 0
-        return v
 
-    row_idx = 2
-    for c_item in cust_rows:
-        for col_idx, attr in enumerate(col_order, start=1):
-            ws.cell(row=row_idx, column=col_idx, value=_val(c_item, attr))
-        row_idx += 1
+        for item in self._current_items:
+            desc_entries = self._parse_description(item.descricao)
+            lines: list[str] = []
+            if desc_entries:
+                lines.append(desc_entries[0][1].upper())
+                for kind, text in desc_entries[1:]:
+                    if kind == "dash":
+                        lines.append(f"- {text}")
+                    elif kind == "star":
+                        lines.append(f"* {text}")
+                    elif kind == "header2":
+                        lines.append(text.upper())
+                    else:
+                        lines.append(text)
+            else:
+                lines.append("")
 
-    def _orla_width_from_esp(esp_val: float) -> float:
+            first_line = lines[0]
+            extra_lines = lines[1:]
+
+            ws.append(
+                [
+                    item.codigo,
+                    "MOB",
+                    first_line,
+                    _to_num(item.altura),
+                    _to_num(item.largura),
+                    _to_num(item.profundidade),
+                    _to_num(item.qt),
+                    _to_num(item.preco_unitario),
+                ]
+            )
+            for extra in extra_lines:
+                ws.append(["", "", extra, None, None, None, None, None])
+
+        # ajuste simples de largura das colunas para facilitar leitura
+        for col_cells in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col_cells)
+            ws.column_dimensions[col_cells[0].column_letter].width = min(max(max_len + 2, 10), 60)
+
+        wb.save(dest)
+        return dest
+
+
+    def _build_workbook(self, output_path: Path) -> None:
+        """
+        Gera o ficheiro Excel (usando xlsxwriter) com formatação semelhante ao PDF.
+        Formato da coluna "Descrição":
+        - 1.ª linha: título em MAIÚSCULAS e NEGRITO
+        - linhas seguintes: cada '-' ou '*' em nova linha (ALT+ENTER) e em ITÁLICO
+        - usa write_rich_string para manter formatação por sub-trecho da célula
+        """
+        # validações iniciais
+        client = self._current_client
+        orc = self._current_orcamento
+        rows = self._current_items
+        if not orc:
+            raise ValueError("Nenhum orçamento disponível para exportar.")
+
+        import xlsxwriter
+        # Pillow opcional para dimensionar imagem com precisão
         try:
-            esp = float(esp_val)
+            from PIL import Image as PILImage
+            PIL_AVAILABLE = True
         except Exception:
-            return 0.0
-        if esp <= 0:
-            return 0.0
-        if esp < 20:
-            return 23.0
-        if esp < 31:
-            return 35.0
-        if esp < 40:
-            return 45.0
-        return 60.0
+            PIL_AVAILABLE = False
 
-    ws_resumo_orlas = wb.create_sheet("Resumo_Orlas")
-    ws_resumo_orlas.append(["Ref Orla", "Descr Material", "Espessura", "Largura", "ML Total", "Custo Total"])
-    for c_item in cust_rows:
-        qt_total = float(c_item.qt_total or 0)
-        largura_orla = _orla_width_from_esp(getattr(c_item, "esp_res", None) or getattr(c_item, "esp_mp", None))
-        ref_map = {
-            1: getattr(c_item, "orl_0_4", None) or getattr(c_item, "corres_orla_0_4", None) or "",
-            2: getattr(c_item, "orl_1_0", None) or getattr(c_item, "corres_orla_1_0", None) or "",
-        }
-        sides = [
-            (getattr(c_item, "orl_c1", 0), getattr(c_item, "ml_orl_c1", 0), getattr(c_item, "custo_orl_c1", 0)),
-            (getattr(c_item, "orl_c2", 0), getattr(c_item, "ml_orl_c2", 0), getattr(c_item, "custo_orl_c2", 0)),
-            (getattr(c_item, "orl_l1", 0), getattr(c_item, "ml_orl_l1", 0), getattr(c_item, "custo_orl_l1", 0)),
-            (getattr(c_item, "orl_l2", 0), getattr(c_item, "ml_orl_l2", 0), getattr(c_item, "custo_orl_l2", 0)),
-        ]
-        for code_raw, ml_raw, custo_raw in sides:
+        # cria workbook / worksheet
+        wb = xlsxwriter.Workbook(str(output_path))
+        ws = wb.add_worksheet("Relatório")
+
+        # ----------------------------
+        # FORMATOS (bordas nas células da tabela; totais sem borda)
+        # ----------------------------
+        azul_escuro = '#184ca7'
+        fmt_title = wb.add_format({'bold': True, 'font_size': 15, 'align': 'center', 'valign': 'vcenter'})
+        fmt_cliente = wb.add_format({'bold': True, 'font_size': 12, 'align': 'left', 'valign': 'vcenter'})
+        fmt_info = wb.add_format({'bold': True, 'font_size': 12, 'align': 'right', 'valign': 'vcenter'})
+        fmt_small = wb.add_format({'font_size': 10, 'align': 'left', 'valign': 'vcenter'})
+
+        fmt_header = wb.add_format({'bold': True, 'bg_color': '#D9D9D9', 'align': 'center', 'border': 1, 'valign': 'vcenter', 'font_size': 9})
+        fmt_cell = wb.add_format({'align': 'center', 'font_size': 10, 'border': 1, 'valign': 'vcenter'})
+
+        # descrição: título e sublinhas (ambos com borda para manter consistência)
+        fmt_descr_titulo = wb.add_format({'bold': True, 'font_size': 11, 'align': 'left', 'valign': 'top', 'border': 1})
+        fmt_descr_sub = wb.add_format({'italic': True, 'font_size': 10, 'align': 'left', 'valign': 'top', 'border': 1})
+        fmt_descr_container = wb.add_format({'border': 1, 'text_wrap': True, 'valign': 'top'})
+
+        # formatos números com borda
+        fmt_number = wb.add_format({'num_format': '0.00', 'align': 'right', 'border': 1, 'valign': 'vcenter'})
+        fmt_money = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'valign': 'vcenter', 'border': 1})
+        fmt_money_bold = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'bold': True, 'valign': 'vcenter', 'border': 1})
+
+        # formato para linha padrão (só border) - usado como default da linha
+        fmt_row_border = wb.add_format({'border': 1})
+        # formatos para totais (sem borda) - o utilizador pediu sem limites
+        fmt_total_label_nb = wb.add_format({'align': 'right', 'bold': True, 'font_size': 10, 'valign': 'vcenter', 'border': 0})
+        fmt_total_val_nb = wb.add_format({'align': 'right', 'bold': True, 'font_size': 11, 'color': '#002060', 'valign': 'vcenter', 'border': 0})
+        fmt_money_nb = wb.add_format({'num_format': '€ #,##0.00', 'align': 'right', 'valign': 'vcenter', 'border': 0})
+
+        # formato Data (linha 3) alinhada à direita
+        fmt_date_right = wb.add_format({'font_size': 10, 'align': 'right', 'valign': 'vcenter', 'border': 0})
+
+        # ----------------------------
+        # MARGENS / FIT / LINHA 2 = 50
+        # ----------------------------
+        ws.set_margins(left=0.2, right=0.2, top=0.2, bottom=0.25)
+        ws.fit_to_pages(1, 0)
+        ws.set_row(1, 50)  # linha 2 altura = 50
+
+        # ----------------------------
+        # LOGO - dimensões pedidas: largura 12.32 cm, altura 5.61 cm
+        # ----------------------------
+        logo_path = self._resolve_logo_path()
+        if logo_path:
             try:
-                code_val = float(code_raw or 0)
+                desired_w_cm = 13.32
+                desired_h_cm = 5.61
+                if PIL_AVAILABLE:
+                    pil_img = PILImage.open(str(logo_path))
+                    img_w_px, img_h_px = pil_img.size
+                    dpi = 96.0
+                    desired_w_px = (desired_w_cm / 2.54) * dpi
+                    desired_h_px = (desired_h_cm / 2.54) * dpi
+                    x_scale = desired_w_px / img_w_px
+                    y_scale = desired_h_px / img_h_px
+                    ws.insert_image(0, 0, str(logo_path), {
+                        'x_scale': x_scale, 'y_scale': y_scale, 'x_offset': 8, 'y_offset': 6, 'positioning': 1
+                    })
+                else:
+                    # fallback - valores aproximados
+                    ws.insert_image(0, 0, str(logo_path), {
+                        'x_scale': 0.18 * (4.05/4.05), 'y_scale': 0.18 * (2.2/2.2), 'x_offset': 8, 'y_offset': 6, 'positioning': 1
+                    })
             except Exception:
-                code_val = 0.0
-            if code_val <= 0:
+                pass
+
+        # ----------------------------
+        # CABEÇALHO (cliente / título / nº / data)
+        # ----------------------------
+        cliente_nome = (getattr(client, "nome", "") or "").upper()
+        ws.merge_range(2, 0, 2, 2, cliente_nome, fmt_cliente)            # linha 3
+        ws.merge_range(0, 3, 0, 9, "Relatório de Orçamento", fmt_title)  # título
+        ws.merge_range(1, 3, 1, 9, f"Nº Orçamento: {orc.num_orcamento or ''}_{self._format_versao(orc.versao)}", fmt_info)
+        ws.merge_range(2, 3, 2, 9, f"Data: {orc.data or ''}", fmt_date_right)
+
+        ws.merge_range(3, 0, 3, 2, getattr(client, "morada", "") or "", fmt_small)
+        ws.merge_range(4, 0, 4, 2, getattr(client, "email", "") or "", fmt_small)
+        contactos = f"Telefone: {(getattr(client,'telefone','') or '')}  |  Telemóvel: {(getattr(client,'telemovel','') or '')}"
+        ws.merge_range(5, 0, 5, 2, contactos, fmt_small)
+
+        ws.merge_range(6, 0, 6, 2, f"Ref.: {orc.ref_cliente or '-'}", wb.add_format({'bold': True, 'font_size': 12, 'font_color': azul_escuro, 'border': 0}))
+        ws.merge_range(6, 3, 6, 9, f"Obra: {orc.obra or '-'}", wb.add_format({'bold': True, 'font_size': 12, 'font_color': 'red', 'align': 'right', 'border': 0}))
+
+        # ----------------------------
+        # CABEÇALHO TABELA
+        # ----------------------------
+        headers = ["Item", "Código", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preço Unit", "Preço Total"]
+        start_row = 9
+        for col, h in enumerate(headers):
+            ws.write(start_row, col, h, fmt_header)
+
+        col_widths = [6, 12, 44, 8, 8, 8, 6, 6, 14, 16]
+        for idx, w in enumerate(col_widths):
+            ws.set_column(idx, idx, w)
+
+        # ----------------------------
+        # ESCREVER ITENS
+        # - Antes de escrever a linha definimos um formato de linha com borda (fmt_row_border)
+        # - Construímos o write_rich_string para a descrição (título + bullets)
+        # - Ajustamos a altura da linha com base no nº de linhas exibidas
+        # ----------------------------
+        row = start_row + 1
+        for item in rows:
+            # parse da descrição para linhas (usa _parse_description do mesmo ficheiro)
+            entries = self._parse_description(item.descricao)
+            # construir "linetexts" para saber quantas linhas vamos mostrar
+            text_lines = []
+            if entries:
+                # primeira linha (header)
+                text_lines.append(entries[0][1].upper())
+                for kind, text in entries[1:]:
+                    if kind == 'dash':
+                        text_lines.append(f"- {text}")
+                    elif kind == 'star':
+                        text_lines.append(f"* {text}")
+                    elif kind == 'header2':
+                        text_lines.append(text.upper())
+                    else:
+                        text_lines.append(text)
+            else:
+                text_lines = [""]
+
+            # calcular altura (cada linha ~14 pontos); base 20 para 1 linha
+            num_lines = max(1, len(text_lines))
+            line_height = max(20, 14 * num_lines)
+
+            # definir apenas a altura da linha (sem aplicar formato a toda a linha)
+            # assim evitamos que células vazias à direita apareçam com borda
+            ws.set_row(row, line_height)
+
+            # escrever Item e Código (formato com borda)
+            ws.write(row, 0, item.item, fmt_cell)
+            ws.write(row, 1, item.codigo, fmt_cell)
+
+            # Descrição -> preparar argumentos para write_rich_string
+            if not entries:
+                ws.write(row, 2, "", fmt_descr_container)
+            else:
+                # Se apenas existe o header, evita warning do xlsxwriter
+                if len(entries) == 1:
+                    ws.write(row, 2, entries[0][1].upper(), fmt_descr_titulo)
+                else:
+                    rich_args = []
+                    # 1ª entrada - título em uppercase + negrito
+                    rich_args.append(fmt_descr_titulo)
+                    rich_args.append(entries[0][1].upper())
+
+                    # restantes entradas - cada uma em nova linha com formatação
+                    for kind, text in entries[1:]:
+                        rich_args.append('\n')
+                        if kind == 'dash':
+                            rich_args.append(fmt_descr_sub)
+                            rich_args.append(f"- {text}")
+                        elif kind == 'star':
+                            rich_args.append(fmt_descr_sub)
+                            rich_args.append(f"* {text}")
+                        elif kind == 'header2':
+                            rich_args.append(fmt_descr_titulo)
+                            rich_args.append(str(text).upper())
+                        else:
+                            rich_args.append(fmt_descr_sub)
+                            rich_args.append(text)
+
+                    # escreve usando write_rich_string e garante container format (borda + wrap)
+                    try:
+                        ws.write_rich_string(row, 2, *rich_args, fmt_descr_container)
+                    except Exception:
+                        joined = "\n".join(
+                            [entries[0][1].upper()]
+                            + [("- " + t) if k == 'dash' else ("* " + t) if k == 'star' else t for k, t in entries[1:]]
+                        )
+                        ws.write(row, 2, joined, fmt_descr_container)
+
+            # Alt / Larg / Prof
+            ws.write_number(row, 3, float(item.altura) if item.altura is not None else None, fmt_cell)
+            ws.write_number(row, 4, float(item.largura) if item.largura is not None else None, fmt_cell)
+            ws.write_number(row, 5, float(item.profundidade) if item.profundidade is not None else None, fmt_cell)
+
+            # Unidade
+            ws.write(row, 6, item.unidade, fmt_cell)
+
+            # Qt / Preço Unit / Preço Total (com borda)
+            ws.write_number(row, 7, float(item.qt) if item.qt is not None else 0.0, fmt_number)
+            ws.write_number(row, 8, float(item.preco_unitario) if item.preco_unitario is not None else 0.0, fmt_money)
+            ws.write_number(row, 9, float(item.preco_total) if item.preco_total is not None else 0.0, fmt_money_bold)
+
+            row += 1
+
+        # ----------------------------
+        # TOTAIS (coluna I=8 labels, J=9 valores) - SEM bordas
+        # ----------------------------
+        totals_row = row + 1
+        total_qt = sum((item.qt or Decimal("0")) for item in rows)
+        subtotal = sum((item.preco_total or Decimal("0")) for item in rows)
+        iva = subtotal * IVA_RATE
+        total = subtotal + iva
+
+        ws.write(totals_row, 8, "Total Qt:", fmt_total_label_nb)
+        ws.write_number(totals_row, 9, float(total_qt), fmt_total_val_nb)
+
+        ws.write(totals_row + 1, 8, "SubTotal:", fmt_total_label_nb)
+        ws.write_number(totals_row + 1, 9, float(subtotal), fmt_total_val_nb)
+
+        ws.write(totals_row + 2, 8, "IVA (23%):", fmt_total_label_nb)
+        ws.write_number(totals_row + 2, 9, float(iva), fmt_total_val_nb)
+
+        ws.write(totals_row + 3, 8, "Total Geral:", fmt_total_label_nb)
+        ws.write_number(totals_row + 3, 9, float(total), fmt_money_nb)
+
+        # fechar workbook
+        wb.close()
+
+    def _export_resumo_custos(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
+        """
+        Gera 'Resumo_Custos_<num>_<ver>.xlsx' a partir do modelo MODELO_Resumo_Custos.xlsx
+        (na pasta Base Dados Orçamento) preenchendo o separador 'Resumo Geral' com os
+        registos da tabela custeio_items para este orçamento/versão.
+        """
+
+        col_order = [
+            "id",
+            "descricao_livre",
+            "def_peca",
+            "descricao",
+            "qt_total",
+            "comp_res",
+            "larg_res",
+            "esp_res",
+            "mps",
+            "mo",
+            "orla",
+            "blk",
+            "nst",
+            "mat_default",
+            "acabamento_sup",
+            "acabamento_inf",
+            "ref_le",
+            "descricao_no_orcamento",
+            "pliq",
+            "und",
+            "desp",
+            "orl_0_4",
+            "orl_1_0",
+            "tipo",
+            "familia",
+            "comp_mp",
+            "larg_mp",
+            "esp_mp",
+            "orl_c1",
+            "orl_c2",
+            "orl_l1",
+            "orl_l2",
+            "ml_orl_c1",
+            "ml_orl_c2",
+            "ml_orl_l1",
+            "ml_orl_l2",
+            "custo_orl_c1",
+            "custo_orl_c2",
+            "custo_orl_l1",
+            "custo_orl_l2",
+            "gravar_modulo",
+            "custo_total_orla",
+            "soma_total_ml_orla",
+            "area_m2_und",
+            "perimetro_und",
+            "spp_ml_und",
+            "cp01_sec",
+            "cp01_sec_und",
+            "cp02_orl",
+            "cp02_orl_und",
+            "cp03_cnc",
+            "cp03_cnc_und",
+            "cp04_abd",
+            "cp04_abd_und",
+            "cp05_prensa",
+            "cp05_prensa_und",
+            "cp06_esquad",
+            "cp06_esquad_und",
+            "cp07_embalagem",
+            "cp07_embalagem_und",
+            "cp08_mao_de_obra",
+            "cp08_mao_de_obra_und",
+            "cp09_colagem",
+            "cp09_colagem_und",
+            "custo_mp_und",
+            "custo_mp_total",
+            "soma_custo_orla_total",
+            "soma_custo_und",
+            "soma_custo_total",
+            "soma_custo_acb",
+        ]
+
+        base_dados_path = Path(self._get_setting_value(KEY_ORC_DB_BASE, DEFAULT_BASE_DADOS_ORC))
+        template_candidates = [
+            base_dados_path / "MODELO_Resumo_Custos.xlsx",
+            base_dados_path / "MODELO_Resumo_Custos_V2.xlsx",
+        ]
+        template_path = next((p for p in template_candidates if p.exists()), None)
+        if not template_path:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Resumo Custos",
+                "Modelo não encontrado (procure MODELO_Resumo_Custos.xlsx).",
+            )
+            return
+
+        nome_base = f"Resumo_Custos_{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.xlsx"
+        destino = export_dir / nome_base
+        try:
+            shutil.copyfile(template_path, destino)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao copiar modelo: {exc}")
+            return
+
+        try:
+            wb = load_workbook(destino)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Não foi possível abrir o modelo: {exc}")
+            return
+
+        ws = wb["Resumo Geral"] if "Resumo Geral" in wb.sheetnames else wb.active
+        if ws.max_row > 1:
+            ws.delete_rows(2, ws.max_row)
+        # garantimos cabeçalho com a ordem correta
+        for col_idx, name in enumerate(col_order, start=1):
+            ws.cell(row=1, column=col_idx, value=name)
+        # remove colunas excedentes do modelo antigo
+        if ws.max_column > len(col_order):
+            ws.delete_cols(len(col_order) + 1, ws.max_column - len(col_order))
+
+        try:
+            with SessionLocal() as session:
+                cust_rows = (
+                    session.query(CusteioItem)
+                    .filter(CusteioItem.orcamento_id == orc.id, CusteioItem.versao == orc.versao)
+                    .order_by(CusteioItem.ordem)
+                    .all()
+                )
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao carregar custeio: {exc}")
+            return
+
+        def _val(obj, attr):
+            v = getattr(obj, attr, None)
+            if isinstance(v, Decimal):
+                try:
+                    return float(v)
+                except Exception:
+                    return None
+            if isinstance(v, bool):
+                return 1 if v else 0
+            return v
+
+        row_idx = 2
+        for c_item in cust_rows:
+            for col_idx, attr in enumerate(col_order, start=1):
+                ws.cell(row=row_idx, column=col_idx, value=_val(c_item, attr))
+            row_idx += 1
+
+        def _orla_width_from_esp(esp_val: float) -> float:
+            """Devolve a largura de orla (mm) segundo a espessura da peça."""
+            try:
+                esp = float(esp_val)
+            except Exception:
+                return 0.0
+            if esp <= 0:
+                return 0.0
+            if esp < 20:
+                return 23.0
+            if esp < 31:
+                return 35.0
+            if esp < 40:
+                return 45.0
+            return 60.0
+
+        def _espessura_orla(ci) -> str:
+            """Determina espessura da orla a partir das colunas orl_*."""
+            for attr in ("orl_c1", "orl_c2", "orl_l1", "orl_l2"):
+                try:
+                    val = float(getattr(ci, attr, 0) or 0)
+                except Exception:
+                    val = 0
+                if val <= 0:
+                    continue
+                if val == 1:
+                    return "0.4mm"
+                if val == 2:
+                    return "1.0mm"
+                return f"{val:.1f}mm"
+            if getattr(ci, "orl_0_4", None):
+                return "0.4mm"
+            if getattr(ci, "orl_1_0", None):
+                return "1.0mm"
+            return ""
+
+        def _ref_orla(ci) -> str:
+            return (
+                getattr(ci, "orl_0_4", None)
+                or getattr(ci, "orl_1_0", None)
+                or getattr(ci, "corres_orla_0_4", None)
+                or getattr(ci, "corres_orla_1_0", None)
+                or ""
+            )
+
+        def write_table(sheet_name: str, headers: list, rows: list) -> None:
+            # cria/limpa folha e grava
+            if sheet_name in wb.sheetnames:
+                ws_out = wb[sheet_name]
+                ws_out.delete_rows(1, ws_out.max_row)
+            else:
+                ws_out = wb.create_sheet(sheet_name)
+            if not rows:
+                for col, h in enumerate(headers, start=1):
+                    ws_out.cell(row=1, column=col, value=h)
+                return
+            ws_out.append(headers)
+            for r in rows:
+                ws_out.append(r)
+
+        # ------------------- Resumo Placas -------------------
+        placas_header = [
+            "ref_le", "descricao_no_orcamento", "pliq", "und", "desp",
+            "comp_mp", "larg_mp", "esp_mp", "qt_placas_utilizadas",
+            "area_placa", "m2_consumidos", "m2_total_pecas",
+            "custo_mp_total", "custo_placas_utilizadas", "nao_stock",
+        ]
+        placas_map: dict[tuple, dict] = {}
+        for c_item in cust_rows:
+            und = (c_item.und or "").upper()
+            if und != "M2":
                 continue
-            esp_descr = "1.0mm" if code_val >= 0.9 else "0.4mm"
-            ref_orl = ref_map.get(2 if code_val >= 0.9 else 1) or ""
-            if not ref_orl:
+            comp_mp = float(c_item.comp_mp or 0)
+            larg_mp = float(c_item.larg_mp or 0)
+            desp = float(c_item.desp or 0)
+            qt_total = float(c_item.qt_total or 0)
+            pliq = float(c_item.pliq or 0)
+            area_placa = (comp_mp / 1000.0) * (larg_mp / 1000.0) if comp_mp and larg_mp else 0
+            m2_total_pecas = float(c_item.area_m2_und or 0) * qt_total
+            m2_consumidos = m2_total_pecas * (1 + desp)
+            ratio = area_placa and m2_consumidos / area_placa or 0
+            qt_placas = int(ratio) if ratio.is_integer() else int(ratio) + 1
+            custo_placas_utilizadas = qt_placas * area_placa * pliq
+
+            key = (c_item.ref_le, c_item.descricao_no_orcamento)
+            if key not in placas_map:
+                placas_map[key] = {
+                    "ref_le": c_item.ref_le,
+                    "descricao_no_orcamento": c_item.descricao_no_orcamento,
+                    "pliq": pliq,
+                    "und": und,
+                    "desp": desp,
+                    "comp_mp": comp_mp,
+                    "larg_mp": larg_mp,
+                    "esp_mp": float(c_item.esp_mp or 0),
+                    "qt_placas_utilizadas": 0.0,
+                    "area_placa": area_placa,
+                    "m2_consumidos": 0.0,
+                    "m2_total_pecas": 0.0,
+                    "custo_mp_total": 0.0,
+                    "custo_placas_utilizadas": 0.0,
+                    "nao_stock": "",
+                }
+            placas_map[key]["qt_placas_utilizadas"] += qt_placas
+            placas_map[key]["m2_consumidos"] += m2_consumidos
+            placas_map[key]["m2_total_pecas"] += m2_total_pecas
+            placas_map[key]["custo_mp_total"] += float(c_item.custo_mp_total or 0)
+            placas_map[key]["custo_placas_utilizadas"] += custo_placas_utilizadas
+
+        placas_rows = [
+            [
+                v["ref_le"],
+                v["descricao_no_orcamento"],
+                v["pliq"],
+                v["und"],
+                v["desp"],
+                v["comp_mp"],
+                v["larg_mp"],
+                v["esp_mp"],
+                int(v["qt_placas_utilizadas"]),
+                round(v["area_placa"], 3),
+                round(v["m2_consumidos"], 3),
+                round(v["m2_total_pecas"], 3),
+                round(v["custo_mp_total"], 2),
+                round(v["custo_placas_utilizadas"], 2),
+                v["nao_stock"],
+            ]
+            for v in placas_map.values()
+        ]
+        write_table("Resumo Placas", placas_header, placas_rows)
+
+        # ------------------- Resumo Orlas -------------------
+        orlas_header = ["ref_orla", "descricao_material", "espessura_orla", "largura_orla", "ml_total", "custo_total"]
+        orlas_map: dict[tuple, dict] = {}
+        for c_item in cust_rows:
+            qt_total = float(c_item.qt_total or 0)
+            largura_orla = _orla_width_from_esp(getattr(c_item, "esp_res", None) or getattr(c_item, "esp_mp", None))
+
+            ref_map = {
+                1: getattr(c_item, "orl_0_4", None) or getattr(c_item, "corres_orla_0_4", None) or "",
+                2: getattr(c_item, "orl_1_0", None) or getattr(c_item, "corres_orla_1_0", None) or "",
+            }
+            sides = [
+                (getattr(c_item, "orl_c1", 0), getattr(c_item, "ml_orl_c1", 0), getattr(c_item, "custo_orl_c1", 0)),
+                (getattr(c_item, "orl_c2", 0), getattr(c_item, "ml_orl_c2", 0), getattr(c_item, "custo_orl_c2", 0)),
+                (getattr(c_item, "orl_l1", 0), getattr(c_item, "ml_orl_l1", 0), getattr(c_item, "custo_orl_l1", 0)),
+                (getattr(c_item, "orl_l2", 0), getattr(c_item, "ml_orl_l2", 0), getattr(c_item, "custo_orl_l2", 0)),
+            ]
+
+            for code_raw, ml_raw, custo_raw in sides:
+                try:
+                    code_val = float(code_raw or 0)
+                except Exception:
+                    code_val = 0.0
+                if code_val <= 0:
+                    continue  # sem orla neste lado
+
+                # código 0.4 -> orla fina; código 1 -> orla grossa (1mm)
+                if code_val >= 0.9:
+                    code = 2  # grossa 1.0mm
+                    esp_descr = "1.0mm"
+                else:
+                    code = 1  # fina 0.4mm
+                    esp_descr = "0.4mm"
+
+                ref_orl = ref_map.get(code) or ""
+                if not ref_orl:
+                    continue
+
+                ml_val = float(ml_raw or 0) * qt_total
+                custo_val = float(custo_raw or 0) * qt_total
+                if ml_val == 0 and custo_val == 0:
+                    continue
+
+                key = (ref_orl, c_item.descricao_no_orcamento, esp_descr)
+                if key not in orlas_map:
+                    orlas_map[key] = {
+                        "ref_orla": ref_orl,
+                        "descricao_material": c_item.descricao_no_orcamento,
+                        "espessura_orla": esp_descr,
+                        "largura_orla": largura_orla,
+                        "ml_total": 0.0,
+                        "custo_total": 0.0,
+                    }
+                orlas_map[key]["ml_total"] += ml_val
+                orlas_map[key]["custo_total"] += custo_val
+
+        orlas_rows = [
+            [
+                v["ref_orla"],
+                v["descricao_material"],
+                v["espessura_orla"],
+                v["largura_orla"],
+                round(v["ml_total"], 2),
+                round(v["custo_total"], 2),
+            ]
+            for v in orlas_map.values()
+        ]
+        write_table("Resumo Orlas", orlas_header, orlas_rows)
+
+        # ------------------- Resumo Ferragens -------------------
+        ferr_header = ["ref_le", "descricao_no_orcamento", "pliq", "und", "desp", "comp_mp", "larg_mp", "esp_mp", "qt_total", "spp_ml_total", "custo_mp_und", "custo_mp_total"]
+        ferr_map: dict[tuple, dict] = {}
+        for c_item in cust_rows:
+            ref = (c_item.ref_le or "").upper()
+            if not ref.startswith("FER"):
                 continue
-            ml_val = float(ml_raw or 0) * qt_total
-            custo_val = float(custo_raw or 0) * qt_total
-            if ml_val == 0 and custo_val == 0:
-                continue
-            ws_resumo_orlas.append([ref_orl, c_item.descricao_no_orcamento, esp_descr, largura_orla, ml_val, custo_val])
+            key = (c_item.ref_le, c_item.descricao_no_orcamento)
+            qt_total = float(c_item.qt_total or 0)
+            spp_ml_total = float(c_item.spp_ml_und or 0) * qt_total
+            if key not in ferr_map:
+                ferr_map[key] = {
+                    "ref_le": c_item.ref_le,
+                    "descricao_no_orcamento": c_item.descricao_no_orcamento,
+                    "pliq": float(c_item.pliq or 0),
+                    "und": c_item.und,
+                    "desp": float(c_item.desp or 0),
+                    "comp_mp": float(c_item.comp_mp or 0),
+                    "larg_mp": float(c_item.larg_mp or 0),
+                    "esp_mp": float(c_item.esp_mp or 0),
+                    "qt_total": 0.0,
+                    "spp_ml_total": 0.0,
+                    "custo_mp_und": float(c_item.custo_mp_und or 0),
+                    "custo_mp_total": 0.0,
+                }
+            ferr_map[key]["qt_total"] += qt_total
+            ferr_map[key]["spp_ml_total"] += spp_ml_total
+            ferr_map[key]["custo_mp_total"] += float(c_item.custo_mp_total or 0)
 
-    try:
-        wb.save(destino)
-    except Exception as exc:
-        QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao guardar: {exc}")
-        return
+        ferr_rows = [
+            [
+                v["ref_le"],
+                v["descricao_no_orcamento"],
+                v["pliq"],
+                v["und"],
+                v["desp"],
+                v["comp_mp"],
+                v["larg_mp"],
+                v["esp_mp"],
+                round(v["qt_total"], 2),
+                round(v["spp_ml_total"], 2),
+                v["custo_mp_und"],
+                round(v["custo_mp_total"], 2),
+            ]
+            for v in ferr_map.values()
+        ]
+        write_table("Resumo Ferragens", ferr_header, ferr_rows)
 
-# Salvaguarda: adiciona métodos ausentes para evitar que a página quebre
-def _ensure_relatorios_methods():
-    cls = RelatoriosPage
-    # Já existem implementações reais; apenas mantemos stub se ausente.
-    if not hasattr(cls, "export_to_excel"):
-        def export_to_excel(self) -> None:
-            QtWidgets.QMessageBox.information(self, "Exportar Excel", "Funcionalidade indisponível.")
-        cls.export_to_excel = export_to_excel  # type: ignore[attr-defined]
+        # ------------------- Resumo Maquinas_MO -------------------
+        maq_rows = []
+        maq_header = ["Operação", "Custo Total (€)", "ML Corte", "ML Orlado", "Nº Peças"]
+        # custos por tipo
+        def get_cost(filter_attr):
+            return sum(float(getattr(ci, f"{filter_attr}_und") or 0) * float(ci.qt_total or 0) for ci in cust_rows if getattr(ci, filter_attr) and float(getattr(ci, filter_attr) or 0) > 0)
+        def get_ml_corte():
+            total = 0.0
+            for ci in cust_rows:
+                if float(ci.cp01_sec or 0) <= 0:
+                    continue
+                total += ((float(ci.comp_res or 0) * 2 + float(ci.larg_res or 0) * 2) * float(ci.qt_total or 0)) / 1000.0
+            return round(total, 2)
+        def get_ml_orla():
+            total = 0.0
+            for ci in cust_rows:
+                if float(ci.cp02_orl or 0) <= 0:
+                    continue
+                total += sum(float(x or 0) for x in [getattr(ci, "ml_orl_c1", 0), getattr(ci, "ml_orl_c2", 0), getattr(ci, "ml_orl_l1", 0), getattr(ci, "ml_orl_l2", 0)]) * float(ci.qt_total or 0)
+            return round(total, 2)
+        maq_rows.append(["Seccionadora (Corte)", round(get_cost("cp01_sec"), 2), get_ml_corte(), "", int(sum(float(ci.qt_total or 0) for ci in cust_rows if float(ci.cp01_sec or 0) > 0))])
+        maq_rows.append(["Orladora (Orlagem)", round(get_cost("cp02_orl"), 2), "", get_ml_orla(), int(sum(float(ci.qt_total or 0) for ci in cust_rows if float(ci.cp02_orl or 0) > 0))])
+        maq_rows.append(["CNC (Mecanizações)", round(get_cost("cp03_cnc"), 2), "", "", int(sum(float(ci.qt_total or 0) for ci in cust_rows if float(ci.cp03_cnc or 0) > 0))])
+        maq_rows.append(["ABD (Mecanizações)", round(get_cost("cp04_abd"), 2), "", "", int(sum(float(ci.qt_total or 0) for ci in cust_rows if float(ci.cp04_abd or 0) > 0))])
+        maq_rows.append(["Prensa (Montagem)", round(get_cost("cp05_prensa"), 2), "", "", ""])
+        maq_rows.append(["Esquadrejadora (Cortes Manuais)", round(get_cost("cp06_esquad"), 2), "", "", ""])
+        maq_rows.append(["Embalamento (Paletização)", round(get_cost("cp07_embalagem"), 2), "", "", ""])
+        maq_rows.append(["Mão de Obra (MO geral)", round(get_cost("cp08_mao_de_obra"), 2), "", "", ""])
+        write_table("Resumo Maquinas_MO", maq_header, maq_rows)
 
-    if not hasattr(cls, "export_to_pdf"):
-        def export_to_pdf(self) -> None:
-            QtWidgets.QMessageBox.information(self, "Exportar PDF", "Funcionalidade indisponível.")
-        cls.export_to_pdf = export_to_pdf  # type: ignore[attr-defined]
+        try:
+            wb.save(destino)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "Resumo Custos", f"Falha ao gravar resumo: {exc}")
 
 
-_ensure_relatorios_methods()
+    def _apply_description_to_cell(self, cell, text: Optional[str]) -> None:
+        """
+        Aplica a descrição na célula de Excel usando RichText:
+        - 1ª linha (header/header2) em MAIÚSCULAS e a negrito
+        - linhas que começam por '-' ou '*' em nova linha (ALT+ENTER)
+        com um ligeiro "TAB" (4 espaços antes do símbolo) e em itálico
+        """
+        entries = self._parse_description(text)
+        if not entries:
+            cell.value = ""
+            return
+
+        rich = CellRichText()
+        for idx, (kind, content) in enumerate(entries):
+            # ALT+ENTER entre cada bloco (mantém tudo na mesma célula)
+            if idx > 0:
+                rich.append(TextBlock(text="\n", font=InlineFont()))
+
+            if kind in ("header", "header2"):
+                # título em maiúsculas + negrito
+                rich.append(TextBlock(text=content.upper(), font=InlineFont(b=True)))
+            elif kind == "dash":
+                # 4 espaços para simular TAB antes do '-'; texto em itálico
+                rich.append(TextBlock(text=f"    - {content}", font=InlineFont(i=True)))
+            elif kind == "star":
+                # 4 espaços p/ simular TAB antes do '*'; texto em itálico
+                rich.append(TextBlock(text=f"    * {content}", font=InlineFont(i=True)))
+            else:
+                rich.append(TextBlock(text=content, font=InlineFont()))
+
+        cell.value = rich
+        cell.alignment = Alignment(vertical="top", horizontal="left", wrap_text=True)
+
+    def _build_pdf(self, output_path: Path) -> None:
+        """
+        Gera o PDF do orçamento com layout ajustado:
+        - margens em mm coerentes com as colWidths
+        - colunas redesenhadas (descrição maior)
+        - fontes e paddings ajustados para caber melhor na tabela
+        - totais alinhados mais à direita
+        """
+        client = self._current_client
+        orc = self._current_orcamento
+        rows = self._current_items
+        if not orc:
+            raise ValueError("Nenhum orçamento disponível.")
+
+        # --------------------------
+        # Parâmetros de layout (fáceis de ajustar)
+        # --------------------------
+        left_margin = 5 * mm        # margem esquerda (mm -> pontos)
+        right_margin = 5 * mm       # margem direita
+        top_margin = 1 * mm
+        bottom_margin = 1 * mm # margem inferior pequena para rodapé mais baixo
+
+        # Tamanhos de fontes e leading
+        HEADER_FONT_SIZE = 16
+        HEADER_TABLE_FONTSIZE = 9   # <--- reduzido (cabeçalho da tabela)
+        BODY_FONTSIZE = 9
+        DESC_LEADING = 11
+
+        # col_widths em mm que somam a largura útil da página:
+        # A4 = 210 mm, largura útil = 210 - left - right
+        # 210 - 5 - 5 = 200 mm
+        # ajuste: descrição maior (80 mm) para caber melhor
+        col_widths_mm = [9, 20, 80, 10, 11, 11, 11, 11, 18, 19]  # soma = 200 mm
+        # converter para pontos (reportlab usa pontos internamente)
+        col_widths = [w * mm for w in col_widths_mm]
+
+        # --------------------------
+        # Styles
+        # --------------------------
+        styles = getSampleStyleSheet()
+        # info_style mais compacto para poupar espaço vertical
+        info_style = ParagraphStyle("info", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
+        header_style = ParagraphStyle("header", parent=styles["Heading1"], alignment=2, fontSize=HEADER_FONT_SIZE, textColor=colors.HexColor("#133a63"))
+        desc_style = ParagraphStyle("desc", parent=styles["Normal"], fontSize=BODY_FONTSIZE, leading=DESC_LEADING, spaceAfter=2)
+        price_style = ParagraphStyle("price", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+
+        # -------------------------------------------------------------------------------------
+        # Criar o doc (precisamos do doc para obter doc.width/doc.height antes de construir story)
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            topMargin=top_margin,
+            bottomMargin=bottom_margin,
+            leftMargin=left_margin,
+            rightMargin=right_margin,
+        )
+
+        # ------------------------------------------------------------------
+        # Header: left_table (cliente) e right_table (titulo + nº/data)
+        # ------------------------------------------------------------------
+        left_elements: List = []
+        logo_path = self._resolve_logo_path()
+        if logo_path:
+            try:
+                img = Image(str(logo_path))
+                img.drawHeight = 10 * mm
+                img.drawWidth = 32 * mm
+                left_elements.append([img])
+            except Exception:
+                pass
+
+        client_name = getattr(client, "nome", "") or ""
+        contact_lines = [
+            getattr(client, "morada", "") or "",
+            getattr(client, "email", "") or "",
+            f"Telefone: {getattr(client, 'telefone', '') or ''} | Telemóvel: {getattr(client, 'telemovel', '') or ''} | N.º cliente PHC: {getattr(client, 'num_cliente_phc', '') or ''}",
+        ]
+        left_elements.append([Paragraph(f"<font size=12><b>{client_name}</b></font>", info_style)])
+        left_elements.append([Paragraph("<br/>".join(filter(None, contact_lines)), info_style)])
+        left_table = Table(left_elements, colWidths=[80 * mm])
+        left_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ('LEFTPADDING', (0, 0), (-1, -1), -8 * mm),
+        ]))
+
+        right_title = Paragraph("<font color='#103864' size=16><b>Relatório de Orçamento</b></font>", header_style)
+        right_info = Paragraph(
+            f"<font size=12>Nº Orçamento: <b>{orc.num_orcamento or ''}_{self._format_versao(orc.versao)}</b></font><br/>"
+            f"<font color='#5f6368'>Data: {orc.data or ''}</font>",
+            info_style,
+        )
+        right_table = Table([[right_title], [Spacer(1, 3 * mm)], [right_info]], colWidths=[80 * mm])
+        right_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 15),
+        ]))
+
+        header_table = Table([[left_table, right_table]], colWidths=[100 * mm, 80 * mm])
+        header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+        # ref / obra
+        ref_para = Paragraph(f"<font color='#0a4ea1' size=12><b>Ref.: {orc.ref_cliente or '-'} </b></font>", info_style)
+        obra_para = Paragraph(f"<font color='#d4111f' size=12><b>Obra: {orc.obra or '-'}</b></font>", ParagraphStyle("obra", parent=info_style, alignment=2))
+        ref_table = Table([[ref_para, obra_para]], colWidths=[98 * mm, 76 * mm])
+        ref_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (0, -1), -10 * mm),
+            ("LEFTPADDING", (1, 0), (1, 0), -30),
+            ("ALIGN", (1, 0), (1, 0), "LEFT"),
+        ]))
+
+        # ------------------------------------------------------------------
+        # Construir a tabela de items (mas ainda NÃO a adicionamos ao story)
+        # ------------------------------------------------------------------
+        headers = ["Item", "Código", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preço Unit", "Preço Total"]
+        data = [headers]
+        for item in rows:
+            desc_para = Paragraph(self._format_description_pdf(item.descricao), desc_style)
+            data.append([
+                item.item, item.codigo, desc_para,
+                _fmt_decimal(item.altura, 0), _fmt_decimal(item.largura, 0), _fmt_decimal(item.profundidade, 0),
+                item.unidade, _fmt_decimal(item.qt, 2), _fmt_currency(item.preco_unitario),
+                Paragraph(f"<b>{_fmt_currency(item.preco_total)}</b>", price_style),
+            ])
+
+        # paddings iniciais (vamos poder reduzir dinamicamente)
+        pad_left = 3
+        pad_right = 4
+        pad_top = 2
+        pad_bottom = 2
+
+        def make_table_style(pl=pad_left, pr=pad_right, pt=pad_top, pb=pad_bottom):
+            style = TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#d7dce2")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), HEADER_TABLE_FONTSIZE),
+                ("FONTSIZE", (0, 1), (-1, -1), BODY_FONTSIZE),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("VALIGN", (0, 1), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), pl),
+                ("RIGHTPADDING", (0, 0), (-1, -1), pr),
+                ("TOPPADDING", (0, 0), (-1, -1), pt),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), pb),
+                ("ALIGN", (3, 1), (5, -1), "CENTER"),
+                ("ALIGN", (7, 1), (8, -1), "RIGHT"),
+                ("ALIGN", (9, 1), (9, -1), "RIGHT"),
+            ])
+            return style
+
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(make_table_style())
+
+        # ------------------------------------------------------------------
+        # Resumo / totais (SubTotal: com colon conforme pediste)
+        # ------------------------------------------------------------------
+        total_qt = sum((item.qt or Decimal("0")) for item in rows)
+        subtotal = sum((item.preco_total or Decimal("0")) for item in rows)
+        iva = subtotal * IVA_RATE
+        total = subtotal + iva
+
+        # estilos para labels (right) e valores (right)
+        label_right = ParagraphStyle("label_right", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+        value_right = ParagraphStyle("value_right", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+
+        # construir summary com Paragraphs — evita que HTML apareça em texto cru
+        summary_col1 = 18 * mm
+        summary_col2 = 30 * mm
+
+        summary_table = Table(
+            [
+                [Paragraph("Total Qt.:", label_right), Paragraph(f"<b>{_fmt_decimal(total_qt, 2)}</b>", value_right)],
+                [Paragraph("<font color='#0a2b6d'><b>SubTotal:</b></font>", label_right), Paragraph(f"<b>{_fmt_currency(subtotal)}</b>", value_right)],
+                [Paragraph("IVA (23%):", label_right), Paragraph(f"{_fmt_currency(iva)}", value_right)],
+                [Paragraph("Total Geral:", label_right), Paragraph(f"<b>{_fmt_currency(total)}</b>", value_right)],
+            ],
+            colWidths=[summary_col1, summary_col2],
+        )
+
+        # estilo para summary: alinhar tudo à direita, paddings reduzidos, box só no SUBTOTAL VALOR
+        summary_table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 1),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),  # garantir valores bem encostados à direita
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("BOX", (1, 1), (1, 1), 1, colors.HexColor("#1d2f6f")),
+                    ("BACKGROUND", (1, 1), (1, 1), colors.HexColor("#dfe5f2")),
+                ]
+            )
+        )
+        summary_table.hAlign = "RIGHT"
+
+        # Posicionar o summary exactamente à direita (push_right controla o "encaixe")
+        page_width, _ = A4
+        usable_width = page_width - left_margin - right_margin
+        summary_width = summary_col1 + summary_col2
+        left_space = usable_width - summary_width
+        push_right = 12 * mm   # podes ajustar (aumenta este valor para encostar mais)
+        left_space = max(0, left_space - push_right)
+
+        container = Table([[ "", summary_table ]], colWidths=[left_space, summary_width])
+        container.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (0, 0), 0),
+                    ("RIGHTPADDING", (0, 0), (0, 0), 0),
+                    ("LEFTPADDING", (1, 0), (1, 0), 0),
+                    ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ]
+            )
+        )
+
+        # -------------------------------------------------------------------------------------
+        #   Checagem de alturas: se tudo couber numa página, adicionamos; se faltar pouco,
+        #   reduzimos paddings da tabela para forçar a caber numa página (evita página em branco).
+        # -------------------------------------------------------------------------------------
+        # obter alturas com wrap
+        page_w = doc.width
+        page_h = doc.height
+
+        # calcular alturas dos blocos
+        h_header = header_table.wrap(page_w, page_h)[1]
+        h_ref = ref_table.wrap(page_w, page_h)[1]
+        # pequeno spacer antes da tabela (6 pts)
+        spacer1 = 6
+        # obter altura da tabela com paddings actuais
+        table_h = table.wrap(page_w, page_h)[1]
+        # summary height
+        summary_h = container.wrap(page_w, page_h)[1]
+        total_needed = h_header + h_ref + spacer1 + table_h + spacer1 + summary_h
+
+        # Se excede a página por poucos pontos, vamos reduzir os paddings gradualmente
+        max_iterations = 6
+        iter_count = 0
+        # versão mais agressiva para reduzir paddings e forçar caber numa página
+        max_iterations = 12
+        iter_count = 0
+        # reduzir em 1–2 pontos por iteração até um limite
+        while total_needed > page_h and iter_count < max_iterations:
+            pad_left = max(0, pad_left - 2)
+            pad_right = max(0, pad_right - 2)
+            pad_top = max(0, pad_top - 1)
+            pad_bottom = max(0, pad_bottom - 1)
+            table.setStyle(make_table_style(pl=pad_left, pr=pad_right, pt=pad_top, pb=pad_bottom))
+            table_h = table.wrap(page_w, page_h)[1]
+            total_needed = h_header + h_ref + spacer1 + table_h + spacer1 + summary_h
+            iter_count += 1
+
+        # Se continuar a ser maior que a página, deixamos partir em 2 páginas (cenário com muitos itens)
+        # Agora construímos o story definitivo.
+        story: List = []
+        story.append(header_table)
+        story.append(ref_table)
+        story.append(Spacer(1, 6))
+        story.append(table)
+        story.append(Spacer(1, 6))
+        story.append(container)
+
+        # -------------------------------------------------------------------------------------
+        # Construir documento com NumberedFooterCanvas (mantém rodapé com página X/Y)
+        # -------------------------------------------------------------------------------------
+        footer_info = {"data": orc.data or "", "numero": f"{orc.num_orcamento or ''}_{self._format_versao(orc.versao)}"}
+        doc.build(story, canvasmaker=lambda *args, **kwargs: NumberedFooterCanvas(*args, footer_info=footer_info, **kwargs))
+
+
+    def _format_description_pdf(self, text: Optional[str]) -> str:
+        entries = self._parse_description(text)
+        if not entries:
+            return ""
+        parts: List[str] = []
+        for kind, content in entries:
+            safe = html.escape(content)
+            if kind in ("header", "header2"):
+                parts.append(f"<b>{safe.upper()}</b>")
+            elif kind == "dash":
+                parts.append(f"<i>- {safe}</i>")
+            elif kind == "star":
+                parts.append(f"<i><u><font color='#0a5c0a'>* {safe}</font></u></i>")
+            else:
+                parts.append(safe)
+        return "<br/>".join(parts)
+
+    @staticmethod
+    def _format_versao(value: Optional[str]) -> str:
+        if value in (None, ""):
+            return "00"
+        try:
+            return f"{int(str(value)) :02d}"
+        except Exception:
+            return str(value)
+
+    @staticmethod
+    def _decimal_value(value: Optional[Decimal]) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except Exception:
+            return None

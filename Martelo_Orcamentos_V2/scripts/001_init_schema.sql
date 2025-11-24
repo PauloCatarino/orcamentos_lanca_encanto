@@ -17,6 +17,8 @@ DROP TABLE IF EXISTS dados_items_ferragens;
 DROP TABLE IF EXISTS dados_items_modelo_items;\r\nDROP TABLE IF EXISTS dados_items_modelos;\r\nDROP TABLE IF EXISTS dados_items_materiais;
 DROP TABLE IF EXISTS dados_def_pecas;
 DROP TABLE IF EXISTS dados_modulo_medidas;
+DROP TABLE IF EXISTS custeio_modulo_linhas;
+DROP TABLE IF EXISTS custeio_modulos;
 
 -- 2) Itens e orçamentos (filhas antes do pai)
 DROP TABLE IF EXISTS orcamento_items;
@@ -170,6 +172,31 @@ CREATE TABLE IF NOT EXISTS dados_modulo_medidas (
   INDEX ix_medidas_item (id_item_fk)
 ) ENGINE=InnoDB;
 
+-- MODULOS DE CUSTEIO
+CREATE TABLE IF NOT EXISTS custeio_modulos (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(255) NOT NULL,
+  descricao LONGTEXT,
+  imagem_path VARCHAR(1024),
+  is_global TINYINT(1) NOT NULL DEFAULT 0,
+  user_id BIGINT NULL,
+  extras JSON,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX ix_modulos_user (user_id),
+  CONSTRAINT fk_modulos_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS custeio_modulo_linhas (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  modulo_id BIGINT NOT NULL,
+  ordem INT NOT NULL DEFAULT 0,
+  dados JSON NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX ix_modulo_linhas_mod (modulo_id),
+  CONSTRAINT fk_modulo_linhas_mod FOREIGN KEY (modulo_id) REFERENCES custeio_modulos(id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
 -- DEF PEÇAS
 CREATE TABLE IF NOT EXISTS dados_def_pecas (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -448,3 +475,4 @@ CREATE TABLE IF NOT EXISTS materia_prima_preferences (
   CONSTRAINT fk_mpp_user FOREIGN KEY (user_id)
     REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+

@@ -1,0 +1,260 @@
+from __future__ import annotations
+
+from functools import partial
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+import json
+import logging
+
+from PySide6 import QtCore, QtWidgets, QtGui
+
+from Martelo_Orcamentos_V2.app.models import OrcamentoItem
+from sqlalchemy.orm import Session
+from Martelo_Orcamentos_V2.app.services import dados_items as svc_di
+from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
+from Martelo_Orcamentos_V2.app.services import materias_primas as svc_mp
+from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
+
+from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
+from ..utils.header import apply_highlight_text, init_highlight_label
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_rows_from_payload(
+    origin: str,
+    payload: Optional[Mapping[str, Any]],
+    menu: str,
+) -> List[Dict[str, Any]]:
+    rows: Sequence[Mapping[str, Any]] = []
+
+    if not payload:
+        return []
+
+    if origin == "global":
+        candidate = payload.get("linhas")
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            rows = [row for row in candidate if isinstance(row, Mapping)]
+        else:
+            candidate = payload.get(menu)
+            if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+                rows = [row for row in candidate if isinstance(row, Mapping)]
+    else:
+        candidate = payload.get(menu, [])
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            rows = [row for row in candidate if isinstance(row, Mapping)]
+
+    return [dict(row) for row in rows]
+
+
+class DadosItemsPage(DadosGeraisPage):
+    def __init__(self, parent=None, current_user=None):
+        super().__init__(
+            parent=parent,
+            current_user=current_user,
+            svc_module=svc_di,
+            page_title="Dados Items",
+            save_button_text="Guardar Dados Items",
+            import_button_text="Importar Dados Items",
+            import_multi_button_text="Importar Multi Dados Items",
+        )
+        self._setup_item_header()
+        self.current_orcamento_id: Optional[int] = None
+        self.current_item_id: Optional[int] = None
+
+    def _setup_item_header(self) -> None:
+        grid = getattr(self, "_header_grid", None)
+        if not isinstance(grid, QtWidgets.QGridLayout):
+            return
+
+        column_span = max(1, grid.columnCount())
+
+        if not hasattr(self, "lbl_highlight"):
+            self.lbl_highlight = QtWidgets.QLabel("")
+            init_highlight_label(self.lbl_highlight)
+        grid.addWidget(self.lbl_highlight, 1, 0, 1, column_span)
+
+        self.lbl_item_description = QtWidgets.QLabel("-")
+        self.lbl_item_description.setWordWrap(True)
+        self.lbl_item_description.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+
+        grid.addWidget(self.lbl_item_description, 2, 0, 1, column_span)
+
+        if self._dimensions_layout is not None:
+            grid.removeItem(self._dimensions_layout)
+            grid.addLayout(self._dimensions_layout, 3, 0, 1, column_span)
+
+        if self._info_pairs_layout is not None:
+            grid.removeItem(self._info_pairs_layout)
+            grid.addLayout(self._info_pairs_layout, 4, 0, 1, column_span)
+            self._info_pairs_layout.setSpacing(18)
+
+        captions = (self._dimension_labels or {}).get("captions", [])
+        if len(captions) >= 3:
+            captions[0].setText("Comp:")
+            captions[1].setText("Largura:")
+            captions[2].setText("Profundidade:")
+
+    # ------------------------------------------------------------------ Matérias-primas merge
+    def _merge_with_materias_primas(self, rows: List[Dict[str, Any]], menu: str) -> List[Dict[str, Any]]:
+        """
+        Preenche campos faltantes a partir de materias_primas (match por ref_le).
+        Se houver conflito (modelo vs MP), apresenta dialogo para o utilizador decidir.
+        """
+        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp", "nao_stock"}
+        compare_fields = ["ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und"]
+        conflicts: Dict[int, Dict[str, Any]] = {}
+        merged: List[Dict[str, Any]] = []
+        mp_cache: Dict[int, Any] = {}
+
+        def _fmt_one_dec(val: Any):
+            try:
+                from decimal import Decimal
+                return float(Decimal(str(val)).quantize(Decimal("0.1")))
+            except Exception:
+                try:
+                    return round(float(val), 1)
+                except Exception:
+                    return val
+
+        def _norm(val: Any) -> Any:
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            return str(val).strip()
+
+        for idx, row in enumerate(rows):
+            new_row = dict(row)
+            ref_le = (new_row.get("ref_le") or "").strip()
+            mp = svc_mp.get_materia_prima_by_ref_le(self.session, ref_le) if ref_le else None
+            if mp:
+                mp_cache[idx] = mp
+                for field in fill_fields:
+                    mp_val = getattr(mp, field, None)
+                    if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                        mp_val = _fmt_one_dec(mp_val)
+                    if mp_val is None:
+                        continue
+                    if new_row.get(field) in (None, ""):
+                        new_row[field] = mp_val
+
+                model_subset = {f: new_row.get(f) for f in compare_fields}
+                mp_subset = {f: getattr(mp, f, None) for f in compare_fields}
+                if any(_norm(model_subset.get(f)) != _norm(mp_subset.get(f)) for f in compare_fields):
+                    conflicts[idx] = {"model": model_subset, "mp": mp_subset}
+            merged.append(new_row)
+
+        if conflicts:
+            dialog = MateriaPrimaConflictDialog(conflicts, parent=self)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                choices = dialog.selected_sources()
+                for row_idx, use_mp in choices.items():
+                    if not (0 <= row_idx < len(merged)):
+                        continue
+                    mp = mp_cache.get(row_idx)
+                    if not mp:
+                        continue
+                    mp_subset = conflicts[row_idx]["mp"]
+                    if use_mp:
+                        for field, val in mp_subset.items():
+                            merged[row_idx][field] = val
+                        for field in fill_fields:
+                            mp_val = getattr(mp, field, merged[row_idx].get(field))
+                            if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                                mp_val = _fmt_one_dec(mp_val)
+                            merged[row_idx][field] = mp_val
+
+        return merged
+
+# ------------------------------------------------------------------ Import override (usar ordenação fixa)
+    def _apply_imported_rows(self, key: str, rows: Sequence[Mapping[str, Any]], *, replace: bool) -> None:  # type: ignore[override]
+        model = self.models[key]
+        prepared_rows = [dict(r) for r in rows if isinstance(r, Mapping)]
+        if not prepared_rows:
+            return
+
+        if replace:
+            existing_rows = model.export_rows()
+            merged: List[Dict[str, Any]] = []
+            for idx, base in enumerate(existing_rows):
+                incoming = prepared_rows[idx] if idx < len(prepared_rows) else {}
+                merged_row = dict(base or {})
+                for k, v in incoming.items():
+                    if v in (None, ""):
+                        # preserva tipo/familia/não stock existentes se o modelo trouxer vazio
+                        if k in {"tipo", "familia"}:
+                            continue
+                    merged_row[k] = v
+                merged.append(merged_row)
+
+            merged = self._merge_with_materias_primas(merged, key)
+            model.load_rows(merged)
+            if hasattr(model, "_reindex"):
+                try:
+                    model._reindex()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            if hasattr(model, "recalculate"):
+                for idx in range(model.rowCount()):
+                    try:
+                        model.recalculate(idx)  # type: ignore[attr-defined]
+                    except Exception:
+                        continue
+            else:
+                self._recalculate_menu_rows(key)
+            return
+
+        # Caso mesclar, reconciliamos antes de delegar para lógica base
+        prepared_rows = self._merge_with_materias_primas(prepared_rows, key)
+        return super()._apply_imported_rows(key, prepared_rows, replace=replace)
+
+    # ------------------------------------------------------------------ Integration
+    def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
+        logger.debug("DadosItems.load_item orcamento_id=%s item_id=%s", orcamento_id, item_id)
+        self.current_orcamento_id = orcamento_id
+        normalized_item_id = item_id
+        if item_id is not None:
+            try:
+                normalized_item_id = int(item_id)
+            except (TypeError, ValueError):
+                normalized_item_id = item_id
+            try:
+                self.session.flush()
+            except Exception:
+                pass
+            try:
+                self.session.expire_all()
+            except Exception:
+                pass
+        logger.debug("DadosItems.load_item normalized_item_id=%s", normalized_item_id)
+        self.current_item_id = normalized_item_id
+
+        try:
+            self.session.rollback()
+        except Exception:
+            pass
+
+        if not normalized_item_id:
+            self.context = None
+            self._reset_tables()
+            self.lbl_title.setText(self.page_title)
+            self.lbl_item_description.setText("-")
+            self._update_dimensions_labels(visible=False)
+            self._update_highlight_banner()
+            return
+
+        try:
+            logger.debug("DadosItems.load_item calling super.load_orcamento with item_id=%s", normalized_item_id)
+            super().load_orcamento(orcamento_id, item_id=normalized_item_id)
+        except Exception as exc:  # pragma: no cover - UI feedback
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar Dados Items: {exc}")
+            self._reset_tables()
+            self._update_dimensions_labels(visible=False)
+            return
+
+        self._update_item_header(item_id)
+        self._update_highlight_banner()
+
+    def _reset_tables(self) -> None:
+        for model in self.models.values():
+            model.load_rows([])

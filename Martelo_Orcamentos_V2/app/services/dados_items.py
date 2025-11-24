@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,7 @@ from Martelo_Orcamentos_V2.app.models import (
     DadosItemsModeloItem,
 )
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
+from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dados_gerais
 
 MENU_MATERIAIS = svc_dg.MENU_MATERIAIS
 MENU_FERRAGENS = svc_dg.MENU_FERRAGENS
@@ -44,6 +46,11 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
     MENU_SIS_CORRER: MENU_FIELDS_BASE[MENU_SIS_CORRER] + ("linha", "custo_mp_und", "custo_mp_total"),
     MENU_ACABAMENTOS: MENU_FIELDS_BASE[MENU_ACABAMENTOS] + ("linha", "custo_acb_und", "custo_acb_total"),
 }
+
+
+# Campos comuns que queremos persistir nos modelos/exportacoes
+MODEL_COMMON_FIELDS = ("ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und")
+GLOBAL_PREFIX = svc_dg.GLOBAL_PREFIX if hasattr(svc_dg, "GLOBAL_PREFIX") else "__GLOBAL__|"
 
 MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
     MENU_MATERIAIS: {
@@ -152,6 +159,90 @@ def _json_ready_rows(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         prepared.append(clean)
     return prepared
 
+
+def preencher_com_dados_gerais(db: Session, ctx: DadosItemsContext) -> None:
+    """
+    Copia os dados gerais do orçamento para os dados do item (4 tabelas) e grava.
+    Substitui as linhas atuais do item pelos dados gerais equivalentes.
+    """
+    dg_ctx = svc_dados_gerais.carregar_contexto(db, ctx.orcamento_id)
+    dados_gerais = svc_dados_gerais.carregar_dados_gerais(db, dg_ctx)
+
+    payload: Dict[str, List[Dict[str, Any]]] = {}
+    for menu, rows in dados_gerais.items():
+        if menu not in MENU_FIELDS:
+            continue
+        cleaned: List[Dict[str, Any]] = []
+        for ordem, row in enumerate(rows):
+            body: Dict[str, Any] = {"ordem": ordem}
+            for field in MENU_FIELDS[menu]:
+                body[field] = row.get(field)
+            cleaned.append(body)
+        payload[menu] = cleaned
+
+    guardar_dados_gerais(db, ctx, payload)
+
+
+def _cleanup_for_compare(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    base: List[Dict[str, Any]] = []
+
+    def _normalize(val: Any) -> Any:
+        if val in ("", None):
+            return None
+        if isinstance(val, Decimal):
+            try:
+                return float(val)
+            except Exception:
+                return float(str(val))
+        if isinstance(val, (int, float)):
+            try:
+                return float(val)
+            except Exception:
+                return val
+        if isinstance(val, str):
+            txt = val.strip()
+            if txt == "":
+                return None
+            try:
+                return float(txt.replace(",", "."))
+            except Exception:
+                return txt
+        if isinstance(val, bool):
+            return 1 if val else 0
+        return val
+
+    for ordem, row in enumerate(rows):
+        entry: Dict[str, Any] = {"ordem": ordem}
+        for field in MENU_FIELDS[menu]:
+            entry[field] = _normalize(row.get(field))
+        base.append(entry)
+    return base
+
+
+def dados_items_em_sincronia_com_gerais(db: Session, ctx: DadosItemsContext) -> bool:
+    """
+    Compara os Dados Items do item com os Dados Gerais do orçamento.
+    Retorna True se os 4 menus coincidirem (ordem e valores relevantes).
+    """
+    try:
+        di_atual = carregar_dados_gerais(db, ctx)
+        dg_ctx = svc_dados_gerais.carregar_contexto(db, ctx.orcamento_id)
+        dg_base = svc_dados_gerais.carregar_dados_gerais(db, dg_ctx)
+    except Exception:
+        return False
+
+    for menu in MENU_KEYS:
+        if menu not in di_atual or menu not in dg_base:
+            return False
+        right = _cleanup_for_compare(menu, di_atual.get(menu, ()))
+        left = _cleanup_for_compare(menu, dg_base.get(menu, ()))
+        if len(right) != len(left):
+            return False
+        for a, b in zip(right, left):
+            # compara campos simples; Decimal já vem como float em carregar_dados_gerais
+            if a != b:
+                return False
+    return True
 
 def carregar_dados_gerais(db: Session, ctx: DadosItemsContext) -> Dict[str, List[Dict[str, Any]]]:
     data: Dict[str, List[Dict[str, Any]]] = {}
@@ -319,10 +410,16 @@ class DadosItemsModeloData:
     replace: bool
 
 
-def listar_modelos(db: Session, orcamento_id: int, *, item_id: Optional[int] = None) -> List[DadosItemsModelo]:
+def listar_modelos(db: Session, orcamento_id: int, *, item_id: Optional[int] = None, user_id: Optional[int] = None) -> List[DadosItemsModelo]:
     stmt = select(DadosItemsModelo).where(DadosItemsModelo.orcamento_id == orcamento_id)
     if item_id is not None:
         stmt = stmt.where((DadosItemsModelo.item_id == item_id) | (DadosItemsModelo.item_id.is_(None)))
+    if user_id is not None:
+        stmt = stmt.where(
+            (DadosItemsModelo.user_id == user_id)
+            | (DadosItemsModelo.user_id.is_(None))
+            | (DadosItemsModelo.nome_modelo.startswith(GLOBAL_PREFIX))
+        )
     stmt = stmt.order_by(DadosItemsModelo.nome_modelo, DadosItemsModelo.id)
     return db.execute(stmt).scalars().all()
 
@@ -345,6 +442,16 @@ def carregar_modelo(db: Session, modelo_id: int) -> Dict[str, List[Dict[str, Any
     return result
 
 
+def _filter_model_row(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[str, Any]:
+    primary = svc_dg.MENU_PRIMARY_FIELD.get(menu)
+    fields = [primary] if primary else []
+    fields += list(MODEL_COMMON_FIELDS)
+    filtered: Dict[str, Any] = {"ordem": ordem}
+    for field in fields:
+        filtered[field] = row.get(field)
+    return filtered
+
+
 def guardar_modelo(
     db: Session,
     ctx: DadosItemsContext,
@@ -352,22 +459,30 @@ def guardar_modelo(
     linhas: Mapping[str, Sequence[Mapping[str, Any]]],
     *,
     replace_model_id: Optional[int] = None,
+    is_global: bool = False,
+    add_timestamp: bool = False,
 ) -> DadosItemsModelo:
+    nome_limpo = nome_modelo.strip()
+    if add_timestamp:
+        nome_limpo = f"{nome_limpo} ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+    if is_global:
+        nome_limpo = f"{GLOBAL_PREFIX}{nome_limpo}"
+
     if replace_model_id:
         modelo = db.get(DadosItemsModelo, replace_model_id)
         if not modelo:
             raise ValueError("Modelo nao encontrado")
-        modelo.nome_modelo = nome_modelo
+        modelo.nome_modelo = nome_limpo
         modelo.item_id = ctx.item_id
         modelo.orcamento_id = ctx.orcamento_id
-        modelo.user_id = ctx.user_id
+        modelo.user_id = None if is_global else ctx.user_id
         db.execute(delete(DadosItemsModeloItem).where(DadosItemsModeloItem.modelo_id == modelo.id))
     else:
         modelo = DadosItemsModelo(
             orcamento_id=ctx.orcamento_id,
             item_id=ctx.item_id,
-            user_id=ctx.user_id,
-            nome_modelo=nome_modelo,
+            user_id=None if is_global else ctx.user_id,
+            nome_modelo=nome_limpo,
             tipo_menu=MENU_MATERIAIS,
         )
         db.add(modelo)
@@ -375,7 +490,8 @@ def guardar_modelo(
 
     for menu in MENU_KEYS:
         rows = linhas.get(menu, [])
-        payload = json.dumps(_json_ready_rows(rows))
+        filtered_rows = [_filter_model_row(menu, r, ordem) for ordem, r in enumerate(rows)]
+        payload = json.dumps(_json_ready_rows(filtered_rows))
         db.add(
             DadosItemsModeloItem(
                 modelo_id=modelo.id,

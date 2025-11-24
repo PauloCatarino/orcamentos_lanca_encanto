@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+FULL_PLATES_MODE = False
+
 from copy import deepcopy
 from decimal import Decimal, ROUND_HALF_UP
 import json

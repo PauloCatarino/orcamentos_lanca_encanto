@@ -5,12 +5,13 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import json
 import logging
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 from Martelo_Orcamentos_V2.app.models import OrcamentoItem
 from sqlalchemy.orm import Session
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_di
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
+from Martelo_Orcamentos_V2.app.services import materias_primas as svc_mp
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
 
 from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
@@ -92,6 +93,250 @@ class DadosItemsPage(DadosGeraisPage):
             captions[0].setText("Comp:")
             captions[1].setText("Largura:")
             captions[2].setText("Profundidade:")
+
+    # ------------------------------------------------------------------ Matérias-primas merge
+    def _merge_with_materias_primas(self, rows: List[Dict[str, Any]], menu: str) -> List[Dict[str, Any]]:
+        """
+        Preenche campos faltantes a partir de materias_primas (match por ref_le).
+        Se houver conflito (modelo vs MP), apresenta dialogo para o utilizador decidir.
+        """
+        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp", "nao_stock"}
+        compare_fields = ["ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und"]
+        conflicts: Dict[int, Dict[str, Any]] = {}
+        merged: List[Dict[str, Any]] = []
+        mp_cache: Dict[int, Any] = {}
+        label_field_map = {
+            svc_di.MENU_MATERIAIS: "materiais",
+            svc_di.MENU_FERRAGENS: "ferragens",
+            svc_di.MENU_SIS_CORRER: "sistemas_correr",
+            svc_di.MENU_ACABAMENTOS: "acabamentos",
+        }
+        label_header_map = {
+            svc_di.MENU_MATERIAIS: "Materiais",
+            svc_di.MENU_FERRAGENS: "Ferragens",
+            svc_di.MENU_SIS_CORRER: "Sistemas Correr",
+            svc_di.MENU_ACABAMENTOS: "Acabamentos",
+        }
+        label_field = label_field_map.get(menu, "label")
+        line_header = label_header_map.get(menu, "Linha")
+
+        def _fmt_one_dec(val: Any):
+            try:
+                from decimal import Decimal
+                return float(Decimal(str(val)).quantize(Decimal("0.1")))
+            except Exception:
+                try:
+                    return round(float(val), 1)
+                except Exception:
+                    return val
+
+        def _norm(val: Any) -> Any:
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            return str(val).strip()
+
+        def _is_close(a: Any, b: Any, field: str) -> bool:
+            # tolera arredondamentos para valores monet�rios/percentuais
+            if a in (None, "") and b in (None, ""):
+                return True
+            try:
+                fa = float(a)
+                fb = float(b)
+                if field in {"preco_tab", "preco_liq"}:
+                    return abs(fa - fb) < 0.01  # tolera 1 c�ntimo
+                if field in {"margem", "desconto"}:
+                    return abs(fa - fb) < 0.0001  # tolera pequenas casas decimais
+            except Exception:
+                pass
+            return _norm(a) == _norm(b)
+
+        def _mp_value(mp_obj: Any, field: str) -> Any:
+            # resolve aliases for comparacao (campos principais)
+            alias_map = {
+                "descricao_material": [
+                    "descricao_material",
+                    "descricao_no_orcamento",
+                    "descricao_orcamento",
+                    "DESCRICAO_no_ORCAMENTO",
+                    "DESCRICAO_ORCAMENTO",
+                ],
+                "preco_tab": ["preco_tab", "preco_tabela", "PRECO_TABELA"],
+                "preco_liq": ["preco_liq", "pliq", "PLIQ", "PRECO_LIQ"],
+                "margem": ["margem", "MARGEM"],
+                "desconto": ["desconto", "DESCONTO"],
+                "ref_le": ["ref_le", "REF_LE", "Ref_LE"],
+                "und": ["und", "UND"],
+            }
+            keys = alias_map.get(field, [field])
+            for k in keys:
+                try:
+                    val = getattr(mp_obj, k)
+                except Exception:
+                    val = None
+                if val not in (None, ""):
+                    return val
+            return None
+
+        table_model_for_menu = self.models.get(menu)
+
+        for idx, row in enumerate(rows):
+            new_row = dict(row)
+            ref_le = (new_row.get("ref_le") or "").strip()
+            mp = svc_mp.get_materia_prima_by_ref_le(self.session, ref_le) if ref_le else None
+            if mp:
+                mp_cache[idx] = mp
+                for field in fill_fields:
+                    mp_val = getattr(mp, field, None)
+                    if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                        mp_val = _fmt_one_dec(mp_val)
+                    if mp_val is None:
+                        continue
+                    if new_row.get(field) in (None, ""):
+                        new_row[field] = mp_val
+
+                model_subset = {f: new_row.get(f) for f in compare_fields}
+                mp_subset = {f: _mp_value(mp, f) for f in compare_fields}
+                if any(not _is_close(model_subset.get(f), mp_subset.get(f), f) for f in compare_fields):
+                    mp_full = {
+                        "ref_le": getattr(mp, "ref_le", None),
+                        "descricao_no_orcamento": getattr(mp, "descricao_no_orcamento", None)
+                        or getattr(mp, "descricao_orcamento", None)
+                        or getattr(mp, "DESCRICAO_no_ORCAMENTO", None)
+                        or getattr(mp, "DESCRICAO_NO_ORCAMENTO", None)
+                        or getattr(mp, "DESCRICAO_ORCAMENTO", None),
+                        "descricao_material": getattr(mp, "descricao_material", None)
+                        or getattr(mp, "DESCRICAO_MATERIAL", None),
+                        "preco_tab": getattr(mp, "preco_tab", None) or getattr(mp, "PRECO_TAB", None),
+                        "preco_tabela": getattr(mp, "preco_tabela", None) or getattr(mp, "PRECO_TABELA", None),
+                        "preco_liq": getattr(mp, "preco_liq", None) or getattr(mp, "PRECO_LIQ", None),
+                        "pliq": getattr(mp, "pliq", None) or getattr(mp, "PLIQ", None),
+                        "margem": getattr(mp, "margem", None) or getattr(mp, "MARGEM", None),
+                        "desconto": getattr(mp, "desconto", None) or getattr(mp, "DESCONTO", None),
+                        "und": getattr(mp, "und", None) or getattr(mp, "UND", None),
+                    }
+                    def _first_label(candidates):
+                        for cand in candidates:
+                            if cand is None:
+                                continue
+                            if isinstance(cand, str):
+                                val = cand.strip()
+                                if val and not val.isdigit():
+                                    return val
+                            else:
+                                try:
+                                    # skip pure numbers as labels if possible
+                                    float(cand)
+                                    continue
+                                except Exception:
+                                    pass
+                                return str(cand)
+                        # fallback: allow numeric if nothing else
+                        for cand in candidates:
+                            if cand not in (None, ""):
+                                return str(cand)
+                        return ""
+
+                    label_from_table = None
+                    if table_model_for_menu is not None:
+                        try:
+                            item = table_model_for_menu.item(idx, 0)  # primeira coluna visível
+                            if item:
+                                label_from_table = item.text()
+                        except Exception:
+                            try:
+                                idx_qt = table_model_for_menu.index(idx, 0)  # type: ignore[attr-defined]
+                                label_from_table = idx_qt.data()
+                            except Exception:
+                                pass
+
+                    label_value = _first_label(
+                        [
+                            label_from_table,
+                            new_row.get(label_field),
+                            new_row.get("materiais"),
+                            new_row.get("ferragens"),
+                            new_row.get("sistemas_correr"),
+                            new_row.get("acabamentos"),
+                            new_row.get("linha"),
+                            new_row.get("descricao"),
+                            new_row.get("descricao_material"),
+                            new_row.get("ref_le"),
+                        ]
+                    )
+                    conflicts[idx] = {
+                        "model": model_subset,
+                        "mp": mp_subset,
+                        "mp_full": mp_full,
+                        "label": label_value,
+                        "line_header": line_header,
+                    }
+            merged.append(new_row)
+
+        if conflicts:
+            dialog = MateriaPrimaConflictDialog(conflicts, parent=self, line_header=line_header)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                choices = dialog.selected_sources()
+                for row_idx, use_mp in choices.items():
+                    if not (0 <= row_idx < len(merged)):
+                        continue
+                    mp = mp_cache.get(row_idx)
+                    if not mp:
+                        continue
+                    mp_subset = conflicts[row_idx]["mp"]
+                    if use_mp:
+                        for field, val in mp_subset.items():
+                            merged[row_idx][field] = val
+                        for field in fill_fields:
+                            mp_val = getattr(mp, field, merged[row_idx].get(field))
+                            if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                                mp_val = _fmt_one_dec(mp_val)
+                            merged[row_idx][field] = mp_val
+
+        return merged
+
+# ------------------------------------------------------------------ Import override (usar ordenação fixa)
+    def _apply_imported_rows(self, key: str, rows: Sequence[Mapping[str, Any]], *, replace: bool) -> None:  # type: ignore[override]
+        model = self.models[key]
+        prepared_rows = [dict(r) for r in rows if isinstance(r, Mapping)]
+        if not prepared_rows:
+            return
+
+        if replace:
+            existing_rows = model.export_rows()
+            merged: List[Dict[str, Any]] = []
+            for idx, base in enumerate(existing_rows):
+                incoming = prepared_rows[idx] if idx < len(prepared_rows) else {}
+                merged_row = dict(base or {})
+                for k, v in incoming.items():
+                    if v in (None, ""):
+                        # preserva tipo/familia/não stock existentes se o modelo trouxer vazio
+                        if k in {"tipo", "familia"}:
+                            continue
+                    merged_row[k] = v
+                merged.append(merged_row)
+
+            merged = self._merge_with_materias_primas(merged, key)
+            model.load_rows(merged)
+            if hasattr(model, "_reindex"):
+                try:
+                    model._reindex()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            if hasattr(model, "recalculate"):
+                for idx in range(model.rowCount()):
+                    try:
+                        model.recalculate(idx)  # type: ignore[attr-defined]
+                    except Exception:
+                        continue
+            else:
+                self._recalculate_menu_rows(key)
+            return
+
+        # Caso mesclar, reconciliamos antes de delegar para lógica base
+        prepared_rows = self._merge_with_materias_primas(prepared_rows, key)
+        return super()._apply_imported_rows(key, prepared_rows, replace=replace)
 
     # ------------------------------------------------------------------ Integration
     def load_item(self, orcamento_id: int, item_id: Optional[int]) -> None:
@@ -274,32 +519,41 @@ class DadosItemsPage(DadosGeraisPage):
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nao existem linhas para guardar.")
             return
 
-        nome, ok = QtWidgets.QInputDialog.getText(self, "Guardar Dados Items", "Nome do modelo:")
+        modelos_existentes = svc_di.listar_modelos(
+            self.session,
+            orcamento_id=self.context.orcamento_id,
+            item_id=self.context.item_id,
+            user_id=getattr(self.current_user, "id", None),
+        )
+        nomes = [m.nome_modelo for m in modelos_existentes]
+        default_idx = 0 if nomes else -1
+        nome, ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Guardar Dados Items",
+            "Selecione ou escreva o nome do modelo:",
+            nomes or ["<novo>"],
+            default_idx,
+            True,
+        )
         if not ok:
             return
         nome = nome.strip()
-        if not nome:
+        if not nome or nome == "<novo>":
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nome invalido.")
             return
 
-        existentes = {
-            modelo.nome_modelo: modelo
-            for modelo in svc_di.listar_modelos(
-                self.session,
-                orcamento_id=self.context.orcamento_id,
-                item_id=self.context.item_id,
-            )
-        }
         replace_id: Optional[int] = None
-        if nome in existentes:
-            resp = QtWidgets.QMessageBox.question(
-                self,
-                "Confirmar",
-                "Ja existe um modelo com este nome. Pretende substitui-lo?",
-            )
-            if resp != QtWidgets.QMessageBox.StandardButton.Yes:
-                return
-            replace_id = existentes[nome].id
+        for m in modelos_existentes:
+            if m.nome_modelo.strip().lower() == nome.lower():
+                resp = QtWidgets.QMessageBox.question(
+                    self,
+                    "Confirmar",
+                    "Ja existe um modelo com este nome. Pretende substitui-lo?",
+                )
+                if resp != QtWidgets.QMessageBox.StandardButton.Yes:
+                    return
+                replace_id = m.id
+                break
 
         try:
             payload = {key: linhas}
@@ -431,10 +685,18 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
 
             list_widget = QtWidgets.QListWidget()
             list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+            actions_layout = QtWidgets.QHBoxLayout()
+            btn_rename = QtWidgets.QPushButton("Renomear")
+            btn_delete = QtWidgets.QPushButton("Eliminar")
+            btn_rename.clicked.connect(partial(self._on_rename_model, origin))
+            btn_delete.clicked.connect(partial(self._on_delete_model, origin))
+            actions_layout.addWidget(btn_rename)
+            actions_layout.addWidget(btn_delete)
             list_container = QtWidgets.QWidget()
             list_layout = QtWidgets.QVBoxLayout(list_container)
             list_layout.setContentsMargins(0, 0, 0, 0)
             list_layout.addWidget(list_widget)
+            list_layout.addLayout(actions_layout)
             splitter.addWidget(list_container)
 
             table = QtWidgets.QTableWidget()
@@ -533,6 +795,8 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
 
     def _model_display(self, model: Any) -> str:
         display = getattr(model, "nome_modelo", str(model))
+        if display.startswith("__GLOBAL__|"):
+            display = f"[Global] {display[len('__GLOBAL__|'):]}"
         created = getattr(model, "created_at", None)
         if created:
             try:
@@ -670,6 +934,120 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         self._selected_rows = rows
         super().accept()
 
+    def _on_delete_model(self, origin: str) -> None:
+        list_widget = self.models_list.get(origin)
+        if not list_widget:
+            return
+        item = list_widget.currentItem()
+        if not item:
+            return
+        model_id = item.data(QtCore.Qt.UserRole)
+        if not model_id:
+            return
+        if QtWidgets.QMessageBox.question(self, "Eliminar", "Eliminar este modelo?") != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            if origin == "local":
+                svc_di.eliminar_modelo(self.session, modelo_id=model_id, orcamento_id=self.context.orcamento_id)
+            else:
+                user_id = getattr(self.current_user, "id", None)
+                svc_dg.eliminar_modelo(self.session, modelo_id=model_id, user_id=user_id)
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {exc}")
+            return
+        self._populate_models(origin)
+
+    def _on_rename_model(self, origin: str) -> None:
+        list_widget = self.models_list.get(origin)
+        if not list_widget:
+            return
+        item = list_widget.currentItem()
+        if not item:
+            return
+        model_id = item.data(QtCore.Qt.UserRole)
+        if not model_id:
+            return
+        base_name = item.text().split(" (")[0]
+        new_name, ok = QtWidgets.QInputDialog.getText(self, "Renomear Modelo", "Novo nome:", text=base_name)
+        if not ok or not new_name.strip():
+            return
+        try:
+            if origin == "local":
+                svc_di.renomear_modelo(
+                    self.session,
+                    modelo_id=model_id,
+                    orcamento_id=self.context.orcamento_id,
+                    novo_nome=new_name.strip(),
+                )
+            else:
+                user_id = getattr(self.current_user, "id", None)
+                svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=user_id, novo_nome=new_name.strip())
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao renomear: {exc}")
+            return
+        self._populate_models(origin)
+
+    def _on_delete_model(self, origin: str) -> None:
+        list_widget = self.models_list.get(origin)
+        if not list_widget:
+            return
+        item = list_widget.currentItem()
+        if not item:
+            return
+        model_id = item.data(QtCore.Qt.UserRole)
+        if not model_id:
+            return
+        if QtWidgets.QMessageBox.question(self, "Eliminar", "Eliminar este modelo?") != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            if origin == "local":
+                svc_di.eliminar_modelo(self.session, modelo_id=model_id, orcamento_id=self.context.orcamento_id)
+            else:
+                user_id = getattr(self.current_user, "id", None)
+                svc_dg.eliminar_modelo(self.session, modelo_id=model_id, user_id=user_id)
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {exc}")
+            return
+        self._populate_models(origin)
+
+    def _on_rename_model(self, origin: str) -> None:
+        list_widget = self.models_list.get(origin)
+        if not list_widget:
+            return
+        item = list_widget.currentItem()
+        if not item:
+            return
+        model_id = item.data(QtCore.Qt.UserRole)
+        if not model_id:
+            return
+        base_name = item.text().split(" (")[0]
+        new_name, ok = QtWidgets.QInputDialog.getText(self, "Renomear Modelo", "Novo nome:", text=base_name)
+        if not ok or not new_name.strip():
+            return
+        try:
+            if origin == "local":
+                svc_di.renomear_modelo(
+                    self.session,
+                    modelo_id=model_id,
+                    orcamento_id=self.context.orcamento_id,
+                    novo_nome=new_name.strip(),
+                )
+            else:
+                user_id = getattr(self.current_user, "id", None)
+                svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=user_id, novo_nome=new_name.strip())
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao renomear: {exc}")
+            return
+        self._populate_models(origin)
+
 
 class ImportarMultiDadosItemsDialog(QtWidgets.QDialog):
     def __init__(
@@ -745,3 +1123,182 @@ class ImportarMultiDadosItemsDialog(QtWidgets.QDialog):
 
     def selected_models(self) -> Dict[str, Tuple[str, int, bool]]:
         return self.selections
+
+
+class MateriaPrimaConflictDialog(QtWidgets.QDialog):
+    COLS_DISPLAY = [
+        ("ref_le", "Ref_LE"),
+        ("descricao_material", "Descrição Material"),
+        ("preco_tab", "Preço Tabela"),
+        ("preco_liq", "Preço Líquido"),
+        ("margem", "Margem"),
+        ("desconto", "Desconto"),
+        ("und", "Und"),
+    ]
+
+    def __init__(self, conflicts: Mapping[int, Mapping[str, Any]], parent=None, line_header: str = "Linha") -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Diferenças entre Dados do Modelo vs Matérias-Primas")
+        self.resize(1700, 820)
+        self._choices: Dict[int, bool] = {}  # row_idx -> use_mp
+        self._conflicts = conflicts
+        self._line_header = line_header
+
+        layout = QtWidgets.QVBoxLayout(self)
+        info = QtWidgets.QLabel(
+            "Foram encontradas diferenças entre o modelo importado e a tabela de Matérias-Primas.\n"
+            "Para cada linha, escolha se pretende aplicar os valores do Modelo ou da Matéria-Prima."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+
+        self.table_model = QtWidgets.QTableWidget()
+        self.COLS_MODEL = [("label", line_header)] + self.COLS_DISPLAY
+        self.table_model.setColumnCount(len(self.COLS_MODEL) + 1)
+        self.table_model.setHorizontalHeaderLabels(["Usar Modelo"] + [label for _, label in self.COLS_MODEL])
+        self.table_model.setRowCount(len(conflicts))
+
+        self.table_mp = QtWidgets.QTableWidget()
+        self.table_mp.setColumnCount(len(self.COLS_DISPLAY) + 1)
+        self.table_mp.setHorizontalHeaderLabels(["Usar MP"] + [label for _, label in self.COLS_DISPLAY])
+        self.table_mp.setRowCount(len(conflicts))
+
+        header_wrapper = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout(header_wrapper)
+        lbl_model = QtWidgets.QLabel("<b>DADOS DO MODELO</b>")
+        lbl_mp = QtWidgets.QLabel("<b>DADOS MAT�RIAS-PRIMAS</b>")
+        header_layout.addWidget(lbl_model, 1)
+        header_layout.addWidget(lbl_mp, 1)
+        layout.addWidget(header_wrapper)
+
+        def _format_value(field: str, val: Any) -> str:
+            if val is None or val == "":
+                return ""
+            try:
+                num = float(val)
+            except Exception:
+                return str(val)
+            if field in {"preco_tab", "preco_liq"}:
+                return f"{num:,.2f} €"
+            if field in {"margem", "desconto"}:
+                return f"{num*100:.2f} %"
+            return str(val)
+
+        sorted_conflicts = list(conflicts.items())
+        self._row_keys = [row_idx for row_idx, _ in sorted_conflicts]
+        for r_idx, (row_idx, data) in enumerate(sorted_conflicts):
+            model_data = data.get("model", {})
+            mp_data = data.get("mp_full") or data.get("mp", {})
+            # mapeia aliases de materias-primas
+            def _mp_val(*keys: str):
+                for k in keys:
+                    if k in mp_data and mp_data.get(k) not in (None, ""):
+                        return mp_data.get(k)
+                    upper = k.upper()
+                    if upper in mp_data and mp_data.get(upper) not in (None, ""):
+                        return mp_data.get(upper)
+                return mp_data.get(keys[0], None)
+
+            mp_display = {
+                "ref_le": _mp_val("ref_le"),
+                "descricao_material": _mp_val(
+                    "descricao_material",
+                    "descricao_no_orcamento",
+                    "descricao_orcamento",
+                    "DESCRICAO_no_ORCAMENTO",
+                    "DESCRICAO_ORCAMENTO",
+                ),
+                "preco_tab": _mp_val("preco_tab", "preco_tabela", "PRECO_TABELA"),
+                "preco_liq": _mp_val("preco_liq", "pliq", "PLIQ"),
+                "margem": _mp_val("margem", "MARGEM"),
+                "desconto": _mp_val("desconto", "DESCONTO"),
+                "und": _mp_val("und", "UND"),
+            }
+            model_data["label"] = data.get("label") or model_data.get("descricao_material") or model_data.get("ref_le")
+
+            chk_model = QtWidgets.QTableWidgetItem()
+            chk_model.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            chk_model.setCheckState(QtCore.Qt.Unchecked)
+            self.table_model.setItem(r_idx, 0, chk_model)
+
+            chk_mp = QtWidgets.QTableWidgetItem()
+            chk_mp.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            chk_mp.setCheckState(QtCore.Qt.Checked)
+            self.table_mp.setItem(r_idx, 0, chk_mp)
+            self._choices[row_idx] = True
+
+            # modelo (inclui coluna de linha/aba)
+            for c_idx, (field, _) in enumerate(self.COLS_MODEL, start=1):
+                model_val = model_data.get(field)
+                item_model = QtWidgets.QTableWidgetItem(_format_value(field, model_val))
+                self.table_model.setItem(r_idx, c_idx, item_model)
+
+            # materias-primas: mantém apenas as colunas originais, alinhadas
+            for mp_c_idx, (field, _) in enumerate(self.COLS_DISPLAY, start=1):
+                mp_val = mp_display.get(field)
+                item_mp = QtWidgets.QTableWidgetItem(_format_value(field, mp_val))
+                model_val = model_data.get(field)
+                if str(model_val) != str(mp_val):
+                    # realça apenas colunas não-idênticas
+                    item_mp.setBackground(QtGui.QColor("#e0e0e0"))
+                    # também realça célula correspondente no modelo
+                    model_item = self.table_model.item(r_idx, mp_c_idx + 1)  # +1 porque modelo tem coluna label extra
+                    if model_item:
+                        model_item.setBackground(QtGui.QColor("#e0e0e0"))
+                self.table_mp.setItem(r_idx, mp_c_idx, item_mp)
+
+        self.table_model.resizeColumnsToContents()
+        self.table_mp.resizeColumnsToContents()
+        splitter.addWidget(self.table_model)
+        splitter.addWidget(self.table_mp)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        layout.addWidget(splitter, 1)
+
+        btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+        # ligações únicas para mutual exclusivity
+        self.table_model.itemChanged.connect(self._on_model_item_changed)
+        self.table_mp.itemChanged.connect(self._on_mp_item_changed)
+
+    def selected_sources(self) -> Dict[int, bool]:
+        return dict(self._choices)
+
+    def _toggle_choice(self, row_key: int, use_mp: bool) -> None:
+        self._choices[row_key] = use_mp
+        # sincroniza checkboxes sem recursão
+        row_idx = self._row_keys.index(row_key)
+        m_item = self.table_model.item(row_idx, 0)
+        p_item = self.table_mp.item(row_idx, 0)
+        if not m_item or not p_item:
+            return
+        with QtCore.QSignalBlocker(self.table_model), QtCore.QSignalBlocker(self.table_mp):
+            if use_mp:
+                p_item.setCheckState(QtCore.Qt.Checked)
+                m_item.setCheckState(QtCore.Qt.Unchecked)
+            else:
+                m_item.setCheckState(QtCore.Qt.Checked)
+                p_item.setCheckState(QtCore.Qt.Unchecked)
+
+    def _on_model_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.column() != 0:
+            return
+        row_idx = item.row()
+        if not (0 <= row_idx < len(self._row_keys)):
+            return
+        use_model = item.checkState() == QtCore.Qt.Checked
+        self._toggle_choice(self._row_keys[row_idx], use_mp=not use_model)
+
+    def _on_mp_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.column() != 0:
+            return
+        row_idx = item.row()
+        if not (0 <= row_idx < len(self._row_keys)):
+            return
+        use_mp = item.checkState() == QtCore.Qt.Checked
+        self._toggle_choice(self._row_keys[row_idx], use_mp=use_mp)

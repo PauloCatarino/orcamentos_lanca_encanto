@@ -45,6 +45,7 @@ def init_db():
                 dados_gerais,
                 custeio,
                 custeio_producao,
+                modulo,
             )  # noqa: F401
             
             # Drop custeio_items table if it exists to force recreation with new schema

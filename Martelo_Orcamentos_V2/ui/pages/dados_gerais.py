@@ -2292,6 +2292,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
         self.save_button_text = save_button_text
+        self._base_save_button_text = save_button_text
+        self._dirty = False
 
 
 
@@ -2472,6 +2474,27 @@ class DadosGeraisPage(QtWidgets.QWidget):
     def _default_info_pairs(self) -> List[Tuple[str, QtWidgets.QLabel]]:
 
         return []
+
+    def _set_dirty(self, dirty: bool) -> None:
+        dirty = bool(dirty)
+        if getattr(self, "_dirty", False) == dirty:
+            return
+        self._dirty = dirty
+        self._update_save_button_texts()
+
+    def _update_save_button_texts(self) -> None:
+        text = self._base_save_button_text
+        if getattr(self, "_dirty", False) and not text.endswith("*"):
+            text = f"{text}*"
+        elif not getattr(self, "_dirty", False):
+            text = self._base_save_button_text
+        for btn in getattr(self, "_save_buttons", []):
+            try:
+                btn.setText(text)
+            except Exception:
+                continue
+        if getattr(self, "btn_guardar", None) and self.btn_guardar.text() != text:
+            self.btn_guardar.setText(text)
 
 
 
@@ -3037,6 +3060,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self.tables[key] = table
 
             table.setModel(model)
+            try:
+                model.dataChanged.connect(lambda *_, **__: self._set_dirty(True))
+                model.rowsInserted.connect(lambda *_, **__: self._set_dirty(True))
+                model.rowsRemoved.connect(lambda *_, **__: self._set_dirty(True))
+            except Exception:
+                pass
 
             self._apply_column_layout(key)
 
@@ -3047,6 +3076,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             self._configure_delegates(key)
 
+        self._update_save_button_texts()
 
 
     # --- delegates por coluna (combos, etc.) ----------------------------------
@@ -3240,9 +3270,14 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             return
 
-        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
-
         target_rows = list(row_indices)
+
+        source_count = len(rows)
+        if source_count == 1 and target_rows:
+            rows = rows * len(target_rows)
+            source_count = len(rows)
+
+        primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
 
         allowed_fields = {spec.field for spec in model.columns}
 
@@ -3252,9 +3287,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
                 continue
 
-            if idx < len(target_rows):
+            target_idx = idx
+            if source_count == 1 and target_rows:
+                target_idx = min(idx, len(target_rows) - 1)
+            if target_idx < len(target_rows):
 
-                target_row = target_rows[idx]
+                target_row = target_rows[target_idx]
 
             else:
 
@@ -3295,10 +3333,12 @@ class DadosGeraisPage(QtWidgets.QWidget):
         if not hasattr(model, "recalculate"):
 
             self._recalculate_menu_rows(key)
+        self._set_dirty(True)
 
         for row in target_rows:
 
             table.selectRow(row)
+        self._set_dirty(True)
 
 
 
@@ -3367,10 +3407,10 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
         index = table.indexAt(pos)
-
-        if index.isValid():
-
-            table.selectRow(index.row())
+        selection_model = table.selectionModel()
+        if selection_model is None or not selection_model.hasSelection():
+            if index.isValid():
+                table.selectRow(index.row())
 
 
 
@@ -3491,6 +3531,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             rows = data.get(key, [])
             model.load_rows(rows)
             model._reindex()
+        self._set_dirty(False)
     def _carregar_topo(self, orcamento_id: int) -> None:
 
 
@@ -3646,6 +3687,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
             QtWidgets.QMessageBox.information(self, "Sucesso", "Dados gerais guardados.")
+            self._set_dirty(False)
 
 
 
@@ -3846,6 +3888,8 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
                 replace_id=dialog.replace_model_id,
+                is_global=getattr(dialog, "is_global", False),
+                add_timestamp=getattr(dialog, "add_timestamp", False),
 
 
 
@@ -3949,185 +3993,270 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
 
+    def _merge_with_materias_primas(self, rows: List[Dict[str, Any]], menu: str) -> List[Dict[str, Any]]:
+        """
+        Preenche campos faltantes a partir de materias_primas (match por ref_le) e resolve conflitos via dialogo.
+        """
+        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp", "nao_stock"}
+        compare_fields = ["ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und"]
+        conflicts: Dict[int, Dict[str, Any]] = {}
+        merged: List[Dict[str, Any]] = []
+        mp_cache: Dict[int, Any] = {}
+
+        label_field_map = {
+            self.svc.MENU_MATERIAIS: "grupo_material",
+            self.svc.MENU_FERRAGENS: "grupo_ferragem",
+            self.svc.MENU_SIS_CORRER: "grupo_sistema",
+            self.svc.MENU_ACABAMENTOS: "grupo_acabamento",
+        }
+        label_header_map = {
+            self.svc.MENU_MATERIAIS: "Materiais",
+            self.svc.MENU_FERRAGENS: "Ferragens",
+            self.svc.MENU_SIS_CORRER: "Sistemas Correr",
+            self.svc.MENU_ACABAMENTOS: "Acabamentos",
+        }
+        label_field = label_field_map.get(menu, "label")
+        line_header = label_header_map.get(menu, "Linha")
+        table_model_for_menu = None
+        try:
+            table_for_menu = self.tables.get(menu)
+            table_model_for_menu = table_for_menu.model() if table_for_menu else None
+        except Exception:
+            table_model_for_menu = None
+
+        try:
+            current_rows = self.models.get(menu).export_rows()  # type: ignore[union-attr]
+        except Exception:
+            current_rows = []
+
+        def _fmt_one_dec(val: Any):
+            try:
+                from decimal import Decimal
+                return float(Decimal(str(val)).quantize(Decimal("0.1")))
+            except Exception:
+                try:
+                    return round(float(val), 1)
+                except Exception:
+                    return val
+
+        def _norm(val: Any) -> Any:
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val)
+            return str(val).strip()
+
+        def _is_close(a: Any, b: Any, field: str) -> bool:
+            if a in (None, "") and b in (None, ""):
+                return True
+            try:
+                fa = float(a)
+                fb = float(b)
+                if field in {"preco_tab", "preco_liq"}:
+                    return abs(fa - fb) < 0.01
+                if field in {"margem", "desconto"}:
+                    return abs(fa - fb) < 0.0001
+            except Exception:
+                pass
+            return _norm(a) == _norm(b)
+
+        def _mp_value(mp_obj: Any, field: str) -> Any:
+            alias_map = {
+                "descricao_material": [
+                    "descricao_material",
+                    "descricao_no_orcamento",
+                    "descricao_orcamento",
+                    "DESCRICAO_no_ORCAMENTO",
+                    "DESCRICAO_ORCAMENTO",
+                ],
+                "preco_tab": ["preco_tab", "preco_tabela", "PRECO_TABELA"],
+                "preco_liq": ["preco_liq", "pliq", "PLIQ", "PRECO_LIQ"],
+                "margem": ["margem", "MARGEM"],
+                "desconto": ["desconto", "DESCONTO"],
+                "ref_le": ["ref_le", "REF_LE", "Ref_LE"],
+                "und": ["und", "UND"],
+            }
+            keys = alias_map.get(field, [field])
+            for k in keys:
+                try:
+                    val = getattr(mp_obj, k)
+                except Exception:
+                    val = None
+                if val not in (None, ""):
+                    return val
+            return None
+
+        def _first_label(candidates: List[Any]) -> str:
+            for cand in candidates:
+                if cand is None:
+                    continue
+                if isinstance(cand, str):
+                    val = cand.strip()
+                    if val and not val.isdigit():
+                        return val
+                else:
+                    try:
+                        float(cand)
+                        continue
+                    except Exception:
+                        pass
+                    return str(cand)
+            for cand in candidates:
+                if cand not in (None, ""):
+                    return str(cand).strip()
+            return ""
+
+        def _label_from_table(row_idx: int) -> Any:
+            if table_model_for_menu is None:
+                return None
+            try:
+                item = table_model_for_menu.item(row_idx, 0)  # type: ignore[attr-defined]
+                if item:
+                    return item.text()
+            except Exception:
+                pass
+            try:
+                idx_qt = table_model_for_menu.index(row_idx, 0)  # type: ignore[attr-defined]
+                if idx_qt.isValid():
+                    return idx_qt.data()
+            except Exception:
+                pass
+            return None
+
+        for idx, row in enumerate(rows):
+            new_row = dict(row)
+            ref_le = (new_row.get("ref_le") or "").strip()
+            mp = svc_mp.get_materia_prima_by_ref_le(self.session, ref_le) if ref_le else None
+            if mp:
+                mp_cache[idx] = mp
+                for field in fill_fields:
+                    mp_val = getattr(mp, field, None)
+                    if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                        mp_val = _fmt_one_dec(mp_val)
+                    if mp_val is None:
+                        continue
+                    if new_row.get(field) in (None, ""):
+                        new_row[field] = mp_val
+
+                model_subset = {f: new_row.get(f) for f in compare_fields}
+                mp_subset = {f: _mp_value(mp, f) for f in compare_fields}
+                if any(not _is_close(model_subset.get(f), mp_subset.get(f), f) for f in compare_fields):
+                    mp_full = {
+                        "ref_le": getattr(mp, "ref_le", None),
+                        "descricao_no_orcamento": getattr(mp, "descricao_no_orcamento", None)
+                        or getattr(mp, "descricao_orcamento", None)
+                        or getattr(mp, "DESCRICAO_no_ORCAMENTO", None)
+                        or getattr(mp, "DESCRICAO_NO_ORCAMENTO", None)
+                        or getattr(mp, "DESCRICAO_ORCAMENTO", None),
+                        "descricao_material": getattr(mp, "descricao_material", None)
+                        or getattr(mp, "DESCRICAO_MATERIAL", None),
+                        "preco_tab": getattr(mp, "preco_tab", None) or getattr(mp, "PRECO_TAB", None),
+                        "preco_tabela": getattr(mp, "preco_tabela", None) or getattr(mp, "PRECO_TABELA", None),
+                        "preco_liq": getattr(mp, "preco_liq", None) or getattr(mp, "PRECO_LIQ", None),
+                        "pliq": getattr(mp, "pliq", None) or getattr(mp, "PLIQ", None),
+                        "margem": getattr(mp, "margem", None) or getattr(mp, "MARGEM", None),
+                        "desconto": getattr(mp, "desconto", None) or getattr(mp, "DESCONTO", None),
+                        "und": getattr(mp, "und", None) or getattr(mp, "UND", None),
+                    }
+                    label_candidates = [
+                        _label_from_table(idx),
+                        current_rows[idx].get(label_field) if idx < len(current_rows) else None,
+                        new_row.get(label_field),
+                        new_row.get("materiais"),
+                        new_row.get("ferragens"),
+                        new_row.get("sistemas_correr"),
+                        new_row.get("acabamentos"),
+                        new_row.get("linha"),
+                        new_row.get("descricao"),
+                        new_row.get("descricao_material"),
+                        new_row.get("ref_le"),
+                    ]
+                    conflicts[idx] = {
+                        "model": model_subset,
+                        "mp": mp_subset,
+                        "mp_full": mp_full,
+                        "label": _first_label(label_candidates),
+                        "line_header": line_header,
+                    }
+            merged.append(new_row)
+
+        if conflicts:
+            dialog = MateriaPrimaConflictDialogDG(conflicts, parent=self, line_header=line_header)
+            if dialog.exec() == QtWidgets.QDialog.Accepted:
+                choices = dialog.selected_sources()
+                for row_idx, use_mp in choices.items():
+                    if not (0 <= row_idx < len(merged)):
+                        continue
+                    mp = mp_cache.get(row_idx)
+                    if not mp:
+                        continue
+                    mp_subset = conflicts[row_idx]["mp"]
+                    if use_mp:
+                        for field, val in mp_subset.items():
+                            merged[row_idx][field] = val
+                        for field in fill_fields:
+                            mp_val = getattr(mp, field, merged[row_idx].get(field))
+                            if field in {"comp_mp", "larg_mp", "esp_mp"} and mp_val not in (None, ""):
+                                mp_val = _fmt_one_dec(mp_val)
+                            merged[row_idx][field] = mp_val
+
+        return merged
+
     def _apply_imported_rows(self, key: str, rows: Sequence[Mapping[str, Any]], *, replace: bool) -> None:
-
+        """
+        Importa linhas de modelo para o quadro atual.
+        - Se replace=True: sobrepõe por chave (primary) nas linhas existentes, preservando tipo/familia e valores não enviados.
+        - Se replace=False: mantém linhas atuais e acrescenta as que não encontrarem chave.
+        """
         model = self.models[key]
-
-        table = self.tables.get(key)
-
-        selected_rows = self._selected_rows_from_table(table) if table else []
-
         primary_field = self.svc.MENU_PRIMARY_FIELD.get(key)
-
         prepared_rows = [dict(r) for r in rows if isinstance(r, Mapping)]
-
         if not prepared_rows:
-
             return
 
-        def _normalize(value: Any) -> str:
-
-            if value is None:
-
+        def _norm(val: Any) -> str:
+            if val is None:
                 return ""
-
-            return str(value).strip().upper()
+            return str(val).strip().upper()
 
         existing_rows = model.export_rows()
-
-        total_rows = len(existing_rows)
-
-        selected_rows = [idx for idx in selected_rows if 0 <= idx < total_rows]
-
-        candidate_indices = selected_rows or list(range(total_rows))
-
-        key_to_index: Dict[str, int] = {}
-
+        merged_rows: List[Dict[str, Any]] = list(existing_rows)
+        primary_index: Dict[str, int] = {}
         if primary_field:
-
-            for idx in candidate_indices:
-
-                try:
-
-                    current_row = existing_rows[idx]
-
-                except Exception:
-
-                    continue
-
-                marker = _normalize(current_row.get(primary_field))
-
-                if marker and marker not in key_to_index:
-
-                    key_to_index[marker] = idx
-
-        selected_queue = deque(candidate_indices)
-
-        used_indices: set = set()
-
-        pending_rows: List[Dict[str, Any]] = []
-
-        updated_any = False
+            for idx, row in enumerate(existing_rows):
+                marker = _norm(row.get(primary_field))
+                if marker and marker not in primary_index:
+                    primary_index[marker] = idx
 
         for incoming in prepared_rows:
+            marker = _norm(incoming.get(primary_field)) if primary_field else ""
+            target_idx = primary_index.get(marker) if marker else None
+            payload = {k: v for k, v in incoming.items() if k not in {"id", "ordem", "tipo", "familia"} and v not in (None, "")}
 
-            target_idx = None
-
-            marker = _normalize(incoming.get(primary_field)) if primary_field else ""
-
-            if primary_field and marker and marker in key_to_index:
-
-                target_idx = key_to_index.pop(marker)
-
+            if target_idx is not None:
+                base = dict(merged_rows[target_idx] or {})
+                base.update(payload)
+                merged_rows[target_idx] = base
             else:
+                # sem chave -> apenas adiciona se estamos em modo append/mesclar
+                if replace:
+                    continue
+                merged_rows.append(payload)
 
-                while selected_queue:
-
-                    candidate = selected_queue[0]
-
-                    if candidate in used_indices:
-
-                        selected_queue.popleft()
-
-                        continue
-
-                    target_idx = selected_queue.popleft()
-
-                    break
-
-            if target_idx is None:
-
-                pending_rows.append(incoming)
-
-                continue
-
-            payload = {k: v for k, v in incoming.items() if k not in {"id", "ordem"}}
-
-            if primary_field:
-
-                payload.pop(primary_field, None)
-
-            model.update_row(target_idx, payload)
-
-            if hasattr(model, "recalculate"):
-
-                try:
-
-                    model.recalculate(target_idx)  # type: ignore[attr-defined]
-
-                except Exception:
-
-                    pass
-
-            updated_any = True
-
-            used_indices.add(target_idx)
-
-        if updated_any:
-
-            if pending_rows:
-
-                combined_rows = model.export_rows()
-
-                combined_rows.extend(pending_rows)
-
-                model.load_rows(combined_rows)
-
-                model._reindex()
-
-                if hasattr(model, "recalculate"):
-
-                    for idx in range(model.rowCount()):
-
-                        try:
-
-                            model.recalculate(idx)  # type: ignore[attr-defined]
-
-                        except Exception:
-
-                            continue
-
-                else:
-
-                    self._recalculate_menu_rows(key)
-
-                return
-
-            if not hasattr(model, "recalculate"):
-
-                self._recalculate_menu_rows(key)
-
-            return
-
-        if replace:
-
-            model.load_rows(prepared_rows)
-
-        else:
-
-            combined_rows = model.export_rows()
-
-            combined_rows.extend(prepared_rows)
-
-            model.load_rows(combined_rows)
+        merged_rows = self._merge_with_materias_primas(merged_rows, key)
+        model.load_rows(merged_rows)
 
         model._reindex()
 
         if hasattr(model, "recalculate"):
-
             for idx in range(model.rowCount()):
-
                 try:
-
                     model.recalculate(idx)  # type: ignore[attr-defined]
-
                 except Exception:
-
                     continue
-
         else:
-
             self._recalculate_menu_rows(key)
+        self._set_dirty(True)
 
 
     def _recalculate_menu_rows(self, key: str) -> None:
@@ -4807,507 +4936,149 @@ def _format_preview_value(kind: str, value: Any) -> str:
 
 
 class GuardarModeloDialog(QDialog):
-
-
-
     def __init__(self, session, user_id: int, tipo_menu: str, linhas: Sequence[Mapping[str, Any]], parent=None, *, svc_module, window_title: Optional[str] = None):
-
-
-
-
-
-
-
         super().__init__(parent)
-
-
-
-
-
-
-
         self.session = session
-
-
-
-
-
-
-
         self.user_id = user_id
-
-
-
-
-
-
-
         self.tipo_menu = tipo_menu
-
-
-
-
-
-
-
         if svc_module is None:
-
-
-
-
-
-
-
             raise ValueError("GuardarModeloDialog requires svc_module")
-
-
-
-
-
-
-
         self.svc = svc_module
-
-
-
-
-
-
-
+        self.global_prefix = getattr(self.svc, "GLOBAL_PREFIX", "__GLOBAL__|")
         self.window_title = window_title or "Guardar Modelo"
-
-
-
-
-
-
-
         self.setWindowTitle(self.window_title)
 
-
-
-
-
-
-
         self.linhas = [dict(row) for row in linhas]
-
-
-
         self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
-
-
-
         self.replace_model_id: Optional[int] = None
-
-
-
         self.model_name: str = ""
-
-
-
-
-
-
-
-        self.setWindowTitle("Guardar Modelo")
-
-
+        self.is_global: bool = False
+        self.add_timestamp: bool = True
 
         self.resize(900, 600)
-
-
-
-
-
-
-
         layout = QVBoxLayout(self)
-
-
-
         split = QHBoxLayout()
 
-
-
-
-
-
-
         self.models_list = QListWidget()
-
-
-
         self.models_list.itemSelectionChanged.connect(self._on_model_selected)
-
-
-
         split.addWidget(self.models_list, 1)
 
-
-
-
-
-
-
         self.preview_table = QTableWidget()
-
-
-
         self.preview_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
-
-
         self.preview_table.setSelectionMode(QAbstractItemView.NoSelection)
-
-
-
         split.addWidget(self.preview_table, 2)
-
-
-
-
-
-
-
         layout.addLayout(split)
 
-
-
-
-
-
-
         form = QFormLayout()
-
-
-
         self.name_edit = QLineEdit()
-
-
-
         form.addRow("Nome do modelo:", self.name_edit)
-
-
-
+        self.chk_timestamp = QCheckBox("Adicionar data/hora ao nome")
+        self.chk_timestamp.setChecked(True)
+        form.addRow("", self.chk_timestamp)
+        self.chk_global = QCheckBox("Disponibilizar como Global (todos os utilizadores)")
+        form.addRow("", self.chk_global)
         layout.addLayout(form)
 
-
-
-
-
-
-
         self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-
-
-
         self.button_box.accepted.connect(self.accept)
-
-
-
         self.button_box.rejected.connect(self.reject)
-
-
-
         layout.addWidget(self.button_box)
 
-
-
-
-
-
-
         self._populate_models()
-
-
-
         self._populate_preview()
-
-
-
         if self.models_list.count() > 0:
-
-
-
             self.models_list.setCurrentRow(0)
 
-
-
-
-
-
-
     def _filtered_lines(self) -> List[Dict[str, Any]]:
+        return [dict(row) for row in self.linhas]
 
-
-
-        fields = self.svc.MENU_FIELDS.get(self.tipo_menu, ())
-
-
-
-        filtered: List[Dict[str, Any]] = []
-
-
-
-        for row in self.linhas:
-
-
-
-            if any((row.get(field) not in (None, "", 0, 0.0)) for field in fields if field not in ("grupo_material",)):
-
-
-
-                filtered.append(dict(row))
-
-
-
-        return filtered
-
-
-
-
-
-
+    def _display_name(self, model) -> str:
+        name = getattr(model, "nome_modelo", "") or ""
+        is_global = name.startswith(self.global_prefix)
+        clean = name[len(self.global_prefix):] if is_global else name
+        label = f"[Global] {clean}" if is_global else clean
+        created = getattr(model, "created_at", None)
+        if created:
+            label += f" ({created})"
+        return label
 
     def _populate_models(self) -> None:
-
-
-
         self.models_list.clear()
-
-
-
         for model in self.models:
-
-
-
-            display = model.nome_modelo
-
-
-
-            created = getattr(model, "created_at", None)
-
-
-
-            if created:
-
-
-
-                try:
-
-
-
-                    display += f" ({created})"
-
-
-
-                except Exception:
-
-
-
-                    display += f" ({str(created)})"
-
-
-
-            item = QListWidgetItem(display)
-
-
-
+            item = QListWidgetItem(self._display_name(model))
             item.setData(Qt.UserRole, model.id)
-
-
-
             self.models_list.addItem(item)
 
-
-
-
-
-
-
     def _populate_preview(self) -> None:
-
-
-
         columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
-
-
-
         rows = self._filtered_lines()
-
-
-
         limit = min(len(rows), 12)
-
-
-
         self.preview_table.setColumnCount(len(columns))
-
-
-
         self.preview_table.setRowCount(limit)
-
-
-
-        self.preview_table.setHorizontalHeaderLabels([col[0] for col in columns])
-
-
-
+        for col_idx, (header, _, _) in enumerate(columns):
+            item = QtWidgets.QTableWidgetItem(header)
+            f = item.font(); f.setBold(True); item.setFont(f)
+            self.preview_table.setHorizontalHeaderItem(col_idx, item)
         for row_idx in range(limit):
-
-
-
             row_data = rows[row_idx]
-
-
-
             for col_idx, (_, key, kind) in enumerate(columns):
-
-
-
-                text = _format_preview_value(kind, row_data.get(key))
-
-
-
-                item = QTableWidgetItem(text)
-
-
-
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-
-
-
+                item = QtWidgets.QTableWidgetItem(_format_preview_value(kind, row_data.get(key)))
                 self.preview_table.setItem(row_idx, col_idx, item)
-
-
-
         self.preview_table.resizeColumnsToContents()
 
-
-
-
-
-
-
     def _on_model_selected(self) -> None:
-
-
-
         item = self.models_list.currentItem()
-
-
-
         if not item:
-
-
-
+            self.preview_table.clearContents()
+            self.preview_table.setRowCount(0)
             return
-
-
-
-        self.name_edit.setText(item.text().split(" (")[0])
-
-
-
-
-
-
+        model_id = item.data(Qt.UserRole)
+        current_model = next((m for m in self.models if m.id == model_id), None)
+        self.current_model = current_model
+        if not current_model:
+            return
+        self.model_name = current_model.nome_modelo
+        try:
+            self.current_lines = self.svc.carregar_modelo(self.session, current_model.id)["linhas"]
+        except Exception:
+            self.current_lines = []
+        self.preview_table.clearContents()
+        self.preview_table.setRowCount(len(self.current_lines))
+        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
+        for row_idx, row_data in enumerate(self.current_lines):
+            for col_idx, (_, key, kind) in enumerate(columns):
+                item = QtWidgets.QTableWidgetItem(_format_preview_value(kind, row_data.get(key)))
+                self.preview_table.setItem(row_idx, col_idx, item)
+        self.preview_table.resizeColumnsToContents()
 
     def accept(self) -> None:
-
-
-
         name = self.name_edit.text().strip()
-
-
-
         if not name:
-
-
-
             QtWidgets.QMessageBox.warning(self, "Aviso", "Indique um nome para o modelo.")
-
-
-
             return
-
-
+        self.add_timestamp = self.chk_timestamp.isChecked()
+        self.is_global = self.chk_global.isChecked()
 
         replace_id: Optional[int] = None
-
-
-
+        target_name = f"{self.global_prefix if self.is_global else ''}{name}".lower()
         for model in self.models:
-
-
-
-            if model.nome_modelo.strip().lower() == name.lower():
-
-
-
+            existing_name = (getattr(model, "nome_modelo", "") or "").lower()
+            if existing_name == target_name:
                 answer = QtWidgets.QMessageBox.question(
-
-
-
                     self,
-
-
-
                     "Substituir",
-
-
-
                     f"Ja existe um modelo chamado '{name}'. Deseja substituir?",
-
-
-
                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-
-
-
                     QtWidgets.QMessageBox.No,
-
-
-
                 )
-
-
-
                 if answer != QtWidgets.QMessageBox.Yes:
-
-
-
                     return
-
-
-
                 replace_id = model.id
-
-
-
                 break
 
-
-
         self.model_name = name
-
-
-
         self.replace_model_id = replace_id
-
-
-
         super().accept()
-
-
-
-
-
-
-
-
-
 
 
 class ImportarModeloDialog(QDialog):
@@ -6476,9 +6247,181 @@ class ImportarMultiModelosDialog(QDialog):
 
         self.selections = selections
 
-
-
         super().accept()
+
+
+class MateriaPrimaConflictDialogDG(QtWidgets.QDialog):
+    COLS_DISPLAY = [
+        ("ref_le", "Ref_LE"),
+        ("descricao_material", "Descrição Material"),
+        ("preco_tab", "Preço Tabela"),
+        ("preco_liq", "Preço Líquido"),
+        ("margem", "Margem"),
+        ("desconto", "Desconto"),
+        ("und", "Und"),
+    ]
+
+    def __init__(self, conflicts: Mapping[int, Mapping[str, Any]], parent=None, line_header: str = "Linha") -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Diferenças entre Dados do Modelo vs Matérias-Primas")
+        self.resize(1900, 840)
+        self._choices: Dict[int, bool] = {}  # row_idx -> use_mp
+        self._conflicts = conflicts
+        self._line_header = line_header
+
+        layout = QtWidgets.QVBoxLayout(self)
+        info = QtWidgets.QLabel(
+            "Foram encontradas diferenças entre o modelo importado e a tabela de Matérias-Primas.\n"
+            "Para cada linha, escolha se pretende aplicar os valores do Modelo ou da Matéria-Prima."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+
+        self.table_model = QtWidgets.QTableWidget()
+        self.COLS_MODEL = [("label", line_header)] + self.COLS_DISPLAY
+        self.table_model.setColumnCount(len(self.COLS_MODEL) + 1)
+        self.table_model.setHorizontalHeaderLabels(["Usar Modelo"] + [label for _, label in self.COLS_MODEL])
+        self.table_model.setRowCount(len(conflicts))
+
+        self.table_mp = QtWidgets.QTableWidget()
+        self.table_mp.setColumnCount(len(self.COLS_DISPLAY) + 1)
+        self.table_mp.setHorizontalHeaderLabels(["Usar MP"] + [label for _, label in self.COLS_DISPLAY])
+        self.table_mp.setRowCount(len(conflicts))
+
+        header_wrapper = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout(header_wrapper)
+        lbl_model = QtWidgets.QLabel("<b>DADOS DO MODELO</b>")
+        lbl_mp = QtWidgets.QLabel("<b>DADOS MATÉRIAS-PRIMAS</b>")
+        header_layout.addWidget(lbl_model, 1)
+        header_layout.addWidget(lbl_mp, 1)
+        layout.addWidget(header_wrapper)
+
+        def _format_value(field: str, val: Any) -> str:
+            if val is None or val == "":
+                return ""
+            try:
+                num = float(val)
+            except Exception:
+                return str(val)
+            if field in {"preco_tab", "preco_liq"}:
+                return f"{num:,.2f} \u20ac"
+            if field in {"margem", "desconto"}:
+                return f"{num*100:.2f} %"
+            return str(val)
+
+        sorted_conflicts = list(conflicts.items())
+        self._row_keys = [row_idx for row_idx, _ in sorted_conflicts]
+        for r_idx, (row_idx, data) in enumerate(sorted_conflicts):
+            model_data = data.get("model", {})
+            mp_data = data.get("mp_full") or data.get("mp", {})
+            label_val = data.get("label", "")
+
+            chk_model = QtWidgets.QTableWidgetItem()
+            chk_model.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            chk_model.setCheckState(QtCore.Qt.Unchecked)
+            self.table_model.setItem(r_idx, 0, chk_model)
+
+            chk_mp = QtWidgets.QTableWidgetItem()
+            chk_mp.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled)
+            chk_mp.setCheckState(QtCore.Qt.Checked)
+            self.table_mp.setItem(r_idx, 0, chk_mp)
+            self._choices[row_idx] = True
+
+            for c_idx, (field, _) in enumerate(self.COLS_MODEL, start=1):
+                val = label_val if field == "label" else model_data.get(field)
+                item_model = QtWidgets.QTableWidgetItem(_format_value(field, val))
+                self.table_model.setItem(r_idx, c_idx, item_model)
+
+            def _mp_val(*keys: str):
+                for k in keys:
+                    if k in mp_data and mp_data.get(k) not in (None, ""):
+                        return mp_data.get(k)
+                    upper = k.upper()
+                    if upper in mp_data and mp_data.get(upper) not in (None, ""):
+                        return mp_data.get(upper)
+                return mp_data.get(keys[0], None)
+
+            mp_display = {
+                "ref_le": _mp_val("ref_le"),
+                "descricao_material": _mp_val(
+                    "descricao_material",
+                    "descricao_no_orcamento",
+                    "descricao_orcamento",
+                    "DESCRICAO_no_ORCAMENTO",
+                    "DESCRICAO_ORCAMENTO",
+                ),
+                "preco_tab": _mp_val("preco_tab", "preco_tabela", "PRECO_TABELA"),
+                "preco_liq": _mp_val("preco_liq", "pliq", "PLIQ"),
+                "margem": _mp_val("margem", "MARGEM"),
+                "desconto": _mp_val("desconto", "DESCONTO"),
+                "und": _mp_val("und", "UND"),
+            }
+
+            for mp_c_idx, (field, _) in enumerate(self.COLS_DISPLAY, start=1):
+                mp_val = mp_display.get(field)
+                item_mp = QtWidgets.QTableWidgetItem(_format_value(field, mp_val))
+                model_val = model_data.get(field)
+                if str(model_val) != str(mp_val):
+                    item_mp.setBackground(QtGui.QColor("#e0e0e0"))
+                    model_item = self.table_model.item(r_idx, mp_c_idx + 1)
+                    if model_item:
+                        model_item.setBackground(QtGui.QColor("#e0e0e0"))
+                self.table_mp.setItem(r_idx, mp_c_idx, item_mp)
+
+        self.table_model.resizeColumnsToContents()
+        self.table_mp.resizeColumnsToContents()
+        splitter.addWidget(self.table_model)
+        splitter.addWidget(self.table_mp)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        layout.addWidget(splitter, 1)
+
+        btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+        self.table_model.itemChanged.connect(self._on_model_item_changed)
+        self.table_mp.itemChanged.connect(self._on_mp_item_changed)
+
+    def selected_sources(self) -> Dict[int, bool]:
+        return dict(self._choices)
+
+    def _toggle_choice(self, row_key: int, use_mp: bool) -> None:
+        self._choices[row_key] = use_mp
+        row_idx = self._row_keys.index(row_key)
+        m_item = self.table_model.item(row_idx, 0)
+        p_item = self.table_mp.item(row_idx, 0)
+        if not m_item or not p_item:
+            return
+        with QtCore.QSignalBlocker(self.table_model), QtCore.QSignalBlocker(self.table_mp):
+            if use_mp:
+                p_item.setCheckState(QtCore.Qt.Checked)
+                m_item.setCheckState(QtCore.Qt.Unchecked)
+            else:
+                m_item.setCheckState(QtCore.Qt.Checked)
+                p_item.setCheckState(QtCore.Qt.Unchecked)
+
+    def _on_model_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.column() != 0:
+            return
+        row_idx = item.row()
+        if not (0 <= row_idx < len(self._row_keys)):
+            return
+        use_model = item.checkState() == QtCore.Qt.Checked
+        self._toggle_choice(self._row_keys[row_idx], use_mp=not use_model)
+
+    def _on_mp_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        if item.column() != 0:
+            return
+        row_idx = item.row()
+        if not (0 <= row_idx < len(self._row_keys)):
+            return
+        use_mp = item.checkState() == QtCore.Qt.Checked
+        self._toggle_choice(self._row_keys[row_idx], use_mp=use_mp)
+
 
 
 

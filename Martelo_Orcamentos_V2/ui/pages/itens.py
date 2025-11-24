@@ -8,6 +8,7 @@
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple, Mapping
 from pathlib import Path
+import sys
 import logging
 
 # PySide6
@@ -105,9 +106,18 @@ def _load_ui_into(widget: QtWidgets.QWidget, ui_path: str) -> QtWidgets.QWidget:
     Ex.: no .ui existe QLineEdit com objectName 'edit_codigo' ? podes usar self.edit_codigo.
     """
     loader = QUiLoader()
-    f = QFile(ui_path)
+    ui_candidates = [Path(ui_path)]
+    mei_base = getattr(sys, "_MEIPASS", None)
+    if mei_base:
+        mei_base = Path(mei_base)
+        ui_candidates.append(mei_base / Path(ui_path).name)
+        ui_candidates.append(mei_base / "Martelo_Orcamentos_V2" / "ui" / "forms" / Path(ui_path).name)
+    ui_file = next((p for p in ui_candidates if p.exists()), None)
+    if ui_file is None:
+        raise FileNotFoundError(f"Não consegui abrir UI: {ui_path}")
+    f = QFile(str(ui_file))
     if not f.open(QFile.ReadOnly):
-        raise FileNotFoundError(f"N?o consegui abrir UI: {ui_path}")
+        raise FileNotFoundError(f"Não consegui abrir UI: {ui_file}")
     try:
         loaded = loader.load(f, widget)
     finally:
@@ -355,6 +365,8 @@ class ItensPage(QtWidgets.QWidget):
         cost_font.setBold(True)
         cost_font.setPointSize(cost_font.pointSize() + 1)
         self.btn_update_costs.setFont(cost_font)
+        self._costs_dirty = False
+        self._base_update_costs_text = self.btn_update_costs.text()
 
         self.lbl_custeio_status = QtWidgets.QLabel("", self)
         self.lbl_custeio_status.setObjectName("lbl_custeio_status")
@@ -443,7 +455,6 @@ class ItensPage(QtWidgets.QWidget):
         objetivo_actions = QtWidgets.QHBoxLayout()
         objetivo_actions.setContentsMargins(0, 4, 0, 0)
         objetivo_actions.addStretch(1)
-        objetivo_actions.addWidget(self.btn_objetivo_apply)
         margem_layout.addLayout(objetivo_actions, update_row + 2, 0, 1, 4)
 
         button_row = QtWidgets.QHBoxLayout()
@@ -453,6 +464,7 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_margens_save.setEnabled(False)
         self.btn_margens_reset = QtWidgets.QPushButton("Repor Valores Padrão", self._margem_panel)
         self.btn_margens_reset.clicked.connect(self._on_reset_margens_clicked)
+        button_row.addWidget(self.btn_objetivo_apply)
         button_row.addWidget(self.btn_margens_save)
         button_row.addWidget(self.btn_margens_reset)
         button_row.addStretch(1)
@@ -492,6 +504,7 @@ class ItensPage(QtWidgets.QWidget):
             dims_actions_layout.setStretch(0, 2)
             dims_actions_layout.setStretch(1, 3)
         self.refresh_margem_defaults()
+        self._rebuild_form_layout()
 
         self._update_mode_buttons()
         self.btn_add.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder))
@@ -790,6 +803,7 @@ class ItensPage(QtWidgets.QWidget):
             """
         )
         self.table.clicked.connect(self._on_table_clicked)
+        self.model.dataChanged.connect(lambda *_, **__: self._set_costs_dirty(True))
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
@@ -944,11 +958,19 @@ class ItensPage(QtWidgets.QWidget):
         if not self._orc_id:
             self.model.set_rows([])
             self._clear_form()
+            self._set_costs_dirty(False)
             return
 
-        rows = list_items(self.db, self._orc_id)
+        versao_filtro = (self.lbl_ver_val.text() or '').strip() or None
+        if versao_filtro:
+            try:
+                versao_filtro = f"{int(versao_filtro):02d}"
+            except Exception:
+                pass
+        rows = list_items(self.db, self._orc_id, versao=versao_filtro)
         self.model.set_rows(rows)
         self._apply_row_height()
+        self._set_costs_dirty(False)
 
         if rows:
             row_to_select: Optional[int] = None
@@ -1046,6 +1068,101 @@ class ItensPage(QtWidgets.QWidget):
     def _update_cost_button_state(self) -> None:
         if hasattr(self, "btn_update_costs"):
             self.btn_update_costs.setEnabled(bool(self._orc_id))
+            self._apply_costs_button_text()
+
+    def _apply_costs_button_text(self) -> None:
+        if not hasattr(self, "btn_update_costs"):
+            return
+        base = getattr(self, "_base_update_costs_text", "Atualizar Custos")
+        text = f"{base}*" if getattr(self, "_costs_dirty", False) else base
+        self.btn_update_costs.setText(text)
+
+    def _set_costs_dirty(self, dirty: bool) -> None:
+        dirty = bool(dirty)
+        if getattr(self, "_costs_dirty", False) == dirty:
+            return
+        self._costs_dirty = dirty
+        self._apply_costs_button_text()
+
+    def _clear_layout_items(self, layout: Optional[QtWidgets.QLayout]) -> None:
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            if widget is not None:
+                widget.setParent(None)
+            if child_layout is not None:
+                self._clear_layout_items(child_layout)
+
+    def _rebuild_form_layout(self) -> None:
+        frame = getattr(self, "form_frame", None)
+        if not isinstance(frame, QtWidgets.QFrame):
+            return
+        base_layout = frame.layout()
+        if not isinstance(base_layout, QtWidgets.QGridLayout):
+            return
+        self._clear_layout_items(base_layout)
+        base_layout.setContentsMargins(8, 6, 8, 6)
+        base_layout.setHorizontalSpacing(0)
+        base_layout.setVerticalSpacing(0)
+
+        main_layout = QtWidgets.QHBoxLayout()
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(4, 2, 4, 2)
+
+        left_group = QtWidgets.QGroupBox("Item do Orçamento", frame)
+        left_group.setFlat(False)
+        left_group_layout = QtWidgets.QVBoxLayout(left_group)
+        left_group_layout.setContentsMargins(10, 8, 10, 20) # left, top, right, bottom
+        left_group_layout.setSpacing(8)
+
+        def _field(label_text: str, widget: QtWidgets.QWidget, width: Optional[int] = None) -> QtWidgets.QWidget:
+            container = QtWidgets.QWidget(frame)
+            lay = QtWidgets.QHBoxLayout(container)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(4)
+            lbl = QtWidgets.QLabel(label_text, container)
+            lbl.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
+            lay.addWidget(lbl)
+            widget.setParent(container)
+            if width:
+                widget.setFixedWidth(width)
+            lay.addWidget(widget)
+            return container
+
+        fields_row = QtWidgets.QHBoxLayout()
+        fields_row.setSpacing(12)
+        fields_row.addWidget(_field("Item", self.edit_item, 70))
+        fields_row.addWidget(_field("Código", self.edit_codigo, 200))
+        fields_row.addWidget(_field("Altura", self.edit_altura, 100))
+        fields_row.addWidget(_field("Largura", self.edit_largura, 100))
+        fields_row.addWidget(_field("Profundidade", self.edit_profundidade, 100))
+        fields_row.addWidget(_field("Qt", self.edit_qt, 70))
+        fields_row.addWidget(_field("Und", self.edit_und, 80))
+        fields_row.addStretch(1)
+        left_group_layout.addLayout(fields_row)
+
+        desc_row = QtWidgets.QHBoxLayout()
+        desc_row.setContentsMargins(0, 0, 0, 0) # 3 px de “folga” por baixo
+        desc_row.setSpacing(6)
+        desc_label = QtWidgets.QLabel("Descrição", frame)
+        desc_label.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+        desc_row.addWidget(desc_label)
+        self.edit_descricao.setParent(frame)
+        self.edit_descricao.setMinimumHeight(180)
+        desc_row.addWidget(self.edit_descricao, 1)
+        left_group_layout.addLayout(desc_row)
+
+        main_layout.addWidget(left_group, 3)
+
+        if hasattr(self, "_top_right_panel") and isinstance(self._top_right_panel, QtWidgets.QWidget):
+            self._top_right_panel.setParent(frame)
+            self._top_right_panel.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+            main_layout.addWidget(self._top_right_panel, 0, QtCore.Qt.AlignTop)
+
+        base_layout.addLayout(main_layout, 0, 0, 1, 1)
 
     def _set_custeio_status(self, text: Optional[str], *, busy: bool = False) -> None:
         label = getattr(self, "lbl_custeio_status", None)
@@ -1410,6 +1527,7 @@ class ItensPage(QtWidgets.QWidget):
 
         if button:
             button.setEnabled(True)
+        self._set_costs_dirty(False)
 
         if atualizados:
             self._show_toast(button or self.table, f"Custos atualizados para {atualizados} item(s).")
@@ -2180,7 +2298,6 @@ class ItensPage(QtWidgets.QWidget):
         id_item = self.selected_id()
         if not id_item:
             return
-        row = self.table.currentIndex().row()
         try:
             move_item(self.db, id_item, direction, moved_by=self._current_user_id())
             self.db.commit()
@@ -2188,7 +2305,8 @@ class ItensPage(QtWidgets.QWidget):
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao mover: {e}")
             return
-        self.refresh(select_row=row)
+        # Recarrega mantendo o item selecionado no novo posicionamento
+        self.refresh(select_id=id_item)
 
     def on_expand_rows(self):
         if hasattr(self, "btn_toggle_rows"):

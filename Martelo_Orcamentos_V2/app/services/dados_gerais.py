@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 import logging
+from datetime import datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -355,6 +356,9 @@ MENU_DEFAULT_FAMILIA = {
     MENU_SIS_CORRER: "FERRAGENS",
     MENU_ACABAMENTOS: "ACABAMENTOS",
 }
+
+MODEL_COMMON_FIELDS = ("ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und")
+GLOBAL_PREFIX = "__GLOBAL__|"
 
 LAYOUT_NAMESPACE = "dados_gerais"
 
@@ -981,7 +985,10 @@ def _prepare_model_line(menu: str, row: Mapping[str, Any], ordem: int) -> Dict[s
     primary = MENU_PRIMARY_FIELD.get(menu)
     default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
     grupo_valor = row.get(primary) if primary else None
-    for field in MENU_FIELDS[menu]:
+    # apenas os campos relevantes para o modelo (colunas visíveis comuns)
+    fields_to_keep = [primary] if primary else []
+    fields_to_keep += list(MODEL_COMMON_FIELDS)
+    for field in fields_to_keep:
         value = row.get(field)
         if field == primary:
             if menu == MENU_MATERIAIS:
@@ -1002,7 +1009,9 @@ def _deserialize_model_line(menu: str, payload: Mapping[str, Any]) -> Dict[str, 
     row: Dict[str, Any] = {"ordem": int(payload.get("ordem", 0))}
     primary = MENU_PRIMARY_FIELD.get(menu)
     default_familia = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
-    for field in MENU_FIELDS[menu]:
+    fields_to_keep = [primary] if primary else []
+    fields_to_keep += list(MODEL_COMMON_FIELDS)
+    for field in fields_to_keep:
         value = payload.get(field)
         coerced = _coerce_field(menu, field, value)
         if menu == MENU_MATERIAIS and field == "preco_liq" and coerced is None:
@@ -1022,11 +1031,17 @@ def guardar_modelo(
     tipo_menu: str,
     nome_modelo: str,
     linhas: Sequence[Mapping[str, Any]],
+    is_global: bool = False,
+    add_timestamp: bool = False,
     replace_id: Optional[int] = None,
 ) -> DadosGeraisModelo:
     if tipo_menu not in MODEL_MAP:
         raise ValueError("Tipo de menu invalido")
     nome_limpo = nome_modelo.strip()
+    if add_timestamp:
+        nome_limpo = f"{nome_limpo} ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+    if is_global:
+        nome_limpo = f"{GLOBAL_PREFIX}{nome_limpo}"
     if not nome_limpo:
         raise ValueError("Nome do modelo obrigatorio")
     if replace_id:
@@ -1064,7 +1079,9 @@ def guardar_modelo(
 
 
 def listar_modelos(db: Session, *, user_id: int, tipo_menu: Optional[str] = None) -> List[DadosGeraisModelo]:
-    stmt = select(DadosGeraisModelo).where(DadosGeraisModelo.user_id == user_id)
+    stmt = select(DadosGeraisModelo).where(
+        (DadosGeraisModelo.user_id == user_id) | (DadosGeraisModelo.nome_modelo.startswith(GLOBAL_PREFIX))
+    )
     if tipo_menu:
         stmt = stmt.where(DadosGeraisModelo.tipo_menu == tipo_menu)
     stmt = stmt.order_by(DadosGeraisModelo.created_at.desc(), DadosGeraisModelo.id.desc())
@@ -1074,7 +1091,11 @@ def listar_modelos(db: Session, *, user_id: int, tipo_menu: Optional[str] = None
 def carregar_modelo(db: Session, modelo_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
     stmt = select(DadosGeraisModelo).where(DadosGeraisModelo.id == modelo_id)
     if user_id is not None:
-        stmt = stmt.where(DadosGeraisModelo.user_id == user_id)
+        stmt = stmt.where(
+            (DadosGeraisModelo.user_id == user_id)
+            | (DadosGeraisModelo.user_id.is_(None))
+            | (DadosGeraisModelo.nome_modelo.startswith(GLOBAL_PREFIX))
+        )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:
         raise ValueError("Modelo nao encontrado")

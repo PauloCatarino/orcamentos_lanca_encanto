@@ -5,6 +5,7 @@ from .item_children import (
     DadosModuloMedidas,
     DadosDefPecas,
 )
+from .modulo import CusteioModulo, CusteioModuloLinha
 from .materia_prima import MateriaPrima, MateriaPrimaPreference
 from .dados_gerais import (
     DadosGeraisMaterial,

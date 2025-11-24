@@ -6,7 +6,9 @@ from __future__ import annotations
 
 
 
+from copy import deepcopy
 from functools import partial
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 import logging
 import ast
@@ -23,14 +25,17 @@ import shiboken6
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
+from Martelo_Orcamentos_V2.app.services import modulos as svc_modulos
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
+from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate, BoolDelegate
+from ..dialogs.custeio_modulos import ImportModuloDialog, SaveModuloDialog
 
 SPECIAL_MAT_DEFAULTS = {
     "divisoria": "Divisorias",
@@ -322,16 +327,17 @@ HEADER_TOOLTIPS = {
 
 CELL_TOOLTIP_KEYS = set(HEADER_TOOLTIPS.keys()) | {"descricao"}
 
+# Column display/configuration helpers Larguras padrao para colunas na tabela de itens de custeio
 COLUMN_WIDTH_DEFAULTS = {
     "id": 55,
     "descricao_livre": 170,
     "icon_hint": 36,
     "def_peca": 170,
-    "descricao": 200,
+    "descricao": 150,
     "qt_mod": 60,
     "qt_und": 50,
-    "comp": 40,
-    "larg": 40,
+    "comp": 50,
+    "larg": 50,
     "esp": 40,
     "mps": 40,
     "mo": 40,
@@ -345,18 +351,18 @@ COLUMN_WIDTH_DEFAULTS = {
     "comp_res": 50,
     "larg_res": 50,
     "esp_res": 50,
-    "ref_le": 70,
-    "descricao_no_orcamento": 200,
+    "ref_le": 65,
+    "descricao_no_orcamento": 250,
     "pliq": 50,
     "und": 30,
-    "desp": 40,
+    "desp": 45,
     "orl_0_4": 70,
     "orl_1_0": 70,
     "tipo": 100,
     "familia": 100,
-    "comp_mp": 70,
-    "larg_mp": 70,
-    "esp_mp": 70,
+    "comp_mp": 60,
+    "larg_mp": 60,
+    "esp_mp": 60,
     "orl_c1": 50,
     "orl_c2": 50,
     "orl_l1": 50,
@@ -764,6 +770,20 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def _coerce_numeric(value: Any) -> Optional[float]:
         if value in (None, "", False):
             return None
+        # aceita "." ou "," como separador decimal e ignora símbolos de moeda/percentagem/espaços
+        if isinstance(value, str):
+            try:
+                cleaned = value.strip()
+                cleaned = cleaned.replace("€", "").replace("EUR", "").replace("%", "")
+                cleaned = cleaned.replace(" ", "").replace(" ", "")
+                cleaned = cleaned.replace(",", ".")
+                if cleaned.count(".") > 1:
+                    # remove separadores de milhar simples (ex: 1.234,56 -> 1234.56)
+                    parts = cleaned.split(".")
+                    cleaned = "".join(parts[:-1]) + "." + parts[-1]
+                return float(cleaned)
+            except Exception:
+                return None
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -4572,6 +4592,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._production_mode_cache: str = "STD"
         self._production_rates_by_desc: Dict[str, Dict[str, float]] = {}
         self._production_rates_by_abbrev: Dict[str, Dict[str, float]] = {}
+        self._last_gravar_row: Optional[int] = None
+        self._bold_font_cache: Dict[str, QtGui.QFont] = {}
+        self._full_plates_mode: bool = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
+        self._full_plates_mode: bool = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
 
         self._setup_ui()
 
@@ -4612,12 +4636,22 @@ class CusteioItemsPage(QtWidgets.QWidget):
         try:
             modo = svc_producao.get_mode(self.session, ctx)
         except Exception as exc:
+            try:
+                if getattr(self, "session", None):
+                    self.session.rollback()
+            except Exception:
+                pass
             logger.exception("Custeio._refresh_production_cache get_mode failed: %s", exc)
             modo = "STD"
         self._production_mode_cache = (modo or "STD").upper()
         try:
             valores = svc_producao.load_values(self.session, ctx)
         except Exception as exc:
+            try:
+                if getattr(self, "session", None):
+                    self.session.rollback()
+            except Exception:
+                pass
             logger.exception("Custeio._refresh_production_cache load_values failed: %s", exc)
             valores = []
         for entry in valores:
@@ -4643,6 +4677,37 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._ensure_production_cache()
         modo = (self._production_mode_cache or "STD").upper()
         return "SERIE" if modo == "SERIE" else "STD"
+
+    def _update_auto_fill_icon(self, force: bool = False, override_state: Optional[bool] = None) -> None:
+        if not hasattr(self, "btn_auto_fill"):
+            return
+        if self.context is None:
+            self.btn_auto_fill.setIcon(QtGui.QIcon())
+            self.btn_auto_fill.setStyleSheet("")
+            self.btn_auto_fill.setToolTip("Copiar os Dados Gerais para as 4 tabelas de Dados Items do item corrente.")
+            return
+        if not force and getattr(self, "_auto_fill_icon_busy", False):
+            return
+        self._auto_fill_icon_busy = True
+        try:
+            if override_state is None:
+                di_ctx = svc_dados_items.carregar_contexto(
+                    self.session, self.context.orcamento_id, self.context.item_id
+                )
+                in_sync = svc_dados_items.dados_items_em_sincronia_com_gerais(self.session, di_ctx)
+            else:
+                in_sync = bool(override_state)
+        except Exception:
+            in_sync = False
+        if in_sync:
+            self.btn_auto_fill.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+            self.btn_auto_fill.setStyleSheet("background-color: #d4edda; color: #0f5132;")
+            self.btn_auto_fill.setToolTip("Dados Items estão sincronizados com os Dados Gerais.")
+        else:
+            self.btn_auto_fill.setIcon(QtGui.QIcon())
+            self.btn_auto_fill.setStyleSheet("background-color: #f8d7da; color: #842029;")
+            self.btn_auto_fill.setToolTip("Dados Items não estão sincronizados com os Dados Gerais. Clique para atualizar.")
+        self._auto_fill_icon_busy = False
 
     def get_production_rate_info(self, key: str) -> Optional[Dict[str, float]]:
         self._ensure_production_cache()
@@ -4987,11 +5052,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_next_item.setEnabled(False)
         self.btn_next_item.clicked.connect(self._on_next_item_clicked)
 
+        self.btn_auto_fill = QtWidgets.QPushButton("Preencher Dados Items")
+        self.btn_auto_fill.setToolTip("Copiar os Dados Gerais para as 4 tabelas de Dados Items do item corrente.")
+
         actions_layout.addWidget(self.btn_refresh)
 
         actions_layout.addWidget(self.btn_save)
         actions_layout.addWidget(self.btn_prev_item)
         actions_layout.addWidget(self.btn_next_item)
+        actions_layout.addWidget(self.btn_auto_fill)
 
         actions_layout.addStretch(1)
 
@@ -5021,12 +5090,57 @@ class CusteioItemsPage(QtWidgets.QWidget):
             value_item = QtWidgets.QTableWidgetItem("")
             value_item.setTextAlignment(QtCore.Qt.AlignCenter)
             self.dimensions_table.setItem(1, col, value_item)
-            self.dimensions_table.setColumnWidth(col, 60)
+            self.dimensions_table.setColumnWidth(col, 50)
         self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
         self.dimensions_table.setEnabled(False)
-        right_layout.addWidget(self.dimensions_table)
+        max_width = len(DIMENSION_KEY_ORDER) * 52
+        self.dimensions_table.setMaximumWidth(max_width)
+        dim_line = QtWidgets.QHBoxLayout()
+        dim_line.setSpacing(8)
+        dim_line.addWidget(self.dimensions_table, 1)
+
+        module_btns = QtWidgets.QVBoxLayout()
+        module_btns.setSpacing(6)
+        self.btn_save_module = QtWidgets.QPushButton("Guardar Modulo")
+        self.btn_save_module.setToolTip("Guardar linhas selecionadas (coluna GRAVAR_MODULO) como um módulo reutilizável.")
+        self.btn_import_module = QtWidgets.QPushButton("Importar Modulo")
+        self.btn_import_module.setToolTip("Importar módulos guardados e inserir linhas no custeio.")
+        self.btn_save_module.setMaximumWidth(120)
+        self.btn_import_module.setMaximumWidth(120)
+        self.btn_save_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.btn_import_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        module_btns.addWidget(self.btn_save_module)
+        module_btns.addWidget(self.btn_import_module)
+        module_btns.addStretch(1)
+
+        dim_line.addLayout(module_btns)
+
+        right_layout.addLayout(dim_line)
         self._update_dimension_table()
 
+        cache_font = self._bold_font_cache
+
+        def _bold(btn: QtWidgets.QAbstractButton) -> None:
+            key = btn.text() or btn.toolTip() or str(id(btn))
+            font = cache_font.get(key)
+            if font is None:
+                font = btn.font()
+                font.setBold(True)
+                cache_font[key] = font
+            btn.setFont(font)
+
+        style = self.style() or QtWidgets.QApplication.style()
+        self.btn_refresh.setIcon(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload))
+        _bold(self.btn_refresh)
+        self.btn_save.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
+        _bold(self.btn_save)
+        self.btn_auto_fill.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        _bold(self.btn_auto_fill)
+        self.btn_save_module.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
+        _bold(self.btn_save_module)
+        self.btn_import_module.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogOpenButton))
+        _bold(self.btn_import_module)
+        self._update_auto_fill_icon()
 
         self.table_view = CusteioTableView()
 
@@ -5121,6 +5235,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_refresh.clicked.connect(self._on_refresh_custeio)
 
         self.btn_save.clicked.connect(self._on_save_custeio)
+        self.btn_save_module.clicked.connect(self._on_save_modulo_clicked)
+        self.btn_import_module.clicked.connect(self._on_import_modulo_clicked)
+        self.btn_auto_fill.clicked.connect(self._on_auto_fill_dados_items)
 
         self._update_table_placeholder_visibility()
         self._update_save_button_text()
@@ -5936,6 +6053,105 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
+    def _linhas_para_modulo(self) -> List[Dict[str, Any]]:
+        if not getattr(self, "table_model", None):
+            return []
+        selecionadas: List[Dict[str, Any]] = []
+        for row in self.table_model.rows:
+            if svc_custeio._coerce_checkbox_to_bool(row.get("gravar_modulo")):
+                # Usa limpeza do serviço para evitar objetos Qt (ex.: ícones) no deepcopy
+                selecionadas.append(svc_modulos.limpar_linha_para_modulo(row))
+        return selecionadas
+
+    def _limpar_marcadores_modulo(self) -> None:
+        if not getattr(self, "table_model", None):
+            return
+        changed = False
+        for idx, row in enumerate(self.table_model.rows):
+            if svc_custeio._coerce_checkbox_to_bool(row.get("gravar_modulo")):
+                self.table_model.update_row_fields(idx, {"gravar_modulo": False})
+                changed = True
+        if changed:
+            self.table_model.recalculate_all()
+
+    def _on_save_modulo_clicked(self) -> None:
+        if not self.context:
+            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+            return
+        linhas = self._linhas_para_modulo()
+        if not linhas:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Informacao",
+                "Selecione as linhas que pretende gravar marcando a coluna GRAVAR_MODULO.",
+            )
+            return
+        dialog = SaveModuloDialog(self, self.session, self.current_user_id, linhas)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            self._limpar_marcadores_modulo()
+            QtWidgets.QMessageBox.information(self, "Sucesso", "Modulo gravado com sucesso.")
+
+    def _on_import_modulo_clicked(self) -> None:
+        if not self.context:
+            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+            return
+        dialog = ImportModuloDialog(self, self.session, self.current_user_id)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        linhas = dialog.linhas_importadas()
+        if not linhas:
+            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum modulo selecionado para importar.")
+            return
+        auto_dimensions = self._auto_dimensions_enabled()
+        if auto_dimensions:
+            try:
+                rules = svc_custeio.get_auto_dimension_rules(self.session, self.current_user_id)
+                svc_custeio.aplicar_dimensoes_automaticas(linhas, rules=rules)
+            except Exception:
+                pass
+        self.table_model.append_rows(linhas)
+        self.table_model.recalculate_all()
+        self._update_table_placeholder_visibility()
+        self._update_auto_fill_icon()
+
+    def _on_auto_fill_dados_items(self) -> None:
+        if not self.context:
+            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+            return
+        try:
+            di_ctx = svc_dados_items.carregar_contexto(self.session, self.context.orcamento_id, self.context.item_id)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao preparar contexto de Dados Items: {exc}")
+            return
+        # Confirmação se já há dados preenchidos
+        try:
+            existentes = svc_dados_items.carregar_dados_gerais(self.session, di_ctx)
+            ja_tem_dados = any(existing_rows for existing_rows in existentes.values() if existing_rows)
+        except Exception:
+            ja_tem_dados = False
+        if ja_tem_dados:
+            resp = QtWidgets.QMessageBox.question(
+                self,
+                "Confirmar atualização",
+                "Já existem dados preenchidos nas 4 tabelas de Dados Items.\nDeseja substituir pelos Dados Gerais?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No,
+            )
+            if resp != QtWidgets.QMessageBox.Yes:
+                return
+        try:
+            svc_dados_items.preencher_com_dados_gerais(self.session, di_ctx)
+        except Exception as exc:
+            self.session.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao preencher Dados Items: {exc}")
+            return
+        QtWidgets.QMessageBox.information(
+                self,
+            "Dados Items atualizados",
+            "As 4 tabelas de Dados Items foram preenchidas a partir dos Dados Gerais e gravadas.",
+        )
+        self._update_auto_fill_icon(force=True, override_state=True)
+
     def _on_refresh_custeio(self) -> None:
         if not self.context:
             QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
@@ -5944,8 +6160,76 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.session.expire_all()
         self._apply_updates_from_items()
         self.table_model.recalculate_all()
+        self._full_plates_mode = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
+        self._apply_full_plate_mode(self._full_plates_mode, from_load=True)
         self._update_table_placeholder_visibility()
 
+    def _coerce_float_simple(self, value: Any) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            return float(str(value).replace(",", "."))
+        except Exception:
+            return None
+
+    def _compute_full_plate_desp(self, row: Mapping[str, Any]) -> Optional[float]:
+        comp_mp = self._coerce_float_simple(row.get("comp_mp"))
+        larg_mp = self._coerce_float_simple(row.get("larg_mp"))
+        area_und = self._coerce_float_simple(row.get("area_m2_und"))
+        qt_total = self._coerce_float_simple(row.get("qt_total")) or 0.0
+        if not comp_mp or not larg_mp or not area_und or qt_total <= 0:
+            return None
+        area_placa = (comp_mp * larg_mp) / 1_000_000.0
+        if area_placa <= 0:
+            return None
+        area_consumida = area_und * qt_total
+        if area_consumida <= 0:
+            return None
+        placas_necessarias = max(1, math.ceil(area_consumida / area_placa))
+        if placas_necessarias <= 0:
+            return None
+        area_total_comprada = placas_necessarias * area_placa
+        desp_fraction = max(area_total_comprada / area_consumida - 1.0, 0.0)
+        return round(desp_fraction * 100.0, 2)
+
+    def _apply_full_plate_mode(self, enabled: bool, *, from_load: bool = False) -> None:
+        if not getattr(self, "table_model", None):
+            return
+        self._full_plates_mode = bool(enabled)
+        changed = False
+        for row in self.table_model.rows:
+            familia = (row.get("familia") or "").strip().upper()
+            if familia != "PLACAS":
+                continue
+            nst_checked = bool(row.get("nst"))
+            if not nst_checked:
+                continue
+            if enabled:
+                if "_desp_original" not in row:
+                    row["_desp_original"] = row.get("desp")
+                novo_desp = self._compute_full_plate_desp(row)
+                if novo_desp is not None:
+                    row["desp"] = novo_desp
+                    changed = True
+            else:
+                if "_desp_original" in row:
+                    row["desp"] = row["_desp_original"]
+                    del row["_desp_original"]
+                    changed = True
+        if changed:
+            self.table_model.recalculate_all()
+            self.table_model.layoutChanged.emit()
+            self.table_model._mark_dirty()
+            if not from_load:
+                self._update_summary()
+
+    def set_full_plate_mode(self, enabled: bool) -> None:
+        self._full_plates_mode = bool(enabled)
+        try:
+            setattr(svc_custeio, "FULL_PLATES_MODE", self._full_plates_mode)
+        except Exception:
+            pass
+        self._apply_full_plate_mode(self._full_plates_mode)
 
     def _save_custeio(self, *, auto: bool = False) -> bool:
 
@@ -6016,6 +6300,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_model.recalculate_all()
 
         self._update_table_placeholder_visibility()
+        self._update_auto_fill_icon()
 
         self._update_save_button_text()
 
@@ -6119,6 +6404,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._reapply_nst_override_snapshot()
 
         self.table_model.recalculate_all()
+        self._full_plates_mode = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
+        self._apply_full_plate_mode(self._full_plates_mode, from_load=True)
 
         self._update_table_placeholder_visibility()
 
@@ -6172,7 +6459,16 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.lbl_placeholder.show()
         self.btn_save.setEnabled(self.context is not None and has_rows)
         self.btn_refresh.setEnabled(has_rows)
+        if hasattr(self, "btn_save_module"):
+            self.btn_save_module.setEnabled(self.context is not None and has_rows)
+        if hasattr(self, "btn_import_module"):
+            self.btn_import_module.setEnabled(self.context is not None)
+        if hasattr(self, "btn_auto_fill"):
+            self.btn_auto_fill.setEnabled(self.context is not None)
         self._update_save_button_text()
+        # atualizar ícone de sincronismo dos Dados Items
+        if hasattr(self, "_update_auto_fill_icon"):
+            self._update_auto_fill_icon()
 
 
 
@@ -6288,7 +6584,20 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if spec["type"] == "bool":
             current = bool(row_data.get(spec["key"]))
             new_state = QtCore.Qt.Unchecked if current else QtCore.Qt.Checked
+            if spec["key"] == "gravar_modulo":
+                modifiers = QtWidgets.QApplication.keyboardModifiers()
+                if modifiers & QtCore.Qt.ShiftModifier and self._last_gravar_row is not None:
+                    start = min(self._last_gravar_row, index.row())
+                    end = max(self._last_gravar_row, index.row())
+                    for row_idx in range(start, end + 1):
+                        target_index = self.table_model.index(row_idx, index.column())
+                        self.table_model.setData(target_index, new_state, QtCore.Qt.CheckStateRole)
+                    self._last_gravar_row = index.row()
+                    return
+                self._last_gravar_row = index.row()
             self.table_model.setData(index, new_state, QtCore.Qt.CheckStateRole)
+            if spec["key"] != "gravar_modulo":
+                self._last_gravar_row = None
 
 
     def _on_table_context_menu(self, pos: QtCore.QPoint) -> None:
@@ -7137,5 +7446,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._update_table_placeholder_visibility()
         self._emit_item_context_changed()
+        self._update_auto_fill_icon()
 
 

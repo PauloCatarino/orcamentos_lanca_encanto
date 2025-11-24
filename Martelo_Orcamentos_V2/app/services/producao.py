@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models.custeio_producao import (
@@ -172,38 +173,46 @@ def _config_query(session: Session, ctx: ProducaoContext):
 
 
 def ensure_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConfig:
-    config = _config_query(session, ctx)
-    if config:
-        return config
+    try:
+        config = _config_query(session, ctx)
+        if config:
+            return config
 
-    config = CusteioProducaoConfig(
-        orcamento_id=ctx.orcamento_id,
-        cliente_id=ctx.cliente_id,
-        user_id=ctx.user_id,
-        ano=ctx.ano,
-        num_orcamento=ctx.num_orcamento,
-        versao=ctx.versao,
-        modo="STD",
-    )
-    session.add(config)
-    session.flush()
-
-    valores: List[CusteioProducaoValor] = []
-    for ordem, row in enumerate(DEFAULT_PRODUCTION_VALUES, start=1):
-        valores.append(
-            CusteioProducaoValor(
-                config_id=config.id,
-                descricao_equipamento=str(row["descricao_equipamento"]),
-                abreviatura=str(row["abreviatura"]),
-                valor_std=_to_decimal(row["valor_std"]),
-                valor_serie=_to_decimal(row["valor_serie"]),
-                resumo=str(row.get("resumo") or ""),
-                ordem=ordem,
-            )
+        config = CusteioProducaoConfig(
+            orcamento_id=ctx.orcamento_id,
+            cliente_id=ctx.cliente_id,
+            user_id=ctx.user_id,
+            ano=ctx.ano,
+            num_orcamento=ctx.num_orcamento,
+            versao=ctx.versao,
+            modo="STD",
         )
-    config.valores = valores
-    session.flush()
-    return config
+        session.add(config)
+        session.flush()
+
+        valores: List[CusteioProducaoValor] = []
+        for ordem, row in enumerate(DEFAULT_PRODUCTION_VALUES, start=1):
+            valores.append(
+                CusteioProducaoValor(
+                    config_id=config.id,
+                    descricao_equipamento=str(row["descricao_equipamento"]),
+                    abreviatura=str(row["abreviatura"]),
+                    valor_std=_to_decimal(row["valor_std"]),
+                    valor_serie=_to_decimal(row["valor_serie"]),
+                    resumo=str(row.get("resumo") or ""),
+                    ordem=ordem,
+                )
+            )
+        config.valores = valores
+        session.flush()
+        return config
+    except OperationalError:
+        # outro utilizador pode ter criado no intervalo; tenta recuperar
+        session.rollback()
+        existing = _config_query(session, ctx)
+        if existing:
+            return existing
+        raise
 
 
 def load_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConfig:
