@@ -1,7 +1,12 @@
 ﻿from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import logging
 from PySide6 import QtCore, QtWidgets
+
+logger = logging.getLogger(__name__)
+import os
+import datetime
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
@@ -494,14 +499,146 @@ class SettingsPage(QtWidgets.QWidget):
             self.lbl_producao_info.setText("Selecione um orçamento para editar os dados produtivos.")
             return
         try:
+            try:
+                self.db.expire_all()
+            except Exception:
+                pass
             ctx = svc_producao.build_context(self.db, orcamento_id, self._current_user_id, versao=versao)
         except Exception as exc:
-            self.db.rollback()
-            self._producao_ctx = None
-            self._set_producao_controls_enabled(False)
-            self._clear_producao_table()
-            self.lbl_producao_info.setText(f"Falha ao carregar contexto: {exc}")
-            return
+            # registar diagnostico mais detalhado para facilitar debugging
+            try:
+                logger.exception("set_orcamento_context: falha ao carregar contexto para orcamento %s: %s", orcamento_id, exc)
+            except Exception:
+                pass
+            # Fazer diagnóstico interativo: verificar na sessão actual, numa nova sessão e por SELECT raw
+            try:
+                from Martelo_Orcamentos_V2.app.models import Orcamento
+
+                initial_found = False
+                try:
+                    initial_found = self.db.get(Orcamento, orcamento_id) is not None
+                except Exception:
+                    initial_found = False
+
+                tmp_found = False
+                raw_res = None
+                try:
+                    with SessionLocal() as tmp:
+                        try:
+                            tmp_found = tmp.get(Orcamento, orcamento_id) is not None
+                        except Exception:
+                            tmp_found = False
+                        try:
+                            raw_res = tmp.execute(
+                                "SELECT id, ano, num_orcamento, versao FROM orcamento WHERE id = :id",
+                                {"id": orcamento_id},
+                            ).fetchone()
+                        except Exception:
+                            raw_res = None
+
+                except Exception:
+                    tmp_found = False
+                    raw_res = None
+
+                # mostrar popup com resultado diagnostico para o utilizador
+                try:
+                    msg = (
+                        f"Erro ao carregar contexto para Orçamento ID={orcamento_id}\n\n"
+                        f"Exceção: {exc}\n\n"
+                        f"Sessão actual encontrou registo? {initial_found}\n"
+                        f"Nova sessão encontrou registo? {tmp_found}\n"
+                        f"Resultado raw SELECT: {raw_res}\n\n"
+                        "Se tmp_found for True mas build_context falhar, veja permissões/transaction isolation/replicação."
+                    )
+                    QtWidgets.QMessageBox.critical(self, "Erro (diagnóstico)", msg)
+                except Exception:
+                    pass
+
+                # gravar diagnostico em ficheiro temporario no directório do projecto
+                try:
+                    diag_path = os.path.join(os.getcwd(), "martelo_orc_diag.txt")
+                    with open(diag_path, "a", encoding="utf-8") as f:
+                        f.write("-----\n")
+                        f.write(f"Timestamp: {datetime.datetime.now().isoformat()}\n")
+                        f.write(f"Orcamento ID: {orcamento_id}\n")
+                        f.write(f"Exception: {repr(exc)}\n")
+                        f.write(f"Sessao actual encontrou registo: {initial_found}\n")
+                        f.write(f"Nova sessao encontrou registo: {tmp_found}\n")
+                        f.write(f"Resultado raw SELECT: {raw_res}\n")
+                        f.write("-----\n\n")
+                except Exception:
+                    try:
+                        logger.exception("Falha ao gravar ficheiro de diagnostico para orcamento %s", orcamento_id)
+                    except Exception:
+                        pass
+
+                # Also print diagnostic to stdout and log it so it appears in the terminal
+                try:
+                    diag_msg = (
+                        "-----\n"
+                        f"Timestamp: {datetime.datetime.now().isoformat()}\n"
+                        f"Orcamento ID: {orcamento_id}\n"
+                        f"Exception: {repr(exc)}\n"
+                        f"Sessao actual encontrou registo: {initial_found}\n"
+                        f"Nova sessao encontrou registo: {tmp_found}\n"
+                        f"Resultado raw SELECT: {raw_res}\n"
+                        "-----\n"
+                    )
+                    # print to stdout (terminal)
+                    try:
+                        print(diag_msg, flush=True)
+                    except Exception:
+                        pass
+                    # also log via logger at ERROR level
+                    try:
+                        logger.error("Diagnostico orcamento: %s", diag_msg)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+                # Se nova sessão encontrou o registo, substituimos a sessão local e tentamos novamente
+                if tmp_found:
+                    try:
+                        try:
+                            self.db.close()
+                        except Exception:
+                            pass
+                        self.db = SessionLocal()
+                        ctx = svc_producao.build_context(self.db, orcamento_id, self._current_user_id, versao=versao)
+                    except Exception as exc2:
+                        try:
+                            logger.exception(
+                                "set_orcamento_context: segunda tentativa falhou para orcamento %s: %s",
+                                orcamento_id,
+                                exc2,
+                            )
+                        except Exception:
+                            pass
+                        self.db.rollback()
+                        self._producao_ctx = None
+                        self._set_producao_controls_enabled(False)
+                        self._clear_producao_table()
+                        self.lbl_producao_info.setText(f"Falha ao carregar contexto: {exc2}")
+                        return
+                else:
+                    # não encontrado em nenhuma sessão — sair com mensagem já mostrada
+                    self.db.rollback()
+                    self._producao_ctx = None
+                    self._set_producao_controls_enabled(False)
+                    self._clear_producao_table()
+                    self.lbl_producao_info.setText(f"Falha ao carregar contexto: {exc}")
+                    return
+            except Exception:
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+                self._producao_ctx = None
+                self._set_producao_controls_enabled(False)
+                self._clear_producao_table()
+                self.lbl_producao_info.setText(f"Falha ao carregar contexto: {exc}")
+                return
         self._producao_ctx = ctx
         self._producao_mode = "(pendente)"
         self._producao_dirty = True

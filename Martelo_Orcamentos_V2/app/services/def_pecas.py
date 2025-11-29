@@ -101,13 +101,18 @@ def mapa_por_nome(session: Session) -> Dict[str, Dict[str, float]]:
     mapa: Dict[str, Dict[str, float]] = {}
     for definicao in definicoes:
         nome = definicao.get("nome_da_peca")
-        if not nome:
-            continue
-        chave = _normalize_token(nome)
-        cp_map = {}
+        subgrupo = definicao.get("subgrupo_peca")
+        cp_map: Dict[str, float] = {}
         for campo in CP_COLUMNS:
             valor = definicao.get(campo)
             if valor is not None:
                 cp_map[campo] = float(valor)
-        mapa[chave] = cp_map
+        if nome:
+            chave_nome = _normalize_token(nome)
+            if chave_nome:
+                mapa[chave_nome] = dict(cp_map)
+        if subgrupo:
+            chave_sub = _normalize_token(subgrupo)
+            if chave_sub and chave_sub not in mapa:
+                mapa[chave_sub] = dict(cp_map)
     return mapa

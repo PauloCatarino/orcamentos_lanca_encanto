@@ -21,7 +21,7 @@ from .dados_gerais import (
     DadosItemsModelo,
     DadosItemsModeloItem,
 )
-from .custeio import CusteioItem
+from .custeio import CusteioItem, CusteioItemDimensoes, CusteioDespBackup
 from .custeio_producao import CusteioProducaoConfig, CusteioProducaoValor
 from .definicao_peca import DefinicaoPeca
 from .descricao_predefinida import DescricaoPredefinida

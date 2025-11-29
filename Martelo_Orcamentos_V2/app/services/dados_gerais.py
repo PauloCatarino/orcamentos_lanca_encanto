@@ -717,9 +717,56 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
 
 
 def carregar_contexto(db: Session, orcamento_id: int) -> DadosGeraisContext:
+    # Tentar primeiro com a sessão actual
     orc = db.get(Orcamento, orcamento_id)
+    
+    # Se não encontrou, fazer expire_all e tentar novamente
+    if not orc:
+        try:
+            db.expire_all()
+        except Exception:
+            pass
+        
+        orc = db.get(Orcamento, orcamento_id)
+    
+    # Se ainda não encontrou, usar uma nova sessão para buscar os dados
+    if not orc:
+        try:
+            from Martelo_Orcamentos_V2.app.db import SessionLocal
+            with SessionLocal() as tmp_session:
+                orc = tmp_session.get(Orcamento, orcamento_id)
+                
+                if orc:
+                    # Usar os dados da nova sessão e construir o contexto diretamente
+                    
+                    # Carregar cliente
+                    if not orc.client_id:
+                        raise ValueError("Orcamento sem cliente associado")
+                    cliente = tmp_session.get(Client, orc.client_id)
+                    if not cliente:
+                        raise ValueError("Cliente associado nao encontrado")
+                    
+                    # Carregar user
+                    user = tmp_session.get(User, orc.created_by) if orc.created_by else None
+                    
+                    versao = str(orc.versao or "")
+                    if versao.isdigit():
+                        versao = f"{int(versao):02d}"
+                    
+                    return DadosGeraisContext(
+                        orcamento_id=orcamento_id,
+                        cliente_id=cliente.id,
+                        ano=str(orc.ano or ""),
+                        num_orcamento=str(orc.num_orcamento or ""),
+                        versao=versao,
+                        user_id=getattr(user, "id", None),
+                    )
+        except Exception:
+            pass
+    
     if not orc:
         raise ValueError("Orcamento nao encontrado")
+    
     if not orc.client_id:
         raise ValueError("Orcamento sem cliente associado")
     cliente = db.get(Client, orc.client_id)

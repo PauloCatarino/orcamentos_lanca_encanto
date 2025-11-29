@@ -649,7 +649,7 @@
       </widget>
      </item>
      <item alignment="Qt::AlignRight|Qt::AlignTop">
-      <layout class="QHBoxLayout" name="buttonsLayout" stretch="0,0,0,0,0,0,0,0">
+      <layout class="QHBoxLayout" name="buttonsLayout" stretch="0,0,0,0,0,0,0,0,0">
        <property name="spacing">
         <number>8</number>
        </property>
@@ -691,6 +691,13 @@
         <widget class="QPushButton" name="btn_del">
          <property name="text">
           <string>Eliminar Item</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_dup">
+         <property name="text">
+          <string>Duplicar Item</string>
          </property>
         </widget>
        </item>

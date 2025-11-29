@@ -126,21 +126,67 @@ def aplicar_definicao_cp_linha(
     session: Session,
     linha: Dict[str, Any],
     cache: Optional[Dict[str, Dict[str, float]]] = None,
+    *,
+    raise_if_missing: bool = False,
+    fill_zeros_if_missing: bool = False,
 ) -> Dict[str, Dict[str, float]]:
+    """
+    Preenche os campos CP** da linha a partir de Definições de Peças.
+    - Ignora linhas de divisão independente.
+    - Não levanta erro por defeito; apenas se raise_if_missing=True.
+    - Pode opcionalmente preencher zeros quando não existirem definições.
+    """
     if not linha:
         return cache or {}
     nome = linha.get("def_peca") or linha.get("descricao")
     if not nome:
         return cache or {}
+    if _is_divisao_def(nome):
+        linha["_cp_def_found"] = True
+        return cache or svc_def_pecas.mapa_por_nome(session)
+
     mapa = cache or svc_def_pecas.mapa_por_nome(session)
     chave = _normalize_token(nome)
-    definicao = mapa.get(chave)
+
+    def _find_def(chave_normalizada: str) -> Optional[Dict[str, float]]:
+        if not chave_normalizada:
+            return None
+        if chave_normalizada in mapa:
+            return mapa[chave_normalizada]
+        # tentar sem sufixos _n
+        chave_sem_sufixo = re.sub(r"[_\\s]+\\d+$", "", chave_normalizada)
+        if chave_sem_sufixo and chave_sem_sufixo in mapa:
+            return mapa[chave_sem_sufixo]
+        # tentar aproximação: contém/começa
+        for k, v in mapa.items():
+            if not k:
+                continue
+            if chave_sem_sufixo and (k.startswith(chave_sem_sufixo) or chave_sem_sufixo.startswith(k)):
+                return v
+            if k in chave_normalizada or chave_normalizada in k:
+                return v
+        return None
+
+    definicao = _find_def(chave)
+    linha["_cp_def_found"] = bool(definicao)
+
     if not definicao:
+        if fill_zeros_if_missing:
+            for campo in CP_VALUE_KEYS:
+                if linha.get(campo) in (None, ""):
+                    linha[campo] = 0
+        if raise_if_missing:
+            raise ValueError(f"Não existem dados CP para a peça '{nome}'. Configure em Definições de Peças.")
+        logger.warning("Dados CP não encontrados para a peça '%s'.", nome)
         return mapa
+
     for campo in CP_VALUE_KEYS:
         valor = definicao.get(campo)
         if valor is not None:
-            linha[campo] = float(valor)
+            try:
+                linha[campo] = float(valor)
+            except Exception:
+                linha[campo] = valor
     return mapa
 
 
@@ -152,14 +198,14 @@ for _menu, _groups in svc_dados_items.MENU_FIXED_GROUPS.items():
 _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
     _normalize_token("SUPORTE PRATELEIRA"): {"tipo": "SUPORTE PRATELEIRA", "familia": "FERRAGENS"},
     _normalize_token("VARAO"): {"tipo": "SPP", "familia": "FERRAGENS"},
-    _normalize_token("VARÃO"): {"tipo": "SPP", "familia": "FERRAGENS"},
+    _normalize_token("VAR├âO"): {"tipo": "SPP", "familia": "FERRAGENS"},
     _normalize_token("SUPORTE VARAO"): {"tipo": "SUPORTE VARAO", "familia": "FERRAGENS"},
-    _normalize_token("SUPORTE VARÃO"): {"tipo": "SUPORTE VARAO", "familia": "FERRAGENS"},
+    _normalize_token("SUPORTE VAR├âO"): {"tipo": "SUPORTE VARAO", "familia": "FERRAGENS"},
     _normalize_token("PUXADOR"): {"tipo": "PUXADOR", "familia": "FERRAGENS"},
     _normalize_token("PES"): {"tipo": "PES", "familia": "FERRAGENS"},
-    _normalize_token("PÉS"): {"tipo": "PES", "familia": "FERRAGENS"},
+    _normalize_token("P├ëS"): {"tipo": "PES", "familia": "FERRAGENS"},
     _normalize_token("DOBRADICA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
-    _normalize_token("DOBRADIÇA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
+    _normalize_token("DOBRADI├çA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
     _normalize_token("RODAPE PVC/ALUMINIO"): {"tipo": "Rodape PVC SPP", "familia": "FERRAGENS"},
     _normalize_token("FUNDO GAVETA [0022]"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
     _normalize_token("FUNDO GAVETA"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
@@ -173,7 +219,7 @@ _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
 _FERRAGEM_TIPO_KEYWORDS: Dict[str, Sequence[str]] = {
     _normalize_token("SUPORTE PRATELEIRA"): ("suporte", "prateleira"),
     _normalize_token("SUPORTE VARAO"): ("suporte", "varao"),
-    _normalize_token("SUPORTE VARÃO"): ("suporte", "varao"),
+    _normalize_token("SUPORTE VAR├âO"): ("suporte", "varao"),
     _normalize_token("SPP"): ("varao", "spp"),
     _normalize_token("PUXADOR"): ("puxador",),
     _normalize_token("PES"): ("pes",),
@@ -184,7 +230,7 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "PES": {
         "matches": ["PES"],
         "expression": "4 if COMP < 650 and LARG < 800 else 6 if COMP >= 650 and LARG < 800 else 8",
-        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP>=650 & LARG<800 | 8 caso contrário",
+        "tooltip": "4 se COMP<650 & LARG<800 | 6 se COMP>=650 & LARG<800 | 8 caso contr├írio",
     },
     "SUPORTE PRATELEIRA": {
         "matches": ["SUPORTE PRATELEIRA"],
@@ -194,22 +240,22 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "VARAO SPP": {
         "matches": ["VARAO SPP", "VARAO"],
         "expression": "1",
-        "tooltip": "1 varão por peça principal (COMP herdado para cálculo de ML).",
+        "tooltip": "1 var├úo por pe├ºa principal (COMP herdado para c├ílculo de ML).",
     },
     "SUPORTE VARAO": {
         "matches": ["SUPORTE VARAO"],
         "expression": "2",
-        "tooltip": "2 suportes por varão.",
+        "tooltip": "2 suportes por var├úo.",
     },
     "SUPORTE TERMINAL VARAO": {
         "matches": ["SUPORTE TERMINAL VARAO"],
         "expression": "2",
-        "tooltip": "2 suportes por varão.",
+        "tooltip": "2 suportes por var├úo.",
     },
     "SUPORTE VARAO": {
         "matches": ["SUPORTE VARAO"],
         "expression": "2",
-        "tooltip": "2 suportes por varão.",
+        "tooltip": "2 suportes por var├úo.",
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
@@ -220,12 +266,12 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
                         "else 5 if COMP <= 2600 "
                         "else 6 + ((COMP - 2600) // 600)"
                     ") + (1 if LARG >= 605 else 0)",
-        "tooltip": "Até 850: 2 | 851-1600: 3 | 1601-2000: 4 | 2001-2600: 5 | depois: +1/600mm. Soma +1 se LARG>=605.",
+        "tooltip": "At├® 850: 2 | 851-1600: 3 | 1601-2000: 4 | 2001-2600: 5 | depois: +1/600mm. Soma +1 se LARG>=605.",
     },
     "PUXADOR": {
         "matches": ["PUXADOR"],
         "expression": "1",
-        "tooltip": "1 puxador por porta (total acompanha o QT_und da peça principal).",
+        "tooltip": "1 puxador por porta (total acompanha o QT_und da pe├ºa principal).",
     },
 }
 
@@ -1237,9 +1283,9 @@ def _coerce_checkbox_to_bool(value: Any) -> bool:
         token = normalized.strip().lower()
         if token in {"1", "true", "t", "sim", "yes", "y", "on", "checked", "checked=true", "true"}:
             return True
-        if token in {"0", "false", "f", "nao", "não", "no", "n", "off", "unchecked", ""}:
+        if token in {"0", "false", "f", "nao", "na╠âo", "no", "n", "off", "unchecked", ""}:
             return False
-        # Qualquer string não-vazia assume True (compatibilidade com checkbox)
+        # Qualquer string n├úo-vazia assume True (compatibilidade com checkbox)
         return True
 
     # Fallback: truthiness
@@ -1554,7 +1600,7 @@ def aplicar_espessuras_orla(linha: Dict[str, Any], lookup: Mapping[str, str]) ->
 
 
 def _parse_float_value(valor: Any) -> Optional[float]:
-    """Converte diferentes representações numéricas (incluindo strings com vírgula) para float."""
+    """Converte diferentes representa├º├Áes num├®ricas (incluindo strings com v├¡rgula) para float."""
     if valor in (None, "", False):
         return None
     if isinstance(valor, Decimal):
@@ -1581,7 +1627,7 @@ def preencher_info_orlas_linha(
     linha: Dict[str, Any],
     ref_cache: Optional[Dict[str, Tuple[float, float, Optional[str]]]] = None,
 ) -> None:
-    """Preenche campos orl_ref_*, orl_pliq_* e orl_desp_* com base nas referências das colunas ORL 0.4/1.0."""
+    """Preenche campos orl_ref_*, orl_pliq_* e orl_desp_* com base nas refer├¬ncias das colunas ORL 0.4/1.0."""
     if ref_cache is None:
         ref_cache = {}
 
@@ -1624,9 +1670,9 @@ def preencher_info_orlas_linha(
 
 
 def _get_orla_width_factor(esp_peca: Any) -> Tuple[float, float]:
-    """Retorna (largura_mm, fator) com base na espessura da peça.
+    """Retorna (largura_mm, fator) com base na espessura da pe├ºa.
 
-    Mantém compatibilidade com calculo_orlas.get_orla_width_factor.
+    Mant├®m compatibilidade com calculo_orlas.get_orla_width_factor.
     """
     try:
         if esp_peca is None:
@@ -1963,6 +2009,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)
     cp_cache = svc_def_pecas.mapa_por_nome(session)
+    missing_cp_defs: Set[str] = set()
     ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
     for registro in registros:
         linha = _empty_row()
@@ -1991,6 +2038,18 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         _aplicar_orla_espessuras(linha, orla_lookup)
 
         preencher_info_orlas_linha(session, linha, ref_cache)
+        cp_cache = aplicar_definicao_cp_linha(
+            session,
+            linha,
+            cp_cache,
+            raise_if_missing=False,
+            fill_zeros_if_missing=False,
+        )
+        if linha.get("_cp_def_found") is False:
+            nome = linha.get("def_peca") or linha.get("descricao")
+            if nome and nome not in missing_cp_defs:
+                missing_cp_defs.add(nome)
+                logger.warning("Dados CP não encontrados para a peça '%s' (listar).", nome)
 
         is_divisao = _is_divisao_def(linha.get("def_peca"))
         need_area = linha.get("area_m2_und") in (None, "", 0)
@@ -2044,6 +2103,8 @@ def salvar_custeio_items(
     session.flush()
 
     acabamento_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+    cp_cache = svc_def_pecas.mapa_por_nome(session)
+    missing_cp_defs: Set[str] = set()
 
     for ordem, linha in enumerate(linhas):
         logger.debug(
@@ -2056,6 +2117,22 @@ def salvar_custeio_items(
             linha.get("blk"),
             linha.get("nst"),
         )
+        cp_cache = aplicar_definicao_cp_linha(
+            session,
+            linha,
+            cp_cache,
+            raise_if_missing=False,
+            fill_zeros_if_missing=True,
+        )
+        if linha.get("_cp_def_found") is False:
+            nome = linha.get("def_peca") or linha.get("descricao")
+            if nome and nome not in missing_cp_defs:
+                missing_cp_defs.add(nome)
+                logger.warning("Dados CP não encontrados para a peça '%s' (salvar).", nome)
+        elif linha.get("_cp_def_found") is None and not _is_divisao_def(linha.get("def_peca")):
+            # Fallback para marcar que não houve correspondência clara (evita sobrescrever manual).
+            linha["_cp_def_found"] = False
+
         registro = CusteioItem(
             orcamento_id=ctx.orcamento_id,
             item_id=ctx.item_id,
@@ -2129,7 +2206,7 @@ def salvar_custeio_items(
     try:
         atualizar_orlas_custeio(session, ctx.orcamento_id, ctx.item_id)
     except Exception:
-        # Não bloqueia o fluxo principal caso o cálculo das orlas falhe
+        # N├úo bloqueia o fluxo principal caso o c├ílculo das orlas falhe
         pass
 
     session.commit()
@@ -2143,6 +2220,7 @@ def gerar_linhas_para_selecoes(
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)
     cp_cache = svc_def_pecas.mapa_por_nome(session)
+    missing_cp_defs: Set[str] = set()
     for selecao in selecoes:
         parts = [p.strip() for p in selecao.split(">") if p.strip()]
         if not parts:
@@ -2186,7 +2264,18 @@ def gerar_linhas_para_selecoes(
             linha["_nst_source"] = _coerce_checkbox_to_bool(linha.get("nst"))
 
         _aplicar_orla_espessuras(linha, orla_lookup)
-        aplicar_definicao_cp_linha(session, linha, cp_cache)
+        cp_cache = aplicar_definicao_cp_linha(
+            session,
+            linha,
+            cp_cache,
+            raise_if_missing=False,
+            fill_zeros_if_missing=True,
+        )
+        if linha.get("_cp_def_found") is False:
+            nome = linha.get("def_peca") or linha.get("descricao")
+            if nome and nome not in missing_cp_defs:
+                missing_cp_defs.add(nome)
+                logger.warning("Dados CP não encontrados para a peça '%s' (inserir).", nome)
         linhas.append(linha)
 
         if child_tokens:
@@ -2251,7 +2340,18 @@ def gerar_linhas_para_selecoes(
                     child_row["_nst_source"] = _coerce_checkbox_to_bool(child_row.get("nst"))
 
                 _aplicar_orla_espessuras(child_row, orla_lookup)
-                aplicar_definicao_cp_linha(session, child_row, cp_cache)
+                cp_cache = aplicar_definicao_cp_linha(
+                    session,
+                    child_row,
+                    cp_cache,
+                    raise_if_missing=False,
+                    fill_zeros_if_missing=True,
+                )
+                if child_row.get("_cp_def_found") is False:
+                    nome = child_row.get("def_peca") or child_row.get("descricao")
+                    if nome and nome not in missing_cp_defs:
+                        missing_cp_defs.add(nome)
+                        logger.warning("Dados CP não encontrados para a peça '%s' (inserir filho).", nome)
                 linhas.append(child_row)
 
     return linhas
@@ -2538,7 +2638,7 @@ def _coerce_decimal_two(value: Any) -> Decimal:
 def atualizar_resumo_custos_orcamento(session: Session, orcamento_id: Optional[int]) -> int:
     """
     Copia os custos agregados do custeio (custeio_items) para a tabela de orcamento_items.
-    Retorna o número de itens atualizados.
+    Retorna o n├║mero de itens atualizados.
     """
     if not orcamento_id:
         return 0

@@ -62,6 +62,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Copia .env para a pasta do exe para garantir configuracao de BD/email
+set DIST_ENV=dist\Martelo_Orcamentos_V2\.env
+if exist ".env" (
+    copy /Y ".env" "%DIST_ENV%" >nul
+    echo Copiado .env para %DIST_ENV%
+) else (
+    echo [AVISO] Ficheiro .env nao encontrado na raiz; nao foi copiado.
+)
+
 echo.
 echo ============================================================
 echo Build concluido.

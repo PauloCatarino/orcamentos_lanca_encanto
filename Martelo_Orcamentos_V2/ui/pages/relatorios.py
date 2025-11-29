@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import html
+import warnings
+warnings.filterwarnings("ignore", message=".*Failed to disconnect.*dataChanged.*")
+import logging
 import re
 import shutil
 import tempfile
@@ -14,7 +17,6 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtCore import Qt
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.rich_text import CellRichText, TextBlock
-from Martelo_Orcamentos_V2.ui.pages import relatorios_copia as relatorios_full
 from utils_email import send_email
 from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Alignment, Border, Font, Side, PatternFill
@@ -96,10 +98,12 @@ try:
 except Exception:
     colors = A4 = ParagraphStyle = getSampleStyleSheet = mm = Image = Paragraph = SimpleDocTemplate = Spacer = Table = TableStyle = NumberedFooterCanvas = None
     REPORTLAB_AVAILABLE = False
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
-from Martelo_Orcamentos_V2.app.models import Client, Orcamento, OrcamentoItem, CusteioItem
+from Martelo_Orcamentos_V2.app.models import Client, Orcamento, OrcamentoItem, CusteioItem, CusteioDespBackup
+from Martelo_Orcamentos_V2.app.services.custeio_items import atualizar_orlas_custeio
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
 from Martelo_Orcamentos_V2.ui.models.qt_table import SimpleTableModel
 
@@ -109,6 +113,8 @@ KEY_BASE_PATH = "base_path_orcamentos"
 KEY_ORC_DB_BASE = "base_path_dados_orcamento"
 DEFAULT_BASE_PATH = r"\\server_le\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\MARTELO_ORCAMENTOS_V2"
 DEFAULT_BASE_DADOS_ORC = r"\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Base_Dados_Orcamento"
+
+logger = logging.getLogger(__name__)
 
 
 class RichTextDelegate(QtWidgets.QStyledItemDelegate):
@@ -149,6 +155,22 @@ class BoldValueDelegate(QtWidgets.QStyledItemDelegate):
         font = option.font
         font.setBold(True)
         option.font = font
+
+
+class _WheelForwarder(QtCore.QObject):
+    """Reencaminha eventos de roda do rato para um widget pai (ex.: QScrollArea)."""
+
+    def __init__(self, target: QtWidgets.QWidget):
+        super().__init__(target)
+        self._target = target
+
+    def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Wheel and self._target is not None:
+            # reenvia para o viewport do scroll e deixa o evento propagar
+            target_widget = getattr(self._target, "viewport", lambda: self._target)()
+            QtWidgets.QApplication.sendEvent(target_widget, event)
+            return False
+        return super().eventFilter(obj, event)
 
 
 @dataclass
@@ -198,8 +220,15 @@ class RelatoriosPage(QtWidgets.QWidget):
         self._current_items: List[ItemPreview] = []
         self._dashboard_data = {"placas": [], "orlas": [], "ferr": [], "maq": []}
         self._dash_info_labels: dict[str, QtWidgets.QLabel] = {}
-
+        self._nao_stock_dirty: bool = False
         self._setup_ui()
+
+    def _set_nao_stock_dirty(self, dirty: bool) -> None:
+        """Adiciona '*' ao botão de gravação quando há alterações por gravar."""
+        self._nao_stock_dirty = bool(dirty)
+        if getattr(self, "btn_nao_stock_save", None):
+            prefix = "* " if self._nao_stock_dirty else ""
+            self.btn_nao_stock_save.setText(f"{prefix}Gravar Nao Stock")
 
     # ------------------------------------------------------------------ UI SETUP
     def _setup_ui(self) -> None:
@@ -674,19 +703,25 @@ class RelatoriosPage(QtWidgets.QWidget):
         self.btn_send_email.setEnabled(enabled)
         self.btn_export_excel.setEnabled(enabled)
         self.btn_export_pdf.setEnabled(enabled)
+        if not enabled:
+            self._set_nao_stock_dirty(False)
 
     # ---------------------- DASHBOARD ----------------------
-    def _wrap_in_group(self, title: str, widget: QtWidgets.QWidget) -> QtWidgets.QGroupBox:
+    def _wrap_in_group(self, title: str, widget: QtWidgets.QWidget, wheel_forwarder: Optional[_WheelForwarder] = None) -> QtWidgets.QGroupBox:
         box = QtWidgets.QGroupBox(title)
         lay = QtWidgets.QVBoxLayout(box)
         lay.setContentsMargins(6, 6, 6, 6)
         lay.addWidget(widget)
+        if wheel_forwarder is not None:
+            box.installEventFilter(wheel_forwarder)
+            widget.installEventFilter(wheel_forwarder)
         return box
 
     def _create_canvas(self) -> Tuple[Any, Any]:
         fig = Figure(figsize=(5, 3))
         ax = fig.add_subplot(111)
         canvas = FigureCanvas(fig)
+        canvas.setFocusPolicy(QtCore.Qt.NoFocus)
         return canvas, ax
 
     def _build_dashboard_tab(self, parent: QtWidgets.QWidget) -> None:
@@ -711,6 +746,7 @@ class RelatoriosPage(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(content)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
+        self._wheel_forwarder_dashboard = _WheelForwarder(scroll)
 
         # barra de info orçamento
         info_frame = QtWidgets.QFrame()
@@ -743,9 +779,38 @@ class RelatoriosPage(QtWidgets.QWidget):
         layout.addWidget(info_frame)
 
         actions = QtWidgets.QHBoxLayout()
-        self.btn_dash_refresh = QtWidgets.QPushButton("Atualizar Dashboard")
-        self.btn_dash_export = QtWidgets.QPushButton("Exportar Dashboard para PDF")
+        actions.setSpacing(10)
+
+        def _dash_icon(theme: str, fallback: QtWidgets.QStyle.StandardPixmap) -> QtGui.QIcon:
+            icon = QtGui.QIcon.fromTheme(theme)
+            if icon.isNull():
+                icon = self.style().standardIcon(fallback)
+            return icon
+
+        def _make_dash_button(text: str, icon: QtGui.QIcon) -> QtWidgets.QPushButton:
+            btn = QtWidgets.QPushButton(text)
+            font = btn.font()
+            font.setBold(True)
+            font.setPointSize(max(font.pointSize(), 11))
+            btn.setFont(font)
+            btn.setIcon(icon)
+            btn.setIconSize(QtCore.QSize(22, 22))
+            return btn
+
+        self.btn_dash_refresh = _make_dash_button(
+            "Atualizar Dashboard",
+            _dash_icon("view-refresh", QtWidgets.QStyle.SP_BrowserReload),
+        )
+        self.btn_nao_stock_save = _make_dash_button(
+            "Gravar Nao Stock",
+            _dash_icon("document-save", QtWidgets.QStyle.SP_DialogSaveButton),
+        )
+        self.btn_dash_export = _make_dash_button(
+            "Exportar Dashboard para PDF",
+            _dash_icon("document-export", QtWidgets.QStyle.SP_FileDialogDetailedView),
+        )
         actions.addWidget(self.btn_dash_refresh)
+        actions.addWidget(self.btn_nao_stock_save)
         actions.addStretch(1)
         actions.addWidget(self.btn_dash_export)
         layout.addLayout(actions)
@@ -754,8 +819,8 @@ class RelatoriosPage(QtWidgets.QWidget):
         top_split = QtWidgets.QSplitter(Qt.Horizontal)
         self.tbl_dash_placas = QtWidgets.QTableView()
         self.tbl_dash_orlas = QtWidgets.QTableView()
-        top_split.addWidget(self._wrap_in_group("Resumo de Placas", self.tbl_dash_placas))
-        top_split.addWidget(self._wrap_in_group("Resumo de Orlas", self.tbl_dash_orlas))
+        top_split.addWidget(self._wrap_in_group("Resumo de Placas", self.tbl_dash_placas, self._wheel_forwarder_dashboard))
+        top_split.addWidget(self._wrap_in_group("Resumo de Orlas", self.tbl_dash_orlas, self._wheel_forwarder_dashboard))
         top_split.setStretchFactor(0, 1)
         top_split.setStretchFactor(1, 1)
         layout.addWidget(top_split, 3)
@@ -763,8 +828,8 @@ class RelatoriosPage(QtWidgets.QWidget):
         mid_split = QtWidgets.QSplitter(Qt.Horizontal)
         self.tbl_dash_ferr = QtWidgets.QTableView()
         self.tbl_dash_maq = QtWidgets.QTableView()
-        mid_split.addWidget(self._wrap_in_group("Resumo de Ferragens", self.tbl_dash_ferr))
-        mid_split.addWidget(self._wrap_in_group("Resumo de Máquinas / MO", self.tbl_dash_maq))
+        mid_split.addWidget(self._wrap_in_group("Resumo de Ferragens", self.tbl_dash_ferr, self._wheel_forwarder_dashboard))
+        mid_split.addWidget(self._wrap_in_group("Resumo de Máquinas / MO", self.tbl_dash_maq, self._wheel_forwarder_dashboard))
         mid_split.setStretchFactor(0, 1)
         mid_split.setStretchFactor(1, 1)
         layout.addWidget(mid_split, 3)
@@ -774,8 +839,9 @@ class RelatoriosPage(QtWidgets.QWidget):
         self.canvas_orlas, self.ax_orlas = self._create_canvas()
         for c in (self.canvas_placas, self.canvas_orlas):
             c.setMinimumHeight(1075)
-        bottom_split.addWidget(self._wrap_in_group("Comparativo de Custos por Placa", self.canvas_placas))
-        bottom_split.addWidget(self._wrap_in_group("Consumo de Orlas (ml)", self.canvas_orlas))
+            c.installEventFilter(self._wheel_forwarder_dashboard)
+        bottom_split.addWidget(self._wrap_in_group("Comparativo de Custos por Placa", self.canvas_placas, self._wheel_forwarder_dashboard))
+        bottom_split.addWidget(self._wrap_in_group("Consumo de Orlas (ml)", self.canvas_orlas, self._wheel_forwarder_dashboard))
         bottom_split.setStretchFactor(0, 1)
         bottom_split.setStretchFactor(1, 1)
         layout.addWidget(bottom_split, 3)
@@ -786,18 +852,24 @@ class RelatoriosPage(QtWidgets.QWidget):
         self.canvas_pie, self.ax_pie = self._create_canvas()
         for c in (self.canvas_ferr, self.canvas_ops, self.canvas_pie):
             c.setMinimumHeight(875)
-        bottom2_split.addWidget(self._wrap_in_group("Custos por Ferragem", self.canvas_ferr))
-        bottom2_split.addWidget(self._wrap_in_group("Custos por Operação", self.canvas_ops))
+            c.installEventFilter(self._wheel_forwarder_dashboard)
+        bottom2_split.addWidget(self._wrap_in_group("Custos por Ferragem", self.canvas_ferr, self._wheel_forwarder_dashboard))
+        bottom2_split.addWidget(self._wrap_in_group("Custos por Operação", self.canvas_ops, self._wheel_forwarder_dashboard))
         layout.addWidget(bottom2_split, 3)
 
-        pie_box = self._wrap_in_group("Distribuição de Custos (Placas / Orlas / Ferragens / Máquinas)", self.canvas_pie)
+        pie_box = self._wrap_in_group("Distribuição de Custos (Placas / Orlas / Ferragens / Máquinas)", self.canvas_pie, self._wheel_forwarder_dashboard)
         layout.addWidget(pie_box, 2)
         bottom2_split.setStretchFactor(0, 1)
         bottom2_split.setStretchFactor(1, 1)
         layout.addWidget(pie_box, 2)
 
         self.btn_dash_refresh.clicked.connect(self._refresh_dashboard)
+        self.btn_nao_stock_save.clicked.connect(self._save_nao_stock_states)
         self.btn_dash_export.clicked.connect(self._export_dashboard_pdf)
+
+        # Garantir que as figuras n�o "prendem" o scroll do rato
+        for canvas in (self.canvas_placas, self.canvas_orlas, self.canvas_ferr, self.canvas_ops, self.canvas_pie):
+            canvas.installEventFilter(self._wheel_forwarder_dashboard)
 
         scroll.setWidget(content)
         outer.addWidget(scroll)
@@ -815,6 +887,21 @@ class RelatoriosPage(QtWidgets.QWidget):
                     .order_by(CusteioItem.ordem)
                     .all()
                 )
+
+                backup_map: dict[int, CusteioDespBackup] = {}
+                item_ids_all = [getattr(ci, "id", None) for ci in cust_rows if getattr(ci, "id", None)]
+                if item_ids_all:
+                    backups = (
+                        session.query(CusteioDespBackup)
+                        .filter(
+                            CusteioDespBackup.custeio_item_id.in_(item_ids_all),
+                            CusteioDespBackup.orcamento_id == orc.id,
+                            CusteioDespBackup.versao == orc.versao,
+                        )
+                        .all()
+                    )
+                    backup_map = {bak.custeio_item_id: bak for bak in backups}
+
         except Exception:
             return result
 
@@ -833,6 +920,28 @@ class RelatoriosPage(QtWidgets.QWidget):
                 return 45.0
             return 60.0
 
+        def _safe_float(value: Any) -> float:
+            try:
+                return float(value)
+            except Exception:
+                return 0.0
+
+        def _fmt_percent_value(value: Any) -> str:
+            try:
+                num = float(value)
+            except Exception:
+                return "-"
+            if abs(num) <= 1.0:
+                num *= 100.0
+            return f"{num:.2f} %"
+
+        def _fmt_currency_value(value: Any) -> str:
+            try:
+                num = float(value)
+            except Exception:
+                return "0.00 EUR"
+            return f"{num:.2f} EUR"
+
         # ------------ Placas ------------
         placas_map: dict[tuple, dict] = {}
         for ci in cust_rows:
@@ -841,12 +950,16 @@ class RelatoriosPage(QtWidgets.QWidget):
                 continue
             comp_mp = float(ci.comp_mp or 0)
             larg_mp = float(ci.larg_mp or 0)
-            desp = float(ci.desp or 0)
+            try:
+                desp_pct = float(ci.desp or 0)
+            except Exception:
+                desp_pct = 0.0
+            desp_fraction = desp_pct / 100.0 if abs(desp_pct) > 1 else desp_pct
             qt_total = float(ci.qt_total or 0)
             pliq = float(ci.pliq or 0)
             area_placa = (comp_mp / 1000.0) * (larg_mp / 1000.0) if comp_mp and larg_mp else 0
             m2_total_pecas = float(ci.area_m2_und or 0) * qt_total
-            m2_consumidos = m2_total_pecas * (1 + desp)
+            m2_consumidos = m2_total_pecas * (1 + desp_fraction)
             key = (ci.ref_le, ci.descricao_no_orcamento)
             if key not in placas_map:
                 placas_map[key] = {
@@ -854,7 +967,7 @@ class RelatoriosPage(QtWidgets.QWidget):
                     "descricao_no_orcamento": ci.descricao_no_orcamento,
                     "pliq": pliq,
                     "und": und,
-                    "desp": desp,
+                    "desp": desp_pct,
                     "comp_mp": comp_mp,
                     "larg_mp": larg_mp,
                     "esp_mp": float(ci.esp_mp or 0),
@@ -864,16 +977,31 @@ class RelatoriosPage(QtWidgets.QWidget):
                     "m2_total_pecas": 0.0,
                     "custo_mp_total": 0.0,
                     "custo_placas_utilizadas": 0.0,
+                    "item_ids": [],
+                    "nao_stock": False,
+                    "_desp_original_values": [],
+                    "_blk_original_values": [],
+                    "_blk_current_values": [],
                 }
             if area_placa > 0:
                 placas_map[key]["area_placa"] = area_placa
             if pliq:
                 placas_map[key]["pliq"] = pliq
-            if desp:
-                placas_map[key]["desp"] = desp
+            placas_map[key]["desp"] = desp_pct
             placas_map[key]["m2_consumidos"] += m2_consumidos
             placas_map[key]["m2_total_pecas"] += m2_total_pecas
             placas_map[key]["custo_mp_total"] += float(ci.custo_mp_total or 0)
+            placas_map[key]["item_ids"].append(getattr(ci, "id", None))
+            ci_id = getattr(ci, "id", None)
+            placas_map[key]["_blk_current_values"].append(bool(getattr(ci, "blk", False)))
+            if ci_id:
+                bak = backup_map.get(ci_id)
+                if bak:
+                    if bak.desp_original is not None:
+                        placas_map[key]["_desp_original_values"].append(float(bak.desp_original))
+                    placas_map[key]["_blk_original_values"].append(bool(getattr(bak, "blk_original", False)))
+                    if getattr(bak, "nao_stock_active", False):
+                        placas_map[key]["nao_stock"] = True
         placas_rows: List[dict] = []
         for data in placas_map.values():
             area = data.get("area_placa") or 0
@@ -885,6 +1013,31 @@ class RelatoriosPage(QtWidgets.QWidget):
                 qt_placas = 0
             data["qt_placas_utilizadas"] = float(qt_placas)
             data["custo_placas_utilizadas"] = qt_placas * area * (data.get("pliq") or 0)
+            orig_list = [v for v in data.get("_desp_original_values", []) if v is not None]
+            blk_orig_list = [v for v in data.get("_blk_original_values", []) if v is not None]
+            blk_cur_list = [v for v in data.get("_blk_current_values", []) if v is not None]
+            data["_desp_original"] = orig_list[0] if orig_list else None
+            data["_blk_original"] = blk_orig_list[0] if blk_orig_list else None
+            data["_blk_atual"] = blk_cur_list[-1] if blk_cur_list else None
+            data.pop("_desp_original_values", None)
+            data.pop("_blk_original_values", None)
+            data.pop("_blk_current_values", None)
+
+            tooltip_lines = [
+                f"m2 de pecas: {_safe_float(data.get('m2_total_pecas')):.2f}",
+                f"Desperdicio aplicado: {_fmt_percent_value(data.get('desp'))} -> m2 consumidos: {_safe_float(data.get('m2_consumidos')):.2f}",
+            ]
+            if area > 0 and qt_placas > 0:
+                tooltip_lines.append(f"Area placa: {area:.2f} m2 | Qt placas: {qt_placas}")
+            tooltip_lines.append(f"C.MP Tot (custeio): {_fmt_currency_value(data.get('custo_mp_total'))}")
+            tooltip_lines.append(f"C.Placa Usada: {_fmt_currency_value(data.get('custo_placas_utilizadas'))}")
+            if data.get("nao_stock") and data.get("_desp_original") is not None:
+                tooltip_lines.append(f"Desp. original (NST): {_fmt_percent_value(data.get('_desp_original'))}")
+            if data.get("_blk_original") is not None:
+                tooltip_lines.append(f"BLK original: {'Ativo' if data.get('_blk_original') else 'Inativo'}")
+            if data.get("_blk_atual") is not None:
+                tooltip_lines.append(f"BLK atual: {'Ativo' if data.get('_blk_atual') else 'Inativo'}")
+            data["_placa_tooltip"] = "\n".join(tooltip_lines)
             placas_rows.append(data)
         result["placas"] = placas_rows
 
@@ -1049,6 +1202,234 @@ class RelatoriosPage(QtWidgets.QWidget):
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self, "Resumo de Consumos", f"Falha ao atualizar dashboard: {exc}")
 
+    def _calc_custo_mp_total_estimate(self, ci: CusteioItem) -> float:
+        """
+        Estima o custo MP total replicando a logica principal (base * (1+desp) * pliq * qt_total).
+        """
+        try:
+            und = (ci.und or "").upper()
+        except Exception:
+            return 0.0
+
+        try:
+            desp_pct = float(ci.desp or 0) or 0.0
+        except Exception:
+            desp_pct = 0.0
+        desp = desp_pct / 100.0 if abs(desp_pct) > 1 else desp_pct
+
+        try:
+            pliq = float(ci.pliq or 0) or 0.0
+        except Exception:
+            pliq = 0.0
+
+        try:
+            qt_total = float(ci.qt_total or 0) or 0.0
+        except Exception:
+            qt_total = 0.0
+
+        if pliq <= 0 or qt_total <= 0:
+            return 0.0
+
+        base = 0.0
+        if und == "M2":
+            base = float(ci.area_m2_und or 0) or 0.0
+        elif und == "ML":
+            base = float(ci.spp_ml_und or 0) or 0.0
+        elif und == "UND":
+            base = 1.0
+
+        if base <= 0:
+            return 0.0
+
+        custo_und = base * (1.0 + desp) * pliq
+        return custo_und * qt_total
+
+    def _apply_nao_stock_toggle(self, row_data: dict, checked: bool) -> None:
+        """
+        Ajusta o valor de 'desp' das linhas de PLACAS para aproximar C.MP Tot de C.Placa Usad.
+        """
+        orc = self._current_orcamento
+        if not orc:
+            return
+
+        item_ids = [iid for iid in row_data.get("item_ids", []) if iid]
+        if not item_ids:
+            return
+
+        target_total = float(row_data.get("custo_placas_utilizadas") or 0) or 0.0
+
+        try:
+            with SessionLocal() as session:
+                itens = (
+                    session.query(CusteioItem)
+                    .filter(CusteioItem.id.in_(item_ids))
+                    .all()
+                )
+                placas_items = [ci for ci in itens if (ci.familia or "").upper() == "PLACAS"]
+                if not placas_items:
+                    return
+
+                touched_items = set()
+
+                if checked:
+                    current_total = sum(self._calc_custo_mp_total_estimate(ci) for ci in placas_items)
+
+                    for ci in placas_items:
+                        blk_before = bool(getattr(ci, "blk", False))
+                        existing = (
+                            session.query(CusteioDespBackup)
+                            .filter(CusteioDespBackup.custeio_item_id == ci.id)
+                            .first()
+                        )
+                        if not existing:
+                            session.add(
+                                CusteioDespBackup(
+                                    orcamento_id=orc.id,
+                                    versao=orc.versao,
+                                    user_id=getattr(self.current_user, "id", None),
+                                    custeio_item_id=ci.id,
+                                    desp_original=ci.desp or 0,
+                                    blk_original=blk_before,
+                                )
+                            )
+                        else:
+                            if existing.blk_original is None:
+                                existing.blk_original = blk_before
+                            existing.nao_stock_active = True
+
+                    if target_total <= 0 or current_total <= 0:
+                        session.commit()
+                        return
+
+                    alvo = max(target_total - 1.0, 0.0)
+                    if abs(alvo - current_total) <= 1.0:
+                        fator = 1.0
+                    else:
+                        fator = alvo / current_total
+
+                    for ci in placas_items:
+                        try:
+                            desp_pct = float(ci.desp or 0) or 0.0
+                        except Exception:
+                            desp_pct = 0.0
+                        blk_before = bool(getattr(ci, "blk", False))
+                        if not blk_before:
+                            try:
+                                ci.blk = True
+                            except Exception:
+                                pass
+                        desp_frac = desp_pct / 100.0 if abs(desp_pct) > 1 else desp_pct
+                        novo_frac = max((1.0 + desp_frac) * fator - 1.0, 0.0)
+                        novo_desp_pct = novo_frac * 100.0
+                        try:
+                            ci.desp = Decimal(str(novo_desp_pct)).quantize(Decimal("0.0001"))
+                        except Exception:
+                            ci.desp = novo_desp_pct
+                        item_id = getattr(ci, "item_id", None)
+                        if item_id:
+                            touched_items.add(item_id)
+                else:
+                    backups = (
+                        session.query(CusteioDespBackup)
+                        .filter(CusteioDespBackup.custeio_item_id.in_([ci.id for ci in placas_items]))
+                        .all()
+                    )
+                    backup_map = {b.custeio_item_id: b for b in backups}
+                    for ci in placas_items:
+                        bak = backup_map.get(ci.id)
+                        if not bak:
+                            continue
+                        ci.desp = bak.desp_original
+                        bak.nao_stock_active = False
+                        blk_restore = bak.blk_original
+                        if blk_restore is not None:
+                            try:
+                                ci.blk = bool(blk_restore)
+                            except Exception:
+                                ci.blk = blk_restore
+                        item_id = getattr(ci, "item_id", None)
+                        if item_id:
+                            touched_items.add(item_id)
+
+                for item_id in touched_items:
+                    try:
+                        atualizar_orlas_custeio(session, orcamento_id=orc.id, item_id=item_id)
+                    except Exception:
+                        logger.exception("Falha ao recalcular custos para item %s", item_id)
+
+                session.commit()
+        except OperationalError as exc:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Resumo de Consumos",
+                f"Falha ao aplicar Nao Stock: {exc.orig if hasattr(exc, 'orig') else exc}",
+            )
+        except Exception:
+            logger.exception("Erro ao aplicar Nao Stock")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Resumo de Consumos",
+                "Falha ao aplicar Nao Stock. Verifique os dados e tente novamente.",
+            )
+
+    def _on_dash_placas_changed(self, top_left: QtCore.QModelIndex, bottom_right: QtCore.QModelIndex, roles=None) -> None:
+        """
+        Handler para edicao da coluna 'Nao Stock' no resumo de placas.
+        """
+        model = self.tbl_dash_placas.model()
+        if not isinstance(model, SimpleTableModel):
+            return
+
+        cols = getattr(model, "columns", getattr(model, "_columns", []))
+        if not cols:
+            return
+
+        nao_stock_col = None
+        for idx, col in enumerate(cols):
+            spec = model._col_spec(col)
+            if spec.get("attr") == "nao_stock":
+                nao_stock_col = idx
+                break
+
+        if nao_stock_col is None:
+            return
+
+        if top_left.column() > nao_stock_col or bottom_right.column() < nao_stock_col:
+            return
+
+        try:
+            row_obj = model.get_row(top_left.row())
+        except Exception:
+            return
+
+        checked = False
+        try:
+            checked = bool(row_obj.get("nao_stock"))
+        except Exception:
+            checked = False
+
+        self._apply_nao_stock_toggle(row_obj, checked)
+        self._set_nao_stock_dirty(True)
+        self._refresh_dashboard()
+
+    def _save_nao_stock_states(self) -> None:
+        """
+        Grava em base de dados o estado atual da coluna Nao Stock para todas as linhas exibidas.
+        """
+        model = self.tbl_dash_placas.model()
+        if not isinstance(model, SimpleTableModel):
+            return
+        rows = getattr(model, "_rows", [])
+        for row in rows:
+            try:
+                checked = bool(row.get("nao_stock"))
+            except Exception:
+                checked = False
+            self._apply_nao_stock_toggle(row, checked)
+        self._refresh_dashboard()
+        self._set_nao_stock_dirty(False)
+
+
     def _update_dashboard_ui(self) -> None:
         data = self._dashboard_data or {}
         # tabelas
@@ -1100,25 +1481,40 @@ class RelatoriosPage(QtWidgets.QWidget):
                 num = float(val)
             except Exception:
                 return "" if val in (None, "") else str(val)
-            if abs(num) < 1.0:
-                return f"{num:.0%}"
-            return f"{num:.0f} %"
+            # sempre 2 casas decimais para percentagem
+            if abs(num) <= 1.0:
+                return f"{num * 100:.2f} %"
+            return f"{num:.2f} %"
+
+        def _placa_row_tooltip(row: dict, value: Any, spec=None) -> Optional[str]:
+            return row.get("_placa_tooltip")
+
+        def _desp_original_tooltip(row: dict, value: Any, spec=None) -> Optional[str]:
+            base_tip = row.get("_placa_tooltip")
+            if row.get("nao_stock") and row.get("_desp_original") is not None:
+                original_txt = _percent(row.get("_desp_original"))
+                extra = f"Desp. original: {original_txt}"
+                if base_tip:
+                    return f"{extra}\n{base_tip}"
+                return extra
+            return base_tip
 
         placas_cols = [
-            ("Ref.", "ref_le"),
-            ("Descrição", "descricao_no_orcamento"),
-            ("P.Liq", "pliq", moedas),
-            ("Und", "und"),
-            ("Desp.", "desp", _percent),
-            ("Comp.", "comp_mp", mm_fmt),
-            ("Larg.", "larg_mp", mm_fmt),
-            ("Esp.", "esp_mp", mm_fmt),
-            ("Qt.Pla.", "qt_placas_utilizadas", fmt_auto),
-            ("Área", "area_placa", m2_fmt),
-            ("m2 Usad.", "m2_consumidos", m2_fmt),
-            ("m2_total_pecas", "m2_total_pecas", m2_fmt),
-            ("C.MP Tot", "custo_mp_total", moedas),
-            ("C.Placa Usad.", "custo_placas_utilizadas", moedas),
+            ("Ref.", "ref_le", None, _placa_row_tooltip),
+            ("Descricao", "descricao_no_orcamento", None, _placa_row_tooltip),
+            ("P.Liq", "pliq", moedas, _placa_row_tooltip),
+            ("Und", "und", None, _placa_row_tooltip),
+            ("Desp.", "desp", _percent, _desp_original_tooltip),
+            ("Comp.", "comp_mp", mm_fmt, _placa_row_tooltip),
+            ("Larg.", "larg_mp", mm_fmt, _placa_row_tooltip),
+            ("Esp.", "esp_mp", mm_fmt, _placa_row_tooltip),
+            ("Qt.Pla.", "qt_placas_utilizadas", fmt_auto, _placa_row_tooltip),
+            ("Area", "area_placa", m2_fmt, _placa_row_tooltip),
+            ("m2 Usad.", "m2_consumidos", m2_fmt, _placa_row_tooltip),
+            ("m2_total_pecas", "m2_total_pecas", m2_fmt, _placa_row_tooltip),
+            ("C.MP Tot", "custo_mp_total", moedas, _placa_row_tooltip),
+            ("C.Placa Usad.", "custo_placas_utilizadas", moedas, _placa_row_tooltip),
+            {"header": "Nao Stock", "attr": "nao_stock", "type": "bool", "editable": True, "tooltip": _placa_row_tooltip},
         ]
         orlas_cols = [
             ("Ref. Orla", "ref_orla"),
@@ -1159,7 +1555,15 @@ class RelatoriosPage(QtWidgets.QWidget):
             ("Nº Peças", "num_pecas", fmt_auto),
         ]
 
-        self.tbl_dash_placas.setModel(SimpleTableModel(data.get("placas", []), placas_cols, self.tbl_dash_placas))
+        model_placas = SimpleTableModel(data.get("placas", []), placas_cols, self.tbl_dash_placas)
+        old_model = getattr(self, "_dash_placas_model", None)
+        if old_model is not None and old_model is not model_placas:
+            try:
+                old_model.dataChanged.disconnect(self._on_dash_placas_changed)
+            except Exception:
+                pass
+        self._dash_placas_model = model_placas
+        self.tbl_dash_placas.setModel(model_placas)
         self.tbl_dash_orlas.setModel(SimpleTableModel(data.get("orlas", []), orlas_cols, self.tbl_dash_orlas))
         self.tbl_dash_ferr.setModel(SimpleTableModel(data.get("ferr", []), ferr_cols, self.tbl_dash_ferr))
         self.tbl_dash_maq.setModel(SimpleTableModel(data.get("maq", []), maq_cols, self.tbl_dash_maq))
@@ -1174,7 +1578,7 @@ class RelatoriosPage(QtWidgets.QWidget):
             (self.tbl_dash_placas, "Resumo de Placas"),
             (self.tbl_dash_orlas, "Resumo de Orlas"),
             (self.tbl_dash_ferr, "Resumo de Ferragens"),
-            (self.tbl_dash_maq, "Resumo de Máquinas / MO"),
+            (self.tbl_dash_maq, "Resumo de Maquinas / MO"),
         ):
             tbl.setAlternatingRowColors(True)
             header = tbl.horizontalHeader()
@@ -1188,6 +1592,19 @@ class RelatoriosPage(QtWidgets.QWidget):
             tbl.setMinimumHeight(460)
             if title in tooltips:
                 header.setToolTip(tooltips[title])
+
+        # ligar toggles da coluna Não Stock
+        model_placas = self.tbl_dash_placas.model()
+        if isinstance(model_placas, SimpleTableModel):
+            try:
+                model_placas.dataChanged.disconnect(self._on_dash_placas_changed)
+            except Exception:
+                pass
+            try:
+                model_placas.dataChanged.connect(self._on_dash_placas_changed, QtCore.Qt.UniqueConnection)
+            except Exception:
+                pass
+
 
         # gráficos
         self._plot_dashboard_charts()
@@ -1222,16 +1639,30 @@ class RelatoriosPage(QtWidgets.QWidget):
             teor = [float(p.get("custo_mp_total", 0) or 0) for p in placas]
             real = [float(p.get("custo_placas_utilizadas", 0) or 0) for p in placas]
             width = 0.35
-            self.ax_placas.bar([xi - width / 2 for xi in x], teor, width=width, label="Custo Teórico", color="#7ec0ee")
-            self.ax_placas.bar([xi + width / 2 for xi in x], real, width=width, label="Custo Real", color="#ef5350")
+            teor_colors = []
+            tol = 2.0
+            for t, r in zip(teor, real):
+                teor_colors.append("#4caf50" if abs(t - r) <= tol else "#7ec0ee")
+            bars_teor = self.ax_placas.bar(
+                [xi - width / 2 for xi in x], teor, width=width, label="Custo Teórico", color=teor_colors
+            )
+            bars_real = self.ax_placas.bar(
+                [xi + width / 2 for xi in x], real, width=width, label="Custo Real", color="#ef5350"
+            )
             self.ax_placas.set_xticks(x)
             self.ax_placas.set_xticklabels(labels, rotation=20, ha="right")
             self.ax_placas.set_ylabel("Custo (€)")
             self.ax_placas.tick_params(axis="x", labelsize=8)
             self.ax_placas.tick_params(axis="y", labelsize=8)
             self.ax_placas.legend(fontsize=9)
-            for xi, val in zip(x, real):
-                self.ax_placas.text(xi + width / 2, val, f"{val:.2f}", ha="center", va="bottom", fontsize=8)
+            for bar, val in zip(bars_teor, teor):
+                self.ax_placas.text(
+                    bar.get_x() + bar.get_width() / 2, val, f"{val:.2f}", ha="center", va="bottom", fontsize=8
+                )
+            for bar, val in zip(bars_real, real):
+                self.ax_placas.text(
+                    bar.get_x() + bar.get_width() / 2, val, f"{val:.2f}", ha="center", va="bottom", fontsize=8
+                )
             self.ax_placas.set_title("Comparativo de Custos por Placa")
         else:
             self.ax_placas.text(0.5, 0.5, "Sem dados", ha="center", va="center")
@@ -1696,12 +2127,40 @@ class RelatoriosPage(QtWidgets.QWidget):
         )
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
+        log_path = Path("envio_emails.log").resolve()
         try:
+            logger.info(
+                "email.send start orcamento_id=%s versao=%s destinatario=%s anexos=%s user_id=%s",
+                getattr(orc, "id", None),
+                getattr(orc, "versao", None),
+                dialog.destinatario(),
+                dialog.anexos(),
+                getattr(self.current_user, "id", None),
+            )
             send_email(dialog.destinatario(), dialog.assunto(), dialog.corpo_html(), dialog.anexos())
             self._marcar_enviado(orc.id)
         except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Email", f"Falha ao enviar email: {exc}")
+            logger.exception(
+                "email.send erro orcamento_id=%s versao=%s destinatario=%s user_id=%s",
+                getattr(orc, "id", None),
+                getattr(orc, "versao", None),
+                dialog.destinatario(),
+                getattr(self.current_user, "id", None),
+            )
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Email",
+                f"Falha ao enviar email: {exc}\nConsulte o log em:\n{log_path}",
+            )
             return
+        logger.info(
+            "email.send ok orcamento_id=%s versao=%s destinatario=%s anexos=%s user_id=%s",
+            getattr(orc, "id", None),
+            getattr(orc, "versao", None),
+            dialog.destinatario(),
+            dialog.anexos(),
+            getattr(self.current_user, "id", None),
+        )
         QtWidgets.QMessageBox.information(self, "Email", "Email enviado com sucesso.")
 
     def _marcar_enviado(self, orc_id: int) -> None:
@@ -1750,24 +2209,15 @@ class RelatoriosPage(QtWidgets.QWidget):
             "</div>"
         )
 
-    # wrappers para helpers definidos abaixo (mant?m chamadas existentes)
+    # wrappers para helpers definidos abaixo (mantem chamadas existentes)
     def _build_workbook(self, output_path: Path):
-        builder = getattr(relatorios_full.RelatoriosPage, "_build_workbook", None)
-        if callable(builder):
-            return builder(self, output_path)
-        raise AttributeError("_build_workbook não disponível na relatorios_copia")
+        return _build_workbook_full(self, output_path)
 
     def _export_resumo_custos(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
-        exporter = getattr(relatorios_full.RelatoriosPage, "_export_resumo_custos", None)
-        if callable(exporter):
-            return exporter(self, export_dir, orc, client)
-        raise AttributeError("_export_resumo_custos não disponível na relatorios_copia")
+        return _export_resumo_custos_full(self, export_dir, orc, client)
 
     def _export_excel_phc(self, export_dir: Path, orc: Orcamento) -> None:
-        exporter = getattr(relatorios_full.RelatoriosPage, "_export_excel_phc", None)
-        if callable(exporter):
-            return exporter(self, export_dir, orc)
-        raise AttributeError("_export_excel_phc não disponível na relatorios_copia")
+        return _export_excel_phc_full(self, export_dir, orc)
 
     def _on_header_resized(self, section: int, _old: int, _new: int) -> None:
         if section == 2:
@@ -1859,20 +2309,16 @@ class RelatoriosPage(QtWidgets.QWidget):
         try:
             export_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, "Exportar PDF", f"Falha ao preparar pasta do orçamento: {exc}")
+            QtWidgets.QMessageBox.critical(self, "Exportar PDF", f"Falha ao preparar pasta do orcamento: {exc}")
             return
         output_path = export_dir / f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}.pdf"
         try:
-            builder = getattr(relatorios_full.RelatoriosPage, "_build_pdf", None)
-            if callable(builder):
-                builder(self, output_path)
-            else:
-                raise AttributeError("_build_pdf não disponível na relatorios_copia")
+            _build_pdf_full(self, output_path)
             self._export_resumo_custos(export_dir, orc, client)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(self, "Exportar PDF", f"Falha ao exportar: {exc}")
             return
-        QtWidgets.QMessageBox.information(self, "Exportar PDF", f"Relatório guardado em:\n{output_path}")
+        QtWidgets.QMessageBox.information(self, "Exportar PDF", f"Relatorio guardado em:\n{output_path}")
 
         return None
 
@@ -1958,7 +2404,7 @@ class EmailOrcamentoDialog(QtWidgets.QDialog):
 
 # ----------------------------------------------------------------------
 # Funções de exportação completas (restauradas)
-def _build_workbook(self, output_path: Path) -> None:
+def _build_workbook_full(self, output_path: Path) -> None:
     """
     Gera o ficheiro Excel (usando xlsxwriter) com formatação semelhante ao PDF.
     """
@@ -2122,7 +2568,7 @@ def _build_workbook(self, output_path: Path) -> None:
     wb.close()
 
 
-def _export_resumo_custos(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
+def _export_resumo_custos_full(self, export_dir: Path, orc: Orcamento, client: Optional[Client]) -> None:
     """
     Gera 'Resumo_Custos_<num>_<ver>.xlsx' a partir do modelo MODELO_Resumo_Custos.xlsx
     preenchendo o separador 'Resumo Geral' com os registos de custeio_items.
@@ -2330,3 +2776,340 @@ def _ensure_relatorios_methods():
 
 
 _ensure_relatorios_methods()
+
+def _export_excel_phc_full(self, export_dir: Path, orc: Orcamento) -> Path:
+    """
+    Gera um ficheiro Excel no formato esperado pelo PHC.
+    """
+    filename = f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}_PHC.xlsx"
+    dest = export_dir / filename
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "PHC"
+    headers = ["RefCliente", "Referencia", "Designacao", "XAltura", "YLargura", "ZEspessura", "Qtd", "Venda"]
+    ws.append(headers)
+
+    def _to_num(value):
+        conv = getattr(self, "_decimal_value", None)
+        if callable(conv):
+            return conv(value)
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    for item in self._current_items:
+        desc_entries = self._parse_description(item.descricao)
+        lines: list[str] = []
+        if desc_entries:
+            lines.append(desc_entries[0][1].upper())
+            for kind, text in desc_entries[1:]:
+                if kind == "dash":
+                    lines.append(f"- {text}")
+                elif kind == "star":
+                    lines.append(f"* {text}")
+                elif kind == "header2":
+                    lines.append(text.upper())
+                else:
+                    lines.append(text)
+        else:
+            lines.append("")
+
+        first_line = lines[0]
+        extra_lines = lines[1:]
+
+        ws.append(
+            [
+                item.codigo,
+                "MOB",
+                first_line,
+                _to_num(item.altura),
+                _to_num(item.largura),
+                _to_num(item.profundidade),
+                _to_num(item.qt),
+                _to_num(item.preco_unitario),
+            ]
+        )
+        for extra in extra_lines:
+            ws.append(["", "", extra, None, None, None, None, None])
+
+    # ajuste simples de largura das colunas para facilitar leitura
+    for col_cells in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col_cells)
+        ws.column_dimensions[col_cells[0].column_letter].width = min(max(max_len + 2, 10), 60)
+
+    wb.save(dest)
+    return dest
+
+def _build_pdf_full(self, output_path: Path) -> None:
+    """
+    Gera o PDF do orçamento com layout ajustado:
+    - margens em mm coerentes com as colWidths
+    - colunas redesenhadas (descrição maior)
+    - fontes e paddings ajustados para caber melhor na tabela
+    - totais alinhados mais à direita
+    """
+    client = self._current_client
+    orc = self._current_orcamento
+    rows = self._current_items
+    if not orc:
+        raise ValueError("Nenhum orçamento disponível.")
+
+    # --------------------------
+    # Parâmetros de layout (fáceis de ajustar)
+    # --------------------------
+    left_margin = 5 * mm        # margem esquerda (mm -> pontos)
+    right_margin = 5 * mm       # margem direita
+    top_margin = 1 * mm
+    bottom_margin = 1 * mm # margem inferior pequena para rodapé mais baixo
+
+    # Tamanhos de fontes e leading
+    HEADER_FONT_SIZE = 16
+    HEADER_TABLE_FONTSIZE = 9   # <--- reduzido (cabeçalho da tabela)
+    BODY_FONTSIZE = 9
+    DESC_LEADING = 11
+
+    # col_widths em mm que somam a largura útil da página:
+    # A4 = 210 mm, largura útil = 210 - left - right
+    # 210 - 5 - 5 = 200 mm
+    # ajuste: descrição maior (80 mm) para caber melhor
+    col_widths_mm = [9, 20, 80, 10, 11, 11, 11, 11, 18, 19]  # soma = 200 mm
+    # converter para pontos (reportlab usa pontos internamente)
+    col_widths = [w * mm for w in col_widths_mm]
+
+    # --------------------------
+    # Styles
+    # --------------------------
+    styles = getSampleStyleSheet()
+    # info_style mais compacto para poupar espaço vertical
+    info_style = ParagraphStyle("info", parent=styles["Normal"], fontSize=9, leading=11, spaceAfter=2)
+    header_style = ParagraphStyle("header", parent=styles["Heading1"], alignment=2, fontSize=HEADER_FONT_SIZE, textColor=colors.HexColor("#133a63"))
+    desc_style = ParagraphStyle("desc", parent=styles["Normal"], fontSize=BODY_FONTSIZE, leading=DESC_LEADING, spaceAfter=2)
+    price_style = ParagraphStyle("price", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+
+    # -------------------------------------------------------------------------------------
+    # Criar o doc (precisamos do doc para obter doc.width/doc.height antes de construir story)
+    doc = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        topMargin=top_margin,
+        bottomMargin=bottom_margin,
+        leftMargin=left_margin,
+        rightMargin=right_margin,
+    )
+
+    # ------------------------------------------------------------------
+    # Header: left_table (cliente) e right_table (titulo + nº/data)
+    # ------------------------------------------------------------------
+    left_elements: List = []
+    logo_path = self._resolve_logo_path()
+    if logo_path:
+        try:
+            img = Image(str(logo_path))
+            img.drawHeight = 10 * mm
+            img.drawWidth = 32 * mm
+            left_elements.append([img])
+        except Exception:
+            pass
+
+    client_name = getattr(client, "nome", "") or ""
+    contact_lines = [
+        getattr(client, "morada", "") or "",
+        getattr(client, "email", "") or "",
+        f"Telefone: {getattr(client, 'telefone', '') or ''} | Telemóvel: {getattr(client, 'telemovel', '') or ''} | N.º cliente PHC: {getattr(client, 'num_cliente_phc', '') or ''}",
+    ]
+    left_elements.append([Paragraph(f"<font size=12><b>{client_name}</b></font>", info_style)])
+    left_elements.append([Paragraph("<br/>".join(filter(None, contact_lines)), info_style)])
+    left_table = Table(left_elements, colWidths=[80 * mm])
+    left_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), -8 * mm),
+    ]))
+
+    right_title = Paragraph("<font color='#103864' size=16><b>Relatório de Orçamento</b></font>", header_style)
+    right_info = Paragraph(
+        f"<font size=12>Nº Orçamento: <b>{orc.num_orcamento or ''}_{self._format_versao(orc.versao)}</b></font><br/>"
+        f"<font color='#5f6368'>Data: {orc.data or ''}</font>",
+        info_style,
+    )
+    right_table = Table([[right_title], [Spacer(1, 3 * mm)], [right_info]], colWidths=[80 * mm])
+    right_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 15),
+    ]))
+
+    header_table = Table([[left_table, right_table]], colWidths=[100 * mm, 80 * mm])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    # ref / obra
+    ref_para = Paragraph(f"<font color='#0a4ea1' size=12><b>Ref.: {orc.ref_cliente or '-'} </b></font>", info_style)
+    obra_para = Paragraph(f"<font color='#d4111f' size=12><b>Obra: {orc.obra or '-'}</b></font>", ParagraphStyle("obra", parent=info_style, alignment=2))
+    ref_table = Table([[ref_para, obra_para]], colWidths=[98 * mm, 76 * mm])
+    ref_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (0, -1), -10 * mm),
+        ("LEFTPADDING", (1, 0), (1, 0), -30),
+        ("ALIGN", (1, 0), (1, 0), "LEFT"),
+    ]))
+
+    # ------------------------------------------------------------------
+    # Construir a tabela de items (mas ainda NÃO a adicionamos ao story)
+    # ------------------------------------------------------------------
+    headers = ["Item", "Código", "Descrição", "Alt", "Larg", "Prof", "Und", "Qt", "Preço Unit", "Preço Total"]
+    data = [headers]
+    for item in rows:
+        desc_para = Paragraph(self._format_description_pdf(item.descricao), desc_style)
+        data.append([
+            item.item, item.codigo, desc_para,
+            _fmt_decimal(item.altura, 0), _fmt_decimal(item.largura, 0), _fmt_decimal(item.profundidade, 0),
+            item.unidade, _fmt_decimal(item.qt, 2), _fmt_currency(item.preco_unitario),
+            Paragraph(f"<b>{_fmt_currency(item.preco_total)}</b>", price_style),
+        ])
+
+    # paddings iniciais (vamos poder reduzir dinamicamente)
+    pad_left = 3
+    pad_right = 4
+    pad_top = 2
+    pad_bottom = 2
+
+    def make_table_style(pl=pad_left, pr=pad_right, pt=pad_top, pb=pad_bottom):
+        style = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#d7dce2")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), HEADER_TABLE_FONTSIZE),
+            ("FONTSIZE", (0, 1), (-1, -1), BODY_FONTSIZE),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("VALIGN", (0, 1), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), pl),
+            ("RIGHTPADDING", (0, 0), (-1, -1), pr),
+            ("TOPPADDING", (0, 0), (-1, -1), pt),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), pb),
+            ("ALIGN", (3, 1), (5, -1), "CENTER"),
+            ("ALIGN", (7, 1), (8, -1), "RIGHT"),
+            ("ALIGN", (9, 1), (9, -1), "RIGHT"),
+        ])
+        return style
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(make_table_style())
+
+    # ------------------------------------------------------------------
+    # Resumo / totais (SubTotal: com colon conforme pediste)
+    # ------------------------------------------------------------------
+    total_qt = sum((item.qt or Decimal("0")) for item in rows)
+    subtotal = sum((item.preco_total or Decimal("0")) for item in rows)
+    iva = subtotal * IVA_RATE
+    total = subtotal + iva
+
+    # estilos para labels (right) e valores (right)
+    label_right = ParagraphStyle("label_right", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+    value_right = ParagraphStyle("value_right", parent=styles["Normal"], alignment=2, fontSize=BODY_FONTSIZE, leading=DESC_LEADING)
+
+    # construir summary com Paragraphs — evita que HTML apareça em texto cru
+    summary_col1 = 18 * mm
+    summary_col2 = 30 * mm
+
+    summary_table = Table(
+        [
+            [Paragraph("Total Qt.:", label_right), Paragraph(f"<b>{_fmt_decimal(total_qt, 2)}</b>", value_right)],
+            [Paragraph("<font color='#0a2b6d'><b>SubTotal:</b></font>", label_right), Paragraph(f"<b>{_fmt_currency(subtotal)}</b>", value_right)],
+            [Paragraph("IVA (23%):", label_right), Paragraph(f"{_fmt_currency(iva)}", value_right)],
+            [Paragraph("Total Geral:", label_right), Paragraph(f"<b>{_fmt_currency(total)}</b>", value_right)],
+        ],
+        colWidths=[summary_col1, summary_col2],
+    )
+
+    # estilo para summary: alinhar tudo à direita, paddings reduzidos, box só no SUBTOTAL VALOR
+    summary_table.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 1),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),  # garantir valores bem encostados à direita
+                ("TOPPADDING", (0, 0), (-1, -1), 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                ("BOX", (1, 1), (1, 1), 1, colors.HexColor("#1d2f6f")),
+                ("BACKGROUND", (1, 1), (1, 1), colors.HexColor("#dfe5f2")),
+            ]
+        )
+    )
+    summary_table.hAlign = "RIGHT"
+
+    # Posicionar o summary exactamente à direita (push_right controla o "encaixe")
+    page_width, _ = A4
+    usable_width = page_width - left_margin - right_margin
+    summary_width = summary_col1 + summary_col2
+    left_space = usable_width - summary_width
+    push_right = 12 * mm   # podes ajustar (aumenta este valor para encostar mais)
+    left_space = max(0, left_space - push_right)
+
+    container = Table([[ "", summary_table ]], colWidths=[left_space, summary_width])
+    container.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 0),
+                ("LEFTPADDING", (1, 0), (1, 0), 0),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+            ]
+        )
+    )
+
+    # -------------------------------------------------------------------------------------
+    #   Checagem de alturas: se tudo couber numa página, adicionamos; se faltar pouco,
+    #   reduzimos paddings da tabela para forçar a caber numa página (evita página em branco).
+    # -------------------------------------------------------------------------------------
+    # obter alturas com wrap
+    page_w = doc.width
+    page_h = doc.height
+
+    # calcular alturas dos blocos
+    h_header = header_table.wrap(page_w, page_h)[1]
+    h_ref = ref_table.wrap(page_w, page_h)[1]
+    # pequeno spacer antes da tabela (6 pts)
+    spacer1 = 6
+    # obter altura da tabela com paddings actuais
+    table_h = table.wrap(page_w, page_h)[1]
+    # summary height
+    summary_h = container.wrap(page_w, page_h)[1]
+    total_needed = h_header + h_ref + spacer1 + table_h + spacer1 + summary_h
+
+    # Se excede a página por poucos pontos, vamos reduzir os paddings gradualmente
+    max_iterations = 6
+    iter_count = 0
+    # versão mais agressiva para reduzir paddings e forçar caber numa página
+    max_iterations = 12
+    iter_count = 0
+    # reduzir em 1–2 pontos por iteração até um limite
+    while total_needed > page_h and iter_count < max_iterations:
+        pad_left = max(0, pad_left - 2)
+        pad_right = max(0, pad_right - 2)
+        pad_top = max(0, pad_top - 1)
+        pad_bottom = max(0, pad_bottom - 1)
+        table.setStyle(make_table_style(pl=pad_left, pr=pad_right, pt=pad_top, pb=pad_bottom))
+        table_h = table.wrap(page_w, page_h)[1]
+        total_needed = h_header + h_ref + spacer1 + table_h + spacer1 + summary_h
+        iter_count += 1
+
+    # Se continuar a ser maior que a página, deixamos partir em 2 páginas (cenário com muitos itens)
+    # Agora construímos o story definitivo.
+    story: List = []
+    story.append(header_table)
+    story.append(ref_table)
+    story.append(Spacer(1, 6))
+    story.append(table)
+    story.append(Spacer(1, 6))
+    story.append(container)
+
+    # -------------------------------------------------------------------------------------
+    # Construir documento com NumberedFooterCanvas (mantém rodapé com página X/Y)
+    # -------------------------------------------------------------------------------------
+    footer_info = {"data": orc.data or "", "numero": f"{orc.num_orcamento or ''}_{self._format_versao(orc.versao)}"}
+    doc.build(story, canvasmaker=lambda *args, **kwargs: NumberedFooterCanvas(*args, footer_info=footer_info, **kwargs))

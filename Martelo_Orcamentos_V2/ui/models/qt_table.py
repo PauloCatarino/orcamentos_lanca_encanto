@@ -132,6 +132,11 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             tooltip = spec.get("tooltip")
             if not tooltip:
                 return None
+            if callable(tooltip):
+                try:
+                    return tooltip(row_obj, val, spec)
+                except Exception:
+                    return None
             if val in (None, ""):
                 return tooltip
             formatted = None

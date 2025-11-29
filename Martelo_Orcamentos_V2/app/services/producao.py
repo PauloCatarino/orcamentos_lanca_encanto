@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from sqlalchemy import select
-from sqlalchemy.exc import OperationalError
+import time
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models.custeio_producao import (
@@ -14,6 +15,9 @@ from Martelo_Orcamentos_V2.app.models.custeio_producao import (
 )
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento
 from Martelo_Orcamentos_V2.app.db import SessionLocal
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_PRODUCTION_VALUES: Sequence[Mapping[str, object]] = (
@@ -147,7 +151,35 @@ def _normalize_versao(value: Optional[str]) -> str:
 
 
 def build_context(session: Session, orcamento_id: int, user_id: int, versao: Optional[str] = None) -> ProducaoContext:
+    try:
+        session.expire_all()
+    except Exception:
+        pass
+    logger.debug("build_context: tentando session.get Orcamento id=%s", orcamento_id)
     orcamento = session.get(Orcamento, orcamento_id)
+    if orcamento is None:
+        try:
+            session.rollback()
+            session.expire_all()
+            orcamento = session.get(Orcamento, orcamento_id)
+        except Exception:
+            pass
+    if orcamento is None:
+        # tenta com uma nova sessão para evitar caches/ligação com problema
+        try:
+            logger.debug("build_context: orcamento nao encontrado na sessao principal, tentando nova sessao id=%s", orcamento_id)
+            with SessionLocal() as tmp:
+                orcamento = tmp.get(Orcamento, orcamento_id)
+                logger.debug("build_context: resultado nova sessao orcamento=%s", bool(orcamento))
+                if orcamento is None:
+                    # tentativa adicional com SQL crua para diagnostico
+                    try:
+                        res = tmp.execute("SELECT id, ano, num_orcamento, versao FROM orcamento WHERE id = :id", {"id": orcamento_id}).fetchone()
+                        logger.debug("build_context: raw select result=%s", res)
+                    except Exception as e:
+                        logger.exception("build_context: falha ao executar raw select para orcamento %s: %s", orcamento_id, e)
+        except Exception:
+            logger.exception("build_context: erro ao tentar nova sessao para orcamento %s", orcamento_id)
     if orcamento is None:
         raise ValueError(f"Orçamento {orcamento_id} não encontrado.")
     versao_norm = _normalize_versao(versao or orcamento.versao)
@@ -173,12 +205,86 @@ def _config_query(session: Session, ctx: ProducaoContext):
 
 
 def ensure_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConfig:
+    """
+    Garante que existe config para (orcamento, versao, user) evitando locks longos.
+    Usa INSERT IGNORE numa sessao curta e recarrega na sessao principal.
+    """
     try:
-        config = _config_query(session, ctx)
-        if config:
-            return config
+        session.rollback()
+        session.execute(text("SET innodb_lock_wait_timeout=5"))
+    except Exception:
+        pass
 
-        config = CusteioProducaoConfig(
+    existing = _config_query(session, ctx)
+    if existing:
+        return existing
+
+    # Confirmar que o orcamento existe (sessao independente para evitar cache suja)
+    with SessionLocal() as chk:
+        if chk.get(Orcamento, ctx.orcamento_id) is None:
+            raise ValueError(f"Orcamento {ctx.orcamento_id} nao encontrado.")
+
+    insert_cfg_sql = text(
+        """
+        INSERT IGNORE INTO custeio_producao_config (orcamento_id, cliente_id, user_id, ano, num_orcamento, versao, modo)
+        VALUES (:orcamento_id, :cliente_id, :user_id, :ano, :num_orcamento, :versao, :modo)
+        """
+    )
+    insert_val_sql = text(
+        """
+        INSERT IGNORE INTO custeio_producao_valores
+        (config_id, descricao_equipamento, abreviatura, valor_std, valor_serie, resumo, ordem)
+        VALUES (:config_id, :descricao_equipamento, :abreviatura, :valor_std, :valor_serie, :resumo, :ordem)
+        """
+    )
+    params_cfg = {
+        "orcamento_id": ctx.orcamento_id,
+        "cliente_id": ctx.cliente_id,
+        "user_id": ctx.user_id,
+        "ano": ctx.ano,
+        "num_orcamento": ctx.num_orcamento,
+        "versao": ctx.versao,
+        "modo": "STD",
+    }
+
+    created_id: Optional[int] = None
+    with SessionLocal() as iso:
+        try:
+            try:
+                iso.execute(text("SET innodb_lock_wait_timeout=5"))
+            except Exception:
+                pass
+            iso.execute(insert_cfg_sql, params_cfg)
+            iso.commit()
+            existing_iso = _config_query(iso, ctx)
+            created_id = existing_iso.id if existing_iso else None
+            if created_id:
+                for ordem, row in enumerate(DEFAULT_PRODUCTION_VALUES, start=1):
+                    iso.execute(
+                        insert_val_sql,
+                        {
+                            "config_id": created_id,
+                            "descricao_equipamento": str(row["descricao_equipamento"]),
+                            "abreviatura": str(row["abreviatura"]),
+                            "valor_std": _to_decimal(row["valor_std"]),
+                            "valor_serie": _to_decimal(row["valor_serie"]),
+                            "resumo": str(row.get("resumo") or ""),
+                            "ordem": ordem,
+                        },
+                    )
+                iso.commit()
+        except Exception:
+            iso.rollback()
+            created_id = None
+
+    session.expire_all()
+    config = session.get(CusteioProducaoConfig, created_id) if created_id else _config_query(session, ctx)
+    if config:
+        return config
+
+    # fallback: tentar criar na sessao atual (sem INSERT IGNORE) antes de falhar
+    try:
+        cfg_obj = CusteioProducaoConfig(
             orcamento_id=ctx.orcamento_id,
             cliente_id=ctx.cliente_id,
             user_id=ctx.user_id,
@@ -187,14 +293,12 @@ def ensure_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConf
             versao=ctx.versao,
             modo="STD",
         )
-        session.add(config)
+        session.add(cfg_obj)
         session.flush()
-
-        valores: List[CusteioProducaoValor] = []
         for ordem, row in enumerate(DEFAULT_PRODUCTION_VALUES, start=1):
-            valores.append(
+            session.add(
                 CusteioProducaoValor(
-                    config_id=config.id,
+                    config_id=cfg_obj.id,
                     descricao_equipamento=str(row["descricao_equipamento"]),
                     abreviatura=str(row["abreviatura"]),
                     valor_std=_to_decimal(row["valor_std"]),
@@ -203,16 +307,26 @@ def ensure_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConf
                     ordem=ordem,
                 )
             )
-        config.valores = valores
         session.flush()
-        return config
-    except OperationalError:
-        # outro utilizador pode ter criado no intervalo; tenta recuperar
-        session.rollback()
+        return cfg_obj
+    except IntegrityError:
+        # Outro processo/sessão gravou no intervalo; tentar recuperar
+        try:
+            session.rollback()
+        except Exception:
+            pass
         existing = _config_query(session, ctx)
         if existing:
             return existing
         raise
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        raise ValueError(
+            f"Falha ao garantir config de producao para orcamento {ctx.orcamento_id} versao {ctx.versao} user {ctx.user_id}"
+        )
 
 
 def load_config(session: Session, ctx: ProducaoContext) -> CusteioProducaoConfig:

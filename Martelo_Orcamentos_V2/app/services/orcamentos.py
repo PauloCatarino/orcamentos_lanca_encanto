@@ -8,7 +8,22 @@ from typing import List, Optional
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import Session
 
-from ..models import Orcamento, OrcamentoItem, Client, User
+from ..models import (
+    Orcamento,
+    OrcamentoItem,
+    Client,
+    User,
+    CusteioItem,
+    CusteioItemDimensoes,
+    DadosModuloMedidas,
+    DadosDefPecas,
+    DadosItemsMaterial,
+    DadosItemsFerragem,
+    DadosItemsSistemaCorrer,
+    DadosItemsAcabamento,
+    DadosItemsModelo,
+    DadosItemsModeloItem,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -418,6 +433,147 @@ def move_item(
 
     _reindex_items(db, it.id_orcamento, versao=versao, updated_by=moved_by)
     return True
+
+
+def _clone_rows(db: Session, model, filters, overrides: dict) -> list:
+    rows = db.query(model).filter(*filters).all()
+    clones = []
+    for row in rows:
+        data = {}
+        for col in model.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name in overrides:
+                data[name] = overrides[name]
+            else:
+                data[name] = getattr(row, name)
+        clone = model(**data)
+        db.add(clone)
+        clones.append(clone)
+    db.flush()
+    return clones
+
+
+def duplicate_item(db: Session, item_id: int, *, created_by: Optional[int] = None) -> OrcamentoItem:
+    """
+    Duplica um item do orçamento (e dependências diretas) no mesmo orçamento/versão.
+    """
+    src = db.get(OrcamentoItem, item_id)
+    if not src:
+        raise ValueError("Item não encontrado.")
+
+    new_item_ord = _next_item_ord(db, src.id_orcamento)
+    new_item_num = str(new_item_ord)
+    versao = _format_versao(src.versao or "01")
+
+    new_item = OrcamentoItem(
+        id_orcamento=src.id_orcamento,
+        versao=versao,
+        item_ord=new_item_ord,
+        item=new_item_num,
+        codigo=src.codigo,
+        descricao=src.descricao,
+        altura=src.altura,
+        largura=src.largura,
+        profundidade=src.profundidade,
+        und=src.und,
+        qt=src.qt,
+        preco_unitario=src.preco_unitario,
+        preco_total=src.preco_total,
+        custo_produzido=src.custo_produzido,
+        ajuste=src.ajuste,
+        custo_total_orlas=src.custo_total_orlas,
+        custo_total_mao_obra=src.custo_total_mao_obra,
+        custo_total_materia_prima=src.custo_total_materia_prima,
+        custo_total_acabamentos=src.custo_total_acabamentos,
+        margem_lucro_perc=src.margem_lucro_perc,
+        valor_margem=src.valor_margem,
+        custos_admin_perc=src.custos_admin_perc,
+        valor_custos_admin=src.valor_custos_admin,
+        margem_acabamentos_perc=src.margem_acabamentos_perc,
+        valor_acabamentos=src.valor_acabamentos,
+        margem_mp_orlas_perc=src.margem_mp_orlas_perc,
+        valor_mp_orlas=src.valor_mp_orlas,
+        margem_mao_obra_perc=src.margem_mao_obra_perc,
+        valor_mao_obra=src.valor_mao_obra,
+        notas=src.notas,
+        extras=src.extras,
+        custo_colagem=src.custo_colagem,
+        reservado_2=src.reservado_2,
+        reservado_3=src.reservado_3,
+        created_by=created_by or src.created_by,
+        updated_by=created_by or src.updated_by,
+    )
+    db.add(new_item)
+    db.flush()
+
+    _clone_rows(db, DadosModuloMedidas, [DadosModuloMedidas.id_item_fk == src.id_item], {"id_item_fk": new_item.id_item})
+    _clone_rows(db, DadosDefPecas, [DadosDefPecas.id_item_fk == src.id_item], {"id_item_fk": new_item.id_item})
+
+    _clone_rows(db, DadosItemsMaterial, [DadosItemsMaterial.item_id == src.id_item], {"item_id": new_item.id_item})
+    _clone_rows(db, DadosItemsFerragem, [DadosItemsFerragem.item_id == src.id_item], {"item_id": new_item.id_item})
+    _clone_rows(db, DadosItemsSistemaCorrer, [DadosItemsSistemaCorrer.item_id == src.id_item], {"item_id": new_item.id_item})
+    _clone_rows(db, DadosItemsAcabamento, [DadosItemsAcabamento.item_id == src.id_item], {"item_id": new_item.id_item})
+
+    modelos = db.query(DadosItemsModelo).filter(DadosItemsModelo.item_id == src.id_item).all()
+    modelo_map = {}
+    for modelo in modelos:
+        data = {}
+        for col in DadosItemsModelo.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "item_id":
+                data[name] = new_item.id_item
+            else:
+                data[name] = getattr(modelo, name)
+        new_modelo = DadosItemsModelo(**data)
+        db.add(new_modelo)
+        db.flush()
+        modelo_map[modelo.id] = new_modelo.id
+    for old_id, new_id in modelo_map.items():
+        _clone_rows(db, DadosItemsModeloItem, [DadosItemsModeloItem.modelo_id == old_id], {"modelo_id": new_id})
+
+    custeio_rows = db.query(CusteioItem).filter(
+        CusteioItem.orcamento_id == src.id_orcamento,
+        CusteioItem.item_id == src.id_item,
+        CusteioItem.versao == versao,
+    ).all()
+    for ci in custeio_rows:
+        data = {}
+        for col in CusteioItem.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "item_id":
+                data[name] = new_item.id_item
+            else:
+                data[name] = getattr(ci, name)
+        new_ci = CusteioItem(**data)
+        db.add(new_ci)
+    db.flush()
+
+    _clone_rows(
+        db,
+        CusteioItemDimensoes,
+        [
+            CusteioItemDimensoes.orcamento_id == src.id_orcamento,
+            CusteioItemDimensoes.item_id == src.id_item,
+            CusteioItemDimensoes.versao == versao,
+        ],
+        {"item_id": new_item.id_item},
+    )
+
+    _reindex_items(db, src.id_orcamento, versao=versao, updated_by=created_by)
+    db.flush()
+    return new_item
 
 
 def next_num_orcamento(db: Session, ano: Optional[str] = None) -> str:

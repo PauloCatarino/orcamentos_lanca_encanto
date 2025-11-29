@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "Martelo_Orcamentos_V2"
 
     # --- DATABASE ---
-    DB_USER: str = "root"
-    DB_PASSWORD: str = "admin"
-    DB_HOST: str = "localhost"
+    DB_USER: str = "orc_user"
+    DB_PASSWORD: str = "senha_forte"
+    DB_HOST: str = "192.168.5.201"
     DB_PORT: int = 3306
     DB_NAME: str = "orcamentos_v2"
     DB_CHARSET: str = "utf8mb4"

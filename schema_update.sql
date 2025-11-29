@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS definicoes_pecas (
 ALTER TABLE custeio_items
     ADD COLUMN IF NOT EXISTS cp09_colagem_und DECIMAL(18,4) NULL AFTER cp08_mao_de_obra_und;
 
+-- Guardar o estado inicial do BLK no backup de desperdicio (Nao Stock)
+ALTER TABLE custeio_desp_backup
+    ADD COLUMN IF NOT EXISTS blk_original TINYINT(1) NOT NULL DEFAULT 0 AFTER desp_original;
+
 -- Renomear coluna reservado_1 para custo_colagem na tabela orcamento_items
 ALTER TABLE orcamento_items
     CHANGE COLUMN reservado_1 custo_colagem DECIMAL(14,2) NOT NULL DEFAULT 0;

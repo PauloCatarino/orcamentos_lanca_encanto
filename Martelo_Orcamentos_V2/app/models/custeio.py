@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from ..db import Base
@@ -116,6 +117,7 @@ class CusteioItem(CusteioContextMixin, Base):
     soma_custo_total = Column(Numeric(18, 4), nullable=True)
     soma_custo_acb = Column(Numeric(18, 4), nullable=True)
 
+    desp_backups = relationship("CusteioDespBackup", back_populates="item", cascade="all, delete-orphan")
 
 class CusteioItemDimensoes(CusteioContextMixin, Base):
     __tablename__ = "custeio_item_dimensoes"
@@ -148,3 +150,26 @@ class CusteioItemDimensoes(CusteioContextMixin, Base):
     h4 = Column(Numeric(18, 4), nullable=True)
     l4 = Column(Numeric(18, 4), nullable=True)
     p4 = Column(Numeric(18, 4), nullable=True)
+
+
+class CusteioDespBackup(Base):
+    """
+    Guarda o valor original de 'desp' e o estado de BLK para restaurar quando o
+    utilizador alterna Nao-Stock (NST) no resumo de placas.
+    """
+
+    __tablename__ = "custeio_desp_backup"
+    __table_args__ = (UniqueConstraint("custeio_item_id", name="u_custeio_desp_backup_item"),)
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    orcamento_id = Column(BigInteger, ForeignKey("orcamentos.id", ondelete="CASCADE"), nullable=False, index=True)
+    versao = Column(String(4), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    custeio_item_id = Column(BigInteger, ForeignKey("custeio_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    desp_original = Column(Numeric(18, 4), nullable=False, default=0)
+    blk_original = Column(Boolean, nullable=False, default=False)
+    nao_stock_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    item = relationship("CusteioItem", back_populates="desp_backups")

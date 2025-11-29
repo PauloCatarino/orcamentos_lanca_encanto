@@ -3026,9 +3026,9 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.setStyleSheet(
 
-                "QTableView::item:selected{background-color:#d0d0d0;color:#000000;}"
+                "QTableView::item:selected{background-color:#555555;color:#ffffff;}"
 
-                "QTableView::item:selected:!active{background-color:#d0d0d0;color:#000000;}"
+                "QTableView::item:selected:!active{background-color:#666666;color:#ffffff;}"
 
             )
 
@@ -3485,7 +3485,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
     def load_orcamento(self, orcamento_id: int, *, item_id: Optional[int] = None) -> None:
-
         try:
             self.session.flush()
         except Exception:
@@ -3534,9 +3533,28 @@ class DadosGeraisPage(QtWidgets.QWidget):
         self._set_dirty(False)
     def _carregar_topo(self, orcamento_id: int) -> None:
 
-
-
         orc: Orcamento = self.session.get(Orcamento, orcamento_id)
+        
+        # Se não encontrou na sessão principal, tentar com nova sessão
+        if not orc:
+            try:
+                from Martelo_Orcamentos_V2.app.db import SessionLocal
+                with SessionLocal() as tmp_session:
+                    orc = tmp_session.get(Orcamento, orcamento_id)
+                    if orc:
+                        # Copiar dados para evitar issues com session detached
+                        orc_data = {
+                            'id': orc.id,
+                            'client_id': orc.client_id,
+                            'ano': orc.ano,
+                            'num_orcamento': orc.num_orcamento,
+                            'versao': orc.versao,
+                            'created_by': orc.created_by,
+                        }
+                        # Use os dados diretamente sem tentar reatachá-los
+                        orc = type('obj', (object,), orc_data)()
+            except Exception:
+                pass
 
         cliente_nome = ""
         ano_text = ""
@@ -3545,8 +3563,29 @@ class DadosGeraisPage(QtWidgets.QWidget):
         username = getattr(self.current_user, "username", None) or ""
 
         if orc:
-            cliente: Optional[Client] = self.session.get(Client, orc.client_id) if orc.client_id else None
-            user: Optional[User] = self.session.get(User, orc.created_by) if orc.created_by else None
+            if hasattr(self, 'session'):
+                cliente: Optional[Client] = self.session.get(Client, orc.client_id) if orc.client_id else None
+                user: Optional[User] = self.session.get(User, orc.created_by) if orc.created_by else None
+            else:
+                cliente = None
+                user = None
+            
+            # Se cliente/user não encontrados na sessão principal, tentar nova sessão
+            if not cliente and orc.client_id:
+                try:
+                    from Martelo_Orcamentos_V2.app.db import SessionLocal
+                    with SessionLocal() as tmp_session:
+                        cliente = tmp_session.get(Client, orc.client_id)
+                except Exception:
+                    pass
+            
+            if not user and orc.created_by:
+                try:
+                    from Martelo_Orcamentos_V2.app.db import SessionLocal
+                    with SessionLocal() as tmp_session:
+                        user = tmp_session.get(User, orc.created_by)
+                except Exception:
+                    pass
 
             cliente_nome = (getattr(cliente, "nome", "") or "").strip()
             ano_val = getattr(orc, "ano", "")

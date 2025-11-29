@@ -1,7 +1,9 @@
+import logging
+import os
 from typing import Optional
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt, Signal, QDate
-from PySide6.QtWidgets import QStyle, QCompleter, QToolButton
+from PySide6.QtWidgets import QStyle, QCompleter, QToolButton, QAbstractSpinBox
 from sqlalchemy import select, and_
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.orcamentos import (
@@ -15,7 +17,9 @@ from Martelo_Orcamentos_V2.app.services.orcamentos import (
 from Martelo_Orcamentos_V2.app.services.clients import list_clients
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
 from ..models.qt_table import SimpleTableModel
-import os
+
+
+logger = logging.getLogger(__name__)
 
 
 class OrcamentosPage(QtWidgets.QWidget):
@@ -39,6 +43,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_ver = QtWidgets.QLineEdit("01")
         self.ed_data = QtWidgets.QDateEdit()
         self.ed_data.setDisplayFormat("dd-MM-yyyy")
+        self.ed_data.setCalendarPopup(True)
+        self.ed_data.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self.ed_data.setDate(QDate.currentDate())
         self.lbl_user = QtWidgets.QLabel(getattr(self.current_user, "username", "(utilizador)") or "(utilizador)")
         self.lbl_user.setFixedHeight(20)
@@ -101,8 +107,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet(
-            "QTableView::item:selected { background: rgb(47,109,168); color: white; }"
-            "QTableView::item:selected:!active { background: rgb(120,120,120); color: white; }"
+            "QTableView::item:selected { background: #555555; color: white; }"
+            "QTableView::item:selected:!active { background: #666666; color: white; }"
         )
         header = self.table.horizontalHeader()
         header.setStretchLastSection(True)
@@ -440,6 +446,62 @@ class OrcamentosPage(QtWidgets.QWidget):
         except Exception:
             return None
 
+    def _confirm_ref_cliente_duplicate(self, ref_cliente: str, matches) -> bool:
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Ref. Cliente duplicada")
+        dialog.setModal(True)
+        dialog.resize(760, 360)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        info = QtWidgets.QLabel(
+            f"Já existem orçamentos com a Ref. Cliente '{ref_cliente}'. "
+            "Verifique a lista e escolha se pretende criar mesmo assim."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        headers = ["ID", "Ano", "Nº Orçamento", "Versão", "Cliente", "Ref. Cliente", "Data", "Estado", "Obra"]
+        table = QtWidgets.QTableWidget(len(matches), len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        for row_idx, row in enumerate(matches):
+            cliente_nome = getattr(row, "cliente_nome", "")
+            if not cliente_nome and getattr(row, "client_id", None):
+                try:
+                    from Martelo_Orcamentos_V2.app.models import Client
+
+                    cliente = self.db.get(Client, row.client_id)
+                    cliente_nome = getattr(cliente, "nome", "") if cliente else ""
+                except Exception:
+                    cliente_nome = ""
+            vals = [
+                getattr(row, "id", ""),
+                getattr(row, "ano", ""),
+                getattr(row, "num_orcamento", ""),
+                getattr(row, "versao", ""),
+                cliente_nome,
+                getattr(row, "ref_cliente", ""),
+                getattr(row, "data", ""),
+                getattr(row, "status", ""),
+                getattr(row, "obra", ""),
+            ]
+            for col_idx, val in enumerate(vals):
+                item = QtWidgets.QTableWidgetItem(str(val or ""))
+                item.setFlags(Qt.ItemIsEnabled)
+                table.setItem(row_idx, col_idx, item)
+        table.resizeColumnsToContents()
+        layout.addWidget(table)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Yes | QtWidgets.QDialogButtonBox.No)
+        buttons.button(QtWidgets.QDialogButtonBox.Yes).setText("Criar novo mesmo assim")
+        buttons.button(QtWidgets.QDialogButtonBox.No).setText("Cancelar")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        return dialog.exec() == QtWidgets.QDialog.Accepted
+
     def _prepare_new_form(self, ano: Optional[str] = None):
         """Prepara o formulario para um novo orcamento."""
         self.table.clearSelection()
@@ -495,10 +557,20 @@ class OrcamentosPage(QtWidgets.QWidget):
             seq = self.ed_num.text().strip().zfill(4)
             num_concat = f"{yy}{seq}"
             versao_txt = self._format_version(self.ed_ver.text())
+            ref_cliente_txt = (self.ed_ref_cliente.text() or "").strip() or None
 
             if self._current_id is None:
                 # Novo orcamento
                 from Martelo_Orcamentos_V2.app.models import Orcamento
+
+                if ref_cliente_txt:
+                    matches = (
+                        self.db.execute(select(Orcamento).where(Orcamento.ref_cliente == ref_cliente_txt))
+                        .scalars()
+                        .all()
+                    )
+                    if matches and not self._confirm_ref_cliente_duplicate(ref_cliente_txt, matches):
+                        return
 
                 exists = self.db.execute(
                     select(Orcamento.id).where(
@@ -533,7 +605,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             o.data = self.ed_data.date().toString("yyyy-MM-dd")
             o.status = self.cb_status.currentText()
             o.enc_phc = self.ed_enc_phc.text().strip() or None
-            o.ref_cliente = self.ed_ref_cliente.text().strip() or None
+            o.ref_cliente = ref_cliente_txt
             o.obra = self.ed_obra.text().strip() or None
             o.preco_total = self._parse_currency(self.ed_preco.text())
             o.descricao_orcamento = self.ed_desc.toPlainText() or None
@@ -543,9 +615,44 @@ class OrcamentosPage(QtWidgets.QWidget):
 
             self.db.commit()
             was_new = self._current_id is None
+            logger.info(
+                "orcamento.save ok action=%s id=%s cliente_id=%s ano=%s num=%s ver=%s user_id=%s",
+                "novo" if was_new else "editar",
+                getattr(o, "id", None),
+                cid,
+                ano_txt,
+                num_concat,
+                versao_txt,
+                getattr(self.current_user, "id", None),
+            )
             if was_new:
-                # Após gravar, prepara o proximo nº
+                # Após gravar, actualiza a lista e selecciona a linha do orcamento
+                # criado sem disparar o handler de selecao. Isto garante que
+                # outras páginas conseguem identificar imediatamente o novo
+                # orcamento (por ex.: ao clicar em 'Abrir Itens') sem reiniciar.
                 self.refresh(select_first=False)
+                try:
+                    new_id = getattr(o, "id", None)
+                    if new_id is not None:
+                        # procurar index da nova linha no modelo
+                        idx = next((i for i, r in enumerate(self.model._rows) if getattr(r, "id", None) == new_id), None)
+                        if idx is not None:
+                            sel_model = self.table.selectionModel()
+                            try:
+                                sel_model.blockSignals(True)
+                            except Exception:
+                                pass
+                            try:
+                                self.table.selectRow(idx)
+                                self.table.scrollTo(self.model.index(idx, 0))
+                            finally:
+                                try:
+                                    sel_model.blockSignals(False)
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                # preparar formulário para próximo registo
                 self._prepare_new_form(ano_txt)
             else:
                 self.refresh()
@@ -553,6 +660,15 @@ class OrcamentosPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, "OK", "Orcamento gravado.")
         except Exception as e:
             self.db.rollback()
+            logger.exception(
+                "orcamento.save erro id=%s cliente_id=%s ano=%s num=%s ver=%s user_id=%s",
+                self._current_id,
+                cid if "cid" in locals() else None,
+                self.ed_ano.text().strip(),
+                self.ed_num.text().strip(),
+                self.ed_ver.text().strip(),
+                getattr(self.current_user, "id", None),
+            )
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar: {e}")
 
     def on_duplicate(self):
@@ -562,10 +678,18 @@ class OrcamentosPage(QtWidgets.QWidget):
         try:
             dup = duplicate_orcamento_version(self.db, oid, created_by=getattr(self.current_user, "id", None))
             self.db.commit()
+            logger.info(
+                "orcamento.duplicar ok origem_id=%s nova_id=%s versao=%s user_id=%s",
+                oid,
+                getattr(dup, "id", None),
+                getattr(dup, "versao", None),
+                getattr(self.current_user, "id", None),
+            )
             self.refresh()
             QtWidgets.QMessageBox.information(self, "OK", f"Criada versao {dup.versao} do orcamento {dup.num_orcamento}.")
         except Exception as e:
             self.db.rollback()
+            logger.exception("orcamento.duplicar erro origem_id=%s user_id=%s", oid, getattr(self.current_user, "id", None))
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao duplicar: {e}")
 
     def on_delete(self):
@@ -584,8 +708,10 @@ class OrcamentosPage(QtWidgets.QWidget):
             try:
                 delete_orcamento(self.db, oid)
                 self.db.commit()
+                logger.info("orcamento.delete ok id=%s user_id=%s", oid, getattr(self.current_user, "id", None))
             except Exception as e:
                 self.db.rollback()
+                logger.exception("orcamento.delete erro id=%s user_id=%s", oid, getattr(self.current_user, "id", None))
                 QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
             self.refresh()
         elif clicked == btn_pastas:

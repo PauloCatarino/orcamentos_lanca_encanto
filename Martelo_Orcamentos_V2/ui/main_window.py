@@ -1,9 +1,12 @@
 ﻿from typing import Optional
 
 import logging
+from urllib.parse import urlsplit, urlunsplit
+
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 
+from Martelo_Orcamentos_V2.app.config import settings
 from .pages.orcamentos import OrcamentosPage
 from .pages.itens import ItensPage
 from .pages.materias_primas import MateriasPrimasPage
@@ -16,6 +19,21 @@ from .pages.settings import SettingsPage
 
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_db_uri(uri: str) -> str:
+    try:
+        parts = urlsplit(uri)
+        if not parts.username:
+            return uri
+        host_port = parts.hostname or ""
+        if parts.port:
+            host_port = f"{host_port}:{parts.port}"
+        user_part = f"{parts.username}:****@" if parts.username else ""
+        netloc = f"{user_part}{host_port}"
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        return uri
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -114,6 +132,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(central)
 
     def on_abrir_orcamento(self, orcamento_id: int):
+        try:
+            logger.info("Abrir orcamento id=%s (DB=%s)", orcamento_id, _mask_db_uri(settings.DB_URI))
+        except Exception:
+            logger.info("Abrir orcamento id=%s", orcamento_id)
+        
         if self.current_orcamento_id:
             if not self.pg_custeio.auto_save_if_dirty():
                 return

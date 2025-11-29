@@ -29,6 +29,7 @@ from Martelo_Orcamentos_V2.app.services.orcamentos import (
     update_item,
     delete_item,
     move_item,
+    duplicate_item,
 )
 from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
@@ -454,6 +455,18 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_objetivo_apply.clicked.connect(self._on_apply_objetivo_clicked)
         objetivo_actions = QtWidgets.QHBoxLayout()
         objetivo_actions.setContentsMargins(0, 4, 0, 0)
+        # mover os bot�es de modo (STD/SERIE) para dentro do painel de margens
+        buttons_layout = getattr(self, "buttonsLayout", None)
+        if isinstance(buttons_layout, QtWidgets.QLayout):
+            for btn in (self.btn_mode_std, self.btn_mode_serie):
+                for idx in range(buttons_layout.count()):
+                    item = buttons_layout.itemAt(idx)
+                    if item is not None and item.widget() is btn:
+                        buttons_layout.takeAt(idx)
+                        break
+        for btn in (self.btn_mode_std, self.btn_mode_serie):
+            btn.setParent(self._margem_panel)
+            objetivo_actions.addWidget(btn)
         objetivo_actions.addStretch(1)
         margem_layout.addLayout(objetivo_actions, update_row + 2, 0, 1, 4)
 
@@ -513,6 +526,12 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_save.setToolTip("Gravar alterações do item selecionado.")
         self.btn_del.setIcon(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon))
         self.btn_del.setToolTip("Eliminar o item selecionado.")
+        if hasattr(self, 'btn_dup'):
+            self.btn_dup.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogListView))
+            self.btn_dup.setToolTip('Duplicar o item selecionado (copiar todos os dados).')
+            font_dup = self.btn_dup.font()
+            font_dup.setBold(True)
+            self.btn_dup.setFont(font_dup)
         self.btn_up.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp))
         self.btn_up.setToolTip("Mover o item selecionado para cima.")
         self.btn_dn.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
@@ -525,6 +544,7 @@ class ItensPage(QtWidgets.QWidget):
             getattr(self, "btn_add", None),
             getattr(self, "btn_save", None),
             getattr(self, "btn_del", None),
+            getattr(self, 'btn_dup', None),
             getattr(self, "btn_toggle_rows", None),
             getattr(self, "btn_up", None),
             getattr(self, "btn_dn", None),
@@ -794,11 +814,11 @@ class ItensPage(QtWidgets.QWidget):
         self.table.setStyleSheet(
             """
             QTableView::item:selected {
-                background-color: #d0d0d0;
-                color: #202020;
+                background-color: #555555;
+                color: #ffffff;
             }
             QTableView::item:hover {
-                background-color: #c3c3c3;
+                background-color: #6a6a6a;
             }
             """
         )
@@ -877,6 +897,8 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_add.clicked.connect(self.on_new_item)
         self.btn_save.clicked.connect(self.on_save_item)
         self.btn_del.clicked.connect(self.on_del)
+        if hasattr(self, 'btn_dup'):
+            self.btn_dup.clicked.connect(self.on_duplicate_item)
         if hasattr(self, "btn_toggle_rows"):
             self.btn_toggle_rows.toggled.connect(self.on_toggle_rows)
         self.btn_up.clicked.connect(lambda: self.on_move(-1))
@@ -891,6 +913,11 @@ class ItensPage(QtWidgets.QWidget):
     # ==========================================================================
     def load_orcamento(self, orc_id: int):
         """Carrega dados do or?amento e preenche cabe?alho."""
+        try:
+            self.db.rollback()
+            self.db.expire_all()
+        except Exception:
+            pass
         def _txt(v) -> str:
             return "" if v is None else str(v)
 
@@ -1050,6 +1077,10 @@ class ItensPage(QtWidgets.QWidget):
             return None
         versao_text = (self.lbl_ver_val.text() or "").strip() or None
         try:
+            try:
+                self.db.expire_all()
+            except Exception:
+                pass
             return svc_producao.build_context(self.db, self._orc_id, user_id, versao=versao_text)
         except Exception as exc:
             logger.exception("Itens._production_context failed: %s", exc)
@@ -2293,6 +2324,24 @@ class ItensPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
             return
         self.refresh(select_row=row)
+
+    def on_duplicate_item(self):
+        src_id = self.selected_id()
+        if not src_id:
+            QtWidgets.QMessageBox.information(self, "Duplicar Item", "Selecione um item para duplicar.")
+            return
+        try:
+            novo = duplicate_item(self.db, src_id, created_by=self._current_user_id())
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao duplicar item: {e}")
+            return
+
+        target_id = getattr(novo, "id_item", None)
+        self.refresh(select_id=target_id, select_last=target_id is None)
+        if target_id:
+            self.item_selected.emit(target_id)
 
     def on_move(self, direction: int):
         id_item = self.selected_id()

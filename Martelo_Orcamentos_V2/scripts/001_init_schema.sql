@@ -19,6 +19,7 @@ DROP TABLE IF EXISTS dados_def_pecas;
 DROP TABLE IF EXISTS dados_modulo_medidas;
 DROP TABLE IF EXISTS custeio_modulo_linhas;
 DROP TABLE IF EXISTS custeio_modulos;
+DROP TABLE IF EXISTS custeio_desp_backup;
 
 -- 2) Itens e orçamentos (filhas antes do pai)
 DROP TABLE IF EXISTS orcamento_items;
@@ -474,5 +475,21 @@ CREATE TABLE IF NOT EXISTS materia_prima_preferences (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_mpp_user FOREIGN KEY (user_id)
     REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Backup de desperdicio quando ativa a opcao Nao Stock no resumo de placas
+CREATE TABLE IF NOT EXISTS custeio_desp_backup (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  orcamento_id BIGINT NOT NULL,
+  versao VARCHAR(4) NOT NULL,
+  user_id BIGINT NULL,
+  custeio_item_id BIGINT NOT NULL,
+  desp_original DECIMAL(18,4) NOT NULL DEFAULT 0,
+  blk_original TINYINT(1) NOT NULL DEFAULT 0,
+  nao_stock_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY u_custeio_desp_backup_item (custeio_item_id),
+  INDEX ix_custeio_desp_backup_ctx (orcamento_id, versao, custeio_item_id)
 ) ENGINE=InnoDB;
 
