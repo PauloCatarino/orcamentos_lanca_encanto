@@ -222,7 +222,13 @@ def _special_default_for_row(row: Mapping[str, Any]) -> Optional[str]:
     def_text = (row.get("def_peca") or row.get("_child_source") or "").strip()
     if not def_text:
         return None
-    base = def_text.split("[", 1)[0].strip().casefold()
+    
+    # DIVISAO_INDEPENDENTE should never receive special defaults or characteristics
+    base_check = def_text.split("[", 1)[0].strip()
+    if base_check.casefold() == "DIVISAO INDEPENDENTE".casefold():
+        return None
+    
+    base = base_check.casefold()
     return SPECIAL_MAT_DEFAULTS.get(base)
 
 
@@ -4254,6 +4260,11 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
         except Exception:
 
             row = {}
+
+        # DIVISAO_INDEPENDENTE should NOT receive mat_default or characteristics
+        def_peca_norm = svc_custeio._normalize_token(row.get("def_peca") or "")
+        if def_peca_norm == "DIVISAO INDEPENDENTE":
+            return []
 
         familia_val = (row.get("familia") or "").strip()
         familia_norm = familia_val.casefold() if familia_val else ""
