@@ -93,3 +93,53 @@ Se precisares de ajuda, abre uma issue no repositório com uma descrição do pr
 
 ---
 _README atualizado para descrever o projecto Martelo Orçamentos de Mobiliário e fornecer instruções de desenvolvimento._
+
+## requirements.txt
+
+Um `requirements.txt` foi gerado automaticamente a partir do ambiente virtual `.venv_Martelo`. Mantém o ficheiro no repositório para facilitar instalações em outros ambientes. Se desejares regenerar o ficheiro localmente, executa:
+
+```powershell
+.\.venv_Martelo\Scripts\python.exe -m pip freeze > requirements.txt
+```
+
+Se for para produção, analisa e fixe versões críticas manualmente antes do deploy.
+
+## Empacotar / criar executável (build_exe.bat)
+
+O repositório inclui um `build_exe.bat` que pode ser usado como ponto de partida para gerar um executável Windows usando ferramentas como `PyInstaller` ou utilitários personalizados. Exemplo genérico usando `PyInstaller`:
+
+1. Ativa o ambiente virtual e instala PyInstaller:
+
+```powershell
+.\.venv_Martelo\Scripts\Activate.ps1
+pip install pyinstaller
+```
+
+2. Exemplo de comando PyInstaller (gera pasta `dist\Martelo_Orcamentos_V2`):
+
+```powershell
+pyinstaller --noconfirm --onefile --windowed --name Martelo_Orcamentos_V2 Martelo_Orcamentos_V2\run_dev.py
+```
+
+3. O ficheiro `build_exe.bat` pode conter passos adicionais (copiar ficheiros estáticos, templates, licenças, criar atalho). Um exemplo simples que podes usar/ajustar:
+
+```bat
+@echo off
+call ".\.venv_Martelo\Scripts\Activate.ps1"
+pyinstaller --noconfirm --onefile --windowed --name Martelo_Orcamentos_V2 Martelo_Orcamentos_V2\run_dev.py
+if %errorlevel% neq 0 (
+	echo Build failed
+	exit /b %errorlevel%
+)
+echo Build succeeded. Check the 'dist' folder for the executable.
+```
+
+4. Testar o executável gerado abrindo `dist\Martelo_Orcamentos_V2.exe`. Se o teu projeto usa ficheiros adicionais (templates, UI `.ui`, assets), garante que são incluídos no bundle do PyInstaller (`--add-data "src;dest"`) ou copiados manualmente após o build.
+
+5. Nota: para builds estáveis em CI/produção, considera usar um ambiente limpo (por exemplo um container Docker ou runner dedicado) para evitar dependências indesejadas no executável.
+
+---
+Se queres, eu:
+- adiciono um `requirements.txt` ao repositório (já gerado localmente),
+- acrescento um `build_exe.bat` de exemplo (ou atualizo o existente) contendo o script de PyInstaller,
+- ou actualizo o README com instruções mais específicas para inclusão de assets.
