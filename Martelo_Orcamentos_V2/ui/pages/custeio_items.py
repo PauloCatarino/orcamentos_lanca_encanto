@@ -3545,11 +3545,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             tooltip_cp03: Optional[str] = None
             cp03_new_value: Optional[float] = None
             manual_cnc_applied = False
-            manual_cnc_minutes = None
+            # For manual CNC service pieces, compute per-unit minutes from `qt_und` (e.g. 5,15)
+            # and compute cp03_cnc_und as cost per unit (minutes_per_unit * rate_per_minute).
+            minutes_per_unit: Optional[float] = None
             if def_peca_norm in MANUAL_CNC_LABELS:
-                manual_cnc_minutes = self._coerce_numeric(row.get("qt_total"))
+                minutes_per_unit = self._coerce_numeric(row.get("qt_und")) or 1.0
             if (
-                manual_cnc_minutes not in (None, 0)
+                minutes_per_unit not in (None, 0)
                 and cnc_rate_hour not in (None, 0)
                 and row_type not in {"division", "separator"}
                 and def_peca_norm in MANUAL_CNC_LABELS
@@ -3557,18 +3559,18 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 try:
                     rate_hour_val = float(cnc_rate_hour)
                     per_minute = rate_hour_val / 60.0
-                    cp03_new_value = round(manual_cnc_minutes * per_minute, 2)
+                    # cp03_cnc_und must represent the price PER MINUTE (not per-unit). Totais usam qt_total.
+                    cp03_new_value = round(per_minute, 4)
                 except Exception:
                     cp03_new_value = None
                 if cp03_new_value is not None:
                     tooltip_lines_cp03 = [
                         f"Modo: {production_mode}",
-                        f"Qt_total (min): {manual_cnc_minutes:.2f}",
                         f"Tarifa EUROS_HORA_CNC: {rate_hour_val:.4f} €/hora",
-                        f"Calculo: {manual_cnc_minutes:.2f} min x ({rate_hour_val:.4f} €/hora / 60) = {cp03_new_value:.2f} €",
+                        f"Calculo (por minuto): ({rate_hour_val:.4f} €/hora / 60) = {cp03_new_value:.4f} €/min",
+                        f"Observacao: Qt_total acumula minutos totais; cp03_cnc_und e' preco por minuto.",
                     ]
                     tooltip_cp03 = "\n".join(tooltip_lines_cp03)
-                    row["cp03_cnc"] = manual_cnc_minutes
                     manual_cnc_applied = True
             if (
                 not manual_cnc_applied
@@ -3771,30 +3773,29 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             ):
                 try:
                     rate_embal = float(embal_rate_value)
-                    volume_m3 = (
-                        float(qt_total_calc)
-                        * float(comp_res)
+                    # Calculate volume per unit (m3) — do NOT multiply by qt_total here.
+                    volume_unit_m3 = (
+                        float(comp_res)
                         * float(larg_res)
                         * float(esp_res)
                     ) / 1_000_000_000.0
-                    cp07_new_value = round(volume_m3 * rate_embal, 2)
+                    cp07_new_value = round(volume_unit_m3 * rate_embal, 2)
                 except Exception:
                     cp07_new_value = None
-                if cp07_new_value is not None and volume_m3 is not None:
+                if cp07_new_value is not None and volume_unit_m3 is not None:
                     tooltip_lines_cp07 = [
                         f"Modo: {production_mode}",
                         f"Qt_total: {qt_total_calc:.2f}",
-                        f"Dimensoes (mm): {comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f}",
-                        f"Volume total: {volume_m3:.6f} m\u00B3",
+                        f"Dimensoes por unidade (mm): {comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f}",
+                        f"Volume por unidade: {volume_unit_m3:.6f} m\u00B3",
                         f"Tarifa EUROS_EMBALAGEM_M3: {rate_embal:.4f} \u20AC/m\u00B3",
-                        f"Calculo: {qt_total_calc:.2f} x ({comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f} mm / 1e9) x {rate_embal:.4f} \u20AC/m\u00B3 = {cp07_new_value:.2f} \u20AC",
+                        f"Calculo (por unidade): ({comp_res:.2f} x {larg_res:.2f} x {esp_res:.2f} mm / 1e9) x {rate_embal:.4f} \u20AC/m\u00B3 = {cp07_new_value:.2f} \u20AC",
                     ]
                     if embal_rate_std is not None and embal_rate_serie is not None:
                         tooltip_lines_cp07.append(
                             f"STD: {embal_rate_std:.4f} \u20AC/m\u00B3 | SERIE: {embal_rate_serie:.4f} \u20AC/m\u00B3"
                         )
                     tooltip_cp07 = "\n".join(tooltip_lines_cp07)
-                    row["cp07_embalagem"] = max(qt_total_calc or 0, 1.0)
                     manual_embalagem_applied = True
             if (
                 not manual_embalagem_applied
@@ -3859,28 +3860,28 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if (
                 def_peca_norm == DEF_LABEL_MAO_OBRA_MIN_NORM
                 and row_type not in {"division", "separator"}
-                and qt_total_calc not in (None, 0)
                 and mo_rate_value not in (None, 0)
             ):
                 try:
                     rate_mo = float(mo_rate_value)
                     per_minute_mo = rate_mo / 60.0
-                    cp08_new_value = round(float(qt_total_calc) * per_minute_mo, 2)
+                    # Use minutes per unit from qt_und (if provided), otherwise default to 1 minute per unit.
+                    minutes_per_unit_mo = self._coerce_numeric(row.get("qt_und")) or 1.0
+                    cp08_new_value = round(minutes_per_unit_mo * per_minute_mo, 2)
                 except Exception:
                     cp08_new_value = None
                 if cp08_new_value is not None and rate_mo is not None:
                     tooltip_lines_cp08 = [
                         f"Modo: {production_mode}",
-                        f"Qt_total (min): {qt_total_calc:.2f}",
+                        f"Minutos por unidade: {minutes_per_unit_mo:.2f}",
                         f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
-                        f"Calculo: {qt_total_calc:.2f} min x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
+                        f"Calculo (por unidade): {minutes_per_unit_mo:.2f} min x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
                     ]
                     if mo_rate_std is not None and mo_rate_serie is not None:
                         tooltip_lines_cp08.append(
                             f"STD: {mo_rate_std:.4f} \u20AC/hora | SERIE: {mo_rate_serie:.4f} \u20AC/hora"
                         )
                     tooltip_cp08 = "\n".join(tooltip_lines_cp08)
-                    row["cp08_mao_de_obra"] = qt_total_calc
                     manual_mo_applied = True
             if (
                 not manual_mo_applied
@@ -3925,27 +3926,33 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if (
                 def_peca_norm == DEF_LABEL_COLAGEM_NORM
                 and row_type not in {"division", "separator"}
-                and qt_total_calc not in (None, 0)
                 and comp_res not in (None, 0)
                 and larg_res not in (None, 0)
                 and colagem_rate_value not in (None, 0)
             ):
                 try:
                     rate_colagem = float(colagem_rate_value)
+                    # calc area per unit (m2) and store cp09 as cost PER UNIT
                     area_m2 = (float(comp_res) * float(larg_res)) / 1_000_000.0
-                    total_area = area_m2 * float(qt_total_calc)
-                    cp09_new_value = round(total_area * rate_colagem, 2)
+                    cp09_unit = round(area_m2 * rate_colagem, 4)
+                    cp09_new_value = round(cp09_unit, 4)
                 except Exception:
                     cp09_new_value = None
                 if cp09_new_value is not None:
+                    total_area_example = None
+                    try:
+                        total_area_example = area_m2 * float(qt_total_calc) if qt_total_calc not in (None, 0) else None
+                    except Exception:
+                        total_area_example = None
                     tooltip_lines_cp09 = [
                         f"Modo: {production_mode}",
-                        f"Qt_total: {qt_total_calc:.2f}",
-                        f"Dimensoes (mm): {comp_res:.2f} x {larg_res:.2f}",
-                        f"Area total: {total_area:.6f} m\u00B2",
+                        f"Dimensoes por unidade (mm): {comp_res:.2f} x {larg_res:.2f}",
+                        f"Area por unidade: {area_m2:.6f} m\u00B2",
                         f"Tarifa COLAGEM/REVESTIMENTO: {rate_colagem:.4f} \u20AC/m\u00B2",
-                        f"Calculo: {qt_total_calc:.2f} x ({comp_res:.2f} x {larg_res:.2f} mm / 1e6) x {rate_colagem:.4f} \u20AC/m\u00B2 = {cp09_new_value:.2f} \u20AC",
+                        f"Calculo (por unidade): ({comp_res:.2f} x {larg_res:.2f} mm / 1e6) x {rate_colagem:.4f} = {cp09_new_value:.4f} \u20AC/und",
                     ]
+                    if total_area_example is not None:
+                        tooltip_lines_cp09.insert(2, f"Qt_total (exemplo): {qt_total_calc:.2f} -> Area total: {total_area_example:.6f} m\u00B2")
                     if colagem_rate_std is not None and colagem_rate_serie is not None:
                         tooltip_lines_cp09.append(
                             f"STD: {colagem_rate_std:.4f} \u20AC/m\u00B2 | SERIE: {colagem_rate_serie:.4f} \u20AC/m\u00B2"
@@ -3998,15 +4005,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 else:
                     mp_component_total = custo_mp_total_value if custo_mp_total_value is not None else 0.0
 
-                cp09_total_value = self._coerce_numeric(row.get("cp09_colagem_und"))
-                if cp09_total_value is None:
-                    cp09_total_value = 0.0
+                cp09_unit_value = self._coerce_numeric(row.get("cp09_colagem_und"))
+                if cp09_unit_value is None:
+                    cp09_unit_value = 0.0
+                # cp09 contribution to total must be multiplied by qt_total (per-unit -> total)
+                cp09_component_total = round((cp09_unit_value * (qt_total_numeric or 0.0)), 2)
 
                 soma_custo_total_value = (
                     (maquinas_total_value or 0.0)
                     + custo_total_orla_value
                     + mp_component_total
-                    + cp09_total_value
+                    + cp09_component_total
                 )
                 soma_custo_total_value = round(soma_custo_total_value, 2)
                 row["soma_custo_total"] = soma_custo_total_value
@@ -4037,10 +4046,10 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     else f"CUSTO_TOTAL_ORLA = {custo_total_orla_value:.2f} €"
                 )
 
-                cp09_line = f"CP09_COLAGEM_und = {cp09_total_value:.2f} €"
+                cp09_line = f"CP09_COLAGEM_und (por unidade) = {cp09_unit_value:.4f} € | Total: {cp09_component_total:.2f} €"
 
                 soma_total_lines = [
-                    "SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total) + CP09_COLAGEM_und",
+                    "SOMA_CUSTO_TOTAL = (SOMA_CUSTO_und * Qt_Total) + CUSTO_TOTAL_ORLA + (CUSTO_MP_und * Qt_Total) + (CP09_COLAGEM_und * Qt_Total)",
                     maquinas_line,
                     custo_orla_line,
                     mp_line,
@@ -5157,8 +5166,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_view.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
 
         self.table_view.setStyleSheet(
-            "QTableView::item:selected { background-color: #d9d9d9; color: #000000; }\n"
-            "QTableView::item:selected:!active { background-color: #d9d9d9; color: #000000; }"
+            "QTableView::item:selected { background-color: #555555; color: #ffffff; }\n"
+            "QTableView::item:selected:active { background-color: #555555; color: #ffffff; }\n"
+            "QTableView::item:selected:!active { background-color: #666666; color: #ffffff; }\n"
+            "QTableView::item:hover { background-color: #6a6a6a; color: #ffffff; }"
         )
 
         self.table_view.setMouseTracking(True)
@@ -6257,6 +6268,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
         linhas = self.table_model.export_rows()
         snapshot = [bool(row.get("_nst_manual_override")) for row in linhas]
 
+        ctx = self.context
+        logger.info(
+            "custeio.save start auto=%s orcamento_id=%s item_id=%s user_id=%s linhas=%s",
+            auto,
+            getattr(ctx, "orcamento_id", None),
+            getattr(ctx, "item_id", None) if ctx else self.current_item_id,
+            self.current_user_id,
+            len(linhas),
+        )
         try:
 
             svc_custeio.salvar_custeio_items(self.session, self.context, linhas, dimensoes)
@@ -6264,6 +6284,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
         except Exception as exc:
 
             self.session.rollback()
+            logger.exception(
+                "custeio.save erro auto=%s orcamento_id=%s item_id=%s user_id=%s",
+                auto,
+                getattr(ctx, "orcamento_id", None),
+                getattr(ctx, "item_id", None) if ctx else self.current_item_id,
+                self.current_user_id,
+            )
 
             QtWidgets.QMessageBox.critical(
 
@@ -6303,6 +6330,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_auto_fill_icon()
 
         self._update_save_button_text()
+        logger.info(
+            "custeio.save ok auto=%s orcamento_id=%s item_id=%s user_id=%s",
+            auto,
+            getattr(ctx, "orcamento_id", None),
+            getattr(ctx, "item_id", None) if ctx else self.current_item_id,
+            self.current_user_id,
+        )
 
         if should_disable_button:
             save_button.setEnabled(True)
@@ -7335,7 +7369,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
         orcamento = svc_custeio.carregar_orcamento(self.session, orcamento_id)
 
         if not orcamento:
-
             QtWidgets.QMessageBox.critical(self, "Erro", "Orcamento nao encontrado.")
 
             self.context = None
