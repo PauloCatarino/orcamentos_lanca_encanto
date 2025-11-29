@@ -6948,13 +6948,18 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             return
 
+        row = self.table_model.rows[row_index]
+
+        # DIVISAO_INDEPENDENTE should NEVER have mat_default assigned
+        def_peca_val = (row.get("def_peca") or "").strip()
+        if def_peca_val.casefold() == "DIVISAO INDEPENDENTE".casefold():
+            return
+
         selection = (selection or "").strip()
 
         if not selection:
 
             return
-
-        row = self.table_model.rows[row_index]
 
         familia = row.get("familia") or row.get("mat_default")
 
@@ -7010,6 +7015,11 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
             if row.get("blk"):
 
+                continue
+
+            # DIVISAO_INDEPENDENTE should NEVER receive mat_default or characteristic processing
+            def_peca_val = (row.get("def_peca") or "").strip()
+            if def_peca_val.casefold() == "DIVISAO INDEPENDENTE".casefold():
                 continue
 
             row_type = row.get("_row_type")
