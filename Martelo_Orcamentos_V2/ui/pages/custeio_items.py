@@ -4257,7 +4257,7 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
             svc_custeio._normalize_token(row.get("def_peca")),
             svc_custeio._normalize_token(row.get("_child_source")),
             svc_custeio._normalize_token(row.get("descricao")),
-            svc_custeio._normalize_token(row.get("descricao_livre")),
+            # Note: descricao_livre is excluded (user helper text, not for calculation logic)
         }
         spp_match = any(token in SPP_DEF_TOKENS for token in normalized_candidates if token)
         rodizio_match = any(token in RODIZIO_DEF_TOKENS for token in normalized_candidates if token)
