@@ -3865,17 +3865,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 try:
                     rate_mo = float(mo_rate_value)
                     per_minute_mo = rate_mo / 60.0
-                    # Use minutes per unit from qt_und (if provided), otherwise default to 1 minute per unit.
-                    minutes_per_unit_mo = self._coerce_numeric(row.get("qt_und")) or 1.0
-                    cp08_new_value = round(minutes_per_unit_mo * per_minute_mo, 2)
+                    # cp08_mao_de_obra_und stores only the price per minute (€/min). qt_total handles aggregation.
+                    cp08_new_value = round(per_minute_mo, 4)
                 except Exception:
                     cp08_new_value = None
                 if cp08_new_value is not None and rate_mo is not None:
                     tooltip_lines_cp08 = [
                         f"Modo: {production_mode}",
-                        f"Minutos por unidade: {minutes_per_unit_mo:.2f}",
                         f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
-                        f"Calculo (por unidade): {minutes_per_unit_mo:.2f} min x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
+                        f"Calculo (por minuto): ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.4f} \u20AC/min",
+                        f"Observacao: Qt_total acumula minutos totais; cp08_mao_de_obra_und e' preco por minuto.",
                     ]
                     if mo_rate_std is not None and mo_rate_serie is not None:
                         tooltip_lines_cp08.append(
@@ -3893,15 +3892,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 try:
                     rate_mo = float(mo_rate_value)
                     per_minute_mo = rate_mo / 60.0
-                    cp08_new_value = round(cp08_factor * per_minute_mo, 2)
+                    # cp08_mao_de_obra_und stores only the price per minute (€/min).
+                    cp08_new_value = round(per_minute_mo, 4)
                 except Exception:
                     cp08_new_value = None
                 if cp08_new_value is not None and rate_mo is not None:
                     tooltip_lines_cp08 = [
                         f"Modo: {production_mode}",
-                        f"CP08_MAO_DE_OBRA: {cp08_factor:.2f}",
                         f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
-                        f"Calculo: {cp08_factor:.2f} x ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.2f} \u20AC",
+                        f"Calculo (por minuto): ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.4f} \u20AC/min",
                     ]
                     if mo_rate_std is not None and mo_rate_serie is not None:
                         tooltip_lines_cp08.append(

@@ -42,8 +42,15 @@ if __name__ == "__main__":
     # 1) CNC (Min) - expect cp03_cnc_und = EUROS_HORA_CNC / 60 = 0.5 €/min
     rows.append({
         "def_peca": "CNC (Min)",
-        "qt_und": 1,    # minutos por unidade (1 -> cp03 should equal per-minute price)
-        "qt_total": 10, # units / total multiplier
+        "qt_und": 1,
+        "qt_total": 10,
+    })
+    
+    # 1b) MAO OBRA (Min) - expect cp08_mao_de_obra_und = EUROS_HORA_MO / 60 = 0.4 €/min
+    rows.append({
+        "def_peca": "MAO OBRA (Min)",
+        "qt_und": 1,
+        "qt_total": 5,
     })
 
     # 2) Embalagem (M3) - comp=1000mm, larg=500mm, esp=20mm -> volume per unit = 0.01 m3
