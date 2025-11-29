@@ -3865,17 +3865,26 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 try:
                     rate_mo = float(mo_rate_value)
                     per_minute_mo = rate_mo / 60.0
-                    # cp08_mao_de_obra_und stores only the price per minute (€/min). qt_total handles aggregation.
-                    cp08_new_value = round(per_minute_mo, 4)
+                    # cp08_mao_de_obra_und = (€/min) × cp08_mao_de_obra (factor)
+                    if cp08_factor is not None and cp08_factor > 0:
+                        cp08_new_value = round(per_minute_mo * cp08_factor, 4)
+                    else:
+                        cp08_new_value = round(per_minute_mo, 4)
                 except Exception:
                     cp08_new_value = None
                 if cp08_new_value is not None and rate_mo is not None:
                     tooltip_lines_cp08 = [
                         f"Modo: {production_mode}",
                         f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
-                        f"Calculo (por minuto): ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.4f} \u20AC/min",
-                        f"Observacao: Qt_total acumula minutos totais; cp08_mao_de_obra_und e' preco por minuto.",
                     ]
+                    if cp08_factor is not None and cp08_factor > 0:
+                        tooltip_lines_cp08.append(
+                            f"Calculo: ({rate_mo:.4f} \u20AC/h / 60) × {cp08_factor} = {cp08_new_value:.4f} \u20AC"
+                        )
+                    else:
+                        tooltip_lines_cp08.append(
+                            f"Calculo (por minuto): ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.4f} \u20AC/min"
+                        )
                     if mo_rate_std is not None and mo_rate_serie is not None:
                         tooltip_lines_cp08.append(
                             f"STD: {mo_rate_std:.4f} \u20AC/hora | SERIE: {mo_rate_serie:.4f} \u20AC/hora"
@@ -3892,15 +3901,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 try:
                     rate_mo = float(mo_rate_value)
                     per_minute_mo = rate_mo / 60.0
-                    # cp08_mao_de_obra_und stores only the price per minute (€/min).
-                    cp08_new_value = round(per_minute_mo, 4)
+                    # cp08_mao_de_obra_und = (€/min) × cp08_mao_de_obra (factor)
+                    cp08_new_value = round(per_minute_mo * cp08_factor, 4)
                 except Exception:
                     cp08_new_value = None
                 if cp08_new_value is not None and rate_mo is not None:
                     tooltip_lines_cp08 = [
                         f"Modo: {production_mode}",
                         f"Tarifa EUROS_HORA_MO: {rate_mo:.4f} \u20AC/hora",
-                        f"Calculo (por minuto): ({rate_mo:.4f} \u20AC/h / 60) = {cp08_new_value:.4f} \u20AC/min",
+                        f"CP08_MAO_DE_OBRA factor: {cp08_factor}",
+                        f"Calculo: ({rate_mo:.4f} \u20AC/h / 60) × {cp08_factor} = {cp08_new_value:.4f} \u20AC",
                     ]
                     if mo_rate_std is not None and mo_rate_serie is not None:
                         tooltip_lines_cp08.append(

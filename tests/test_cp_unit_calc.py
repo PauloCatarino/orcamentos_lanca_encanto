@@ -46,7 +46,8 @@ if __name__ == "__main__":
         "qt_total": 10,
     })
     
-    # 1b) MAO OBRA (Min) - expect cp08_mao_de_obra_und = EUROS_HORA_MO / 60 = 0.4 €/min
+    # 1b) MAO OBRA (Min) - expect cp08_mao_de_obra_und = (EUROS_HORA_MO / 60) × cp08_mao_de_obra factor
+    # Note: cp08_mao_de_obra value will be set by recalculate_all based on row data
     rows.append({
         "def_peca": "MAO OBRA (Min)",
         "qt_und": 1,
