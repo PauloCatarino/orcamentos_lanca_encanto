@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from copy import deepcopy
+from pathlib import Path
 from functools import partial
 import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
@@ -259,10 +260,6 @@ ITALIC_ON_BLK_KEYS = {
 MANUAL_LOCK_KEYS = ITALIC_ON_BLK_KEYS
 
 MANUAL_QT_UND_KEYWORDS: Tuple[str, ...] = (
-    "DOBRADICA",
-    "DOBRADICAS",
-    "SUPORTE PRATELEIRA",
-    "SUPORTE PRATELEIRAS",
     "PUXADOR",
     "PUXADORES",
     "SUPORTE VARAO",
@@ -718,6 +715,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._bold_font = QtGui.QFont(base_font)
         self._bold_font.setBold(True)
 
+        self._icon_cache: Dict[str, Optional[QtGui.QIcon]] = {}
+        self._icon_hint_size = QtCore.QSize(28, 28)
+
         self.rows: List[Dict[str, Any]] = []
         self._orla_info_cache: Dict[Tuple[str, Optional[float]], Tuple[float, float, Optional[str]]] = {}
         self._acabamento_info_cache: Dict[str, Optional[Dict[str, Any]]] = {}
@@ -747,6 +747,31 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             row["_normalized_def"] = normalized
         return normalized
 
+    def _resolve_icon_hint(self, hint: Any) -> Optional[QtGui.QIcon]:
+        if isinstance(hint, QtGui.QIcon):
+            return hint
+        if isinstance(hint, QtGui.QPixmap):
+            return QtGui.QIcon(hint)
+        if isinstance(hint, str):
+            key = hint.strip()
+            if not key:
+                return None
+            if key in self._icon_cache:
+                return self._icon_cache[key]
+            pix = QtGui.QPixmap(key)
+            if pix.isNull():
+                self._icon_cache[key] = None
+                return None
+            thumb = pix.scaled(
+                self._icon_hint_size,
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation,
+            )
+            icon = QtGui.QIcon(thumb)
+            self._icon_cache[key] = icon
+            return icon
+        return None
+
     @staticmethod
     def _is_varao_child_token(token: str) -> bool:
         if not token:
@@ -756,21 +781,17 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         return has_varao and not has_support
 
     def _supports_qt_und_override(self, row: Mapping[str, Any]) -> bool:
-        """Return True when the row is an automatic child eligible for override."""
+        """Return True when the row is an automatic child eligible for override.
+
+        Agora todos os filhos seguem apenas a fórmula (sem override manual).
+        """
         if not isinstance(row, Mapping):
             return False
 
         if (row.get("_row_type") or "").lower() != "child":
             return False
-
-        normalized = self._normalized_token(row)
-        if not normalized:
-            return False
-
-        if self._is_varao_child_token(normalized):
-            return False
-
-        return any(keyword in normalized for keyword in MANUAL_QT_UND_KEYWORDS)
+        # Bloqueia override para qualquer filho; qt_und vem sempre da fórmula.
+        return False
 
     @staticmethod
     def _coerce_numeric(value: Any) -> Optional[float]:
@@ -1422,6 +1443,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         row_data = self.rows[row]
 
         row_type = row_data.get("_row_type")
+        row_type_norm = (row_type or "").lower()
 
         spec = self.columns[col]
 
@@ -1430,6 +1452,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         value = row_data.get(key)
 
         if role == QtCore.Qt.TextAlignmentRole:
+            if key == "icon_hint":
+                return QtCore.Qt.AlignCenter
             if spec["type"] == "bool" or key in CENTER_ALIGN_KEYS:
                 return QtCore.Qt.AlignCenter
 
@@ -1997,8 +2021,30 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return None
 
         if key == "icon_hint":
-            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole, QtCore.Qt.DecorationRole):
+            if role == QtCore.Qt.DecorationRole:
+                icon = self._resolve_icon_hint(row_data.get("icon_hint"))
+                if icon:
+                    return icon
+                if row_type_norm == "division":
+                    page_ref = getattr(self, "_page", None)
+                    if page_ref is not None:
+                        return page_ref._icon("division")
+                return None
+            if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
                 return ""
+            if role == QtCore.Qt.ToolTipRole:
+                hint_val = row_data.get("icon_hint")
+                if isinstance(hint_val, str) and hint_val.strip():
+                    path_obj = Path(hint_val)
+                    if path_obj.is_file():
+                        try:
+                            uri = path_obj.as_uri()
+                        except ValueError:
+                            uri = None
+                        if uri:
+                            return f'<img src="{uri}" width="260" />'
+                    return hint_val
+                return None
             return None
 
         if role == QtCore.Qt.BackgroundRole:
@@ -2654,6 +2700,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         cnc_rate_hour: Optional[float] = None
         abd_rate_value: Optional[float] = None
         prensa_rate_value: Optional[float] = None
+        prensa_rate_std: Optional[float] = None
+        prensa_rate_serie: Optional[float] = None
         esquad_rate_value: Optional[float] = None
         esquad_rate_std: Optional[float] = None
         esquad_rate_serie: Optional[float] = None
@@ -2755,6 +2803,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             cnc_rate_hour = _select_rate(cnc_hour_info)
             abd_rate_value = _select_rate(abd_rate_info)
             prensa_rate_value = _select_rate(prensa_rate_info)
+            if prensa_rate_info:
+                prensa_rate_std = _float_or_none(prensa_rate_info.get("valor_std"))
+                prensa_rate_serie = _float_or_none(prensa_rate_info.get("valor_serie"))
             esquad_rate_value = _select_rate(esquad_rate_info)
             if esquad_rate_info:
                 esquad_rate_std = _float_or_none(esquad_rate_info.get("valor_std"))
@@ -2938,7 +2989,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 if getattr(self, "_page", None):
 
-                    row["icon_hint"] = self._page._icon("division")
+                    if not row.get("icon_hint"):
+                        row["icon_hint"] = self._page._icon("division")
 
                 current_parent_row = None
 
@@ -3107,12 +3159,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             # HeranÃ§a de comprimento para VARAO e componentes ML mesmo quando nÃ£o sÃ£o marcados como 'child'
             # Isto garante que linhas "VARAO" exibam o comprimento do componente PAI (ex.: 1000)
+            # EXCETO para SUPORTE VARAO, que deve manter comp vazio (processado na seÃ§Ã£o de child mais abaixo)
             try:
                 is_ml = (row.get("und") or "").strip().upper() == "ML"
             except Exception:
                 is_ml = False
             if current_parent_row is not None and row.get("_row_type") != "division" and row.get("_row_type") != "parent":
-                if is_ml or (normalized_row_token and "VARAO" in normalized_row_token):
+                # Skip SUPORTE VARAO from inheriting comp: it handles its own comp clearing later in the child section
+                is_support_varao_check = normalized_row_token and "SUPORTE" in normalized_row_token
+                is_regular_varao_check = normalized_row_token and "VARAO" in normalized_row_token and not is_support_varao_check
+                if is_ml or is_regular_varao_check:
                     inherited_comp = current_parent_row.get("comp_res")
                     if inherited_comp is None:
                         inherited_comp = _coerce_dimension(current_parent_row.get("comp"))
@@ -3194,17 +3250,43 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
                 if "VARAO" in normalized_child:
                     # VARAO (bar) children are measured in ML: default qt_und is 1 and
-                    # they inherit the parent's comp (length). For support varao, use qt_und=2
+                    # they inherit the parent's comp (length). For suporte varao we force the rule factor.
                     if "SUPORTE" in normalized_child:
-                        # support for varao: typically two supports per parent
+                        # qt_und do SUPORTE VARAO = 2 x qt_und do VARAO (sibling base)
+                        # procura irmao VARAO com o mesmo _parent_uid; senao usa qt_und do pai
+                        base_qt = parent_qt
                         try:
-                            child_factor = 2
+                            parent_uid = row.get("_parent_uid")
+                            for sibling in self.rows:
+                                if sibling is row:
+                                    continue
+                                if sibling.get("_parent_uid") != parent_uid:
+                                    continue
+                                token = self._normalize_def_peca(
+                                    sibling.get("def_peca") or sibling.get("descricao") or sibling.get("tipo")
+                                )
+                                if token and "VARAO" in token and "SUPORTE" not in token:
+                                    sib_qt = self._coerce_numeric(sibling.get("qt_und")) or self._coerce_numeric(
+                                        sibling.get("_qt_formula_value")
+                                    )
+                                    if sib_qt not in (None, 0):
+                                        base_qt = sib_qt
+                                        break
                         except Exception:
-                            child_factor = 2
+                            base_qt = parent_qt
+                        try:
+                            child_factor = 2 * float(base_qt)
+                        except Exception:
+                            child_factor = 2.0
                         # for supports we do not inherit comp; leave comp empty
                         row["comp_res"] = None
                         if isinstance(row, dict):
                             row["comp"] = ""
+                        # ajuste de tooltip para refletir a regra fixa
+                        if rule_data is not None:
+                            rule_data = dict(rule_data)
+                            rule_data["tooltip"] = "SUPORTE VARAO = 2 x QT_PAI (valor do VARAO)."
+                        row["_qt_rule_tooltip"] = "SUPORTE VARAO = 2 x qt_und do VARAO."
                     else:
                         # regular VARAO: one rod per parent module; inherit length
                         try:
@@ -3680,35 +3762,38 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             cp05_factor = self._coerce_numeric(row.get("cp05_prensa"))
             tooltip_cp05: Optional[str] = None
             cp05_new_value: Optional[float] = None
-            area_for_prensa = self._coerce_numeric(row.get("area_m2_und"))
+            rate_prensa: Optional[float] = None
+            per_min_prensa: Optional[float] = None
             if (
                 row_type not in {"division", "separator"}
                 and cp05_factor is not None
                 and cp05_factor > 0
-                and area_for_prensa is not None
-                and area_for_prensa > 0
                 and prensa_rate_value not in (None, 0)
             ):
                 try:
                     rate_prensa = float(prensa_rate_value)
-                    cp05_new_value = round(cp05_factor * area_for_prensa * rate_prensa, 2)
+                    per_min_prensa = rate_prensa / 60.0
+                    cp05_new_value = round(per_min_prensa * cp05_factor, 2)
                 except Exception:
                     cp05_new_value = None
-                if cp05_new_value is not None:
+                if cp05_new_value is not None and per_min_prensa is not None and rate_prensa is not None:
                     tooltip_lines_cp05 = [
                         f"Modo: {production_mode}",
                         f"CP05_PRENSA: {cp05_factor:.2f}",
-                        f"AREA_M2_und: {area_for_prensa:.4f} m2",
-                        f"Tarifa EUROS_HORA_PRENSA: {rate_prensa:.4f} €",
-                        f"Calculo: {cp05_factor:.2f} x {area_for_prensa:.4f} x {rate_prensa:.4f} = {cp05_new_value:.2f} €",
+                        f"Tarifa EUROS_HORA_PRENSA: {rate_prensa:.4f} €/hora",
+                        f"Calculo: ({rate_prensa:.4f} €/hora / 60) x {cp05_factor:.2f} = {cp05_new_value:.2f} €",
                     ]
+                    if prensa_rate_std is not None and prensa_rate_serie is not None:
+                        tooltip_lines_cp05.append(
+                            f"STD: {prensa_rate_std:.4f} €/hora | SERIE: {prensa_rate_serie:.4f} €/hora"
+                        )
                     tooltip_cp05 = "\n".join(tooltip_lines_cp05)
             if cp05_new_value is None:
                 if cp05_prev_val is not None:
                     production_cost_changed = True
                 row["cp05_prensa_und"] = None
                 if tooltip_cp05 is None and cp05_factor not in (None, 0):
-                    tooltip_cp05 = "Area ou tarifa nao disponivel para calcular PRENSA"
+                    tooltip_cp05 = "Tarifa nao disponivel para calcular PRENSA"
             else:
                 if cp05_prev_val is None or not _float_almost_equal(cp05_prev_val, cp05_new_value, tol=1e-4):
                     production_cost_changed = True
@@ -5172,6 +5257,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_auto_fill_icon()
 
         self.table_view = CusteioTableView()
+        self.table_view.setIconSize(QtCore.QSize(28, 28))
 
         self.table_view.setItemDelegate(DadosGeraisDelegate(self.table_view))
         self.table_view.setModel(self.table_model)
@@ -7510,5 +7596,3 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_table_placeholder_visibility()
         self._emit_item_context_changed()
         self._update_auto_fill_icon()
-
-
