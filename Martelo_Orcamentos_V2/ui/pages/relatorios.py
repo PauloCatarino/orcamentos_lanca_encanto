@@ -1354,9 +1354,10 @@ class RelatoriosPage(QtWidgets.QWidget):
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self, "Resumo de Consumos", f"Falha ao atualizar dashboard: {exc}")
 
-    def _calc_custo_mp_total_estimate(self, ci: CusteioItem) -> float:
+    def _calc_custo_mp_total_estimate(self, ci: CusteioItem, orcamento_item: Optional['OrcamentoItem'] = None) -> float:
         """
-        Estima o custo MP total replicando a logica principal (base * (1+desp) * pliq * qt_total).
+        Estima o custo MP total replicando a logica principal (base * (1+desp) * pliq * qt).
+        ✅ FIXED: Agora usa orcamento_item.qt (quantidade real) em vez de ci.qt_total (sempre 1)
         """
         try:
             und = (ci.und or "").upper()
@@ -1374,12 +1375,22 @@ class RelatoriosPage(QtWidgets.QWidget):
         except Exception:
             pliq = 0.0
 
-        try:
-            qt_total = float(ci.qt_total or 0) or 0.0
-        except Exception:
-            qt_total = 0.0
+        # ✅ FIXED: Use orcamento_item.qt if available, otherwise fallback to ci.qt_total
+        qt = 0.0
+        if orcamento_item:
+            try:
+                qt = float(orcamento_item.qt or 0) or 0.0
+            except Exception:
+                qt = 0.0
+        
+        if qt == 0.0:
+            # Fallback to ci.qt_total if no orcamento_item provided
+            try:
+                qt = float(ci.qt_total or 0) or 0.0
+            except Exception:
+                qt = 0.0
 
-        if pliq <= 0 or qt_total <= 0:
+        if pliq <= 0 or qt <= 0:
             return 0.0
 
         base = 0.0
@@ -1394,7 +1405,7 @@ class RelatoriosPage(QtWidgets.QWidget):
             return 0.0
 
         custo_und = base * (1.0 + desp) * pliq
-        return custo_und * qt_total
+        return custo_und * qt
 
     def _apply_nao_stock_toggle(self, row_data: dict, checked: bool) -> None:
         """
@@ -1423,8 +1434,29 @@ class RelatoriosPage(QtWidgets.QWidget):
 
                 touched_items = set()
 
+                # ✅ CRITICAL FIX: Join with OrcamentoItem to get real quantities
+                # Build mapping of CusteioItem.item_id -> OrcamentoItem.qt
+                custeio_item_ids = [ci.id for ci in placas_items]
+                orcamento_items = (
+                    session.query(OrcamentoItem)
+                    .filter(
+                        OrcamentoItem.item_id.in_([ci.item_id for ci in placas_items if ci.item_id]),
+                        OrcamentoItem.id_orcamento == orc.id,
+                        OrcamentoItem.versao == orc.versao
+                    )
+                    .all()
+                )
+                orcamento_item_map = {oi.id_item: oi for oi in orcamento_items}
+
                 if checked:
-                    current_total = sum(self._calc_custo_mp_total_estimate(ci) for ci in placas_items)
+                    # Calculate current_total using actual quantities from OrcamentoItem
+                    current_total = 0.0
+                    for ci in placas_items:
+                        item_id = getattr(ci, "item_id", None)
+                        oi = None
+                        if item_id and item_id in orcamento_item_map:
+                            oi = orcamento_item_map[item_id]
+                        current_total += self._calc_custo_mp_total_estimate(ci, oi)
 
                     # Step 1: Backup original values
                     for ci in placas_items:
@@ -1454,11 +1486,13 @@ class RelatoriosPage(QtWidgets.QWidget):
                         session.commit()
                         return
 
-                    # Step 2: Calculate aggregate qt_total (NEW - considering item quantities)
-                    qt_total_agregada = sum(
-                        float(ci.qt_total or 0) or 0.0 
-                        for ci in placas_items
-                    )
+                    # Step 2: Calculate aggregate qt from OrcamentoItem (FIXED - use real item quantities)
+                    qt_total_agregada = 0.0
+                    for ci in placas_items:
+                        item_id = getattr(ci, "item_id", None)
+                        if item_id and item_id in orcamento_item_map:
+                            oi = orcamento_item_map[item_id]
+                            qt_total_agregada += float(oi.qt or 0) or 0.0
 
                     # Step 3: Calculate custo_excesso and distribute proportionally
                     custo_excesso = max(target_total - current_total, 0.0)
@@ -1472,11 +1506,15 @@ class RelatoriosPage(QtWidgets.QWidget):
                             except Exception:
                                 pass
 
-                        # Calculate new desp considering item quantity
-                        try:
-                            qt_item = float(ci.qt_total or 0) or 0.0
-                        except Exception:
-                            qt_item = 0.0
+                        # Calculate new desp considering item quantity from OrcamentoItem
+                        item_id = getattr(ci, "item_id", None)
+                        qt_item = 0.0
+                        if item_id and item_id in orcamento_item_map:
+                            try:
+                                oi = orcamento_item_map[item_id]
+                                qt_item = float(oi.qt or 0) or 0.0
+                            except Exception:
+                                qt_item = 0.0
 
                         if qt_total_agregada > 0 and custo_excesso > 0:
                             # Distribute excess cost proportionally to item quantity
@@ -1517,7 +1555,6 @@ class RelatoriosPage(QtWidgets.QWidget):
                         except Exception:
                             ci.desp = novo_desp_pct
                         
-                        item_id = getattr(ci, "item_id", None)
                         if item_id:
                             touched_items.add(item_id)
                 else:
