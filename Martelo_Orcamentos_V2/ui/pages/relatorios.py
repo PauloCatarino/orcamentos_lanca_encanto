@@ -1440,7 +1440,7 @@ class RelatoriosPage(QtWidgets.QWidget):
                 orcamento_items = (
                     session.query(OrcamentoItem)
                     .filter(
-                        OrcamentoItem.item_id.in_([ci.item_id for ci in placas_items if ci.item_id]),
+                        OrcamentoItem.id_item.in_([ci.item_id for ci in placas_items if ci.item_id]),
                         OrcamentoItem.id_orcamento == orc.id,
                         OrcamentoItem.versao == orc.versao
                     )
