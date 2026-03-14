@@ -30,7 +30,7 @@ class Orcamento(Base):
     num_orcamento = Column(String(16), nullable=False, index=True)
     versao = Column(String(2), nullable=False, default="01", index=True)
     client_id = Column(BigInteger, ForeignKey("clients.id", ondelete="RESTRICT"), nullable=False)
-    status = Column(String(32), nullable=True)  # Falta Orçamentar; Enviado; Adjudicado; Sem Interesse; Não Adjudicado
+    status = Column(String(32), nullable=True)  # Falta Orçamentar; Enviado; Não Enviado; Adjudicado; Sem Interesse; Não Adjudicado
     data = Column(String(10), nullable=True)  # dd-mm-aaaa
     preco_total = Column(Numeric(14, 2), nullable=True)
     ref_cliente = Column(String(64), nullable=True)
@@ -42,7 +42,11 @@ class Orcamento(Base):
     info_2 = Column(Text, nullable=True)
     notas = Column(Text, nullable=True)
     extras = Column(JSON, nullable=True)
-    reservado1 = Column(String(255), nullable=True)
+    # NOVO: Flag para rastrear se preco_total foi editado manualmente (1) ou calculado (0)
+    # Mapeado para coluna existente 'reservado1' na BD
+    preco_total_manual = Column("reservado1", Integer, nullable=False, default=0, comment="1=manual, 0=calculado")
+    # NOVO: Timestamp de quando o preço foi atualizado (manual ou automático)
+    preco_atualizado_em = Column(DateTime(timezone=True), nullable=True, comment="Última vez que preco_total foi modificado")
     reservado2 = Column(String(255), nullable=True)
     created_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     updated_by = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -50,6 +54,22 @@ class Orcamento(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     items = relationship("OrcamentoItem", back_populates="orcamento", cascade="all, delete-orphan")
+
+    # Propriedade para obter status legível do preço
+    @property
+    def preco_status(self) -> str:
+        """Retorna status legível: 'Manual' ou 'Calculado'"""
+        return "Manual" if self.preco_total_manual else "Calculado"
+
+    @property
+    def preco_tooltip(self) -> str:
+        """Retorna tooltip informativo sobre o preço"""
+        status = self.preco_status
+        if self.preco_atualizado_em:
+            from datetime import datetime
+            data_fmt = self.preco_atualizado_em.strftime("%d-%m-%Y %H:%M") if isinstance(self.preco_atualizado_em, datetime) else str(self.preco_atualizado_em)
+            return f"Preço: {status} (atualizado em {data_fmt})"
+        return f"Preço: {status}"
 
 
 class OrcamentoItem(Base):

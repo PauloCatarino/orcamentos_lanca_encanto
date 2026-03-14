@@ -3,6 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, or_, func
 from ..models import Client
 import difflib
+import re
+import unicodedata
+
+from . import phc_sql as svc_phc
 
 
 SEARCH_FIELDS = (
@@ -107,3 +111,107 @@ def suggestion_tokens(db: Session) -> List[str]:
                 if t and len(t) > 1:
                     tokens.add(t)
     return sorted(tokens)
+
+
+def _none_if_empty(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s or None
+
+
+def _simplex_from_nome(nome: str) -> str:
+    """
+    Gera um nome simplex a partir do NOME do PHC:
+    - remove acentos/pontuação
+    - substitui separadores por '_'
+    - usa 10 primeiros caracteres e '...' se truncado
+
+    Ex.: "ANDRÉ SANTOS RIBEIRO" -> "ANDRE_SANT..."
+    """
+    base = unicodedata.normalize("NFKD", nome or "")
+    base = "".join(ch for ch in base if not unicodedata.combining(ch))
+    base = re.sub(r"[^A-Za-z0-9]+", "_", base)
+    base = re.sub(r"_+", "_", base).strip("_").upper()
+    if not base:
+        return "CLIENTE"
+    if len(base) <= 10:
+        return base
+    return base[:10] + "..."
+
+
+def sync_clients_from_phc(db: Session) -> dict:
+    """
+    Sincroniza a tabela `clients` do Martelo a partir do PHC (dbo.CL).
+
+    NOTA: o acesso ao PHC é apenas leitura (SELECT). As escritas são apenas no Martelo (MySQL).
+    """
+    rows = svc_phc.query_phc_clients(db)
+    if not rows:
+        return {"total_phc": 0, "created": 0, "updated": 0, "skipped": 0}
+
+    # Index por Num_PHC para reduzir roundtrips
+    nums: List[str] = []
+    for r in rows:
+        num = _none_if_empty(r.get("Num_PHC")) if isinstance(r, dict) else None
+        if num:
+            nums.append(num)
+    unique_nums = sorted(set(nums))
+
+    existing_by_num: dict[str, Client] = {}
+    if unique_nums:
+        existing = db.execute(select(Client).where(Client.num_cliente_phc.in_(unique_nums))).scalars().all()
+        for c in existing:
+            key = (c.num_cliente_phc or "").strip()
+            if key:
+                existing_by_num[key] = c
+
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for r in rows:
+        if not isinstance(r, dict):
+            skipped += 1
+            continue
+        num = _none_if_empty(r.get("Num_PHC"))
+        nome = _none_if_empty(r.get("Nome"))
+        if not num or not nome:
+            skipped += 1
+            continue
+
+        client = existing_by_num.get(num)
+        is_new = False
+        if client is None:
+            client = Client()
+            db.add(client)
+            client.num_cliente_phc = num
+            existing_by_num[num] = client
+            created += 1
+            is_new = True
+
+        client.nome = nome
+
+        simplex_raw = _none_if_empty(r.get("Simplex"))
+        if simplex_raw:
+            client.nome_simplex = simplex_raw.upper().replace(" ", "_")
+        else:
+            # Muitos clientes no PHC não têm NOME2 preenchido; criar um simplex curto para indicar que deve ser corrigido no PHC.
+            fallback = _simplex_from_nome(nome)
+            current = (client.nome_simplex or "").strip()
+            old_fallback_full = nome.upper().replace(" ", "_")
+            if (not current) or current == old_fallback_full or current.endswith("..."):
+                client.nome_simplex = fallback
+
+        client.morada = _none_if_empty(r.get("Morada"))
+        client.email = _none_if_empty(r.get("Email"))
+        client.web_page = _none_if_empty(r.get("WEB"))
+        client.telemovel = _none_if_empty(r.get("Telemovel"))
+        client.telefone = _none_if_empty(r.get("Telefone"))
+        client.info_1 = _none_if_empty(r.get("Info_1"))
+
+        if not is_new:
+            updated += 1
+
+    db.flush()
+    return {"total_phc": len(rows), "created": created, "updated": updated, "skipped": skipped}

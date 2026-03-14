@@ -30,6 +30,7 @@ from Martelo_Orcamentos_V2.app.services.orcamentos import (
     delete_item,
     move_item,
     duplicate_item,
+    resolve_orcamento_cliente_nome,
 )
 from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 from Martelo_Orcamentos_V2.app.models.orcamento import OrcamentoItem
@@ -296,23 +297,51 @@ class ItensTableModel(SimpleTableModel):
     def _build_margin_tooltip(self, row_obj, perc_attr: Optional[str], value_attr: Optional[str], label: str) -> Optional[str]:
         if perc_attr is None or value_attr is None:
             return None
-        base_val = self._extract_value(row_obj, "custo_produzido") or 0
+
+        base_attr, base_label = {
+            "margem_lucro_perc": ("custo_produzido", "Custo Produzido"),
+            "custos_admin_perc": ("custo_produzido", "Custo Produzido"),
+            "margem_acabamentos_perc": ("custo_total_acabamentos", "Custo Total Acabamentos"),
+            # margem_mp_orlas_perc usa uma base composta (Matéria Prima + Orlas)
+            "margem_mao_obra_perc": ("custo_total_mao_obra", "Custo Total Mão de Obra"),
+        }.get(perc_attr, ("custo_produzido", "Custo Produzido"))
+
         perc_val = self._extract_value(row_obj, perc_attr) or 0
         valor = self._extract_value(row_obj, value_attr) or 0
         try:
-            base_dec = Decimal(str(base_val))
             perc_dec = Decimal(str(perc_val))
             valor_dec = Decimal(str(valor))
         except Exception:
             return None
+
+        if perc_attr == "margem_mp_orlas_perc":
+            mp_val = self._extract_value(row_obj, "custo_total_materia_prima") or 0
+            orlas_val = self._extract_value(row_obj, "custo_total_orlas") or 0
+            try:
+                mp_dec = Decimal(str(mp_val))
+                orlas_dec = Decimal(str(orlas_val))
+            except Exception:
+                return None
+            base_dec = mp_dec + orlas_dec
+            return (
+                f"{label}: Matéria Prima ({mp_dec:.2f} €) + Orlas ({orlas_dec:.2f} €) = {base_dec:.2f} € "
+                f"x ({perc_dec:.2f}%) = {valor_dec:.2f} €"
+            )
+
+        base_val = self._extract_value(row_obj, base_attr) or 0
+        try:
+            base_dec = Decimal(str(base_val))
+        except Exception:
+            return None
         return (
-            f"{label}: {base_dec:.2f} € x ({perc_dec:.2f}%) = {valor_dec:.2f} €"
+            f"{label}: {base_label} ({base_dec:.2f} €) x ({perc_dec:.2f}%) = {valor_dec:.2f} €"
         )
 
 
 class ItensPage(QtWidgets.QWidget):
     item_selected = Signal(object)
     production_mode_changed = Signal(str)
+    price_changed = Signal(int, object)  # NOVO: orc_id, novo_preco (para sincronizar com outros menus)
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
         self.current_user = current_user
@@ -327,6 +356,10 @@ class ItensPage(QtWidgets.QWidget):
         # ------------------------------------------------------------------
         ui_path = Path(__file__).resolve().parents[1] / "forms" / "itens_form.ui"
         _load_ui_into(self, str(ui_path))
+        self._setup_page_layout()
+        self._loading_item_form: bool = False
+        self._item_dirty: bool = False
+        self._base_item_save_text: str = getattr(self, "btn_save", None).text() if getattr(self, "btn_save", None) else "Gravar Item"
 
         # ------------------------------------------------------------------
         # 2) Preparar widgets do formul?rio
@@ -383,6 +416,8 @@ class ItensPage(QtWidgets.QWidget):
             "soma": Decimal("0.00"),
         }
         self._margens_loading = False
+        self._right_panel_container: Optional[QtWidgets.QWidget] = None
+        self._right_panel_layout: Optional[QtWidgets.QLayout] = None
 
         # Campo de descrição com formatação automática e menu personalizado
         self._descricao_update_block = False
@@ -399,8 +434,10 @@ class ItensPage(QtWidgets.QWidget):
             self.edit_descricao.customContextMenuRequested.connect(self._on_descricao_context_menu)
 
         self._margem_panel = QtWidgets.QGroupBox("Margens e Ajustes", self)
-        self._margem_panel.setMinimumWidth(360)
-        self._margem_panel.setMaximumWidth(520)
+        self._margem_panel.setMinimumWidth(450)
+        # Dar mais largura ao painel de margens (sem forçar em ecrãs pequenos).
+        self._margem_panel.setMaximumWidth(460)
+        self._margem_panel.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         margem_layout = QtWidgets.QGridLayout(self._margem_panel)
         margem_layout.setContentsMargins(10, 10, 10, 10)
         margem_layout.setHorizontalSpacing(12)
@@ -467,6 +504,17 @@ class ItensPage(QtWidgets.QWidget):
         for btn in (self.btn_mode_std, self.btn_mode_serie):
             btn.setParent(self._margem_panel)
             objetivo_actions.addWidget(btn)
+        
+        # NOVO: Botão para reverter preço para calculado (automático)
+        self.btn_revert_price = QtWidgets.QPushButton("Reverter para Calculado", self._margem_panel)
+        self.btn_revert_price.setToolTip(
+            "Se o preço final foi editado manualmente, revertê-lo para o valor calculado automaticamente."
+        )
+        self.btn_revert_price.clicked.connect(self._on_revert_price_clicked)
+        self.btn_revert_price.setMaximumWidth(180)
+        self.btn_revert_price.setEnabled(False)
+        objetivo_actions.addWidget(self.btn_revert_price)
+        
         objetivo_actions.addStretch(1)
         margem_layout.addLayout(objetivo_actions, update_row + 2, 0, 1, 4)
 
@@ -505,17 +553,14 @@ class ItensPage(QtWidgets.QWidget):
             grid_layout.setColumnStretch(10, 1)
             grid_layout.setColumnStretch(11, 1)
         self._set_margens_panel_enabled(False)
-        main_layout = getattr(self, "verticalLayoutMain", None)
-        if isinstance(main_layout, QtWidgets.QVBoxLayout):
-            main_layout.setStretch(0, 0)
-            main_layout.setStretch(1, 0)
-            main_layout.setStretch(2, 0)
-            main_layout.setStretch(3, 0)
-            main_layout.setStretch(4, 1)
+        self._configure_main_layout_stretch()
         dims_actions_layout = getattr(self, "layout_dims_actions", None)
         if isinstance(dims_actions_layout, QtWidgets.QHBoxLayout):
-            dims_actions_layout.setStretch(0, 2)
-            dims_actions_layout.setStretch(1, 3)
+            dims_actions_layout.setStretch(0, 0)
+            dims_actions_layout.setStretch(1, 1)
+            buttons_layout = getattr(self, "buttonsLayout", None)
+            if isinstance(buttons_layout, QtWidgets.QLayout):
+                dims_actions_layout.setAlignment(buttons_layout, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.refresh_margem_defaults()
         self._rebuild_form_layout()
 
@@ -523,7 +568,7 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_add.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder))
         self.btn_add.setToolTip("Inserir um novo item no orçamento.")
         self.btn_save.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton))
-        self.btn_save.setToolTip("Gravar alterações do item selecionado.")
+        self.btn_save.setToolTip("Gravar alterações do item selecionado. Atalho: Ctrl+G.")
         self.btn_del.setIcon(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon))
         self.btn_del.setToolTip("Eliminar o item selecionado.")
         if hasattr(self, 'btn_dup'):
@@ -536,6 +581,10 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_up.setToolTip("Mover o item selecionado para cima.")
         self.btn_dn.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
         self.btn_dn.setToolTip("Mover o item selecionado para baixo.")
+        self.btn_up.setText("")
+        self.btn_dn.setText("")
+        self.btn_up.setFixedWidth(36)
+        self.btn_dn.setFixedWidth(36)
         if hasattr(self, "btn_toggle_rows"):
             self.btn_toggle_rows.setIcon(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown))
             self.btn_toggle_rows.setToolTip("Expandir descrições longas na tabela.")
@@ -577,6 +626,56 @@ class ItensPage(QtWidgets.QWidget):
             color: #9a9a9a;
             border-color: #e0e0e0;
             background-color: #f3f3f3;
+        }
+        QPushButton#btn_add {
+            background-color: #4CAF50;
+            color: #ffffff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        QPushButton#btn_add:hover { background-color: #43A047; }
+        QPushButton#btn_add:disabled { background-color: #A5D6A7; color: #f0f0f0; }
+
+        QPushButton#btn_save {
+            background-color: #2196F3;
+            color: #ffffff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        QPushButton#btn_save:hover { background-color: #1976D2; }
+        QPushButton#btn_save:disabled { background-color: #90CAF9; color: #f0f0f0; }
+
+        QPushButton#btn_dup {
+            background-color: #FF9800;
+            color: #ffffff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        QPushButton#btn_dup:hover { background-color: #F57C00; }
+        QPushButton#btn_dup:disabled { background-color: #FFCC80; color: #f0f0f0; }
+
+        QPushButton#btn_del {
+            background-color: #F44336;
+            color: #ffffff;
+            border: none;
+            font-weight: bold;
+        }
+        QPushButton#btn_del:hover { background-color: #D32F2F; }
+        QPushButton#btn_del:disabled { background-color: #EF9A9A; color: #f0f0f0; }
+
+        QPushButton#btn_del,
+        QPushButton#btn_toggle_rows {
+            padding: 6px 10px;
+        }
+        QPushButton#btn_up,
+        QPushButton#btn_dn {
+            padding: 6px 6px;
         }
         QPushButton[modeToggle="true"] {
             border: 1px solid #4c6ef5;
@@ -645,6 +744,7 @@ class ItensPage(QtWidgets.QWidget):
 
         # Enter avan?a o foco pelos campos
         self._input_sequence = [
+            self.edit_item,
             self.edit_codigo,
             self.edit_altura,
             self.edit_largura,
@@ -658,7 +758,7 @@ class ItensPage(QtWidgets.QWidget):
         # Campo "Item" ? sempre autom?tico
         self.edit_item.setReadOnly(True)
         if not self.edit_und.text().strip():
-            self.edit_und.setText("und")
+            self.edit_und.setText("un")
 
         # ------------------------------------------------------------------
         # 3) Model da tabela
@@ -680,7 +780,7 @@ class ItensPage(QtWidgets.QWidget):
             _col("Altura (mm)", "altura", _fmt_int, "Altura principal em milímetros."),
             _col("Largura (mm)", "largura", _fmt_int, "Largura principal em milímetros."),
             _col("Profundidade (mm)", "profundidade", _fmt_int, "Profundidade principal em milímetros."),
-            _col("Unidade", "und", tooltip="Unidade de medida (ex.: und, par, m²)."),
+            _col("Unidade", "und", tooltip="Unidade de medida (ex.: un, par, m²)."),
             _col("Qt", "qt", _fmt_int, "Quantidade a produzir para este item."),
             _col(
                 "Preço Unitário (€)",
@@ -896,6 +996,9 @@ class ItensPage(QtWidgets.QWidget):
         # ------------------------------------------------------------------
         self.btn_add.clicked.connect(self.on_new_item)
         self.btn_save.clicked.connect(self.on_save_item)
+        self._shortcut_save = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+G"), self)
+        self._shortcut_save.setContext(Qt.WidgetWithChildrenShortcut)
+        self._shortcut_save.activated.connect(self.on_save_item)
         self.btn_del.clicked.connect(self.on_del)
         if hasattr(self, 'btn_dup'):
             self.btn_dup.clicked.connect(self.on_duplicate_item)
@@ -904,9 +1007,61 @@ class ItensPage(QtWidgets.QWidget):
         self.btn_up.clicked.connect(lambda: self.on_move(-1))
         self.btn_dn.clicked.connect(lambda: self.on_move(1))
 
+        self._setup_item_dirty_tracking()
+
         # Estado inicial
         self._clear_form()
         self.destroyed.connect(lambda: self._stop_custeio_worker())
+
+    def _move_main_layout_child(
+        self,
+        main_layout: QtWidgets.QVBoxLayout,
+        target: object,
+        *,
+        to_index: int,
+    ) -> None:
+        if target is None:
+            return
+        from_index = -1
+        for idx in range(main_layout.count()):
+            item = main_layout.itemAt(idx)
+            if item is None:
+                continue
+            if item.widget() is target or item.layout() is target:
+                from_index = idx
+                break
+        if from_index == -1 or from_index == to_index:
+            return
+        main_layout.takeAt(from_index)
+        if isinstance(target, QtWidgets.QWidget):
+            main_layout.insertWidget(to_index, target)
+        elif isinstance(target, QtWidgets.QLayout):
+            main_layout.insertLayout(to_index, target)
+
+    def _setup_page_layout(self) -> None:
+        """Ajusta o layout principal da página Itens para ficar consistente com Orçamentos."""
+        main_layout = getattr(self, "verticalLayoutMain", None)
+        if not isinstance(main_layout, QtWidgets.QVBoxLayout):
+            return
+
+        placeholder_widget = getattr(self, "dimensions_placeholder", None)
+        if isinstance(placeholder_widget, QtWidgets.QWidget):
+            placeholder_widget.hide()
+            placeholder_widget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+            placeholder_widget.setMaximumWidth(0)
+
+        dims_actions_layout = getattr(self, "layout_dims_actions", None)
+        if isinstance(dims_actions_layout, QtWidgets.QHBoxLayout):
+            dims_actions_layout.setStretch(0, 0)
+            dims_actions_layout.setStretch(1, 1)
+            buttons_layout = getattr(self, "buttonsLayout", None)
+            if isinstance(buttons_layout, QtWidgets.QLayout):
+                dims_actions_layout.setAlignment(buttons_layout, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+
+        header_widget = getattr(self, "header", None)
+        self._move_main_layout_child(main_layout, dims_actions_layout, to_index=0)
+        self._move_main_layout_child(main_layout, header_widget, to_index=1)
+        self._configure_main_layout_stretch()
 
     # ==========================================================================
     # Carregamento do or?amento + refresh
@@ -931,6 +1086,7 @@ class ItensPage(QtWidgets.QWidget):
 
         self._orc_id = orc_id
         self._update_cost_button_state()
+        self._update_revert_button_state()  # NOVO: Atualizar estado do botão "Reverter"
         cliente_nome = ""
         ano_txt = ""
         num_txt = ""
@@ -944,7 +1100,7 @@ class ItensPage(QtWidgets.QWidget):
                 user = self.db.get(User, getattr(self.current_user, "id", None))
             username = getattr(user, "username", "") or getattr(self.current_user, "username", "") or ""
 
-            cliente_nome = _txt(getattr(cliente, "nome", ""))
+            cliente_nome = resolve_orcamento_cliente_nome(self.db, o, client=cliente)
             ano_txt = _txt(getattr(o, "ano", ""))
             num_txt = _txt(getattr(o, "num_orcamento", ""))
             ver_txt = _fmt_ver(getattr(o, "versao", ""))
@@ -995,31 +1151,36 @@ class ItensPage(QtWidgets.QWidget):
             except Exception:
                 pass
         rows = list_items(self.db, self._orc_id, versao=versao_filtro)
-        self.model.set_rows(rows)
-        self._apply_row_height()
-        self._set_costs_dirty(False)
+        self._loading_item_form = True
+        try:
+            self.model.set_rows(rows)
+            self._apply_row_height()
+            self._set_costs_dirty(False)
+            self._set_item_dirty(False)
 
-        if rows:
-            row_to_select: Optional[int] = None
-            if select_id is not None:
-                for idx, row in enumerate(rows):
-                    rid = getattr(row, "id_item", None)
-                    if rid == select_id:
-                        row_to_select = idx
-                        break
-            if row_to_select is None:
-                if select_row is not None:
-                    row_to_select = max(0, min(select_row, len(rows) - 1))
-                elif select_last:
-                    row_to_select = len(rows) - 1
-                else:
-                    row_to_select = 0
-            if row_to_select is not None:
-                logger.debug("Itens.refresh selecting row %s for select_id=%s", row_to_select, select_id)
-                self._select_table_row(row_to_select)
-                self._apply_selection_to_form()
-        else:
-            self._prepare_next_item(focus_codigo=False)
+            if rows:
+                row_to_select: Optional[int] = None
+                if select_id is not None:
+                    for idx, row in enumerate(rows):
+                        rid = getattr(row, "id_item", None)
+                        if rid == select_id:
+                            row_to_select = idx
+                            break
+                if row_to_select is None:
+                    if select_row is not None:
+                        row_to_select = max(0, min(select_row, len(rows) - 1))
+                    elif select_last:
+                        row_to_select = len(rows) - 1
+                    else:
+                        row_to_select = 0
+                if row_to_select is not None:
+                    logger.debug("Itens.refresh selecting row %s for select_id=%s", row_to_select, select_id)
+                    self._select_table_row(row_to_select)
+                    self._apply_selection_to_form()
+            else:
+                self._prepare_next_item(focus_codigo=False)
+        finally:
+            self._loading_item_form = False
 
     # ==========================================================================
     # Helpers de sele??o / user / parsing
@@ -1115,6 +1276,54 @@ class ItensPage(QtWidgets.QWidget):
         self._costs_dirty = dirty
         self._apply_costs_button_text()
 
+    def _apply_item_save_button_text(self) -> None:
+        btn = getattr(self, "btn_save", None)
+        if not isinstance(btn, QtWidgets.QPushButton):
+            return
+        base = (getattr(self, "_base_item_save_text", "") or btn.text() or "Gravar Item").rstrip("*")
+        if getattr(self, "_base_item_save_text", "") != base:
+            self._base_item_save_text = base
+        text = f"{base}*" if getattr(self, "_item_dirty", False) else base
+        if btn.text() != text:
+            btn.setText(text)
+
+    def _set_item_dirty(self, dirty: bool) -> None:
+        dirty = bool(dirty)
+        if getattr(self, "_item_dirty", False) == dirty:
+            return
+        self._item_dirty = dirty
+        self._apply_item_save_button_text()
+
+    def _mark_item_dirty(self, *_args) -> None:
+        if getattr(self, "_loading_item_form", False):
+            return
+        self._set_item_dirty(True)
+
+    def _setup_item_dirty_tracking(self) -> None:
+        self._apply_item_save_button_text()
+
+        widgets = (
+            getattr(self, "edit_codigo", None),
+            getattr(self, "edit_altura", None),
+            getattr(self, "edit_largura", None),
+            getattr(self, "edit_profundidade", None),
+            getattr(self, "edit_und", None),
+            getattr(self, "edit_qt", None),
+        )
+        for w in widgets:
+            if hasattr(w, "textEdited"):
+                w.textEdited.connect(self._mark_item_dirty)
+
+        if getattr(self, "edit_descricao", None) is not None and hasattr(self.edit_descricao, "textChanged"):
+            self.edit_descricao.textChanged.connect(self._mark_item_dirty)
+
+        if getattr(self, "dimensions_table", None) is not None and hasattr(self.dimensions_table, "itemChanged"):
+            self.dimensions_table.itemChanged.connect(self._mark_item_dirty)
+
+        model = getattr(self, "model", None)
+        if model is not None and hasattr(model, "dataChanged"):
+            model.dataChanged.connect(lambda *_, **__: self._mark_item_dirty())
+
     def _clear_layout_items(self, layout: Optional[QtWidgets.QLayout]) -> None:
         if layout is None:
             return
@@ -1186,12 +1395,27 @@ class ItensPage(QtWidgets.QWidget):
         desc_row.addWidget(self.edit_descricao, 1)
         left_group_layout.addLayout(desc_row)
 
+        # Reduzir ligeiramente "Item do Orçamento" e dar mais espaço ao painel direito
+        # (Margens e Ajustes + Variáveis).
+        # Aumentar a largura da zona "Item do Orçamento" para manter os campos todos na 1ª linha.
         main_layout.addWidget(left_group, 3)
+        right_container = QtWidgets.QWidget(frame)
+        right_layout = QtWidgets.QHBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+        self._right_panel_container = right_container
+        self._right_panel_layout = right_layout
 
         if hasattr(self, "_top_right_panel") and isinstance(self._top_right_panel, QtWidgets.QWidget):
-            self._top_right_panel.setParent(frame)
+            self._top_right_panel.setParent(right_container)
             self._top_right_panel.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
-            main_layout.addWidget(self._top_right_panel, 0, QtCore.Qt.AlignTop)
+            right_layout.addWidget(self._top_right_panel, 3, QtCore.Qt.AlignTop)
+
+        if hasattr(self, "dimensions_frame") and isinstance(self.dimensions_frame, QtWidgets.QWidget):
+            self.dimensions_frame.setParent(right_container)
+            right_layout.addWidget(self.dimensions_frame, 2, QtCore.Qt.AlignTop)
+
+        main_layout.addWidget(right_container, 3, QtCore.Qt.AlignTop)
 
         base_layout.addLayout(main_layout, 0, 0, 1, 1)
 
@@ -1274,6 +1498,35 @@ class ItensPage(QtWidgets.QWidget):
         except Exception:
             text = "0,00 €"
         self.lbl_soma_preco.setText(text.replace(",", "X").replace(".", ",").replace("X", "."))
+
+    def _update_revert_button_state(self) -> None:
+        """NOVO: Atualiza o estado do botão 'Reverter para Calculado' baseado no preço manual."""
+        btn = getattr(self, "btn_revert_price", None)
+        if btn is None:
+            return
+
+        if not self._orc_id:
+            btn.setEnabled(False)
+            return
+
+        try:
+            orcamento = self.db.query(Orcamento).filter(Orcamento.id == self._orc_id).first()
+            if orcamento:
+                from Martelo_Orcamentos_V2.app.services import price_management as svc_price
+                is_manual = svc_price.is_price_manual(orcamento)
+                btn.setEnabled(is_manual)
+                if is_manual:
+                    btn.setToolTip(
+                        "O preço foi editado manualmente. Clique para reverter ao valor calculado."
+                    )
+                else:
+                    btn.setToolTip(
+                        "O preço é calculado automaticamente. Nada a reverter."
+                    )
+            else:
+                btn.setEnabled(False)
+        except Exception:
+            btn.setEnabled(False)
 
     def refresh_margem_defaults(self) -> None:
         if self._orc_id:
@@ -1469,7 +1722,7 @@ class ItensPage(QtWidgets.QWidget):
             self._custeio_worker.deleteLater()
             self._custeio_worker = None
 
-    def _show_toast(self, widget: Optional[QtWidgets.QWidget], text: str, timeout_ms: int = 2500) -> None:
+    def _show_toast(self, widget: Optional[QtWidgets.QWidget], text: str, timeout_ms: int = 3000) -> None:
         if not widget or not text:
             return
         try:
@@ -1504,8 +1757,21 @@ class ItensPage(QtWidgets.QWidget):
             return
 
         button = getattr(self, "btn_update_costs", None)
+        if getattr(self, "_update_costs_running", False):
+            self._show_toast(button or self.table, "Atualizacao de custos em curso...")
+            return
+        self._update_costs_running = True
         if button:
             button.setDisabled(True)
+
+        def _unlock_update_costs() -> None:
+            self._update_costs_running = False
+            if button:
+                button.setEnabled(True)
+
+        def _schedule_unlock_update_costs() -> None:
+            # Evita que cliques rápidos fiquem em fila e disparem a ação várias vezes.
+            QtCore.QTimer.singleShot(0, _unlock_update_costs)
 
         selected_item_id = self.selected_id()
         try:
@@ -1523,49 +1789,157 @@ class ItensPage(QtWidgets.QWidget):
         total_preco = None
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
+            # NOVO: Importar serviços de price management
+            from Martelo_Orcamentos_V2.app.services import price_management as svc_price
+            from Martelo_Orcamentos_V2.ui.dialogs.price_management import show_price_conflict_dialog
+            
             if self._persist_margens_config(auto=True, commit=False) is None:
-                QtWidgets.QApplication.restoreOverrideCursor()
-                if button:
-                    button.setEnabled(True)
+                _schedule_unlock_update_costs()
                 return
+            
+            # Carregar orçamento atual para verificar preço manual
+            orcamento = self.db.query(Orcamento).filter(Orcamento.id == self._orc_id).first()
+            preço_anterior_manual = orcamento.preco_total_manual if orcamento else 0
+            preço_anterior = orcamento.preco_total if orcamento else None
+            
+            # Atualizar custos normalmente
             atualizados = svc_custeio.atualizar_resumo_custos_orcamento(self.db, self._orc_id)
             total_preco = self._apply_margens_to_items()
+            
+            # NOVO: Verificar conflito de preço
+            # Se o preço foi editado manualmente E o novo valor calculado é diferente,
+            # perguntar ao utilizador o que fazer
+            if preço_anterior_manual and total_preco is not None:
+                if preço_anterior != total_preco:
+                    QtWidgets.QApplication.restoreOverrideCursor()
+                    
+                    # Mostrar diálogo de conflito
+                    resultado = show_price_conflict_dialog(self)
+                    
+                    QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+                    
+                    if resultado == "update":
+                        # Usar novo preço calculado
+                        svc_price.set_price_calculated(
+                            self.db, orcamento, total_preco, commit=False
+                        )
+                        self.db.commit()
+                    elif resultado == "keep":
+                        # Manter preço manual (não fazer nada)
+                        pass
+                    else:  # cancel
+                        # Reverter a atualização
+                        self.db.rollback()
+                        _schedule_unlock_update_costs()
+                        QtWidgets.QApplication.restoreOverrideCursor()
+                        return
+                else:
+                    # Preço manual é igual ao calculado - marcar como calculado mesmo assim
+                    svc_price.set_price_calculated(
+                        self.db, orcamento, total_preco, commit=False
+                    )
+            else:
+                # Preço não era manual - marcar como calculado normalmente
+                if orcamento and total_preco is not None:
+                    svc_price.set_price_calculated(
+                        self.db, orcamento, total_preco, commit=False
+                    )
+            
             self.db.commit()
         except Exception as exc:
             self.db.rollback()
-            QtWidgets.QApplication.restoreOverrideCursor()
             logger.exception("Itens._on_update_item_costs_clicked failed: %s", exc)
+            root_exc = getattr(exc, "orig", None) or exc
             QtWidgets.QMessageBox.critical(
                 self,
                 "Atualizar Custos",
-                f"Não foi possível atualizar os custos a partir do Custeio dos Items:\n{exc}",
+                f"Não foi possível atualizar os custos a partir do Custeio dos Items:\n{root_exc}",
             )
-            if button:
-                button.setEnabled(True)
+            _schedule_unlock_update_costs()
             return
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
 
         try:
-            self.db.expire_all()
-        except Exception:
-            pass
+            try:
+                self.db.expire_all()
+            except Exception:
+                pass
 
-        self.refresh(select_row=current_row, select_id=selected_item_id)
-        self._apply_selection_to_form()
-        if total_preco is not None:
-            self._update_sum_preco_label(total_preco)
+            self.refresh(select_row=current_row, select_id=selected_item_id)
+            self._apply_selection_to_form()
+            if total_preco is not None:
+                self._update_sum_preco_label(total_preco)
 
-        if button:
-            button.setEnabled(True)
-        self._set_costs_dirty(False)
+            self._set_costs_dirty(False)
 
-        if atualizados:
-            self._show_toast(button or self.table, f"Custos atualizados para {atualizados} item(s).")
-        else:
-            self._show_toast(
-                button or self.table,
-                "Custeio dos Items sem dados para este orçamento/versão.",
+            if atualizados:
+                self._show_toast(button or self.table, f"Custos atualizados para {atualizados} item(s).")
+            else:
+                self._show_toast(
+                    button or self.table,
+                    "Custeio dos Items sem dados para este orçamento/versão.",
+                )
+        finally:
+            _schedule_unlock_update_costs()
+
+    def _on_revert_price_clicked(self) -> None:
+        """
+        Reverte o preço final para o valor calculado (automático).
+        Só funciona se o preço foi editado manualmente.
+        """
+        if not self._orc_id:
+            QtWidgets.QMessageBox.information(self, "Reverter Preço", "Nenhum orçamento carregado.")
+            return
+
+        from Martelo_Orcamentos_V2.app.services import price_management as svc_price
+        from Martelo_Orcamentos_V2.ui.dialogs.price_management import show_price_reverted_dialog
+
+        try:
+            orcamento = self.db.query(Orcamento).filter(Orcamento.id == self._orc_id).first()
+            if not orcamento:
+                QtWidgets.QMessageBox.warning(self, "Reverter Preço", "Orçamento não encontrado.")
+                return
+
+            if not svc_price.is_price_manual(orcamento):
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Reverter Preço",
+                    "O preço final não foi editado manualmente. Nada a reverter.",
+                )
+                return
+
+            # Obter o preço calculado atual dos items
+            total_calculado = self._apply_margens_to_items()
+            if total_calculado is None:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Reverter Preço",
+                    "Não foi possível calcular o preço. Certifique-se de que há items com custos.",
+                )
+                return
+
+            # Reverter para calculado
+            svc_price.revert_to_calculated(
+                self.db, orcamento, total_calculado, commit=True
+            )
+
+            # Mostrar confirmação
+            show_price_reverted_dialog(self)
+
+            # Atualizar UI
+            self._update_sum_preco_label(total_calculado)
+            self._update_revert_button_state()
+
+            # Emitir sinal para sincronizar com outros menus
+            self.price_changed.emit(self._orc_id, total_calculado)
+
+        except Exception as exc:
+            logger.exception("Itens._on_revert_price_clicked failed: %s", exc)
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Reverter Preço",
+                f"Erro ao reverter o preço: {exc}",
             )
 
     def _on_mode_clicked(self, mode: str) -> None:
@@ -1615,7 +1989,15 @@ class ItensPage(QtWidgets.QWidget):
     def _focus_next_field(self, index: int):
         if not getattr(self, "_input_sequence", None):
             return
-        next_idx = (index + 1) % len(self._input_sequence)
+        next_idx = index + 1
+        if next_idx >= len(self._input_sequence):
+            descricao = getattr(self, "edit_descricao", None)
+            if isinstance(descricao, QtWidgets.QTextEdit):
+                descricao.setFocus()
+                cursor = descricao.textCursor()
+                cursor.movePosition(QtGui.QTextCursor.End)
+                descricao.setTextCursor(cursor)
+            return
         w = self._input_sequence[next_idx]
         w.setFocus()
         if isinstance(w, QtWidgets.QLineEdit):
@@ -1687,64 +2069,108 @@ class ItensPage(QtWidgets.QWidget):
     # Tabela de vari?veis dimensionais (H, L, P, H1...)
     # ==========================================================================
     def _init_dimensions_ui(self) -> None:
-        self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
-        self._dimension_col_map: Dict[str, int] = {key: idx for idx, key in enumerate(DIMENSION_KEY_ORDER)}
+        self._dimension_values = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimension_items: Dict[str, QtWidgets.QTableWidgetItem] = {}
         self._dimensions_dirty = False
 
-        self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER), self)
+        keys_top = tuple(k for group in DIMENSION_GROUPS[:3] for k in group)
+        keys_bottom = tuple(k for group in DIMENSION_GROUPS[3:] for k in group)
+        columns = len(keys_top)  # 9
+
+        self.dimensions_table = QtWidgets.QTableWidget(4, columns, self)
         self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.dimensions_table.setFixedHeight(72)
         self.dimensions_table.verticalHeader().setVisible(False)
         self.dimensions_table.horizontalHeader().setVisible(False)
         self.dimensions_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         self.dimensions_table.setFocusPolicy(Qt.StrongFocus)
         self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
         self.dimensions_table.setAlternatingRowColors(True)
-        self.dimensions_table.setStyleSheet(
-            "QTableWidget { gridline-color: #d0d0d0; }"
-        )
+        self.dimensions_table.setStyleSheet("QTableWidget { gridline-color: #d0d0d0; }")
 
-        for row in range(2):
-            self.dimensions_table.setRowHeight(row, 28 if row else 24)
+        header_height = 22
+        value_height = 28
+        self.dimensions_table.setRowHeight(0, header_height)
+        self.dimensions_table.setRowHeight(1, value_height)
+        self.dimensions_table.setRowHeight(2, header_height)
+        self.dimensions_table.setRowHeight(3, value_height)
+        self.dimensions_table.setFixedHeight((header_height + value_height) * 2 + 10)
 
-        for col, key in enumerate(DIMENSION_KEY_ORDER):
-            header_item = QtWidgets.QTableWidgetItem(key)
+        default_col_width = 62
+        for col in range(columns):
+            self.dimensions_table.setColumnWidth(col, default_col_width)
+        table_width = columns * default_col_width + 24
+        self.dimensions_table.setMinimumWidth(table_width)
+        # Usar a largura disponível (mostrar todas as variáveis e evitar espaço vazio à direita).
+        self.dimensions_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+
+        def _set_header_cell(row: int, col: int, text: str) -> None:
+            header_item = QtWidgets.QTableWidgetItem(text)
             header_item.setFlags(QtCore.Qt.ItemIsEnabled)
             header_item.setTextAlignment(QtCore.Qt.AlignCenter)
             header_font = header_item.font()
             header_font.setBold(True)
             header_item.setFont(header_font)
-            self.dimensions_table.setItem(0, col, header_item)
+            self.dimensions_table.setItem(row, col, header_item)
 
+        def _set_value_cell(row: int, col: int, key: str) -> None:
             value_item = QtWidgets.QTableWidgetItem("")
             value_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            value_item.setData(QtCore.Qt.UserRole, key)
             if key in PRIMARY_DIMENSION_KEYS:
                 value_item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
             else:
                 value_item.setFlags(
                     QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled
                 )
-            self.dimensions_table.setItem(1, col, value_item)
-            self.dimensions_table.setColumnWidth(col, 60)
+            self.dimensions_table.setItem(row, col, value_item)
+            self._dimension_items[key] = value_item
+
+        for col, key in enumerate(keys_top):
+            _set_header_cell(0, col, key)
+            _set_value_cell(1, col, key)
+
+        for col in range(columns):
+            if col < len(keys_bottom):
+                key = keys_bottom[col]
+                _set_header_cell(2, col, key)
+                _set_value_cell(3, col, key)
+            else:
+                _set_header_cell(2, col, "")
+                spacer_item = QtWidgets.QTableWidgetItem("")
+                spacer_item.setFlags(QtCore.Qt.NoItemFlags)
+                self.dimensions_table.setItem(3, col, spacer_item)
 
         self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
 
-        # Inserir no layout principal antes da tabela de itens
         self.dimensions_frame = QtWidgets.QFrame(self)
+        self.dimensions_frame.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         frame_layout = QtWidgets.QVBoxLayout(self.dimensions_frame)
-        frame_layout.setContentsMargins(0, 4, 0, 4)
+        frame_layout.setContentsMargins(0, 4, 0, 0)
         frame_layout.setSpacing(0)
         frame_layout.addWidget(self.dimensions_table)
 
         added = False
-        if hasattr(self, "dimensions_placeholder_layout"):
+        right_layout = getattr(self, "_right_panel_layout", None)
+        right_container = getattr(self, "_right_panel_container", None)
+        if isinstance(right_layout, QtWidgets.QLayout) and isinstance(right_container, QtWidgets.QWidget):
+            self.dimensions_frame.setParent(right_container)
+            if isinstance(right_layout, QtWidgets.QBoxLayout):
+                right_layout.addWidget(self.dimensions_frame, 2, QtCore.Qt.AlignTop)
+                added = True
+            elif isinstance(right_layout, QtWidgets.QGridLayout):
+                right_layout.addWidget(self.dimensions_frame, 0, 1, 1, 1, QtCore.Qt.AlignTop)
+                added = True
+
+        if not added and hasattr(self, "dimensions_placeholder_layout"):
             placeholder = self.dimensions_placeholder_layout
             if isinstance(placeholder, QtWidgets.QLayout):
                 placeholder.addWidget(self.dimensions_frame)
                 added = True
+
         if not added and hasattr(self, "verticalLayoutMain"):
             layout: QtWidgets.QVBoxLayout = self.verticalLayoutMain
-            table_index = layout.indexOf(self.table)
+            table_layout = getattr(self, "table_and_buttons", None)
+            table_index = layout.indexOf(table_layout) if isinstance(table_layout, QtWidgets.QLayout) else -1
             if table_index == -1:
                 layout.addWidget(self.dimensions_frame)
             else:
@@ -1765,7 +2191,10 @@ class ItensPage(QtWidgets.QWidget):
         for idx in range(count):
             layout.setStretch(idx, 0)
 
-        table_index = layout.indexOf(self.table)
+        table_layout = getattr(self, "table_and_buttons", None)
+        table_index = layout.indexOf(table_layout) if isinstance(table_layout, QtWidgets.QLayout) else -1
+        if table_index == -1:
+            table_index = layout.indexOf(self.table)
         if table_index != -1:
             layout.setStretch(table_index, 1)
 
@@ -1814,19 +2243,15 @@ class ItensPage(QtWidgets.QWidget):
             return
         current = self._dimension_values.get(key)
         if current == value:
-            target_item = source_item or self.dimensions_table.item(1, self._dimension_col_map.get(key, -1))
+            target_item = source_item or getattr(self, "_dimension_items", {}).get(key)
             self._style_dimension_cell(target_item, key)
-            if mark_dirty and current != value:
-                self._dimensions_dirty = True
             return
 
         self._dimension_values[key] = value
         target_item = source_item
-        if target_item is None and hasattr(self, "dimensions_table"):
-            col = self._dimension_col_map.get(key)
-            if col is not None and col >= 0:
-                target_item = self.dimensions_table.item(1, col)
-        if target_item is not None:
+        if target_item is None:
+            target_item = getattr(self, "_dimension_items", {}).get(key)
+        if target_item is not None and hasattr(self, "dimensions_table"):
             self.dimensions_table.blockSignals(True)
             target_item.setText(self._format_dimension_value(value))
             self.dimensions_table.blockSignals(False)
@@ -1838,12 +2263,11 @@ class ItensPage(QtWidgets.QWidget):
         if not hasattr(self, "dimensions_table"):
             return
         self.dimensions_table.blockSignals(True)
-        for key, col in self._dimension_col_map.items():
-            item = self.dimensions_table.item(1, col)
+        items = getattr(self, "_dimension_items", {})
+        for key in DIMENSION_KEY_ORDER:
+            item = items.get(key)
             if item is None:
-                item = QtWidgets.QTableWidgetItem("")
-                item.setTextAlignment(QtCore.Qt.AlignCenter)
-                self.dimensions_table.setItem(1, col, item)
+                continue
             item.setText(self._format_dimension_value(self._dimension_values.get(key)))
             self._style_dimension_cell(item, key)
         self.dimensions_table.blockSignals(False)
@@ -1877,8 +2301,7 @@ class ItensPage(QtWidgets.QWidget):
                 self._set_dimension_value(key, new_value, mark_dirty=mark_dirty)
                 updated = True
             else:
-                col = self._dimension_col_map.get(key)
-                item = self.dimensions_table.item(1, col) if col is not None else None
+                item = getattr(self, "_dimension_items", {}).get(key)
                 self._style_dimension_cell(item, key)
         if mark_dirty and updated:
             self._dimensions_dirty = True
@@ -1929,9 +2352,9 @@ class ItensPage(QtWidgets.QWidget):
             raise RuntimeError(f"Falha ao guardar dimensoes do item: {exc}") from exc
 
     def _on_dimension_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
-        if item.row() != 1:
+        key = item.data(QtCore.Qt.UserRole)
+        if not isinstance(key, str) or key not in self._dimension_values:
             return
-        key = DIMENSION_KEY_ORDER[item.column()]
         novo_valor = self._coerce_dimension_value(item.text())
         if item.text().strip() and novo_valor is None:
             self.dimensions_table.blockSignals(True)
@@ -1942,31 +2365,41 @@ class ItensPage(QtWidgets.QWidget):
         self._set_dimension_value(key, novo_valor, mark_dirty=True, source_item=item)
 
     def _populate_form(self, item):
-        self.edit_item.setText(getattr(item, "item_nome", "") or "")
-        self.edit_codigo.setText((getattr(item, "codigo", "") or "").upper())
-        self.edit_descricao.setPlainText(getattr(item, "descricao", "") or "")
-        self.edit_altura.setText(self._format_decimal(getattr(item, "altura", None)))
-        self.edit_largura.setText(self._format_decimal(getattr(item, "largura", None)))
-        self.edit_profundidade.setText(self._format_decimal(getattr(item, "profundidade", None)))
-        self.edit_und.setText(getattr(item, "und", "") or "und")
-        qt_txt = self._format_decimal(getattr(item, "qt", None))
-        self.edit_qt.setText(qt_txt or "1")
-        self.edit_item.setReadOnly(True)
-        self._edit_item_id = getattr(item, "id_item", None)
-        self._load_dimension_values_for_item(item)
+        self._loading_item_form = True
+        try:
+            self.edit_item.setText(getattr(item, "item_nome", "") or "")
+            self.edit_codigo.setText((getattr(item, "codigo", "") or "").upper())
+            self.edit_descricao.setPlainText(getattr(item, "descricao", "") or "")
+            self.edit_altura.setText(self._format_decimal(getattr(item, "altura", None)))
+            self.edit_largura.setText(self._format_decimal(getattr(item, "largura", None)))
+            self.edit_profundidade.setText(self._format_decimal(getattr(item, "profundidade", None)))
+            self.edit_und.setText(getattr(item, "und", "") or "un")
+            qt_txt = self._format_decimal(getattr(item, "qt", None))
+            self.edit_qt.setText(qt_txt or "1")
+            self.edit_item.setReadOnly(True)
+            self._edit_item_id = getattr(item, "id_item", None)
+            self._load_dimension_values_for_item(item)
+        finally:
+            self._loading_item_form = False
+        self._set_item_dirty(False)
 
     def _clear_form(self):
-        self.edit_item.clear()
-        self.edit_codigo.clear()
-        self.edit_descricao.clear()
-        self.edit_altura.clear()
-        self.edit_largura.clear()
-        self.edit_profundidade.clear()
-        self.edit_und.setText("und")
-        self.edit_qt.setText("1")
-        self.edit_item.setReadOnly(True)
-        self._edit_item_id = None
-        self._clear_dimension_values(enable=bool(self._orc_id))
+        self._loading_item_form = True
+        try:
+            self.edit_item.clear()
+            self.edit_codigo.clear()
+            self.edit_descricao.clear()
+            self.edit_altura.clear()
+            self.edit_largura.clear()
+            self.edit_profundidade.clear()
+            self.edit_und.setText("un")
+            self.edit_qt.setText("1")
+            self.edit_item.setReadOnly(True)
+            self._edit_item_id = None
+            self._clear_dimension_values(enable=bool(self._orc_id))
+        finally:
+            self._loading_item_form = False
+        self._set_item_dirty(False)
 
     # ======================================================================
     # Descrição - regras de formatação e menu auxiliar
@@ -2283,7 +2716,7 @@ class ItensPage(QtWidgets.QWidget):
                     altura=form["altura"],
                     largura=form["largura"],
                     profundidade=form["profundidade"],
-                    und=form["und"] or "und",
+                    und=form["und"] or "un",
                     qt=form["qt"],
                     created_by=self._current_user_id(),
                 )
@@ -2295,10 +2728,11 @@ class ItensPage(QtWidgets.QWidget):
 
             self.db.commit()
             self._dimensions_dirty = False
+            self._set_item_dirty(False)
             target_id = getattr(new_row, "id_item", None) or persist_target_id
             logger.debug("Itens.on_save_item target_id after save: %s", target_id)
             self.refresh(select_id=target_id, select_last=target_id is None)
-            QMessageBox.information(self, "Sucesso", msg)
+            self._show_toast(getattr(self, "btn_save", None), msg, timeout_ms=3000)
             if target_id:
                 logger.debug("Itens.on_save_item emit target_id=%s", target_id)
                 self.item_selected.emit(target_id)
@@ -2374,10 +2808,3 @@ class ItensPage(QtWidgets.QWidget):
     def on_toggle_rows(self, checked: bool):
         self._rows_expanded = checked
         self._apply_row_height()
-
-
-
-
-
-
-

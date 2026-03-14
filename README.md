@@ -143,3 +143,34 @@ Se queres, eu:
 - adiciono um `requirements.txt` ao repositório (já gerado localmente),
 - acrescento um `build_exe.bat` de exemplo (ou atualizo o existente) contendo o script de PyInstaller,
 - ou actualizo o README com instruções mais específicas para inclusão de assets.
+
+## Instalador (Inno Setup)
+
+Para distribuir o Martelo em PCs sem Python/VS Code, recomenda-se usar:
+
+1) Build do executável (PyInstaller):
+
+```powershell
+.\build_exe.bat
+```
+
+O resultado fica em `dist\Martelo_Orcamentos_V2\` (executar `Martelo_Orcamentos_V2.exe`).
+
+2) Build do instalador (Setup.exe), usando o template `installer\Martelo_Orcamentos_V2.iss`:
+
+```powershell
+.\build_installer.bat
+```
+
+(Opcional) para forçar uma versão no nome do setup:
+
+```powershell
+.\build_installer.bat 2.0.1
+```
+
+O instalador fica em `installer\Output\Setup_*.exe`.
+
+Notas:
+- O instalador copia o ficheiro `.env` apenas na 1ª instalação (para não sobrescrever configurações locais).
+- O instalador pede uma password (definida no build com `/DSetupPassword=...`).
+- Se algum PC acusar falta de runtime, instalar "Microsoft Visual C++ Redistributable 2015-2022 (x64)".

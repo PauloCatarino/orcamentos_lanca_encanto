@@ -31,6 +31,7 @@ DROP TABLE IF EXISTS users;
 
 -- 4) Outras
 DROP TABLE IF EXISTS app_settings;
+DROP TABLE IF EXISTS user_feature_flags;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -48,6 +49,24 @@ CREATE TABLE IF NOT EXISTS users (
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- USER FEATURE FLAGS
+CREATE TABLE IF NOT EXISTS user_feature_flags (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  feature_key VARCHAR(64) NOT NULL,
+  enabled BOOLEAN DEFAULT FALSE,
+  reservado1 VARCHAR(255),
+  reservado2 VARCHAR(255),
+  reservado3 VARCHAR(255),
+  reservado4 VARCHAR(255),
+  reservado5 VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY u_user_feature (user_id, feature_key),
+  INDEX idx_user_feature_user (user_id),
+  CONSTRAINT fk_user_feature_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- APP SETTINGS

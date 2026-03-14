@@ -11,8 +11,6 @@ from sqlalchemy.orm import Session
 
 import logging
 
-from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
-
 from Martelo_Orcamentos_V2.app.models import (
     Client,
     Orcamento,
@@ -41,10 +39,10 @@ MENU_FIELDS_BASE = svc_dg.MENU_FIELDS
 MENU_FIELD_TYPES_BASE = svc_dg.MENU_FIELD_TYPES
 
 MENU_FIELDS: Dict[str, Sequence[str]] = {
-    MENU_MATERIAIS: MENU_FIELDS_BASE[MENU_MATERIAIS] + ("linha", "custo_mp_und", "custo_mp_total"),
-    MENU_FERRAGENS: MENU_FIELDS_BASE[MENU_FERRAGENS] + ("linha", "spp_ml_und", "custo_mp_und", "custo_mp_total"),
-    MENU_SIS_CORRER: MENU_FIELDS_BASE[MENU_SIS_CORRER] + ("linha", "custo_mp_und", "custo_mp_total"),
-    MENU_ACABAMENTOS: MENU_FIELDS_BASE[MENU_ACABAMENTOS] + ("linha", "custo_acb_und", "custo_acb_total"),
+    MENU_MATERIAIS: MENU_FIELDS_BASE[MENU_MATERIAIS] + ("linha",),
+    MENU_FERRAGENS: MENU_FIELDS_BASE[MENU_FERRAGENS] + ("linha",),
+    MENU_SIS_CORRER: MENU_FIELDS_BASE[MENU_SIS_CORRER] + ("linha",),
+    MENU_ACABAMENTOS: MENU_FIELDS_BASE[MENU_ACABAMENTOS] + ("linha",),
 }
 
 
@@ -56,22 +54,18 @@ MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
     MENU_MATERIAIS: {
         **MENU_FIELD_TYPES_BASE[MENU_MATERIAIS],
         "integer": MENU_FIELD_TYPES_BASE[MENU_MATERIAIS]["integer"] + ("linha",),
-        "decimal": MENU_FIELD_TYPES_BASE[MENU_MATERIAIS]["decimal"] + ("custo_mp_und", "custo_mp_total"),
     },
     MENU_FERRAGENS: {
         **MENU_FIELD_TYPES_BASE[MENU_FERRAGENS],
         "integer": MENU_FIELD_TYPES_BASE[MENU_FERRAGENS]["integer"] + ("linha",),
-        "decimal": MENU_FIELD_TYPES_BASE[MENU_FERRAGENS]["decimal"] + ("spp_ml_und", "custo_mp_und", "custo_mp_total"),
     },
     MENU_SIS_CORRER: {
         **MENU_FIELD_TYPES_BASE[MENU_SIS_CORRER],
         "integer": MENU_FIELD_TYPES_BASE[MENU_SIS_CORRER]["integer"] + ("linha",),
-        "decimal": MENU_FIELD_TYPES_BASE[MENU_SIS_CORRER]["decimal"] + ("custo_mp_und", "custo_mp_total"),
     },
     MENU_ACABAMENTOS: {
         **MENU_FIELD_TYPES_BASE[MENU_ACABAMENTOS],
         "integer": MENU_FIELD_TYPES_BASE[MENU_ACABAMENTOS]["integer"] + ("linha",),
-        "decimal": MENU_FIELD_TYPES_BASE[MENU_ACABAMENTOS]["decimal"] + ("custo_acb_und", "custo_acb_total"),
     },
 }
 
@@ -141,9 +135,6 @@ def _row_to_dict(menu: str, row: Any) -> Dict[str, Any]:
         data[field] = getattr(row, field, None)
     if "familia" in data and not data.get("familia"):
         data["familia"] = MENU_DEFAULT_FAMILIA.get(menu, "PLACAS")
-    if "nao_stock" in data:
-        # int_to_bool trata "0"/"1"/"true"/"false"/None corretamente
-        data["nao_stock"] = int_to_bool(data.get("nao_stock"))
     return data
 
 
@@ -244,6 +235,37 @@ def dados_items_em_sincronia_com_gerais(db: Session, ctx: DadosItemsContext) -> 
                 return False
     return True
 
+
+
+def dados_items_tem_dados(db: Session, ctx: DadosItemsContext) -> bool:
+    """
+    Retorna True se existir algum dado preenchido nas 4 tabelas de Dados Items.
+    Compara com as linhas padrao para evitar considerar apenas os defaults como "preenchido".
+    """
+    try:
+        di_atual = carregar_dados_gerais(db, ctx)
+    except Exception:
+        return False
+
+    for menu in MENU_KEYS:
+        rows = di_atual.get(menu, ())
+        if not rows:
+            continue
+        current = _cleanup_for_compare(menu, rows)
+        defaults = _cleanup_for_compare(menu, _DEF_ROWS_CACHE.get(menu, ()))
+        for idx, row in enumerate(current):
+            base = defaults[idx] if idx < len(defaults) else None
+            if base is None:
+                if any(value not in (None, "") for key, value in row.items() if key != "ordem"):
+                    return True
+                continue
+            for key, value in row.items():
+                if key == "ordem":
+                    continue
+                if value != base.get(key):
+                    return True
+    return False
+
 def carregar_dados_gerais(db: Session, ctx: DadosItemsContext) -> Dict[str, List[Dict[str, Any]]]:
     data: Dict[str, List[Dict[str, Any]]] = {}
     for menu, model in MODEL_MAP.items():
@@ -271,41 +293,12 @@ def _coerce(menu: str, field: str, value: Any) -> Any:
 
 logger = logging.getLogger(__name__)
 
-def _to_bool_int(v: Any) -> int:
-    """
-    Coerção segura para 0/1 a partir de bool, int, Decimal, str, None.
-    - None -> 0 (podes mudar para None se preferires preservar NULL)
-    - True/"true"/"1"/1 -> 1
-    - False/"false"/"0"/0 -> 0
-    """
-    if v is None:
-        return 0
-    if isinstance(v, bool):
-        return 1 if v else 0
-    # ints, Decimals...
-    try:
-        if isinstance(v, (int, float)):
-            return 1 if int(v) != 0 else 0
-    except Exception:
-        pass
-    if isinstance(v, str):
-        s = v.strip().lower()
-        if s in ("1", "true", "t", "on", "yes", "y"):
-            return 1
-        if s in ("0", "false", "f", "off", "no", "n", ""):
-            return 0
-        # se for texto qualquer, assume true se não vazio
-        return 1 if s else 0
-    # fallback: truthiness
-    return 1 if bool(v) else 0
-
 
 def guardar_dados_gerais(db: Session, ctx: DadosItemsContext,
                          payload: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
     """
     Guarda linhas de vários menus (materiais, ferragens, ...).
     - Apaga linhas existentes para item_id antes de inserir as novas.
-    - Faz coerção explícita do campo `nao_stock` para 0/1.
     - Usa _coerce(menu, field, value) se estiver definido no módulo (mantém compatibilidade).
     """
     # segurança: payload pode ser None ou vazio
@@ -358,12 +351,8 @@ def guardar_dados_gerais(db: Session, ctx: DadosItemsContext,
                 # percorre os campos que este menu aceita
                 for field in MENU_FIELDS[menu]:
                     value = body.get(field)
-                    # tratamento especial para nao_stock — queres 0/1 no BD
-                    if field == "nao_stock":
-                        coerced = _to_bool_int(value)
-                    else:
-                        # tenta manter a coerção já existente no projecto (se houver)
-                        coerced = _try_coerce(menu, field, value)
+                    # tenta manter a coerção já existente no projecto (se houver)
+                    coerced = _try_coerce(menu, field, value)
                     instance_kwargs[field] = coerced
 
                 # cria e adiciona a instância SQLAlchemy
@@ -371,24 +360,6 @@ def guardar_dados_gerais(db: Session, ctx: DadosItemsContext,
 
         # tenta commitar todas as alterações
         db.commit()
-
-        # DEBUG: depois do commit, opcional: mostrar resumo de nao_stock gravado para este item
-        try:
-            logger.debug("Após commit - resumos do item_id=%s", ctx.item_id)
-            for menu in (MENU_MATERIAIS, MENU_FERRAGENS, MENU_SIS_CORRER, MENU_ACABAMENTOS):
-                if menu not in MODEL_MAP:
-                    continue
-                model = MODEL_MAP[menu]
-                rows_saved = db.execute(
-                    select(model.id, model.ordem, model.nao_stock).where(model.item_id == ctx.item_id)
-                    .order_by(model.ordem, model.id)
-                ).all()
-                logger.debug("[AFTER COMMIT] menu=%r rows_saved=%d", menu, len(rows_saved))
-                for r in rows_saved[:10]:
-                    logger.debug("  id=%s ordem=%s nao_stock=%s", r.id, r.ordem, r.nao_stock)
-        except Exception:
-            # não é crítico; apenas logar
-            logger.exception("Erro ao obter resumo pós-commit")
 
     except Exception as exc:
         # garante rollback em caso de erro e re-levanta exceção para tratamento acima

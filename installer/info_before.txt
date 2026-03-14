@@ -1,0 +1,14 @@
+Martelo Orcamentos V2 - Resumo
+--------------------------------
+
+Principais funcionalidades:
+- Criacao e gestao de Orcamentos (versoes, itens e precos)
+- Calculo de custos e margens
+- Criacao/abertura de pastas no servidor para Orcamentos e Producao
+- Integracao com PHC (clientes e outros dados)
+- Relatorios e exportacao (Excel / PDF)
+- Envio de orcamentos  atraves de mails
+
+Notas:
+- A aplicacao usa a configuracao em ".env" (na pasta de instalacao).
+- Certifique-se que existe acesso a rede (servidores/partilhas) e a Base de Dados.

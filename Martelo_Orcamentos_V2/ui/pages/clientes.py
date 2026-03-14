@@ -10,7 +10,7 @@ Versão:
 """
 
 import os
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QStyle, QApplication, QSizePolicy
 from PySide6.QtGui import QPixmap, QPainter, QColor
@@ -22,6 +22,14 @@ from Martelo_Orcamentos_V2.app.services.clients import (
     upsert_client,
     delete_client,
     suggestion_tokens,
+    sync_clients_from_phc,
+)
+from Martelo_Orcamentos_V2.app.services.clientes_temporarios import (
+    list_clientes_temporarios,
+    search_clientes_temporarios,
+    upsert_cliente_temporario,
+    delete_cliente_temporario,
+    suggestion_tokens as suggestion_tokens_temporarios,
 )
 from ..models.qt_table import SimpleTableModel
 
@@ -113,10 +121,57 @@ def label_with_icon(text: str, icon: QStyle.StandardPixmap, color: str = "#0A84F
     return w
 
 
-class ClientesPage(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+def _digits_only(value: str) -> str:
+    return "".join(ch for ch in value if ch.isdigit())
+
+
+def format_phone_display(value: str) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    digits = _digits_only(text)
+    if len(digits) == 9:
+        return f"{digits[0:3]} {digits[3:6]} {digits[6:9]}"
+    return text
+
+
+class ClientesTab(QtWidgets.QWidget):
+    def __init__(
+        self,
+        *,
+        parent=None,
+        list_fn,
+        search_fn,
+        upsert_fn,
+        delete_fn,
+        suggestion_fn,
+        phone_formatter=None,
+        show_refresh: bool = False,
+        show_sync: bool = False,
+        sync_fn=None,
+        require_data_on_new: bool = False,
+        mark_dirty_on_change: bool = False,
+        validate_phone: bool = False,
+        search_placeholder: str = "Pesquisar clientes (use % para multi-termos)",
+    ):
         super().__init__(parent)
         self.db = SessionLocal()
+        self._list_fn = list_fn
+        self._search_fn = search_fn
+        self._upsert_fn = upsert_fn
+        self._delete_fn = delete_fn
+        self._suggestion_fn = suggestion_fn
+        self._sync_fn = sync_fn
+        self._phone_formatter = phone_formatter
+        self._show_refresh = bool(show_refresh)
+        self._show_sync = bool(show_sync)
+        self._require_data_on_new = bool(require_data_on_new)
+        self._mark_dirty_on_change = bool(mark_dirty_on_change)
+        self._validate_phone = bool(validate_phone)
+        self._dirty = False
+        self._suspend_dirty = False
 
         # ------- Função auxiliar para estilizar botões primários -------
         def _style_primary_button(btn: QtWidgets.QPushButton, color: str):
@@ -127,7 +182,7 @@ class ClientesPage(QtWidgets.QWidget):
 
         # ------------------ Barra de pesquisa + botão limpar ------------------
         self.ed_search = QtWidgets.QLineEdit()
-        self.ed_search.setPlaceholderText("Pesquisar clientes (use % para multi-termos)")
+        self.ed_search.setPlaceholderText(search_placeholder)
         self.ed_search.textChanged.connect(self.on_search)
 
         self.btn_clear = QtWidgets.QToolButton()
@@ -141,6 +196,7 @@ class ClientesPage(QtWidgets.QWidget):
 
         # ------------------ Tabela de clientes ------------------
         self.table = QtWidgets.QTableView()
+        phone_formatter = self._phone_formatter
         self.model = SimpleTableModel(
             columns=[
                 ("ID", "id"),
@@ -149,8 +205,8 @@ class ClientesPage(QtWidgets.QWidget):
                 ("Morada", "morada"),
                 ("Email", "email"),
                 ("WEB", "web_page"),
-                ("Telefone", "telefone"),
-                ("Telemovel", "telemovel"),
+                ("Telefone", "telefone", phone_formatter),
+                ("Telemovel", "telemovel", phone_formatter),
                 ("Num_PHC", "num_cliente_phc"),
                 ("Info 1", "info_1"),
                 ("Info 2", "info_2"),
@@ -164,6 +220,9 @@ class ClientesPage(QtWidgets.QWidget):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         header.setStretchLastSection(False)
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
+        self.table.setSortingEnabled(True)
 
         # --- Mapeamento de larguras por coluna (%% AJUSTAR AQUI %%) ---
         # Se queres alterar larguras iniciais, muda aqui.
@@ -206,6 +265,8 @@ class ClientesPage(QtWidgets.QWidget):
         self.ed_info1.setFixedHeight(68)
         self.ed_info2 = QtWidgets.QTextEdit()
         self.ed_info2.setFixedHeight(68)
+        self._save_base_text = "Guardar Cliente"
+        self._btn_save = None
 
         # Grid layout
         grid = QtWidgets.QGridLayout()
@@ -277,28 +338,62 @@ class ClientesPage(QtWidgets.QWidget):
 
         # ------------------ Botões principais ------------------
         btn_new = QtWidgets.QPushButton("Novo Cliente")
-        btn_save = QtWidgets.QPushButton("Guardar Cliente")
+        btn_save = QtWidgets.QPushButton(self._save_base_text)
         btn_del = QtWidgets.QPushButton("Eliminar Cliente")
+        btn_refresh = QtWidgets.QPushButton("Atualizar") if self._show_refresh else None
+        btn_phc_sync = QtWidgets.QPushButton("Atualizar PHC") if self._show_sync else None
+        self._btn_save = btn_save
 
         style = self.style()
         btn_new.setIcon(style.standardIcon(QStyle.SP_FileIcon))
         btn_save.setIcon(style.standardIcon(QStyle.SP_DialogSaveButton))
         btn_del.setIcon(style.standardIcon(QStyle.SP_TrashIcon))
+        if btn_refresh is not None:
+            btn_refresh.setIcon(style.standardIcon(getattr(QStyle, "SP_BrowserReload", QStyle.SP_BrowserStop)))
+        if btn_phc_sync is not None:
+            btn_phc_sync.setIcon(style.standardIcon(getattr(QStyle, "SP_BrowserReload", QStyle.SP_BrowserStop)))
 
         _style_primary_button(btn_new, "#4CAF50")
         _style_primary_button(btn_save, "#2196F3")
         _style_primary_button(btn_del, "#F44336")
+        if btn_refresh is not None:
+            _style_primary_button(btn_refresh, "#607D8B")
+            btn_refresh.setToolTip("Atualiza a listagem de clientes.")
+        if btn_phc_sync is not None:
+            _style_primary_button(btn_phc_sync, "#607D8B")
+            btn_phc_sync.setToolTip(
+                "Atualiza a listagem de clientes do Martelo com os dados do PHC (dbo.CL).\n"
+                "IMPORTANTE: no PHC é apenas leitura (SELECT)."
+            )
 
         btn_new.clicked.connect(self.on_new)
+        btn_save.setToolTip("Guardar cliente na base de dados. Atalho: Ctrl+G.")
         btn_save.clicked.connect(self.on_save)
+        self._shortcut_save = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+G"), self)
+        self._shortcut_save.setContext(Qt.WidgetWithChildrenShortcut)
+        self._shortcut_save.activated.connect(self.on_save)
         btn_del.clicked.connect(self.on_delete)
+        if btn_refresh is not None:
+            btn_refresh.clicked.connect(self.refresh)
+        if btn_phc_sync is not None:
+            btn_phc_sync.clicked.connect(self.on_sync_phc)
 
         primary_actions = QtWidgets.QHBoxLayout()
         primary_actions.setSpacing(10)
         primary_actions.addWidget(btn_new)
         primary_actions.addWidget(btn_save)
         primary_actions.addWidget(btn_del)
+        if btn_refresh is not None:
+            primary_actions.addWidget(btn_refresh)
+        if btn_phc_sync is not None:
+            primary_actions.addWidget(btn_phc_sync)
         primary_actions.addStretch(1)
+
+        if self._mark_dirty_on_change:
+            for w in [self.ed_nome, self.ed_simplex, self.ed_email, self.ed_web, self.ed_tel, self.ed_tm, self.ed_phc]:
+                w.textChanged.connect(self._on_field_changed)
+            for w in [self.ed_morada, self.ed_info1, self.ed_info2]:
+                w.textChanged.connect(self._on_field_changed)
 
         # ------------------ Layout principal ------------------
         dados_container = QtWidgets.QWidget()
@@ -323,7 +418,7 @@ class ClientesPage(QtWidgets.QWidget):
     # ------------------ Helpers / Operações sobre a tabela ------------------
     def refresh(self):
         """Recarrega a tabela a partir da base de dados e reaplica larguras fixas."""
-        rows = list_clients(self.db)
+        rows = self._list_fn(self.db)
         self.model.set_rows(rows)
         if rows:
             self.table.selectRow(0)
@@ -338,14 +433,14 @@ class ClientesPage(QtWidgets.QWidget):
                 header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Fixed)
 
     def _setup_completer(self):
-        toks = suggestion_tokens(self.db)
+        toks = self._suggestion_fn(self.db)
         comp = QtWidgets.QCompleter(toks, self)
         comp.setCaseSensitivity(Qt.CaseInsensitive)
         comp.setFilterMode(Qt.MatchContains)
         self.ed_search.setCompleter(comp)
 
     def on_search(self, text: str):
-        rows = search_clients(self.db, text)
+        rows = self._search_fn(self.db, text)
         self.model.set_rows(rows)
 
     def selected_row(self):
@@ -359,31 +454,104 @@ class ClientesPage(QtWidgets.QWidget):
         if not row:
             self._current_id = None
             return
-        self._current_id = row.id
-        self.ed_nome.setText(row.nome or "")
-        self.ed_simplex.setText(row.nome_simplex or "")
-        self.ed_morada.setPlainText(row.morada or "")
-        self.ed_email.setText(row.email or "")
-        self.ed_web.setText(row.web_page or "")
-        self.ed_tel.setText(row.telefone or "")
-        self.ed_tm.setText(row.telemovel or "")
-        self.ed_phc.setText(row.num_cliente_phc or "")
-        self.ed_info1.setPlainText(row.info_1 or "")
-        self.ed_info2.setPlainText(row.info_2 or "")
+        self._suspend_dirty = True
+        try:
+            self._current_id = row.id
+            self.ed_nome.setText(row.nome or "")
+            self.ed_simplex.setText(row.nome_simplex or "")
+            self.ed_morada.setPlainText(row.morada or "")
+            self.ed_email.setText(row.email or "")
+            self.ed_web.setText(row.web_page or "")
+            self.ed_tel.setText(row.telefone or "")
+            self.ed_tm.setText(row.telemovel or "")
+            self.ed_phc.setText(row.num_cliente_phc or "")
+            self.ed_info1.setPlainText(row.info_1 or "")
+            self.ed_info2.setPlainText(row.info_2 or "")
+        finally:
+            self._suspend_dirty = False
+        self._set_dirty(False)
 
     # ------------------ Ações dos botões ------------------
     def on_new(self):
         self._current_id = None
-        for w in [self.ed_nome, self.ed_simplex, self.ed_email, self.ed_web, self.ed_tel, self.ed_tm, self.ed_phc]:
-            w.clear()
-        self.ed_morada.clear()
-        self.ed_info1.clear()
-        self.ed_info2.clear()
+        self._suspend_dirty = True
+        try:
+            for w in [self.ed_nome, self.ed_simplex, self.ed_email, self.ed_web, self.ed_tel, self.ed_tm, self.ed_phc]:
+                w.clear()
+            self.ed_morada.clear()
+            self.ed_info1.clear()
+            self.ed_info2.clear()
+        finally:
+            self._suspend_dirty = False
+        self._set_dirty(False)
         self.ed_nome.setFocus()
 
+    def _set_dirty(self, dirty: bool):
+        if not self._mark_dirty_on_change:
+            return
+        self._dirty = bool(dirty)
+        if not self._btn_save:
+            return
+        if self._dirty:
+            if not self._btn_save.text().endswith("*"):
+                self._btn_save.setText(f"{self._save_base_text} *")
+        else:
+            self._btn_save.setText(self._save_base_text)
+
+    def _on_field_changed(self, *args, **kwargs):
+        if self._suspend_dirty or not self._mark_dirty_on_change:
+            return
+        self._set_dirty(True)
+
+    def _confirm_phone_value(self, label: str, widget: QtWidgets.QLineEdit):
+        text = (widget.text() or "").strip()
+        if not text:
+            return text, True
+        digits = _digits_only(text)
+        if len(digits) == 9:
+            return text, True
+        msg = (
+            f"O numero em {label} nao tem 9 algarismos.\n"
+            "Para numeros internacionais indique o indicativo (ex: +351).\n\n"
+            "Pretende manter este numero registado?"
+        )
+        if QtWidgets.QMessageBox.question(self, "Confirmar numero", msg) == QtWidgets.QMessageBox.Yes:
+            return text, True
+        widget.setFocus()
+        return text, False
+
     def on_save(self):
+        if self._require_data_on_new and self._current_id is None:
+            values = [
+                self.ed_nome.text(),
+                self.ed_simplex.text(),
+                self.ed_morada.toPlainText(),
+                self.ed_email.text(),
+                self.ed_web.text(),
+                self.ed_tel.text(),
+                self.ed_tm.text(),
+                self.ed_phc.text(),
+                self.ed_info1.toPlainText(),
+                self.ed_info2.toPlainText(),
+            ]
+            if not any(v and v.strip() for v in values):
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Atencao",
+                    "Esta a tentar inserir um novo cliente sem dados.",
+                )
+                return
+        tel_value = (self.ed_tel.text() or "").strip()
+        tm_value = (self.ed_tm.text() or "").strip()
+        if self._validate_phone:
+            tel_value, ok = self._confirm_phone_value("Telefone", self.ed_tel)
+            if not ok:
+                return
+            tm_value, ok = self._confirm_phone_value("Telemovel", self.ed_tm)
+            if not ok:
+                return
         try:
-            upsert_client(
+            self._upsert_fn(
                 self.db,
                 id=self._current_id,
                 nome=self.ed_nome.text(),
@@ -391,8 +559,8 @@ class ClientesPage(QtWidgets.QWidget):
                 morada=self.ed_morada.toPlainText(),
                 email=self.ed_email.text(),
                 web_page=self.ed_web.text(),
-                telefone=self.ed_tel.text(),
-                telemovel=self.ed_tm.text(),
+                telefone=tel_value,
+                telemovel=tm_value,
                 num_cliente_phc=self.ed_phc.text(),
                 info_1=self.ed_info1.toPlainText(),
                 info_2=self.ed_info2.toPlainText(),
@@ -400,6 +568,7 @@ class ClientesPage(QtWidgets.QWidget):
             self.db.commit()
             self.refresh()
             self._setup_completer()
+            self._set_dirty(False)
             QtWidgets.QMessageBox.information(self, "OK", "Cliente gravado com sucesso.")
         except Exception as e:
             self.db.rollback()
@@ -411,10 +580,82 @@ class ClientesPage(QtWidgets.QWidget):
         if QtWidgets.QMessageBox.question(self, "Confirmar", "Eliminar cliente selecionado?") != QtWidgets.QMessageBox.Yes:
             return
         try:
-            delete_client(self.db, self._current_id)
+            self._delete_fn(self.db, self._current_id)
             self.db.commit()
             self.refresh()
             self.on_new()
         except Exception as e:
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
+
+    def on_sync_phc(self):
+        if not self._show_sync or self._sync_fn is None:
+            return
+        msg = (
+            "Isto vai sincronizar/atualizar os clientes do Martelo com os dados do PHC.\n\n"
+            "No PHC e apenas leitura (SELECT). A atualizacao e feita na base de dados do Martelo.\n\n"
+            "Continuar?"
+        )
+        if QtWidgets.QMessageBox.question(self, "Atualizar PHC", msg) != QtWidgets.QMessageBox.Yes:
+            return
+
+        try:
+            QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
+            result = self._sync_fn(self.db)
+            self.db.commit()
+            self.refresh()
+            self._setup_completer()
+            QtWidgets.QMessageBox.information(
+                self,
+                "OK",
+                "Atualizacao PHC concluida.\n\n"
+                f"Total PHC: {result.get('total_phc', 0)}\n"
+                f"Novos: {result.get('created', 0)}\n"
+                f"Atualizados: {result.get('updated', 0)}\n"
+                f"Ignorados: {result.get('skipped', 0)}",
+            )
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao atualizar clientes a partir do PHC:\n\n{exc}")
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+
+
+class ClientesPage(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        tabs = QtWidgets.QTabWidget(self)
+
+        self.tab_phc = ClientesTab(
+            parent=self,
+            list_fn=list_clients,
+            search_fn=search_clients,
+            upsert_fn=upsert_client,
+            delete_fn=delete_client,
+            suggestion_fn=suggestion_tokens,
+            show_sync=True,
+            sync_fn=sync_clients_from_phc,
+            search_placeholder="Pesquisar clientes PHC (use % para multi-termos)",
+        )
+        self.tab_temp = ClientesTab(
+            parent=self,
+            list_fn=list_clientes_temporarios,
+            search_fn=search_clientes_temporarios,
+            upsert_fn=upsert_cliente_temporario,
+            delete_fn=delete_cliente_temporario,
+            suggestion_fn=suggestion_tokens_temporarios,
+            phone_formatter=format_phone_display,
+            show_refresh=True,
+            show_sync=False,
+            sync_fn=None,
+            require_data_on_new=True,
+            mark_dirty_on_change=True,
+            validate_phone=True,
+            search_placeholder="Pesquisar clientes temporarios (use % para multi-termos)",
+        )
+
+        tabs.addTab(self.tab_phc, "Clientes PHC")
+        tabs.addTab(self.tab_temp, "Clientes Temporarios")
+
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.addWidget(tabs)

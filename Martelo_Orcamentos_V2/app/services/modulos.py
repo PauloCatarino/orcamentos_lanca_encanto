@@ -85,13 +85,27 @@ def limpar_linhas_para_modulo(rows: Sequence[Mapping[str, Any]]) -> List[Dict[st
     return [limpar_linha_para_modulo(row) for row in rows]
 
 
-def preparar_linhas_para_importacao(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+def preparar_linhas_para_importacao(
+    rows: Sequence[Mapping[str, Any]],
+    imagem_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     linhas: List[Dict[str, Any]] = []
+    divisao_token = "DIVISAO INDEPENDENTE"
     for row in rows:
         cleaned = limpar_linha_para_modulo(row)
         cleaned.setdefault("gravar_modulo", False)
         cleaned.pop("_uid", None)
         linhas.append(cleaned)
+    if imagem_path:
+        for linha in linhas:
+            def_peca = linha.get("def_peca") or ""
+            try:
+                def_token = str(def_peca).strip().casefold()
+            except Exception:
+                def_token = ""
+            if def_token == divisao_token.casefold():
+                linha["icon_hint"] = imagem_path
+                break
     return linhas
 
 
@@ -222,3 +236,54 @@ def guardar_modulo(
 
     db.flush()
     return modulo
+
+
+def atualizar_modulo_metadata(
+    db: Session,
+    *,
+    modulo_id: int,
+    user_id: Optional[int],
+    nome: str,
+    descricao: Optional[str],
+    imagem_path: Optional[str] = None,
+    is_global: Optional[bool] = None,
+) -> CusteioModulo:
+    """Atualiza nome/descrição/imagem de um módulo existente (sem mexer nas linhas)."""
+    modulo = db.get(CusteioModulo, modulo_id)
+    if modulo is None:
+        raise ValueError("Modulo selecionado nao encontrado.")
+
+    nome_limpo = (nome or "").strip()
+    if not nome_limpo:
+        raise ValueError("O nome do modulo nao pode estar vazio.")
+
+    # Se for módulo de utilizador, apenas o próprio pode atualizar
+    if not bool(modulo.is_global):
+        if user_id is None or modulo.user_id != user_id:
+            raise ValueError("Nao tem permissao para editar este modulo.")
+
+    if is_global is None:
+        is_global = bool(modulo.is_global)
+
+    modulo.nome = nome_limpo
+    modulo.descricao = descricao
+    modulo.imagem_path = imagem_path
+    modulo.is_global = bool(is_global)
+    modulo.user_id = None if is_global else user_id
+    db.flush()
+    return modulo
+
+
+def eliminar_modulo(db: Session, *, modulo_id: int, user_id: Optional[int]) -> None:
+    """Elimina um módulo (e as respetivas linhas)."""
+    modulo = db.get(CusteioModulo, modulo_id)
+    if modulo is None:
+        raise ValueError("Modulo selecionado nao encontrado.")
+
+    # Se for módulo de utilizador, apenas o próprio pode eliminar
+    if not bool(modulo.is_global):
+        if user_id is None or modulo.user_id != user_id:
+            raise ValueError("Nao tem permissao para eliminar este modulo.")
+
+    db.delete(modulo)
+    db.flush()

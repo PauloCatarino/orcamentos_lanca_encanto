@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from .settings import get_setting, set_setting
+from .orcamentos import PRECO_MANUAL_KEY
 
 
 MARGEM_FIELDS: Iterable[Mapping[str, object]] = (
@@ -139,7 +140,8 @@ def update_sum_preco_final(session: Session, orcamento_id: int, total: Decimal) 
     cfg[SUM_KEY] = float(total)
     extras[CONFIG_KEY] = cfg
     orc.extras = extras
-    orc.preco_total = total
+    if not extras.get(PRECO_MANUAL_KEY):
+        orc.preco_total = total
     session.add(orc)
     session.flush()
 
@@ -156,6 +158,10 @@ def aplicar_margens_orcamento(session: Session, orcamento_id: int, percent_value
 
     for item in itens:
         custo = _coerce_decimal(getattr(item, "custo_produzido", None), Decimal("0.00"))
+        custo_orlas = _coerce_decimal(getattr(item, "custo_total_orlas", None), Decimal("0.00"))
+        custo_mp = _coerce_decimal(getattr(item, "custo_total_materia_prima", None), Decimal("0.00"))
+        custo_mao_obra = _coerce_decimal(getattr(item, "custo_total_mao_obra", None), Decimal("0.00"))
+        custo_acabamentos = _coerce_decimal(getattr(item, "custo_total_acabamentos", None), Decimal("0.00"))
         qt = _coerce_decimal(getattr(item, "qt", None), Decimal("0.00"))
 
         perc_lucro = percent_map["margem_lucro_perc"]
@@ -166,9 +172,9 @@ def aplicar_margens_orcamento(session: Session, orcamento_id: int, percent_value
 
         valor_margem = (custo * perc_lucro / Decimal("100")).quantize(TWO_PLACES)
         valor_admin = (custo * perc_admin / Decimal("100")).quantize(TWO_PLACES)
-        valor_acab = (custo * perc_acab / Decimal("100")).quantize(TWO_PLACES)
-        valor_mp = (custo * perc_mp / Decimal("100")).quantize(TWO_PLACES)
-        valor_mo = (custo * perc_mo / Decimal("100")).quantize(TWO_PLACES)
+        valor_acab = (custo_acabamentos * perc_acab / Decimal("100")).quantize(TWO_PLACES)
+        valor_mp = ((custo_mp + custo_orlas) * perc_mp / Decimal("100")).quantize(TWO_PLACES)
+        valor_mo = (custo_mao_obra * perc_mo / Decimal("100")).quantize(TWO_PLACES)
 
         ajuste = _coerce_decimal(getattr(item, "ajuste", None), Decimal("0.00"))
         preco_unitario = (
@@ -195,26 +201,57 @@ def aplicar_margens_orcamento(session: Session, orcamento_id: int, percent_value
     return total.quantize(TWO_PLACES)
 
 
-def _sum_base_costs(session: Session, orcamento_id: int) -> Tuple[Decimal, Decimal]:
-    stmt = select(OrcamentoItem.custo_produzido, OrcamentoItem.qt, OrcamentoItem.ajuste).where(
-        OrcamentoItem.id_orcamento == orcamento_id
-    )
+def _sum_base_costs(session: Session, orcamento_id: int) -> Tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
+    stmt = select(
+        OrcamentoItem.custo_produzido,
+        OrcamentoItem.custo_total_orlas,
+        OrcamentoItem.custo_total_materia_prima,
+        OrcamentoItem.custo_total_mao_obra,
+        OrcamentoItem.custo_total_acabamentos,
+        OrcamentoItem.qt,
+        OrcamentoItem.ajuste,
+    ).where(OrcamentoItem.id_orcamento == orcamento_id)
+
     base_custo = Decimal("0.00")
+    base_orlas = Decimal("0.00")
+    base_mao_obra = Decimal("0.00")
+    base_acabamentos = Decimal("0.00")
     total_ajuste = Decimal("0.00")
-    for custo, qt, ajuste in session.execute(stmt).all():
-        custo_dec = _coerce_decimal(custo, Decimal("0.00"))
+
+    for custo, custo_orlas, custo_mp, custo_mao_obra, custo_acabamentos, qt, ajuste in session.execute(stmt).all():
         qt_dec = _coerce_decimal(qt, Decimal("0.00"))
-        ajuste_dec = _coerce_decimal(ajuste, Decimal("0.00"))
-        base_custo += (custo_dec * qt_dec)
-        total_ajuste += (ajuste_dec * qt_dec)
-    return base_custo, total_ajuste
+
+        base_custo += (_coerce_decimal(custo, Decimal("0.00")) * qt_dec)
+        base_orlas += ((_coerce_decimal(custo_orlas, Decimal("0.00")) + _coerce_decimal(custo_mp, Decimal("0.00"))) * qt_dec)
+        base_mao_obra += (_coerce_decimal(custo_mao_obra, Decimal("0.00")) * qt_dec)
+        base_acabamentos += (_coerce_decimal(custo_acabamentos, Decimal("0.00")) * qt_dec)
+        total_ajuste += (_coerce_decimal(ajuste, Decimal("0.00")) * qt_dec)
+
+    return base_custo, total_ajuste, base_orlas, base_mao_obra, base_acabamentos
 
 
-def _estimate_total(base_custo: Decimal, total_ajuste: Decimal, percent_map: Mapping[str, Decimal]) -> Decimal:
-    percent_sum = Decimal("0.00")
+def _estimate_total(
+    base_custo: Decimal,
+    total_ajuste: Decimal,
+    base_orlas: Decimal,
+    base_mao_obra: Decimal,
+    base_acabamentos: Decimal,
+    percent_map: Mapping[str, Decimal],
+) -> Decimal:
+    base_by_key = {
+        "margem_lucro_perc": base_custo,
+        "custos_admin_perc": base_custo,
+        "margem_acabamentos_perc": base_acabamentos,
+        # Pedido: margem MP/Orlas em € deve usar Custo Total Orlas (€)
+        "margem_mp_orlas_perc": base_orlas,
+        "margem_mao_obra_perc": base_mao_obra,
+    }
+
+    total = base_custo + total_ajuste
     for key in PERCENT_KEYS:
-        percent_sum += _coerce_decimal(percent_map.get(key), Decimal("0.00"))
-    total = base_custo + total_ajuste + (base_custo * percent_sum / Decimal("100"))
+        base = base_by_key.get(key, base_custo)
+        perc = _coerce_decimal(percent_map.get(key), Decimal("0.00"))
+        total += (base * perc / Decimal("100"))
     return total.quantize(TWO_PLACES)
 
 
@@ -235,7 +272,7 @@ def ajustar_percentuais_para_objetivo(
     if objetivo_dec <= Decimal("0.00"):
         raise ValueError("Defina um valor positivo para 'Atingir Objetivo Preço Final (€)'.")
 
-    base_custo, total_ajuste = _sum_base_costs(session, orcamento_id)
+    base_custo, total_ajuste, base_orlas, base_mao_obra, base_acabamentos = _sum_base_costs(session, orcamento_id)
     if base_custo <= Decimal("0.00"):
         raise ValueError("Não existem custos produzidos para este orçamento.")
 
@@ -253,7 +290,7 @@ def ajustar_percentuais_para_objetivo(
         minimo_dec = Decimal("0.10")
 
     def _current_total() -> Decimal:
-        return _estimate_total(base_custo, total_ajuste, percent_map)
+        return _estimate_total(base_custo, total_ajuste, base_orlas, base_mao_obra, base_acabamentos, percent_map)
 
     for key in ordem_exec:
         if key not in percent_map:
@@ -261,7 +298,17 @@ def ajustar_percentuais_para_objetivo(
         diff = objetivo_dec - _current_total()
         if diff.copy_abs() <= tol_dec:
             break
-        delta_percent = (diff / base_custo) * Decimal("100")
+        base_by_key = {
+            "margem_lucro_perc": base_custo,
+            "custos_admin_perc": base_custo,
+            "margem_acabamentos_perc": base_acabamentos,
+            "margem_mp_orlas_perc": base_orlas,
+            "margem_mao_obra_perc": base_mao_obra,
+        }
+        base_ref = base_by_key.get(key, base_custo)
+        if base_ref <= Decimal("0.00"):
+            continue
+        delta_percent = (diff / base_ref) * Decimal("100")
         if delta_percent == Decimal("0.00"):
             continue
         novo_valor = percent_map[key] + delta_percent

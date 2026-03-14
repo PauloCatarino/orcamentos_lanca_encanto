@@ -75,6 +75,7 @@ FERRAGENS_GRUPOS: Sequence[str] = (
     "Suporte Prateleira 1",
     "Suporte Prateleira 2",
     "Suporte Parede",
+    "Suporte Niveladores",
     "Suporte Terminal Varao",
     "Suporte Central Varao",
     "Varao SPP",
@@ -217,6 +218,7 @@ FERRAGENS_GRUPOS: Sequence[str] = (
     "Suporte Prateleira 1",
     "Suporte Prateleira 2",
     "Suporte Parede",
+    "Suporte Niveladores",
     "Suporte Terminal Varao",
     "Suporte Central Varao",
     "Varao SPP",
@@ -460,7 +462,6 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
         "larg_mp",
         "esp_mp",
         "id_mp",
-        "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
@@ -482,7 +483,6 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
         "larg_mp",
         "esp_mp",
         "id_mp",
-        "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
@@ -506,7 +506,6 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
         "orl_0_4",
         "orl_1_0",
         "id_mp",
-        "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
@@ -528,7 +527,6 @@ MENU_FIELDS: Dict[str, Sequence[str]] = {
         "larg_mp",
         "esp_mp",
         "id_mp",
-        "nao_stock",
         "reserva_1",
         "reserva_2",
         "reserva_3",
@@ -542,28 +540,28 @@ MENU_FIELD_TYPES: Dict[str, Dict[str, Sequence[str]]] = {
         "percent": ("margem", "desconto", "desp"),
         "integer": ("comp_mp", "larg_mp", "esp_mp"),
         "decimal": (),
-        "bool": ("nao_stock",),
+        "bool": (),
     },
     MENU_FERRAGENS: {
         "money": ("preco_tab", "preco_liq"),
         "percent": ("margem", "desconto", "desp"),
         "integer": ("comp_mp", "larg_mp", "esp_mp"),
         "decimal": (),
-        "bool": ("nao_stock",),
+        "bool": (),
     },
     MENU_SIS_CORRER: {
         "money": ("preco_tab", "preco_liq"),
         "percent": ("margem", "desconto", "desp"),
         "integer": ("comp_mp", "larg_mp", "esp_mp"),
         "decimal": (),
-        "bool": ("nao_stock",),
+        "bool": (),
     },
     MENU_ACABAMENTOS: {
         "money": ("preco_tab", "preco_liq"),
         "percent": ("margem", "desconto", "desp"),
         "integer": ("comp_mp", "larg_mp", "esp_mp"),
         "decimal": (),
-        "bool": ("nao_stock",),
+        "bool": (),
     },
 }
 
@@ -687,32 +685,18 @@ def _coerce_field(menu: str, field: str, value: Any) -> Any:
     if field in types["decimal"]:
         return _ensure_decimal(value)
     if field in types["bool"]:
-        if field == "nao_stock":  # Tratamento especial para nao_stock
-            if isinstance(value, str):
-                normalized = _strip_accents(value).strip().lower()
-                if normalized in ("true", "sim", "yes", "1"):
-                    return 1
-                if normalized in ("false", "nao", "no", "0"):
-                    return 0
-            if isinstance(value, (int, float, Decimal)):
-                try:
-                    return 1 if bool(Decimal(str(value))) else 0
-                except Exception:
-                    return 0
-            return 1 if bool(value) else 0
-        else:
-            if isinstance(value, str):
-                normalized = _strip_accents(value).strip().lower()
-                if normalized in ("true", "sim", "yes", "1"):
-                    return True
-                if normalized in ("false", "nao", "no", "0"):
-                    return False
-            if isinstance(value, (int, float, Decimal)):
-                try:
-                    return bool(Decimal(str(value)))
-                except Exception:
-                    return False
-            return bool(value)
+        if isinstance(value, str):
+            normalized = _strip_accents(value).strip().lower()
+            if normalized in ("true", "sim", "yes", "1", "on"):
+                return True
+            if normalized in ("false", "nao", "no", "0", "off"):
+                return False
+        if isinstance(value, (int, float, Decimal)):
+            try:
+                return bool(Decimal(str(value)))
+            except Exception:
+                return False
+        return bool(value)
     return value
 
 
@@ -822,8 +806,6 @@ def _default_rows_for_menu(menu: str) -> List[Dict[str, Any]]:
             if field not in row:
                 if field == "familia":
                     row[field] = familia_padrao
-                elif field == "nao_stock":
-                    row[field] = False
                 else:
                     row[field] = None
         defaults.append(row)
@@ -870,8 +852,6 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
         merged.setdefault("id", row.get("id") if row else None)
         if "familia" in merged and not merged.get("familia"):
             merged["familia"] = familia_padrao
-        if "nao_stock" in merged:
-            merged["nao_stock"] = bool(merged.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
             merged.setdefault(field, None)
         ensured.append(merged)
@@ -881,8 +861,6 @@ def _ensure_menu_rows(menu: str, rows: Sequence[Mapping[str, Any]]) -> List[Dict
         extra_row.setdefault("ordem", len(ensured))
         if "familia" in extra_row and not extra_row.get("familia"):
             extra_row["familia"] = _familia_for_grupo(menu, extra_row.get(primary), default_familia)
-        if "nao_stock" in extra_row:
-            extra_row["nao_stock"] = bool(extra_row.get("nao_stock", False))
         for field in MENU_FIELDS[menu]:
             extra_row.setdefault(field, None)
         ensured.append(extra_row)
@@ -940,24 +918,8 @@ def _normalize_row(menu: str, ctx: DadosGeraisContext, row: Mapping[str, Any], o
 
 def _coerce(menu: str, field: str, value: Any) -> Any:
     """
-    Wrapper seguro para _coerce_field. Garante que o campo 'nao_stock'
-    fica sempre guardado como 0/1, aceita True/False, '1'/'0', 'on'/'off'.
-    Se _coerce_field existir mais abaixo, chamamos; senão fazemos fallback.
+    Wrapper seguro para _coerce_field.
     """
-    # fallback simples para nao_stock (garante 0/1)
-    if field == "nao_stock":
-        # Normalizar vários tipos possíveis
-        if isinstance(value, bool):
-            return int(value)
-        if value is None:
-            return 0
-        # aceitar strings '1','0','true','false','on','off'
-        s = str(value).strip().lower()
-        if s in ("1", "true", "yes", "on"):
-            return 1
-        return 0
-
-    # se existir a função _coerce_field definida mais abaixo, usa-a
     try:
         return _coerce_field(menu, field, value)  # type: ignore[name-defined]
     except NameError:
@@ -973,7 +935,6 @@ def guardar_dados_gerais(
     Guarda os 'dados gerais' (materiais, ferragens, sistemas_correr, acabamentos, ...)
     - Para cada menu (p.ex. 'materiais', 'ferragens'...) substitui as linhas existentes
       para o mesmo contexto (cliente_id / ano / num_orcamento / versao).
-    - 'nao_stock' é tratado pelo _coerce(...) (igual ao que já faz para os items).
     """
     # Percorre os menus (materiais, ferragens, sistemas_correr, acabamentos, ...)
     for menu, rows in payload.items():
@@ -1126,9 +1087,8 @@ def guardar_modelo(
 
 
 def listar_modelos(db: Session, *, user_id: int, tipo_menu: Optional[str] = None) -> List[DadosGeraisModelo]:
-    stmt = select(DadosGeraisModelo).where(
-        (DadosGeraisModelo.user_id == user_id) | (DadosGeraisModelo.nome_modelo.startswith(GLOBAL_PREFIX))
-    )
+    global_expr = DadosGeraisModelo.nome_modelo.contains(GLOBAL_PREFIX, autoescape=True)
+    stmt = select(DadosGeraisModelo).where((DadosGeraisModelo.user_id == user_id) | global_expr)
     if tipo_menu:
         stmt = stmt.where(DadosGeraisModelo.tipo_menu == tipo_menu)
     stmt = stmt.order_by(DadosGeraisModelo.created_at.desc(), DadosGeraisModelo.id.desc())
@@ -1138,10 +1098,11 @@ def listar_modelos(db: Session, *, user_id: int, tipo_menu: Optional[str] = None
 def carregar_modelo(db: Session, modelo_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
     stmt = select(DadosGeraisModelo).where(DadosGeraisModelo.id == modelo_id)
     if user_id is not None:
+        global_expr = DadosGeraisModelo.nome_modelo.contains(GLOBAL_PREFIX, autoescape=True)
         stmt = stmt.where(
             (DadosGeraisModelo.user_id == user_id)
             | (DadosGeraisModelo.user_id.is_(None))
-            | (DadosGeraisModelo.nome_modelo.startswith(GLOBAL_PREFIX))
+            | global_expr
         )
     modelo = db.execute(stmt).scalar_one_or_none()
     if not modelo:

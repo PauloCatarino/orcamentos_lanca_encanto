@@ -207,6 +207,7 @@ _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
     _normalize_token("DOBRADICA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
     _normalize_token("DOBRADI├çA"): {"tipo": "DOBRADICAS", "familia": "FERRAGENS"},
     _normalize_token("RODAPE PVC/ALUMINIO"): {"tipo": "Rodape PVC SPP", "familia": "FERRAGENS"},
+    _normalize_token("FUNDO GAVETA [0000]"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
     _normalize_token("FUNDO GAVETA [0022]"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
     _normalize_token("FUNDO GAVETA"): {"tipo": "Gaveta Fundo", "familia": "FERRAGENS"},
     _normalize_token("TRASEIRA GAVETA [2000]"): {"tipo": "Gaveta Caixa", "familia": "FERRAGENS"},
@@ -216,8 +217,16 @@ _FERRAGEM_CHILD_TYPE_MAP: Dict[str, Dict[str, str]] = {
     _normalize_token("PAINEL ESPELHO"): {"tipo": "Painel Espelho Correr 1", "familia": "SISTEMAS CORRER"},
 }
 
+# Aliases de componentes (tokens usados em peças compostas -> nome canónico usado no sistema).
+# Mantém compatibilidade com nomes existentes em "Definições Peças".
+_CHILD_TOKEN_ALIASES: Dict[str, str] = {
+    _normalize_token("SUPORTES NIVELADORES"): "SUPORTE NIVELADORES",
+}
+
 _FERRAGEM_TIPO_KEYWORDS: Dict[str, Sequence[str]] = {
     _normalize_token("SUPORTE PRATELEIRA"): ("suporte", "prateleira"),
+    _normalize_token("SUPORTE NIVELADORES"): ("suporte", "nivelador"),
+    _normalize_token("SUPORTES NIVELADORES"): ("suporte", "nivelador"),
     _normalize_token("SUPORTE VARAO"): ("suporte", "varao"),
     _normalize_token("SUPORTE VAR├âO"): ("suporte", "varao"),
     _normalize_token("SPP"): ("varao", "spp"),
@@ -234,8 +243,13 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "SUPORTE PRATELEIRA": {
         "matches": ["SUPORTE PRATELEIRA"],
-        "expression": "8 if COMP >= 1100 and LARG >= 800 else 6 if COMP >= 1100 else 4",
-        "tooltip": "4 por defeito | 6 se COMP>=1100 | 8 se COMP>=1100 & LARG>=800",
+        "expression": "8 if COMP >= 1100 and LARG >= 800 else 6 if (COMP >= 1100 or (LARG > 800 and COMP < 1100)) else 4",
+        "tooltip": "4 por defeito | 6 se COMP>=1100 ou (LARG>800 e COMP<1100) | 8 se COMP>=1100 & LARG>=800",
+    },
+    "SUPORTE NIVELADORES": {
+        "matches": ["SUPORTE NIVELADORES", "SUPORTES NIVELADORES"],
+        "expression": "2 * QT_PAI",
+        "tooltip": "2 suportes niveladores por peça principal (QT_und do pai).",
     },
     "VARAO SPP": {
         "matches": ["VARAO SPP", "VARAO"],
@@ -244,8 +258,8 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "SUPORTE VARAO": {
         "matches": ["SUPORTE VARAO"],
-        "expression": "2",
-        "tooltip": "2 suportes por var├úo.",
+        "expression": "2 * QT_PAI",
+        "tooltip": "2 suportes por varao. Ex.: VARAO=1 -> 2 suportes | VARAO=2 -> 4 suportes | VARAO=3 -> 6 suportes.",
     },
     "SUPORTE TERMINAL VARAO": {
         "matches": ["SUPORTE TERMINAL VARAO"],
@@ -254,8 +268,8 @@ DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     },
     "SUPORTE VARAO": {
         "matches": ["SUPORTE VARAO"],
-        "expression": "2",
-        "tooltip": "2 suportes por var├úo.",
+        "expression": "2 * QT_PAI",
+        "tooltip": "2 suportes por varao. Ex.: VARAO=1 -> 2 suportes | VARAO=2 -> 4 suportes | VARAO=3 -> 6 suportes.",
     },
     "DOBRADICA": {
         "matches": ["DOBRADICA"],
@@ -451,6 +465,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "COSTA CHAPAR [1111]"},
             {"label": "COSTA REBAIXADA [0000]"},
             {"label": "COSTA PARA REBAIXO [0000]"},
+            {"label": "COSTA PARA REBAIXO [0000] + SUPORTES NIVELADORES"},
         ],
     },
     {
@@ -525,6 +540,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "FRENTE GAVETA [2222] + PUXADOR", "group": "Gaveta Frente"},
             {"label": "LATERAL GAVETA [2202]", "group": "Gaveta Caixa"},
             {"label": "TRASEIRA GAVETA [2000]", "group": "Gaveta Caixa"},
+            {"label": "FUNDO GAVETA [0000]", "group": "Gaveta Fundo"},
             {"label": "FUNDO GAVETA [0022]", "group": "Gaveta Fundo"},
         ],
     },
@@ -542,6 +558,10 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "ENCHIMENTO GUARNICAO [2000]", "group": "Enchimentos Guarnicoes"},
             {"label": "GUARNICAO PRODUZIDA [2222]", "group": "Guarnicoes Produzidas"},
             {"label": "GUARNICAO COMPRA L", "group": "Guarnicoes Compra"},
+            {"label": "TETO ACABAMENTO [2222]", "group": "Tetos Acabamento"},
+            {"label": "FUNDO ACABAMENTO [2222]", "group": "Fundos Acabamento"},
+            {"label": "LATERAL ACABAMENTO [2222]", "group": "Laterais Acabamento"},
+            {"label": "COSTA ACABAMENTO [2222]", "group": "Costas Acabamento"},
         ],
     },
     {
@@ -590,6 +610,7 @@ TREE_DEFINITION: List[TreeNode] = [
                     {"label": "SUPORTE PRATELEIRA 1", "group": "Suporte Prateleira 1"},
                     {"label": "SUPORTE PRATELEIRA 2", "group": "Suporte Prateleira 2"},
                     {"label": "SUPORTE PAREDE", "group": "Suporte Parede"},
+                    {"label": "SUPORTE NIVELADORES", "group": "Suporte Niveladores"},
                 ],
             },
             {
@@ -744,7 +765,6 @@ CUSTEIO_COLUMN_SPECS: List[Dict[str, Any]] = [
     {"key": "mo", "label": "MO", "type": "bool", "editable": True},
     {"key": "orla", "label": "Orla", "type": "bool", "editable": True},
     {"key": "blk", "label": "BLK", "type": "bool", "editable": True},
-    {"key": "nst", "label": "NST", "type": "bool", "editable": True},
     {"key": "mat_default", "label": "Mat_Default", "type": "text", "editable": True},
     {"key": "acabamento_sup", "label": "Acabamento_SUP", "type": "text", "editable": True},
     {"key": "acabamento_inf", "label": "Acabamento_INF", "type": "text", "editable": True},
@@ -1246,6 +1266,7 @@ def _empty_row() -> Dict[str, Any]:
             row[key] = False
         else:
             row[key] = None
+    row["qt_manual_override"] = False
     return row
 
 
@@ -1863,7 +1884,17 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
             if orla_flag:
                 custo_total_orla_decimal = Decimal("0.00")
             custo_mp_total_component = custo_mp_total_decimal if custo_mp_total_decimal is not None else Decimal("0")
-            soma_total_decimal = maquinas_total_decimal + custo_total_orla_decimal + custo_mp_total_component
+
+            cp09_unit_decimal = _to_decimal(getattr(reg, "cp09_colagem_und", None)) or Decimal("0.00")
+            cp09_total_decimal = Decimal("0.00")
+            if qt_total_decimal > Decimal("0") and cp09_unit_decimal != Decimal("0.00"):
+                cp09_total_decimal = (cp09_unit_decimal * qt_total_decimal).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+
+            soma_total_decimal = (
+                maquinas_total_decimal + custo_total_orla_decimal + custo_mp_total_component + cp09_total_decimal
+            )
             reg.soma_custo_total = soma_total_decimal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         soma_ml = Decimal("0")
@@ -1951,7 +1982,7 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
         reg.soma_total_ml_orla = soma_ml.quantize(Decimal("0.0001"))
         reg.custo_total_orla = Decimal("0.0000") if orla_flag else soma_custos.quantize(Decimal("0.0001"))
 
-    session.flush()
+    session.flush(registros)
 
 
 def _registro_precisa_recalculo(reg: CusteioItem) -> bool:
@@ -2016,7 +2047,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         linha["id"] = registro.id
         for spec in CUSTEIO_COLUMN_SPECS:
             key = spec["key"]
-            if key == "id" or spec["type"] == "icon":
+            if key == "id":
                 continue
 
             if key in {"comp", "larg", "esp"}:
@@ -2035,6 +2066,7 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
                 linha[key] = _coerce_checkbox_to_bool(valor)
             else:
                 linha[key] = valor
+        linha["qt_manual_override"] = bool(getattr(registro, "qt_manual_override", False))
         _aplicar_orla_espessuras(linha, orla_lookup)
 
         preencher_info_orlas_linha(session, linha, ref_cache)
@@ -2165,7 +2197,7 @@ def salvar_custeio_items(
             linha["spp_ml_und"] = None
         for spec in CUSTEIO_COLUMN_SPECS:
             key = spec["key"]
-            if key == "id" or spec["type"] == "icon":
+            if key == "id":
                 continue
 
             if key in {"comp", "larg", "esp"}:
@@ -2177,6 +2209,13 @@ def salvar_custeio_items(
                 continue
 
             valor = linha.get(key)
+            if key == "icon_hint":
+                # Apenas guarda caminhos (strings); ignora ícones temporários
+                if isinstance(valor, str) and valor.strip():
+                    setattr(registro, key, _normalise_string(valor))
+                else:
+                    setattr(registro, key, None)
+                continue
             if spec["type"] == "numeric":
                 setattr(registro, key, _to_decimal(valor))
             elif spec["type"] == "bool":
@@ -2184,6 +2223,9 @@ def salvar_custeio_items(
                 setattr(registro, key, 1 if coerced_bool else 0)
             else:
                 setattr(registro, key, _normalise_string(valor))
+        registro.qt_manual_override = bool(
+            linha.get("_qt_manual_override") or linha.get("qt_manual_override")
+        )
 
         valor_acb = _calcular_custo_acabamento_para_registro(session, ctx, registro, acabamento_cache)
         if valor_acb is None:
@@ -2198,13 +2240,15 @@ def salvar_custeio_items(
 
     if dimensoes is not None:
         try:
-            guardar_dimensoes(session, ctx, dimensoes)
+            with session.begin_nested():
+                guardar_dimensoes(session, ctx, dimensoes)
         except Exception:
             # Se falhar, mantem estados anteriores mas nao interrompe a gravacao principal
             pass
 
     try:
-        atualizar_orlas_custeio(session, ctx.orcamento_id, ctx.item_id)
+        with session.begin_nested():
+            atualizar_orlas_custeio(session, ctx.orcamento_id, ctx.item_id)
     except Exception:
         # N├úo bloqueia o fluxo principal caso o c├ílculo das orlas falhe
         pass
@@ -2281,7 +2325,11 @@ def gerar_linhas_para_selecoes(
         if child_tokens:
             seen_counts: Dict[str, int] = {}
             for child_label in child_tokens:
-                base = child_label.strip()
+                base_raw = child_label.strip()
+                if not base_raw:
+                    continue
+                base_token = _normalize_token(base_raw)
+                base = _CHILD_TOKEN_ALIASES.get(base_token, base_raw)
                 if not base:
                     continue
                 seen_counts[base] = seen_counts.get(base, 0) + 1
@@ -2402,7 +2450,6 @@ def _preencher_linha_com_material(
     linha["comp_mp"] = _decimal_to_float(getattr(material, "comp_mp", None))
     linha["larg_mp"] = _decimal_to_float(getattr(material, "larg_mp", None))
     linha["esp_mp"] = _decimal_to_float(getattr(material, "esp_mp", None))
-    linha["nst"] = _coerce_checkbox_to_bool(getattr(material, "nao_stock", False))
     grupo = _grupo_label_from_material(material) or grupo_hint
     if grupo:
         linha["mat_default"] = grupo
@@ -2668,11 +2715,17 @@ def _aplicar_resumo_custos_item(session: Session, item: Optional[OrcamentoItem])
 
     stmt = (
         select(
+            func.coalesce(func.sum(CusteioItem.soma_custo_total), 0),
             func.coalesce(func.sum(CusteioItem.custo_total_orla), 0),
-            func.coalesce(func.sum(CusteioItem.soma_custo_und), 0),
             func.coalesce(func.sum(CusteioItem.custo_mp_total), 0),
             func.coalesce(func.sum(CusteioItem.soma_custo_acb), 0),
-            func.coalesce(func.sum(CusteioItem.cp09_colagem_und), 0),
+            func.coalesce(
+                func.sum(
+                    func.coalesce(CusteioItem.cp09_colagem_und, 0)
+                    * func.coalesce(CusteioItem.qt_total, 0)
+                ),
+                0,
+            ),
         )
         .where(
             CusteioItem.orcamento_id == item.id_orcamento,
@@ -2685,18 +2738,21 @@ def _aplicar_resumo_custos_item(session: Session, item: Optional[OrcamentoItem])
     if not res:
         res = (0, 0, 0, 0, 0)
 
-    total_orlas, total_mo, total_mp, total_acab, total_colagem = (
-        _coerce_decimal_two(value) for value in res
+    base_total, total_orlas, total_mp, total_acab, total_colagem = (_coerce_decimal_two(value) for value in res)
+
+    total_mo = (base_total - total_orlas - total_mp - total_colagem).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
     )
+    # Evita negativos por arredondamentos acumulados.
+    if total_mo < Decimal("0.00"):
+        total_mo = Decimal("0.00")
 
     item.custo_total_orlas = total_orlas
     item.custo_total_mao_obra = total_mo
     item.custo_total_materia_prima = total_mp
     item.custo_total_acabamentos = total_acab
     item.custo_colagem = total_colagem
-    item.custo_produzido = (
-        total_orlas + total_mo + total_mp + total_acab + total_colagem
-    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    item.custo_produzido = (base_total + total_acab).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     return True
 

@@ -30,19 +30,24 @@ from Martelo_Orcamentos_V2.app.services import modulos as svc_modulos
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 from Martelo_Orcamentos_V2.app.services import dados_items as svc_dados_items
+from Martelo_Orcamentos_V2.app.services.orcamentos import resolve_orcamento_cliente_nome
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from sqlalchemy import select
 from .dados_gerais import MateriaPrimaPicker
 from ..utils.header import apply_highlight_text, init_highlight_label
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate, BoolDelegate
-from ..dialogs.custeio_modulos import ImportModuloDialog, SaveModuloDialog
+from ..dialogs.custeio_modulos import ImportModuloDialog, SaveModuloDialog, GerenciadorModulosDialog
 
 SPECIAL_MAT_DEFAULTS = {
     "divisoria": "Divisorias",
     "travessa": "Travessas",
     "prumo": "Prumos",
     "fundo aluminio 1": "Fundo aluminio",
+    "teto acabamento": "Tetos Acabamentos",
+    "fundo acabamento": "Fundos Acabamentos",
+    "lateral acabamento": "Laterais Acabamentos",
+    "costa acabamento": "Costas Acabamentos",
 }
 PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
     "Painel Porta Correr 1",
@@ -303,10 +308,9 @@ HEADER_TOOLTIPS = {
     "descricao_livre": "Texto livre editavel para identificar a linha no custeio.",
     "def_peca": "Codigo da peca selecionada na arvore de definicoes.",
     "descricao": "Descricao base importada do material associado.",
-    "qt_mod": "Quantidade de modulos a produzir com esta linha.",
-    "qt_und": "Quantidade de unidades por modulo.",
+    "qt_mod": "Formula de quantidade desta linha. Nos componentes filhos, fica em italico e sublinhado quando QT_und foi alterado manualmente neste orcamento.",
+    "qt_und": "Quantidade de unidades por modulo. Nos componentes filhos, duplo clique para editar localmente apenas esta linha.",
     "blk": "Quando ativo bloqueia atualizacoes vindas da tabela Dados Items.",
-    "nst": "Indica que o material foi marcado como Nao-Stock nos Dados Items.",
     "mat_default": "Grupo de material usado como origem das informacoes desta linha.",
     "acabamento_sup": "Acabamento aplicado na face superior (selecionado a partir da lista de acabamentos).",
     "acabamento_inf": "Acabamento aplicado na face inferior (selecionado a partir da lista de acabamentos).",
@@ -346,7 +350,6 @@ COLUMN_WIDTH_DEFAULTS = {
     "mo": 40,
     "orla": 40,
     "blk": 40,
-    "nst": 40,
     "mat_default": 150,
     "acabamento_sup": 150,
     "acabamento_inf": 150,
@@ -490,6 +493,34 @@ class NumericLineEditDelegate(QtWidgets.QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         text = editor.text().strip()
         model.setData(index, text, QtCore.Qt.EditRole)
+
+
+class QtModLineEditDelegate(QtWidgets.QStyledItemDelegate):
+    def __init__(self, parent: Optional[QtCore.QObject], model: "CusteioTableModel"):
+        super().__init__(parent)
+        self._model = model
+
+    def createEditor(self, parent, option, index):
+        editor = QtWidgets.QLineEdit(parent)
+        editor.setFrame(False)
+        editor.setProperty("_custeio_editor", True)
+        row_data = self._model.rows[index.row()] if 0 <= index.row() < len(self._model.rows) else {}
+        editor.setAlignment(QtCore.Qt.AlignRight)
+        if self._model._is_division_row(row_data):
+            validator: QtGui.QValidator = QtGui.QIntValidator(1, 8, editor)
+        else:
+            validator = QtGui.QDoubleValidator(editor)
+            validator.setNotation(QtGui.QDoubleValidator.StandardNotation)
+            validator.setDecimals(6)
+        editor.setValidator(validator)
+        return editor
+
+    def setEditorData(self, editor, index):
+        value = index.data(QtCore.Qt.EditRole)
+        editor.setText("" if value in (None, "") else str(value))
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.text().strip(), QtCore.Qt.EditRole)
 
 
 
@@ -783,15 +814,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def _supports_qt_und_override(self, row: Mapping[str, Any]) -> bool:
         """Return True when the row is an automatic child eligible for override.
 
-        Agora todos os filhos seguem apenas a fórmula (sem override manual).
+        O override continua a ser apenas local a esta linha/orcamento e nao altera
+        as regras base.
         """
         if not isinstance(row, Mapping):
             return False
 
         if (row.get("_row_type") or "").lower() != "child":
             return False
-        # Bloqueia override para qualquer filho; qt_und vem sempre da fórmula.
-        return False
+        return True
 
     @staticmethod
     def _coerce_numeric(value: Any) -> Optional[float]:
@@ -1014,7 +1045,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         if manual_allowed:
             manual_override = False
             manual_value: Optional[float] = None
-            stored_child = self._coerce_numeric(row.get("qt_und"))
 
             if new_value is None:
                 manual_override = False
@@ -1029,18 +1059,25 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 manual_override = True
                 manual_value = new_value
 
-            if manual_allowed and not manual_override and manual_value is None:
-                if manual_value is None and stored_child is not None and formula_val is not None and not _float_almost_equal(stored_child, formula_val):
-                    manual_override = True
-                    manual_value = stored_child
-
             if manual_override and manual_value is not None:
                 row["qt_und"] = manual_value
+                row["qt_manual_override"] = True
                 row["_qt_manual_override"] = True
                 row["_qt_manual_value"] = manual_value
-                formatted_formula = self._format_result_number(formula_val) or str(formula_val) if formula_val is not None else ""
-                row["_qt_manual_tooltip"] = f"Valor manual (formula: {formatted_formula})" if formatted_formula else "Valor manual"
+                divisor, parent_factor, _child_factor = self._get_qt_mod_context(row_index)
+                formatted_formula = (
+                    self._format_qt_mod_display(row_index)
+                    if formula_val is not None
+                    else ""
+                )
+                rendered_total = self._format_result_number(float(divisor) * float(parent_factor) * float(manual_value))
+                row["_qt_manual_tooltip"] = (
+                    f"Formula local: {formatted_formula} = {rendered_total}"
+                    if formatted_formula
+                    else "Valor manual"
+                )
             else:
+                row["qt_manual_override"] = False
                 row["_qt_manual_override"] = False
                 row["_qt_manual_value"] = None
                 if formula_val is not None:
@@ -1058,9 +1095,123 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 row["qt_und"] = new_value
         else:
             row["qt_und"] = new_value
+        row["qt_manual_override"] = False
         row["_qt_manual_override"] = False
         row["_qt_manual_value"] = None
         row["_qt_manual_tooltip"] = None
+        self._mark_dirty()
+        return True
+
+    def _sanitize_qt_mod_override_input(self, value: Any) -> Optional[str]:
+        if value in (None, False):
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        normalized = text.replace("×", "*").replace("X", "*").replace("x", "*")
+        normalized = normalized.replace(",", ".").upper().strip()
+        if not re.fullmatch(r"[0-9A-Z+\-*/().\s]*", normalized):
+            return None
+        allowed_tokens = set(DIMENSION_ALLOWED_VARIABLES) | {"QT_DIV", "QT_PAI", "QT_MOD"}
+        for token in _TOKEN_PATTERN.findall(normalized):
+            if token not in allowed_tokens:
+                return None
+        return normalized
+
+    def _get_qt_mod_context(self, row_index: int) -> Tuple[float, float, float]:
+        if not (0 <= row_index < len(self.rows)):
+            return (1.0, 1.0, 1.0)
+        row = self.rows[row_index]
+        divisor = self._coerce_numeric(row.get("_qt_divisor"))
+        if divisor is None:
+            divisor = 1.0
+
+        parent_factor = self._coerce_numeric(row.get("_qt_parent_factor"))
+        if parent_factor is None and (row.get("_row_type") or "").lower() == "child":
+            parent_id = row.get("_parent_uid")
+            parent_row = next((r for r in self.rows if r.get("_uid") == parent_id), None)
+            parent_factor = self._coerce_numeric(parent_row.get("qt_und")) if parent_row is not None else None
+        if parent_factor is None:
+            parent_factor = 1.0
+
+        child_factor = self._coerce_numeric(row.get("_qt_child_factor"))
+        if child_factor is None:
+            child_factor = self._coerce_numeric(row.get("qt_und"))
+        if child_factor is None:
+            child_factor = 1.0
+
+        return (divisor, parent_factor, child_factor)
+
+    def _render_qt_mod_formula(self, divisor: Optional[float], parent_factor: Optional[float], child_factor: Optional[float]) -> str:
+        parts: List[str] = []
+        divisor_text = self._format_factor(divisor)
+        if divisor_text:
+            parts.append(divisor_text)
+        parent_text = self._format_factor(parent_factor)
+        if parent_text:
+            parts.append(parent_text)
+        child_text = self._format_factor(child_factor)
+        if child_text:
+            parts.append(child_text)
+        return " x ".join(parts)
+
+    def _process_qt_mod_child_edit(self, row_index: int, value: Any) -> bool:
+        if not (0 <= row_index < len(self.rows)):
+            return False
+        row = self.rows[row_index]
+        if (row.get("_row_type") or "").lower() != "child":
+            return False
+
+        formula_val = self._coerce_numeric(row.get("_qt_formula_value"))
+        sanitized = self._sanitize_qt_mod_override_input(value)
+        if sanitized is None:
+            return False
+
+        if sanitized == "":
+            row["_qt_manual_override"] = False
+            row["_qt_manual_value"] = None
+            row["_qt_manual_tooltip"] = None
+            if formula_val is not None:
+                row["qt_und"] = formula_val
+            self._mark_dirty()
+            return True
+
+        divisor, parent_factor, _current_child = self._get_qt_mod_context(row_index)
+        eval_context = {
+            "QT_DIV": divisor,
+            "QT_PAI": parent_factor,
+            "QT_MOD": parent_factor,
+        }
+        total_value, error = self._evaluate_formula_expression(sanitized, eval_context)
+        if error or total_value is None or total_value < 0:
+            return False
+
+        base_value = divisor * parent_factor
+        if abs(base_value) <= 1e-9:
+            if abs(total_value) > 1e-9:
+                return False
+            manual_value = 0.0
+        else:
+            manual_value = round(total_value / base_value, 6)
+
+        manual_override = formula_val is None or not _float_almost_equal(manual_value, formula_val)
+        if manual_override:
+            page = getattr(self, "_page", None)
+            confirmer = getattr(page, "confirm_qt_und_override", None)
+            if callable(confirmer) and not confirmer(row, manual_value):
+                return False
+            row["qt_und"] = manual_value
+            row["_qt_manual_override"] = True
+            row["_qt_manual_value"] = manual_value
+            rendered_formula = self._render_qt_mod_formula(divisor, parent_factor, manual_value)
+            rendered_total = self._format_result_number(total_value) or str(total_value)
+            row["_qt_manual_tooltip"] = f"Formula local: {rendered_formula} = {rendered_total}"
+        else:
+            row["_qt_manual_override"] = False
+            row["_qt_manual_value"] = None
+            row["_qt_manual_tooltip"] = None
+            if formula_val is not None:
+                row["qt_und"] = formula_val
         self._mark_dirty()
         return True
 
@@ -1070,16 +1221,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         row = self.rows[row_index]
         if (row.get("_row_type") or "").lower() != "child":
             return False
-        manual_value = self._coerce_numeric(row.get("_qt_manual_value"))
-        if manual_value is not None:
-            return True
         if not self._supports_qt_und_override(row):
             return False
-        stored = self._coerce_numeric(row.get("qt_und"))
-        formula = self._coerce_numeric(row.get("_qt_formula_value"))
-        if stored is None or formula is None:
-            return False
-        return not _float_almost_equal(stored, formula)
+        return bool(row.get("_qt_manual_override") or row.get("qt_manual_override"))
 
     def revert_qt_und(self, row_indices: Sequence[int]) -> None:
         if not row_indices:
@@ -1093,6 +1237,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if formula is None:
                 continue
             row["qt_und"] = formula
+            row["qt_manual_override"] = False
             row["_qt_manual_override"] = False
             row["_qt_manual_value"] = None
             row["_qt_manual_tooltip"] = None
@@ -1118,6 +1263,9 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         tokens: List[str] = []
         for part in def_peca.split("+")[1:]:
             normalized = CusteioTableModel._normalize_def_peca(part)
+            # Normaliza variações/plurais para permitir detetar corretamente linhas-filho.
+            if normalized == "SUPORTES NIVELADORES":
+                normalized = "SUPORTE NIVELADORES"
             if normalized:
                 tokens.append(normalized)
         return tokens
@@ -1200,19 +1348,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         # Para componentes child: divisor x parent_qt_und x child_qt_und
         if row_type == "child":
-            parent_id = row.get("_parent_uid")
-            parent_row = next((r for r in self.rows if r.get("_uid") == parent_id), None)
-            if parent_row is not None:
-                p_raw = parent_row.get("qt_und")
-                if p_raw not in (None, ""):
-                    p_text = self._format_factor(p_raw) or str(p_raw)
-                    parts.append(p_text)
-            # child qt_und - show even if equals 1 when explicitly set
-            c_raw = row.get("qt_und")
-            if c_raw not in (None, ""):
-                c_text = self._format_factor(c_raw) or str(c_raw)
-                parts.append(c_text)
-            return " x ".join(parts)
+            divisor_factor, parent_factor, child_factor = self._get_qt_mod_context(row_index)
+            return self._render_qt_mod_formula(divisor_factor, parent_factor, child_factor)
 
         # Outros tipos (normal): mostrar qt_und quando presente
         q_raw = row.get("qt_und")
@@ -2082,7 +2219,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if key == "def_peca" and row_type == "child":
                 return self._child_font
             # Manual override styling for qt_und (keeps previous behaviour)
-            if key == "qt_und" and row_data.get("_qt_manual_override"):
+            if key in {"qt_mod", "qt_und"} and row_data.get("_qt_manual_override"):
                 return self._manual_override_font
             if row_type == "division":
                 return self._division_font
@@ -2090,7 +2227,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 return self._italic_font
             return None
 
-        if role == QtCore.Qt.ToolTipRole:
+        if role == QtCore.Qt.ToolTipRole and key != "qt_mod":
 
             if key in CELL_TOOLTIP_KEYS:
 
@@ -2120,22 +2257,24 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 formula = self._format_qt_mod_display(index.row())
                 if not formula:
                     return None
-                # Use computed numeric factors stored during recalc for accuracy
-                try:
-                    divisor_val = float(row_obj.get("_qt_divisor") or 1.0)
-                except Exception:
-                    divisor_val = 1.0
-                try:
-                    parent_val = float(row_obj.get("_qt_parent_factor") or 1.0)
-                except Exception:
-                    parent_val = 1.0
-                try:
-                    child_val = float(row_obj.get("_qt_child_factor") or 1.0)
-                except Exception:
-                    child_val = 1.0
-                # The displayed formula may omit factors that are empty; compute product accordingly
+                divisor_val, parent_val, child_val = self._get_qt_mod_context(index.row())
                 result = divisor_val * parent_val * child_val
-                return f"{formula} = {result:.2f}"
+                result_display = self._format_result_number(result) or f"{result:.2f}"
+                lines = [f"{formula} = {result_display}"]
+                manual_tip = row_obj.get("_qt_manual_tooltip")
+                if manual_tip:
+                    lines.append(str(manual_tip))
+                rule_tip = row_obj.get("_qt_rule_tooltip")
+                if rule_tip:
+                    lines.append(str(rule_tip))
+                if (row_obj.get("_row_type") or "").lower() == "child":
+                    lines.append("Duplo clique em QT_und para editar localmente esta linha.")
+                    lines.append("Deixe QT_und vazio para voltar a regra base.")
+                return "\n".join(lines)
+            if role == QtCore.Qt.EditRole:
+                row_obj = self.rows[index.row()]
+                if (row_obj.get("_row_type") or "").lower() == "child":
+                    return self._format_qt_mod_display(index.row())
 
         if spec["type"] == "bool":
 
@@ -2261,14 +2400,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
             row_data = self.rows[index.row()]
 
-            # Disallow editing qt_und for child rows: child quantities are
-            # computed automatically from the parent and must not be changed
-            # by the user. Division rows also remain non-editable for qt_und.
+            # Division rows remain non-editable in QT_und. Child rows may be
+            # edited locally in QT_und but never directly in QT_mod.
             if key == "qt_und":
                 if self._is_division_row(row_data):
                     return flags
-                if (row_data.get("_row_type") or "").lower() == "child":
-                    return flags
+            if key == "qt_mod" and (row_data.get("_row_type") or "").lower() == "child":
+                return flags
 
             flags |= QtCore.Qt.ItemIsEditable
 
@@ -2314,6 +2452,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     new_state = bool(value)
 
             # sem altera├º├úo => OK (evita triggers)
+            previous_state = bool(self.rows[row].get(key))
             if self.rows[row].get(key) == new_state:
                 return True
 
@@ -2324,6 +2463,11 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if key == "blk":
                 roles.append(QtCore.Qt.FontRole)
                 self._emit_font_updates(row)
+                if previous_state and not new_state:
+                    page = getattr(self, "_page", None)
+                    handler = getattr(page, "_restore_defaults_from_blk", None) if page is not None else None
+                    if callable(handler):
+                        QtCore.QTimer.singleShot(0, lambda r=row: handler(r))
 
             if key == "nst":
                 source_val = self.rows[row].get("_nst_source")
@@ -2585,9 +2729,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     coerced[key] = value
 
         if isinstance(row, Mapping):
-            for extra_key in ("_row_type", "_parent_uid", "_group_uid", "_child_source", "_normalized_child", "_qt_manual_override", "_qt_manual_value", "_qt_manual_tooltip", "_qt_formula_value", "_regra_nome", "_nst_manual_override", "_nst_source"):
+            for extra_key in ("_row_type", "_parent_uid", "_group_uid", "_child_source", "_normalized_child", "qt_manual_override", "_qt_manual_override", "_qt_manual_value", "_qt_manual_tooltip", "_qt_formula_value", "_regra_nome", "_nst_manual_override", "_nst_source"):
                 if extra_key in row:
                     coerced[extra_key] = row[extra_key]
+
+        coerced["qt_manual_override"] = bool(coerced.get("qt_manual_override"))
+        if "_qt_manual_override" not in coerced:
+            coerced["_qt_manual_override"] = coerced["qt_manual_override"]
+        else:
+            coerced["_qt_manual_override"] = bool(coerced.get("_qt_manual_override"))
 
         coerced["_nst_manual_override"] = bool(coerced.get("_nst_manual_override"))
         if "_nst_source" not in coerced:
@@ -3244,7 +3394,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 except Exception:
                     parent_qt = 1.0
 
-                raw_child_token = row.get("_child_source") or row.get("descricao") or row.get("tipo")
+                # Prefer explicit _child_source, fall back to descricao/tipo and lastly def_peca
+                raw_child_token = row.get("_child_source") or row.get("descricao") or row.get("tipo") or row.get("def_peca")
                 normalized_child = self._normalize_def_peca(raw_child_token)
                 row["_normalized_child"] = normalized_child
 
@@ -3315,17 +3466,13 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 manual_allowed = self._supports_qt_und_override(row)
                 manual_value = self._coerce_numeric(row.get("_qt_manual_value"))
                 stored_child = self._coerce_numeric(row.get("qt_und"))
-                manual_override_flag = bool(row.get("_qt_manual_override"))
+                manual_override_flag = bool(row.get("_qt_manual_override") or row.get("qt_manual_override"))
 
                 if manual_allowed:
                     if manual_value is not None:
                         effective_child = manual_value
                         manual_override_flag = True
-                    elif manual_override_flag and stored_child is not None and not _float_almost_equal(stored_child, formula_child):
-                        manual_value = stored_child
-                        effective_child = stored_child
-                    elif stored_child is not None and not _float_almost_equal(stored_child, formula_child):
-                        manual_override_flag = True
+                    elif manual_override_flag and stored_child is not None:
                         manual_value = stored_child
                         effective_child = stored_child
                     else:
@@ -3338,11 +3485,16 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     effective_child = formula_child
 
                 row["qt_und"] = effective_child
+                row["qt_manual_override"] = manual_override_flag
                 row["_qt_manual_override"] = manual_override_flag
                 if manual_override_flag and manual_value is not None:
                     row["_qt_manual_value"] = manual_value
-                    formatted_formula = self._format_result_number(formula_child) or str(formula_child)
-                    row["_qt_manual_tooltip"] = f"Valor manual (formula: {formatted_formula})"
+                    manual_formula = self._render_qt_mod_formula(divisor, parent_factor, manual_value)
+                    manual_total = self._format_result_number(float(divisor) * float(parent_factor) * float(manual_value))
+                    if manual_total:
+                        row["_qt_manual_tooltip"] = f"Formula local: {manual_formula} = {manual_total}"
+                    else:
+                        row["_qt_manual_tooltip"] = f"Formula local: {manual_formula}"
                 else:
                     row["_qt_manual_value"] = None
                     row["_qt_manual_tooltip"] = None
@@ -3376,6 +3528,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     # parent rows contribute via _qt_parent_factor; child factor must be 1
                     formula_child = 1.0
                     row["_qt_formula_value"] = formula_child
+                    row["qt_manual_override"] = False
                     row["_qt_manual_override"] = False
                     row["_qt_manual_tooltip"] = None
                     row["_qt_manual_value"] = None
@@ -3383,6 +3536,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 else:
                     formula_child = 1.0
                     row["_qt_formula_value"] = formula_child
+                    row["qt_manual_override"] = False
                     row["_qt_manual_override"] = False
                     row["_qt_manual_tooltip"] = None
                     row["_qt_manual_value"] = None
@@ -3665,8 +3819,6 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 and row_type not in {"division", "separator"}
                 and cp03_factor is not None
                 and cp03_factor > 0
-                and cp02_factor is not None
-                and cp02_factor > 0
             ):
                 familia_val = (row.get("familia") or "").strip().upper()
                 is_ferragens = familia_val == "FERRAGENS"
@@ -4351,17 +4503,27 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
         if def_peca_norm == "DIVISAO INDEPENDENTE":
             return []
 
+        row_type = (row.get("_row_type") or "").strip().casefold()
+        def_peca_value = str(row.get("def_peca") or "").strip()
+        def_peca_base = def_peca_value
+        if row_type == "parent" and "+" in def_peca_value:
+            def_peca_base = def_peca_value.split("+", 1)[0].strip()
+
         familia_val = (row.get("familia") or "").strip()
         familia_norm = familia_val.casefold() if familia_val else ""
         normalized_def = (row.get("_normalized_def") or "").strip().casefold()
         normalized_child = (row.get("_normalized_child") or "").strip().casefold()
         tipo_norm = (row.get("tipo") or "").strip().casefold()
 
+        if row_type == "parent" and def_peca_base:
+            normalized_def = svc_custeio._normalize_token(def_peca_base).casefold()
+            normalized_child = ""
+
         normalized_candidates = {
             normalized_def,
             normalized_child,
-            svc_custeio._normalize_token(row.get("def_peca")),
-            svc_custeio._normalize_token(row.get("_child_source")),
+            svc_custeio._normalize_token(def_peca_base or row.get("def_peca")),
+            svc_custeio._normalize_token(row.get("_child_source")) if row_type != "parent" else "",
             svc_custeio._normalize_token(row.get("descricao")),
             # Note: descricao_livre is excluded (user helper text, not for calculation logic)
         }
@@ -4399,7 +4561,10 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
                 return options
             return list(SPP_SIS_CORRER_OPTIONS)
 
-        info_ferragem = svc_custeio.inferir_ferragem_info(row) if row else None
+        # Para linhas "parent" (componentes compostos), ignorar o filho na inferência do filtro.
+        info_ferragem = (
+            svc_custeio.inferir_ferragem_info(def_peca_base) if row_type == "parent" else svc_custeio.inferir_ferragem_info(row)
+        ) if row else None
         info_familia_norm = (
             (info_ferragem.get("familia") or "").strip().casefold() if info_ferragem else ""
         )
@@ -4411,7 +4576,7 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
                 tipo_hint = row.get("tipo")
             elif info_ferragem and info_ferragem.get("tipo"):
                 tipo_hint = info_ferragem["tipo"]
-            elif row.get("_child_source"):
+            elif row.get("_child_source") and row_type != "parent":
                 tipo_hint = row.get("_child_source")
             options = svc_custeio.lista_mat_default_ferragens(session, context, tipo_hint)
             if options:
@@ -4564,8 +4729,15 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
         if isinstance(row, Mapping):
             for extra_key in (
+                "qt_manual_override",
                 "_qt_manual_override",
+                "_qt_manual_value",
+                "_qt_manual_tooltip",
                 "_qt_formula_value",
+                "_qt_rule_tooltip",
+                "_qt_divisor",
+                "_qt_parent_factor",
+                "_qt_child_factor",
                 "_child_source",
                 "_parent_uid",
                 "_group_uid",
@@ -4647,6 +4819,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         "insert_above": QtWidgets.QStyle.SP_ArrowUp,
         "insert_below": QtWidgets.QStyle.SP_ArrowDown,
         "delete": QtWidgets.QStyle.SP_TrashIcon,
+        "cut": QtWidgets.QStyle.SP_DialogDiscardButton,
         "copy": QtWidgets.QStyle.SP_FileDialogDetailedView,
         "paste": QtWidgets.QStyle.SP_DialogOpenButton,
         "select_mp": QtWidgets.QStyle.SP_DirOpenIcon,
@@ -4654,6 +4827,14 @@ class CusteioItemsPage(QtWidgets.QWidget):
         "save": QtWidgets.QStyle.SP_DialogSaveButton,
         "division": QtWidgets.QStyle.SP_FileDialogNewFolder,
         "revert_formula": QtWidgets.QStyle.SP_ArrowBack,
+    }
+    ICON_THEME_MAP: Dict[str, Tuple[str, ...]] = {
+        "insert_above": ("list-add", "go-up"),
+        "insert_below": ("list-add", "go-down"),
+        "delete": ("edit-delete", "user-trash", "trash-empty"),
+        "copy": ("edit-copy", "copy", "document-copy"),
+        "cut": ("edit-cut", "cut"),
+        "paste": ("edit-paste", "paste"),
     }
 
 
@@ -4681,6 +4862,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._updating_checks = False  # guarda contra reentr├â┬óncia ao propagar check
 
         self._clipboard_rows: List[Dict[str, Any]] = []
+        self._menu_icon_cache: Dict[Tuple[str, int], QtGui.QIcon] = {}
 
         self.table_model = CusteioTableModel(self)
 
@@ -4804,23 +4986,33 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return
         self._auto_fill_icon_busy = True
         try:
+            has_data = False
+            in_sync = False
             if override_state is None:
                 di_ctx = svc_dados_items.carregar_contexto(
                     self.session, self.context.orcamento_id, self.context.item_id
                 )
-                in_sync = svc_dados_items.dados_items_em_sincronia_com_gerais(self.session, di_ctx)
+                has_data = svc_dados_items.dados_items_tem_dados(self.session, di_ctx)
+                if has_data:
+                    in_sync = svc_dados_items.dados_items_em_sincronia_com_gerais(self.session, di_ctx)
             else:
+                has_data = bool(override_state)
                 in_sync = bool(override_state)
         except Exception:
+            has_data = False
             in_sync = False
-        if in_sync:
-            self.btn_auto_fill.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        if has_data:
             self.btn_auto_fill.setStyleSheet("background-color: #d4edda; color: #0f5132;")
-            self.btn_auto_fill.setToolTip("Dados Items estão sincronizados com os Dados Gerais.")
+            if in_sync:
+                self.btn_auto_fill.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+                self.btn_auto_fill.setToolTip("Dados Items preenchidos e sincronizados com os Dados Gerais.")
+            else:
+                self.btn_auto_fill.setIcon(QtGui.QIcon())
+                self.btn_auto_fill.setToolTip("Dados Items preenchidos. Verifique se estao atualizados.")
         else:
             self.btn_auto_fill.setIcon(QtGui.QIcon())
             self.btn_auto_fill.setStyleSheet("background-color: #f8d7da; color: #842029;")
-            self.btn_auto_fill.setToolTip("Dados Items não estão sincronizados com os Dados Gerais. Clique para atualizar.")
+            self.btn_auto_fill.setToolTip("Dados Items nao preenchidos. Clique para preencher.")
         self._auto_fill_icon_busy = False
 
     def get_production_rate_info(self, key: str) -> Optional[Dict[str, float]]:
@@ -4916,7 +5108,49 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.lbl_descr = QtWidgets.QLabel("-")
         self.lbl_descr.setWordWrap(True)
         self.lbl_descr.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
-        header_layout.addWidget(self.lbl_descr)
+
+        # Tabela de variáveis (H/L/P/...) ao lado direito da descrição do item
+        self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
+        self._dimension_col_map: Dict[str, int] = {key: idx for idx, key in enumerate(DIMENSION_KEY_ORDER)}
+        self._dimensions_dirty = False
+        self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER))
+        self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.dimensions_table.setFixedHeight(72)
+        self.dimensions_table.verticalHeader().setVisible(False)
+        self.dimensions_table.horizontalHeader().setVisible(False)
+        self.dimensions_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.dimensions_table.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.dimensions_table.setAlternatingRowColors(True)
+        self.dimensions_table.setStyleSheet("QTableWidget { gridline-color: #d0d0d0; }")
+        self.dimensions_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.dimensions_table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        for col, key in enumerate(DIMENSION_KEY_ORDER):
+            header_item = QtWidgets.QTableWidgetItem(key)
+            header_item.setFlags(QtCore.Qt.ItemIsEnabled)
+            header_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            header_font = header_item.font()
+            header_font.setBold(True)
+            header_item.setFont(header_font)
+            self.dimensions_table.setItem(0, col, header_item)
+            value_item = QtWidgets.QTableWidgetItem("")
+            value_item.setTextAlignment(QtCore.Qt.AlignCenter)
+            self.dimensions_table.setItem(1, col, value_item)
+            self.dimensions_table.setColumnWidth(col, 50)
+        self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
+        self.dimensions_table.setEnabled(False)
+        total_width = sum(self.dimensions_table.columnWidth(col) for col in range(len(DIMENSION_KEY_ORDER)))
+        total_width += (self.dimensions_table.frameWidth() * 2) + 8
+        self.dimensions_table.setMinimumWidth(total_width)
+        self.dimensions_table.setMaximumWidth(total_width)
+
+        descr_line = QtWidgets.QHBoxLayout()
+        descr_line.setContentsMargins(0, 0, 0, 0)
+        descr_line.setSpacing(12)
+        descr_line.addWidget(self.lbl_descr, 1)
+        descr_line.addWidget(self.dimensions_table, 0, QtCore.Qt.AlignTop)
+        header_layout.addLayout(descr_line)
+        self._update_dimension_table()
 
         self.lbl_cliente = QtWidgets.QLabel("-")
 
@@ -5139,7 +5373,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         right_layout = QtWidgets.QVBoxLayout(panel_right)
 
-        right_layout.setContentsMargins(12, 12, 12, 12)
+        # Sem margem extra para alinhar a linha de botões com o campo de pesquisa
+        right_layout.setContentsMargins(0, 0, 0, 0)
 
         right_layout.setSpacing(8)
 
@@ -5149,10 +5384,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         actions_layout.setSpacing(8)
 
+        def _style_primary_button(btn: QtWidgets.QPushButton, color: str) -> None:
+            btn.setStyleSheet(
+                f"background-color:{color}; color:white; font-weight:bold; padding:8px 12px; border-radius:4px;"
+            )
+            btn.setCursor(QtCore.Qt.PointingHandCursor)
+
         self.btn_refresh = QtWidgets.QPushButton("Atualizar")
+        _style_primary_button(self.btn_refresh, "#4CAF50")
 
         self.btn_save = QtWidgets.QPushButton("Guardar Dados Custeio")
         self._save_button_base_text = self.btn_save.text()
+        self.btn_save.setToolTip("Guardar os dados do custeio do item atual. Atalho: Ctrl+G.")
+        _style_primary_button(self.btn_save, "#2196F3")
 
         self.btn_prev_item = QtWidgets.QToolButton()
         self.btn_prev_item.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowUp))
@@ -5169,68 +5413,32 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_auto_fill = QtWidgets.QPushButton("Preencher Dados Items")
         self.btn_auto_fill.setToolTip("Copiar os Dados Gerais para as 4 tabelas de Dados Items do item corrente.")
 
+        self.btn_save_module = QtWidgets.QPushButton("Guardar Modulo")
+        self.btn_save_module.setToolTip("Guardar linhas selecionadas (coluna GRAVAR_MODULO) como um módulo reutilizável.")
+        self.btn_import_module = QtWidgets.QPushButton("Importar Modulo")
+        self.btn_import_module.setToolTip("Importar módulos guardados e inserir linhas no custeio.")
+        self.btn_manage_modules = QtWidgets.QPushButton("Gerenciador de Modulos")
+        self.btn_manage_modules.setToolTip("Gerir módulos: renomear, editar descrição e imagem (Utilizador/Global).")
+        self.btn_save_module.setMaximumWidth(120)
+        self.btn_import_module.setMaximumWidth(120)
+        self.btn_manage_modules.setMaximumWidth(160)
+        self.btn_save_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.btn_import_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.btn_manage_modules.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+
         actions_layout.addWidget(self.btn_refresh)
 
         actions_layout.addWidget(self.btn_save)
         actions_layout.addWidget(self.btn_prev_item)
         actions_layout.addWidget(self.btn_next_item)
         actions_layout.addWidget(self.btn_auto_fill)
+        actions_layout.addWidget(self.btn_save_module)
+        actions_layout.addWidget(self.btn_import_module)
+        actions_layout.addWidget(self.btn_manage_modules)
 
         actions_layout.addStretch(1)
 
         right_layout.addLayout(actions_layout)
-
-        self._dimension_values: Dict[str, Optional[float]] = {key: None for key in DIMENSION_KEY_ORDER}
-        self._dimension_col_map: Dict[str, int] = {key: idx for idx, key in enumerate(DIMENSION_KEY_ORDER)}
-        self._dimensions_dirty = False
-        self.dimensions_table = QtWidgets.QTableWidget(2, len(DIMENSION_KEY_ORDER))
-        self.dimensions_table.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.dimensions_table.setFixedHeight(72)
-        self.dimensions_table.verticalHeader().setVisible(False)
-        self.dimensions_table.horizontalHeader().setVisible(False)
-        self.dimensions_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
-        self.dimensions_table.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.dimensions_table.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
-        self.dimensions_table.setAlternatingRowColors(True)
-        self.dimensions_table.setStyleSheet("QTableWidget { gridline-color: #d0d0d0; }")
-        for col, key in enumerate(DIMENSION_KEY_ORDER):
-            header_item = QtWidgets.QTableWidgetItem(key)
-            header_item.setFlags(QtCore.Qt.ItemIsEnabled)
-            header_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            header_font = header_item.font()
-            header_font.setBold(True)
-            header_item.setFont(header_font)
-            self.dimensions_table.setItem(0, col, header_item)
-            value_item = QtWidgets.QTableWidgetItem("")
-            value_item.setTextAlignment(QtCore.Qt.AlignCenter)
-            self.dimensions_table.setItem(1, col, value_item)
-            self.dimensions_table.setColumnWidth(col, 50)
-        self.dimensions_table.itemChanged.connect(self._on_dimension_item_changed)
-        self.dimensions_table.setEnabled(False)
-        max_width = len(DIMENSION_KEY_ORDER) * 52
-        self.dimensions_table.setMaximumWidth(max_width)
-        dim_line = QtWidgets.QHBoxLayout()
-        dim_line.setSpacing(8)
-        dim_line.addWidget(self.dimensions_table, 1)
-
-        module_btns = QtWidgets.QVBoxLayout()
-        module_btns.setSpacing(6)
-        self.btn_save_module = QtWidgets.QPushButton("Guardar Modulo")
-        self.btn_save_module.setToolTip("Guardar linhas selecionadas (coluna GRAVAR_MODULO) como um módulo reutilizável.")
-        self.btn_import_module = QtWidgets.QPushButton("Importar Modulo")
-        self.btn_import_module.setToolTip("Importar módulos guardados e inserir linhas no custeio.")
-        self.btn_save_module.setMaximumWidth(120)
-        self.btn_import_module.setMaximumWidth(120)
-        self.btn_save_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-        self.btn_import_module.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-        module_btns.addWidget(self.btn_save_module)
-        module_btns.addWidget(self.btn_import_module)
-        module_btns.addStretch(1)
-
-        dim_line.addLayout(module_btns)
-
-        right_layout.addLayout(dim_line)
-        self._update_dimension_table()
 
         cache_font = self._bold_font_cache
 
@@ -5254,6 +5462,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         _bold(self.btn_save_module)
         self.btn_import_module.setIcon(style.standardIcon(QtWidgets.QStyle.SP_DialogOpenButton))
         _bold(self.btn_import_module)
+        self.btn_manage_modules.setIcon(style.standardIcon(QtWidgets.QStyle.SP_FileDialogDetailedView))
+        _bold(self.btn_manage_modules)
         self._update_auto_fill_icon()
 
         self.table_view = CusteioTableView()
@@ -5270,6 +5480,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         # Permitir clique direto em checkboxes e outros campos edit├íveis
         self.table_view.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+
+        # Altura das linhas da tabela de custeio (reduza para ver mais linhas e minimizar scroll).
+        # Ajuste este valor conforme preferir (ex.: 18-24).
+        CUSTEIO_TABLE_ROW_HEIGHT = 16
+        self.table_view.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+        self.table_view.verticalHeader().setDefaultSectionSize(CUSTEIO_TABLE_ROW_HEIGHT)
 
         self.table_view.setStyleSheet(
             "QTableView::item:selected { background-color: #555555; color: #ffffff; }\n"
@@ -5290,7 +5506,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         bool_columns: List[int] = []
         for col_index, spec in enumerate(self.table_model.columns):
             if spec["type"] == "numeric":
-                self.table_view.setItemDelegateForColumn(col_index, NumericLineEditDelegate(self.table_view, spec))
+                if spec["key"] == "qt_mod":
+                    self.table_view.setItemDelegateForColumn(col_index, QtModLineEditDelegate(self.table_view, self.table_model))
+                else:
+                    self.table_view.setItemDelegateForColumn(col_index, NumericLineEditDelegate(self.table_view, spec))
             elif spec["type"] == "bool":
                 bool_columns.append(col_index)
 
@@ -5320,6 +5539,19 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.table_view.customContextMenuRequested.connect(self._on_table_context_menu)
 
         self.table_view.clicked.connect(self._on_table_clicked)
+
+        # Atalhos de teclado (mesma lógica do menu do botão direito do rato)
+        act_copy = QtGui.QAction(self.table_view)
+        act_copy.setShortcut(QtGui.QKeySequence.Copy)
+        act_copy.setShortcutContext(QtCore.Qt.WidgetShortcut)
+        act_copy.triggered.connect(lambda _=False: self._copy_rows(self._selected_table_rows()))
+        self.table_view.addAction(act_copy)
+
+        act_paste = QtGui.QAction(self.table_view)
+        act_paste.setShortcut(QtGui.QKeySequence.Paste)
+        act_paste.setShortcutContext(QtCore.Qt.WidgetShortcut)
+        act_paste.triggered.connect(lambda _=False: self._paste_rows(self._selected_table_rows()))
+        self.table_view.addAction(act_paste)
 
         right_layout.addWidget(self.table_view, 1)
 
@@ -5352,8 +5584,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.btn_refresh.clicked.connect(self._on_refresh_custeio)
 
         self.btn_save.clicked.connect(self._on_save_custeio)
+        self._shortcut_save = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+G"), self)
+        self._shortcut_save.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
+        self._shortcut_save.activated.connect(self._on_save_custeio)
         self.btn_save_module.clicked.connect(self._on_save_modulo_clicked)
         self.btn_import_module.clicked.connect(self._on_import_modulo_clicked)
+        self.btn_manage_modules.clicked.connect(self._on_manage_modulos_clicked)
         self.btn_auto_fill.clicked.connect(self._on_auto_fill_dados_items)
 
         self._update_table_placeholder_visibility()
@@ -5786,9 +6022,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         utilizador = ""
 
         if orcamento:
-            cliente_nome = (
-                svc_custeio.obter_cliente_nome(self.session, getattr(orcamento, "client_id", None)) or ""
-            )
+            cliente_nome = resolve_orcamento_cliente_nome(self.session, orcamento)
             utilizador = (
                 svc_custeio.obter_user_nome(
                     self.session,
@@ -6231,6 +6465,13 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._update_table_placeholder_visibility()
         self._update_auto_fill_icon()
 
+    def _on_manage_modulos_clicked(self) -> None:
+        if not self.context:
+            QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
+            return
+        dialog = GerenciadorModulosDialog(self, self.session, self.current_user_id)
+        dialog.exec()
+
     def _on_auto_fill_dados_items(self) -> None:
         if not self.context:
             QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum item selecionado.")
@@ -6242,8 +6483,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return
         # Confirmação se já há dados preenchidos
         try:
-            existentes = svc_dados_items.carregar_dados_gerais(self.session, di_ctx)
-            ja_tem_dados = any(existing_rows for existing_rows in existentes.values() if existing_rows)
+            ja_tem_dados = svc_dados_items.dados_items_tem_dados(self.session, di_ctx)
         except Exception:
             ja_tem_dados = False
         if ja_tem_dados:
@@ -6275,7 +6515,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return
         if hasattr(self.session, "expire_all"):
             self.session.expire_all()
-        self._apply_updates_from_items()
+        self._apply_updates_from_items(mark_dirty=True)
         self.table_model.recalculate_all()
         self._full_plates_mode = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
         self._apply_full_plate_mode(self._full_plates_mode, from_load=True)
@@ -6348,6 +6588,29 @@ class CusteioItemsPage(QtWidgets.QWidget):
             pass
         self._apply_full_plate_mode(self._full_plates_mode)
 
+    def _commit_view_editor(self, view: QtWidgets.QAbstractItemView) -> None:
+        editor = view.focusWidget()
+        if editor is None:
+            return
+        top_editor = editor
+        while top_editor is not None and top_editor.parent() is not view.viewport():
+            parent = top_editor.parent()
+            if parent is None:
+                break
+            top_editor = parent
+        if top_editor and top_editor.parent() is view.viewport():
+            view.commitData(top_editor)
+            if shiboken6.isValid(top_editor):
+                view.closeEditor(top_editor, QtWidgets.QAbstractItemDelegate.SubmitModelCache)
+
+    def _commit_pending_edits(self) -> None:
+        table_view = getattr(self, "table_view", None)
+        if isinstance(table_view, QtWidgets.QAbstractItemView):
+            self._commit_view_editor(table_view)
+        dims_table = getattr(self, "dimensions_table", None)
+        if isinstance(dims_table, QtWidgets.QAbstractItemView):
+            self._commit_view_editor(dims_table)
+
     def _save_custeio(self, *, auto: bool = False) -> bool:
 
         if not self.context:
@@ -6362,6 +6625,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         should_disable_button = bool(save_button) and not auto
         if should_disable_button:
             save_button.setDisabled(True)
+        self._commit_pending_edits()
+        self._apply_updates_from_items()
 
         self.table_model.recalculate_all()
         if not self._validate_special_rows():
@@ -6428,7 +6693,6 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._reload_custeio_rows()
 
-        self._apply_updates_from_items()
 
         self.table_model.recalculate_all()
 
@@ -6603,6 +6867,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.btn_save_module.setEnabled(self.context is not None and has_rows)
         if hasattr(self, "btn_import_module"):
             self.btn_import_module.setEnabled(self.context is not None)
+        if hasattr(self, "btn_manage_modules"):
+            self.btn_manage_modules.setEnabled(self.context is not None)
         if hasattr(self, "btn_auto_fill"):
             self.btn_auto_fill.setEnabled(self.context is not None)
         self._update_save_button_text()
@@ -6651,11 +6917,178 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.table_model.dataChanged.emit(top_left, bottom_right, [QtCore.Qt.DisplayRole])
 
 
+    def _small_icon_size(self) -> int:
+        style = self.style() or QtWidgets.QApplication.style()
+        try:
+            size = int(style.pixelMetric(QtWidgets.QStyle.PM_SmallIconSize, None, self) or 0)
+        except Exception:
+            size = 0
+        return size if size > 0 else 16
+
+    def _overlay_plus_badge(self, pixmap: QtGui.QPixmap, *, size: int) -> QtGui.QIcon:
+        pm = pixmap.copy()
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+
+        badge_radius = max(3, int(round(size * 0.22)))
+        center = QtCore.QPointF(size - badge_radius - 1, size - badge_radius - 1)
+
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QBrush(QtGui.QColor("#4CAF50")))
+        painter.drawEllipse(center, badge_radius, badge_radius)
+
+        pen = QtGui.QPen(QtCore.Qt.white)
+        pen.setWidthF(max(1.2, size * 0.12))
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        painter.setPen(pen)
+        delta = badge_radius * 0.55
+        painter.drawLine(QtCore.QPointF(center.x() - delta, center.y()), QtCore.QPointF(center.x() + delta, center.y()))
+        painter.drawLine(QtCore.QPointF(center.x(), center.y() - delta), QtCore.QPointF(center.x(), center.y() + delta))
+
+        painter.end()
+        return QtGui.QIcon(pm)
+
+    def _build_icon_copy(self, *, size: int) -> QtGui.QIcon:
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+
+        color = self.palette().color(QtGui.QPalette.WindowText)
+        pen = QtGui.QPen(color)
+        pen.setWidthF(max(1.2, size * 0.10))
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+
+        pad = max(2, int(round(size * 0.20)))
+        offset = max(2, int(round(size * 0.18)))
+        width = size - (2 * pad) - offset
+        height = size - (2 * pad) - offset
+        radius = max(1, int(round(size * 0.12)))
+
+        rect_back = QtCore.QRectF(pad + offset, pad, width, height)
+        rect_front = QtCore.QRectF(pad, pad + offset, width, height)
+        painter.drawRoundedRect(rect_back, radius, radius)
+        painter.drawRoundedRect(rect_front, radius, radius)
+
+        painter.end()
+        return QtGui.QIcon(pm)
+
+    def _build_icon_cut(self, *, size: int) -> QtGui.QIcon:
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+
+        color = self.palette().color(QtGui.QPalette.WindowText)
+        pen = QtGui.QPen(color)
+        pen.setWidthF(max(1.2, size * 0.10))
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+
+        pad = max(2, int(round(size * 0.14)))
+        radius = max(2, int(round(size * 0.13)))
+        cx = size * 0.34
+        cy_top = size * 0.38
+        cy_bottom = size * 0.62
+
+        painter.drawEllipse(QtCore.QPointF(cx, cy_top), radius, radius)
+        painter.drawEllipse(QtCore.QPointF(cx, cy_bottom), radius, radius)
+
+        start_x = cx + radius + 1
+        end_x = size - pad
+        painter.drawLine(QtCore.QPointF(start_x, cy_top), QtCore.QPointF(end_x, size - pad))
+        painter.drawLine(QtCore.QPointF(start_x, cy_bottom), QtCore.QPointF(end_x, pad))
+
+        painter.end()
+        return QtGui.QIcon(pm)
+
+    def _build_icon_paste_below(self, *, size: int) -> QtGui.QIcon:
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(QtCore.Qt.transparent)
+
+        painter = QtGui.QPainter(pm)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+
+        color = self.palette().color(QtGui.QPalette.WindowText)
+        pen = QtGui.QPen(color)
+        pen.setWidthF(max(1.2, size * 0.10))
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+
+        pad = max(2, int(round(size * 0.18)))
+        clip_h = max(3, int(round(size * 0.22)))
+        clip_w = max(6, int(round(size * 0.42)))
+        clip_x = (size - clip_w) / 2
+        clip_y = max(1, int(round(size * 0.06)))
+
+        body_x = pad
+        body_y = clip_y + clip_h - 1
+        body_w = size - (2 * pad)
+        body_h = size - body_y - pad + 1
+
+        radius = max(1, int(round(size * 0.10)))
+        painter.drawRoundedRect(QtCore.QRectF(body_x, body_y, body_w, body_h), radius, radius)
+        painter.drawRoundedRect(QtCore.QRectF(clip_x, clip_y, clip_w, clip_h), radius, radius)
+
+        # arrow down (indica "abaixo")
+        arrow_x = size * 0.5
+        arrow_top = body_y + body_h * 0.35
+        arrow_bottom = body_y + body_h * 0.80
+        head = max(2.0, size * 0.12)
+        painter.drawLine(QtCore.QPointF(arrow_x, arrow_top), QtCore.QPointF(arrow_x, arrow_bottom - head))
+        painter.drawLine(QtCore.QPointF(arrow_x, arrow_bottom), QtCore.QPointF(arrow_x - head, arrow_bottom - head))
+        painter.drawLine(QtCore.QPointF(arrow_x, arrow_bottom), QtCore.QPointF(arrow_x + head, arrow_bottom - head))
+
+        painter.end()
+        return QtGui.QIcon(pm)
+
     def _icon(self, key: str) -> QtGui.QIcon:
+        size = self._small_icon_size()
+        cache_key = (key, size)
+        cached = self._menu_icon_cache.get(cache_key)
+        if cached is not None and not cached.isNull():
+            return cached
+
+        for theme_name in self.ICON_THEME_MAP.get(key, ()):
+            icon = QtGui.QIcon.fromTheme(theme_name)
+            if not icon.isNull():
+                self._menu_icon_cache[cache_key] = icon
+                return icon
 
         style = self.style() or QtWidgets.QApplication.style()
 
-        return style.standardIcon(self.ICON_MAP.get(key, QtWidgets.QStyle.SP_FileIcon))
+        if key in {"insert_above", "insert_below"}:
+            base = style.standardIcon(self.ICON_MAP.get(key, QtWidgets.QStyle.SP_FileIcon)).pixmap(size, size)
+            icon = self._overlay_plus_badge(base, size=size)
+            self._menu_icon_cache[cache_key] = icon
+            return icon
+
+        if key == "copy":
+            icon = self._build_icon_copy(size=size)
+            self._menu_icon_cache[cache_key] = icon
+            return icon
+
+        if key == "cut":
+            icon = self._build_icon_cut(size=size)
+            self._menu_icon_cache[cache_key] = icon
+            return icon
+
+        if key == "paste":
+            icon = self._build_icon_paste_below(size=size)
+            self._menu_icon_cache[cache_key] = icon
+            return icon
+
+        icon = style.standardIcon(self.ICON_MAP.get(key, QtWidgets.QStyle.SP_FileIcon))
+        self._menu_icon_cache[cache_key] = icon
+        return icon
 
 
     def _selected_table_rows(self) -> List[int]:
@@ -6680,11 +7113,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         value_display = "-" if new_value is None else (self.table_model._format_result_number(new_value) or str(new_value))
 
         message = (
-
-            f"O valor de QT_und para {descricao} resulta de uma formula.\n"
-
-            f"Pretende alterar manualmente para {value_display}?"
-
+            f"A quantidade deste componente filho resulta de uma formula.\n"
+            f"Pretende guardar uma excecao local com QT_und = {value_display} nesta linha?"
         )
 
         reply = QtWidgets.QMessageBox.question(
@@ -6764,7 +7194,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         action_copy = menu.addAction(self._icon("copy"), "Copiar linha(s)")
 
-        action_paste = menu.addAction(self._icon("paste"), "Colar linha(s)")
+        action_cut = menu.addAction(self._icon("cut"), "Cortar linha(s)")
+
+        action_paste = menu.addAction(self._icon("paste"), "Colar linha(s) Abaixo")
 
     # Removed manual revert action: child/associated components are no
     # longer editable by the user and revert option is not available.
@@ -6784,6 +7216,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
             action_delete.setEnabled(False)
 
             action_copy.setEnabled(False)
+
+            action_cut.setEnabled(False)
 
             action_select_mp.setEnabled(False)
 
@@ -6828,6 +7262,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if chosen == action_copy:
 
             self._copy_rows(selected_rows)
+
+            return
+
+        if chosen == action_cut:
+
+            self._cut_rows(selected_rows)
 
             return
 
@@ -6935,6 +7375,18 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 collected.append(filtered)
 
         self._clipboard_rows = collected
+
+
+    def _cut_rows(self, rows: Sequence[int]) -> None:
+
+        if not rows:
+
+            self._clipboard_rows = []
+
+            return
+
+        self._copy_rows(rows)
+        self._delete_rows(rows)
 
 
     def _paste_rows(self, target_rows: Sequence[int]) -> None:
@@ -7078,7 +7530,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
-    def _apply_updates_from_items(self) -> None:
+    def _apply_updates_from_items(self, *, mark_dirty: bool = False) -> None:
 
         if not self.context:
 
@@ -7262,6 +7714,133 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.table_model.recalculate_all()
 
+        self._update_table_placeholder_visibility()
+        if mark_dirty:
+            self.table_model._mark_dirty()
+
+    def _restore_defaults_from_blk(self, row_index: int) -> None:
+        """
+        Quando o utilizador desmarca BLK numa linha, volta a aplicar os dados por defeito
+        vindos das tabelas de Dados Items (materiais/ferragens/sist.correr/acabamentos).
+        """
+        if not self.context:
+            return
+        if not getattr(self, "table_model", None) or not getattr(self, "session", None):
+            return
+        if not (0 <= row_index < len(self.table_model.rows)):
+            return
+
+        row = self.table_model.rows[row_index]
+        if row.get("blk"):
+            return
+
+        def_peca_val = (row.get("def_peca") or "").strip()
+        if def_peca_val.casefold() == "DIVISAO INDEPENDENTE".casefold():
+            return
+
+        try:
+            self.session.expire_all()
+        except Exception:
+            pass
+
+        orla_lookup = svc_custeio.obter_mapa_orlas(self.session)
+        cp_cache = svc_def_pecas.mapa_por_nome(self.session)
+        uid_map = {r.get("_uid"): r for r in self.table_model.rows if r.get("_uid")}
+
+        row_type = row.get("_row_type")
+        familia_hint = row.get("familia")
+        if row_type == "child" and not familia_hint:
+            parent_uid = row.get("_parent_uid")
+            parent_row = uid_map.get(parent_uid)
+            if parent_row:
+                familia_hint = parent_row.get("familia")
+
+        # Força a re-leitura do material com base na Def_Peca (ignora o mat_default atual).
+        grupo = svc_custeio.grupo_por_def_peca(def_peca_val)
+        if not grupo and row.get("_child_source"):
+            grupo = svc_custeio.grupo_por_def_peca(row["_child_source"]) or row.get("_child_source")
+        if not grupo and row.get("mat_default"):
+            grupo = str(row.get("mat_default") or "").strip()
+
+        material = None
+        if grupo:
+            material = svc_custeio.obter_material_por_grupo(
+                self.session,
+                self.context,
+                (grupo or "").strip(),
+                familia_hint,
+            )
+
+        ferragem_info = None
+        if not material:
+            ferragem_info = svc_custeio.inferir_ferragem_info(row)
+            if ferragem_info:
+                tipo_val = ferragem_info.get("tipo")
+                familia_val = ferragem_info.get("familia")
+                material = svc_custeio.obter_ferragem_por_tipo(
+                    self.session,
+                    self.context,
+                    tipo_val,
+                    familia_val,
+                )
+
+        if not material:
+            return
+
+        updates = svc_custeio.dados_material(material)
+
+        if not updates.get("mat_default") and ferragem_info:
+            tipo_val = ferragem_info.get("tipo")
+            lista = svc_custeio.lista_mat_default_ferragens(self.session, self.context, tipo_val)
+            if lista:
+                updates["mat_default"] = lista[0]
+            if ferragem_info.get("familia") and not updates.get("familia"):
+                updates["familia"] = ferragem_info.get("familia")
+            if ferragem_info.get("tipo") and not updates.get("tipo"):
+                updates["tipo"] = ferragem_info.get("tipo")
+
+        # NST: respeitar override manual (mesma lógica do refresh geral).
+        if "nst" in updates:
+            nst_source = svc_custeio._coerce_checkbox_to_bool(updates.get("nst"))
+            row["_nst_source"] = nst_source
+            if row.get("_nst_manual_override"):
+                updates.pop("nst", None)
+            else:
+                row["_nst_manual_override"] = False
+        else:
+            if "_nst_source" not in row:
+                row["_nst_source"] = None
+
+        self.table_model.update_row_fields(
+            row_index,
+            updates,
+            skip_keys=(
+                "def_peca",
+                "descricao_livre",
+                "qt_mod",
+                "qt_und",
+                "comp",
+                "larg",
+                "esp",
+                "mps",
+                "mo",
+                "orla",
+                "blk",
+            ),
+        )
+
+        svc_custeio.aplicar_definicao_cp_linha(self.session, row, cp_cache)
+
+        special_default = _special_default_for_row(row)
+        if special_default:
+            current_default = (row.get("mat_default") or "").strip().casefold()
+            if not current_default or current_default == "laterais":
+                self.table_model.update_row_fields(row_index, {"mat_default": special_default})
+
+        orla_updates = svc_custeio.aplicar_espessuras_orla(row, orla_lookup)
+        self.table_model.update_row_fields(row_index, orla_updates)
+
+        self.table_model.recalculate_all()
         self._update_table_placeholder_visibility()
 
     # ------------------------------------------------------------------ Helpers
@@ -7556,6 +8135,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self._ensure_production_cache()
 
         self._reload_custeio_rows()
+        # Quando o item ainda nao tem linhas de custeio, iniciar com 1 linha vazia
+        # (equivalente ao menu de contexto "Inserir linha vazia"), sem marcar como alterado.
+        if self.context is not None and self.table_model.rowCount() == 0:
+            linha = svc_custeio.linha_vazia()
+            self.table_model.insert_rows(0, [linha])
+            # Evita auto-save/grava‡Æo de uma linha vazia apenas por carregar o item.
+            self._set_rows_dirty(False)
+            self.table_model.recalculate_all()
+            self._update_table_placeholder_visibility()
 
         self._apply_updates_from_items()
 

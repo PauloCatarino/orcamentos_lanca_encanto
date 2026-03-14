@@ -1,4 +1,5 @@
-import datetime
+﻿import datetime
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -8,15 +9,25 @@ from typing import List, Optional
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import Session
 
+from ..utils.date_utils import today_storage
+
 from ..models import (
     Orcamento,
     OrcamentoItem,
     Client,
+    ClienteTemporario,
     User,
     CusteioItem,
     CusteioItemDimensoes,
+    CusteioDespBackup,
+    CusteioProducaoConfig,
+    CusteioProducaoValor,
     DadosModuloMedidas,
     DadosDefPecas,
+    DadosGeraisMaterial,
+    DadosGeraisFerragem,
+    DadosGeraisSistemaCorrer,
+    DadosGeraisAcabamento,
     DadosItemsMaterial,
     DadosItemsFerragem,
     DadosItemsSistemaCorrer,
@@ -27,6 +38,10 @@ from ..models import (
 
 logger = logging.getLogger(__name__)
 
+PRECO_MANUAL_KEY = "preco_manual"
+TEMP_CLIENT_ID_KEY = "temp_client_id"
+TEMP_CLIENT_NAME_KEY = "temp_client_nome"
+
 
 @dataclass
 class OrcamentoResumo:
@@ -34,9 +49,15 @@ class OrcamentoResumo:
     ano: str
     num_orcamento: str
     versao: str
+    enc_phc: str
     cliente: str
+    temp_client_id: int | None
+    temp_client_nome: str
     data: str
-    preco: str
+    preco: Decimal | float | None
+    preco_manual: bool
+    preco_total_manual: int  # 0=calculado, 1=manual
+    preco_atualizado_em: Optional[datetime.datetime]
     utilizador: str
     estado: str
     obra: str
@@ -91,6 +112,80 @@ def _coerce_decimal(value, default: Decimal) -> Decimal:
         return default
 
 
+def _parse_orcamento_extras(extras_raw) -> dict:
+    if isinstance(extras_raw, dict):
+        return extras_raw
+    if extras_raw in (None, ""):
+        return {}
+    if isinstance(extras_raw, str):
+        try:
+            parsed = json.loads(extras_raw)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _parse_temp_client_id(extras: dict) -> Optional[int]:
+    if not isinstance(extras, dict):
+        return None
+    temp_id_val = extras.get(TEMP_CLIENT_ID_KEY)
+    if temp_id_val in (None, ""):
+        return None
+    try:
+        return int(temp_id_val)
+    except Exception:
+        return None
+
+
+def resolve_orcamento_temp_cliente(db: Session, orcamento: Optional[Orcamento]) -> Optional[ClienteTemporario]:
+    if not db or not orcamento:
+        return None
+    extras = _parse_orcamento_extras(getattr(orcamento, "extras", None))
+    temp_id = _parse_temp_client_id(extras)
+    if not temp_id:
+        return None
+    try:
+        return db.get(ClienteTemporario, temp_id)
+    except Exception:
+        return None
+
+
+def resolve_orcamento_cliente_nome(
+    db: Session,
+    orcamento: Optional[Orcamento],
+    *,
+    client: Optional[Client] = None,
+) -> str:
+    if not orcamento:
+        return (getattr(client, "nome", "") or "").strip()
+    extras = _parse_orcamento_extras(getattr(orcamento, "extras", None))
+    temp_nome = str(extras.get(TEMP_CLIENT_NAME_KEY) or "").strip() if isinstance(extras, dict) else ""
+    temp_id = _parse_temp_client_id(extras)
+    if temp_id:
+        try:
+            temp = db.get(ClienteTemporario, temp_id)
+        except Exception:
+            temp = None
+        if temp:
+            nome_real = (getattr(temp, "nome", "") or "").strip()
+            if nome_real:
+                return nome_real
+            if temp_nome:
+                return temp_nome
+            nome_simplex = (getattr(temp, "nome_simplex", "") or "").strip()
+            if nome_simplex:
+                return nome_simplex
+    if temp_nome:
+        return temp_nome
+    if client is None and getattr(orcamento, "client_id", None):
+        try:
+            client = db.get(Client, orcamento.client_id)
+        except Exception:
+            client = None
+    return (getattr(client, "nome", "") or "").strip()
+
+
 DECIMAL_ZERO = Decimal("0")
 DECIMAL_ONE = Decimal("1")
 
@@ -103,10 +198,14 @@ def _select_orcamentos():
             Orcamento.ano.label("ano"),
             Orcamento.num_orcamento.label("num_orcamento"),
             Orcamento.versao.label("versao"),
+            Orcamento.enc_phc.label("enc_phc"),
             Client.nome_simplex.label("cliente_simplex"),
             Client.nome.label("cliente_nome"),
             Orcamento.data.label("data"),
             Orcamento.preco_total.label("preco_total"),
+            Orcamento.preco_total_manual.label("preco_total_manual"),
+            Orcamento.preco_atualizado_em.label("preco_atualizado_em"),
+            Orcamento.extras.label("extras"),
             User.username.label("utilizador"),
             Orcamento.status.label("estado"),
             Orcamento.obra.label("obra"),
@@ -124,18 +223,76 @@ def _select_orcamentos():
 
 def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
     rows = db.execute(stmt).all()
-    parsed: List[OrcamentoResumo] = []
+    extras_list: List[dict] = []
+    temp_ids: set[int] = set()
     for row in rows:
-        cliente = row.cliente_simplex or row.cliente_nome or ""
+        extras_raw = getattr(row, "extras", None)
+        extras = {}
+        if isinstance(extras_raw, dict):
+            extras = extras_raw
+        elif extras_raw not in (None, ""):
+            try:
+                extras = json.loads(extras_raw)
+            except Exception:
+                extras = {}
+        extras_list.append(extras if isinstance(extras, dict) else {})
+        temp_id_val = extras.get(TEMP_CLIENT_ID_KEY) if isinstance(extras, dict) else None
+        if temp_id_val not in (None, ""):
+            try:
+                temp_ids.add(int(temp_id_val))
+            except Exception:
+                pass
+
+    temp_simplex_map: dict[int, str] = {}
+    if temp_ids:
+        try:
+            temps = (
+                db.execute(select(ClienteTemporario).where(ClienteTemporario.id.in_(temp_ids)))
+                .scalars()
+                .all()
+            )
+        except Exception:
+            temps = []
+        for temp in temps:
+            name = str(getattr(temp, "nome_simplex", None) or getattr(temp, "nome", None) or "").strip()
+            if name:
+                temp_simplex_map[int(getattr(temp, "id", 0) or 0)] = name
+    parsed: List[OrcamentoResumo] = []
+    for row, extras in zip(rows, extras_list):
+        preco_manual = bool(extras.get(PRECO_MANUAL_KEY)) if isinstance(extras, dict) else False
+        temp_nome = ""
+        temp_id = None
+        if isinstance(extras, dict):
+            temp_nome = str(extras.get(TEMP_CLIENT_NAME_KEY) or "").strip()
+            temp_id_val = extras.get(TEMP_CLIENT_ID_KEY)
+            if temp_id_val not in (None, ""):
+                try:
+                    temp_id = int(temp_id_val)
+                except Exception:
+                    temp_id = None
+        temp_simplex = temp_simplex_map.get(temp_id or -1, "")
+        cliente_base = (row.cliente_simplex or row.cliente_nome or "").strip()
+        if temp_simplex:
+            cliente = temp_simplex
+        elif temp_nome:
+            cliente = temp_nome
+        else:
+            cliente = cliente_base
         parsed.append(
             OrcamentoResumo(
                 id=row.id,
                 ano=str(row.ano or ""),
                 num_orcamento=str(row.num_orcamento or ""),
                 versao=_format_versao(row.versao),
+                enc_phc=str(getattr(row, "enc_phc", "") or ""),
                 cliente=cliente,
+                temp_client_id=temp_id,
+                temp_client_nome=temp_nome,
                 data=row.data or "",
-                preco=_format_preco(row.preco_total),
+                preco=row.preco_total,
+                preco_manual=preco_manual,
+                preco_total_manual=getattr(row, "preco_total_manual", 0) or 0,
+                preco_atualizado_em=getattr(row, "preco_atualizado_em", None),
                 utilizador=row.utilizador or "",
                 estado=row.estado or "",
                 obra=row.obra or "",
@@ -151,7 +308,7 @@ def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
 
 def list_orcamentos(db: Session) -> List[OrcamentoResumo]:
     stmt = _select_orcamentos().order_by(
-        Orcamento.ano.desc(), Orcamento.num_orcamento, Orcamento.versao
+        Orcamento.ano.desc(), Orcamento.num_orcamento.desc(), Orcamento.versao
     )
     return _rows_from_stmt(db, stmt)
 
@@ -161,7 +318,7 @@ def get_orcamento(db: Session, orc_id: int) -> Optional[Orcamento]:
 
 
 def ensure_client(db: Session, nome: str) -> Client:
-    nome = (nome or "Cliente Genérico").strip() or "Cliente Genérico"
+    nome = (nome or "Cliente GenÃ©rico").strip() or "Cliente GenÃ©rico"
     c = db.execute(select(Client).where(Client.nome == nome)).scalar_one_or_none()
     if c:
         return c
@@ -185,7 +342,7 @@ def create_orcamento(
     if client_id:
         cli = db.get(Client, client_id)
         if not cli:
-            raise ValueError("Cliente não encontrado")
+            raise ValueError("Cliente nÃ£o encontrado")
     else:
         cli = ensure_client(db, cliente_nome)
     o = Orcamento(
@@ -193,8 +350,8 @@ def create_orcamento(
         num_orcamento=str(num_orcamento),
         versao=versao,
         client_id=cli.id,
-        data=datetime.datetime.now().strftime("%Y-%m-%d"),
-        status="Falta Orçamentar",
+        data=today_storage(),
+        status="Falta Orcamentar",
         created_by=created_by,
     )
     db.add(o)
@@ -217,7 +374,7 @@ def list_items(db: Session, orc_id: int, versao: str | None = None) -> List[Orca
 
 
 def _next_item_ord(db: Session, orc_id: int) -> int:
-    # já existe no ficheiro, deixo aqui por referência
+    # jÃ¡ existe no ficheiro, deixo aqui por referÃªncia
     q = db.execute(
         select(func.max(OrcamentoItem.item_ord)).where(OrcamentoItem.id_orcamento == orc_id)
     ).scalar()
@@ -257,9 +414,9 @@ def _reindex_items(
 def create_item(
     db: Session,
     orc_id: int,
-    versao: str,              # ✔ versão obrigatória
+    versao: str,              # âœ” versÃ£o obrigatÃ³ria
     *,
-    item: Optional[str] = None,     # ✔ nome visível do item
+    item: Optional[str] = None,     # âœ” nome visÃ­vel do item
     codigo: Optional[str] = None,
     descricao: Optional[str] = None,
     altura=None,
@@ -270,27 +427,27 @@ def create_item(
     created_by: Optional[int] = None,
 ) -> OrcamentoItem:
     """
-    Cria um novo item associado ao orçamento.
-    - 'item' é preenchido automaticamente com a próxima sequência (1, 2, 3, ...)
-      se o utilizador não indicar um nome.
-    - 'item_ord' é a ordem visual (1..N) e acompanha a sequência.
+    Cria um novo item associado ao orÃ§amento.
+    - 'item' Ã© preenchido automaticamente com a prÃ³xima sequÃªncia (1, 2, 3, ...)
+      se o utilizador nÃ£o indicar um nome.
+    - 'item_ord' Ã© a ordem visual (1..N) e acompanha a sequÃªncia.
     """
 
-    # Normaliza versão para '01', '02', ...
+    # Normaliza versÃ£o para '01', '02', ...
     versao_norm = _format_versao(versao)
 
-    # Próxima ordem/sequência dentro do orçamento (por id_orcamento)
+    # PrÃ³xima ordem/sequÃªncia dentro do orÃ§amento (por id_orcamento)
     prox_ord = _next_item_ord(db, orc_id)
 
-    # Se o utilizador não escreveu nome, usamos a sequência como texto
+    # Se o utilizador nÃ£o escreveu nome, usamos a sequÃªncia como texto
     item_val = _normalize_text(item) if item is not None else str(prox_ord)
 
-    # Constrói a entidade ORM
+    # ConstrÃ³i a entidade ORM
     row = OrcamentoItem(
         id_orcamento=orc_id,
-        versao=versao_norm,                 # ✔ agora o modelo aceita 'versao'
+        versao=versao_norm,                 # âœ” agora o modelo aceita 'versao'
         item_ord=prox_ord,
-        item=item_val,                      # ✔ atributo 'item' no ORM (não 'item_nome')
+        item=item_val,                      # âœ” atributo 'item' no ORM (nÃ£o 'item_nome')
         codigo=_normalize_codigo(codigo),
         descricao=_normalize_text(descricao),
         altura=_coerce_decimal(altura, DECIMAL_ZERO),
@@ -345,8 +502,8 @@ def update_item(
     db: Session,
     id_item: int,
     *,
-    versao: Optional[str] = None,         # ✅ Agora podemos atualizar a versão
-    item: Optional[str] = None,           # ✅ Nome do item alinhado com a coluna da BD
+    versao: Optional[str] = None,         # âœ… Agora podemos atualizar a versÃ£o
+    item: Optional[str] = None,           # âœ… Nome do item alinhado com a coluna da BD
     codigo: Optional[str] = None,
     descricao: Optional[str] = None,
     altura=None,
@@ -358,17 +515,17 @@ def update_item(
 ) -> OrcamentoItem:
     """Atualiza um item existente na tabela orcamento_items."""
 
-    # 🔎 Buscar item no BD
+    # ðŸ”Ž Buscar item no BD
     it = db.get(OrcamentoItem, id_item)
     if not it:
-        raise ValueError("Item não encontrado")
+        raise ValueError("Item nÃ£o encontrado")
 
-    # ✅ Atualizar versão se fornecida
+    # âœ… Atualizar versÃ£o se fornecida
     if versao is not None:
         it.versao = _format_versao(versao)
 
-    # ✅ Atualizar os restantes campos
-    it.item = _normalize_text(item)   # ✅ Corrigido: usar 'item' em vez de 'item_nome'
+    # âœ… Atualizar os restantes campos
+    it.item = _normalize_text(item)   # âœ… Corrigido: usar 'item' em vez de 'item_nome'
     it.codigo = _normalize_codigo(codigo)
     it.descricao = _normalize_text(descricao)
     it.altura = _coerce_decimal(altura, DECIMAL_ZERO)
@@ -457,13 +614,39 @@ def _clone_rows(db: Session, model, filters, overrides: dict) -> list:
     return clones
 
 
+def _clone_rows_with_item_map(db: Session, model, item_map: dict, overrides: dict) -> list:
+    if not item_map:
+        return []
+    rows = db.query(model).filter(model.item_id.in_(item_map.keys())).all()
+    clones = []
+    for row in rows:
+        data = {}
+        for col in model.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "item_id":
+                data[name] = item_map.get(getattr(row, "item_id"))
+            elif name in overrides:
+                data[name] = overrides[name]
+            else:
+                data[name] = getattr(row, name)
+        clone = model(**data)
+        db.add(clone)
+        clones.append(clone)
+    db.flush()
+    return clones
+
+
 def duplicate_item(db: Session, item_id: int, *, created_by: Optional[int] = None) -> OrcamentoItem:
     """
-    Duplica um item do orçamento (e dependências diretas) no mesmo orçamento/versão.
+    Duplica um item do orÃ§amento (e dependÃªncias diretas) no mesmo orÃ§amento/versÃ£o.
     """
     src = db.get(OrcamentoItem, item_id)
     if not src:
-        raise ValueError("Item não encontrado.")
+        raise ValueError("Item nÃ£o encontrado.")
 
     new_item_ord = _next_item_ord(db, src.id_orcamento)
     new_item_num = str(new_item_ord)
@@ -581,7 +764,7 @@ def next_num_orcamento(db: Session, ano: Optional[str] = None) -> str:
     if not ano:
         ano = str(datetime.datetime.now().year)
     yy = ano[-2:]
-    # encontrar maior sequencia começando por YY
+    # encontrar maior sequencia comeÃ§ando por YY
     max_seq = 0
     rows = db.execute(select(Orcamento.num_orcamento).where(Orcamento.num_orcamento.like(f"{yy}%"))).scalars().all()
     for s in rows:
@@ -637,7 +820,7 @@ def next_seq_for_year(db: Session, ano: Optional[str] = None) -> str:
         except ValueError:
             continue
 
-    # Devolve apenas a parte sequencial com zero à esquerda
+    # Devolve apenas a parte sequencial com zero Ã  esquerda
         if seq > max_seq:
             max_seq = seq
             largura = len(sufixo)
@@ -669,15 +852,16 @@ def duplicate_orcamento_version(
 ) -> Orcamento:
     o = db.get(Orcamento, orc_id)
     if not o:
-        raise ValueError("Orçamento não encontrado")
-    new_ver = next_version_for(db, o.ano, o.num_orcamento)
+        raise ValueError("OrÃ§amento nÃ£o encontrado")
+    old_ver = _format_versao(o.versao)
+    new_ver = _format_versao(next_version_for(db, o.ano, o.num_orcamento))
     dup = Orcamento(
         ano=o.ano,
         num_orcamento=o.num_orcamento,
         versao=new_ver,
         client_id=o.client_id,
-        status=o.status,
-        data=datetime.datetime.now().strftime("%Y-%m-%d"),
+        status="Falta Orcamentar",
+        data=today_storage(),
         preco_total=o.preco_total,
         ref_cliente=o.ref_cliente,
         enc_phc=o.enc_phc,
@@ -688,11 +872,196 @@ def duplicate_orcamento_version(
         info_2=o.info_2,
         notas=o.notas,
         extras=o.extras,
-        created_by=o.created_by,
+        created_by=created_by or o.created_by,
+        updated_by=created_by or o.updated_by,
     )
     db.add(dup)
     db.flush()
-    # TODO: duplicar itens e filhos numa próxima etapa
+
+    dados_gerais_overrides = {
+        "ano": o.ano,
+        "num_orcamento": o.num_orcamento,
+        "versao": new_ver,
+        "cliente_id": o.client_id,
+    }
+    def _dados_gerais_filters(model):
+        return [
+            model.ano == o.ano,
+            model.num_orcamento == o.num_orcamento,
+            model.versao == old_ver,
+            model.cliente_id == o.client_id,
+        ]
+
+    _clone_rows(db, DadosGeraisMaterial, _dados_gerais_filters(DadosGeraisMaterial), dados_gerais_overrides)
+    _clone_rows(db, DadosGeraisFerragem, _dados_gerais_filters(DadosGeraisFerragem), dados_gerais_overrides)
+    _clone_rows(db, DadosGeraisSistemaCorrer, _dados_gerais_filters(DadosGeraisSistemaCorrer), dados_gerais_overrides)
+    _clone_rows(db, DadosGeraisAcabamento, _dados_gerais_filters(DadosGeraisAcabamento), dados_gerais_overrides)
+
+    items = (
+        db.query(OrcamentoItem)
+        .filter(OrcamentoItem.id_orcamento == o.id, OrcamentoItem.versao == old_ver)
+        .order_by(OrcamentoItem.item_ord, OrcamentoItem.id_item)
+        .all()
+    )
+    item_map = {}
+    for item in items:
+        data = {}
+        for col in OrcamentoItem.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "id_orcamento":
+                data[name] = dup.id
+            elif name == "versao":
+                data[name] = new_ver
+            elif name in {"created_by", "updated_by"}:
+                data[name] = created_by or getattr(item, name)
+            else:
+                data[name] = getattr(item, name)
+        new_item = OrcamentoItem(**data)
+        db.add(new_item)
+        db.flush()
+        item_map[item.id_item] = new_item.id_item
+
+    for old_item_id, new_item_id in item_map.items():
+        _clone_rows(db, DadosModuloMedidas, [DadosModuloMedidas.id_item_fk == old_item_id], {"id_item_fk": new_item_id})
+        _clone_rows(db, DadosDefPecas, [DadosDefPecas.id_item_fk == old_item_id], {"id_item_fk": new_item_id})
+
+    item_context_overrides = {
+        "orcamento_id": dup.id,
+        "versao": new_ver,
+        "ano": o.ano,
+        "num_orcamento": o.num_orcamento,
+        "cliente_id": o.client_id,
+    }
+    _clone_rows_with_item_map(db, DadosItemsMaterial, item_map, item_context_overrides)
+    _clone_rows_with_item_map(db, DadosItemsFerragem, item_map, item_context_overrides)
+    _clone_rows_with_item_map(db, DadosItemsSistemaCorrer, item_map, item_context_overrides)
+    _clone_rows_with_item_map(db, DadosItemsAcabamento, item_map, item_context_overrides)
+
+    modelos = db.query(DadosItemsModelo).filter(DadosItemsModelo.orcamento_id == o.id).all()
+    modelo_map = {}
+    for modelo in modelos:
+        if modelo.item_id is not None and modelo.item_id not in item_map:
+            continue
+        data = {}
+        for col in DadosItemsModelo.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "orcamento_id":
+                data[name] = dup.id
+            elif name == "item_id":
+                data[name] = item_map.get(modelo.item_id) if modelo.item_id is not None else None
+            else:
+                data[name] = getattr(modelo, name)
+        new_modelo = DadosItemsModelo(**data)
+        db.add(new_modelo)
+        db.flush()
+        modelo_map[modelo.id] = new_modelo.id
+    for old_id, new_id in modelo_map.items():
+        _clone_rows(db, DadosItemsModeloItem, [DadosItemsModeloItem.modelo_id == old_id], {"modelo_id": new_id})
+
+    custeio_rows = []
+    if item_map:
+        custeio_rows = db.query(CusteioItem).filter(
+            CusteioItem.orcamento_id == o.id,
+            CusteioItem.item_id.in_(item_map.keys()),
+            CusteioItem.versao == old_ver,
+        ).all()
+    custeio_map = {}
+    for row in custeio_rows:
+        data = {}
+        for col in CusteioItem.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "orcamento_id":
+                data[name] = dup.id
+            elif name == "item_id":
+                data[name] = item_map.get(row.item_id)
+            elif name == "versao":
+                data[name] = new_ver
+            elif name == "ano":
+                data[name] = o.ano
+            elif name == "num_orcamento":
+                data[name] = o.num_orcamento
+            elif name == "cliente_id":
+                data[name] = o.client_id
+            else:
+                data[name] = getattr(row, name)
+        new_row = CusteioItem(**data)
+        db.add(new_row)
+        db.flush()
+        custeio_map[row.id] = new_row.id
+
+    _clone_rows_with_item_map(db, CusteioItemDimensoes, item_map, item_context_overrides)
+
+    if custeio_map:
+        backup_rows = db.query(CusteioDespBackup).filter(
+            CusteioDespBackup.orcamento_id == o.id,
+            CusteioDespBackup.versao == old_ver,
+            CusteioDespBackup.custeio_item_id.in_(custeio_map.keys()),
+        ).all()
+        for row in backup_rows:
+            data = {}
+            for col in CusteioDespBackup.__table__.columns:
+                if col.primary_key:
+                    continue
+                name = col.name
+                if name in {"created_at", "updated_at"}:
+                    continue
+                if name == "orcamento_id":
+                    data[name] = dup.id
+                elif name == "versao":
+                    data[name] = new_ver
+                elif name == "custeio_item_id":
+                    data[name] = custeio_map.get(row.custeio_item_id)
+                else:
+                    data[name] = getattr(row, name)
+            db.add(CusteioDespBackup(**data))
+        db.flush()
+
+    configs = db.query(CusteioProducaoConfig).filter(
+        CusteioProducaoConfig.orcamento_id == o.id,
+        CusteioProducaoConfig.versao == old_ver,
+    ).all()
+    for cfg in configs:
+        data = {}
+        for col in CusteioProducaoConfig.__table__.columns:
+            if col.primary_key:
+                continue
+            name = col.name
+            if name in {"created_at", "updated_at"}:
+                continue
+            if name == "orcamento_id":
+                data[name] = dup.id
+            elif name == "versao":
+                data[name] = new_ver
+            elif name == "ano":
+                data[name] = o.ano
+            elif name == "num_orcamento":
+                data[name] = o.num_orcamento
+            elif name == "cliente_id":
+                data[name] = o.client_id
+            else:
+                data[name] = getattr(cfg, name)
+        new_cfg = CusteioProducaoConfig(**data)
+        db.add(new_cfg)
+        db.flush()
+        _clone_rows(
+            db,
+            CusteioProducaoValor,
+            [CusteioProducaoValor.config_id == cfg.id],
+            {"config_id": new_cfg.id},
+        )
+
     return dup
 
 
@@ -722,5 +1091,6 @@ def search_orcamentos(db: Session, query: str) -> List[OrcamentoResumo]:
                 Client.nome_simplex.ilike(like),
             )
         )
-    stmt = stmt.order_by(Orcamento.ano.desc(), Orcamento.num_orcamento, Orcamento.versao)
+    stmt = stmt.order_by(Orcamento.ano.desc(), Orcamento.num_orcamento.desc(), Orcamento.versao)
     return _rows_from_stmt(db, stmt)
+

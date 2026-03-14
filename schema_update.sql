@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS definicoes_pecas (
 ALTER TABLE custeio_items
     ADD COLUMN IF NOT EXISTS cp09_colagem_und DECIMAL(18,4) NULL AFTER cp08_mao_de_obra_und;
 
+-- Guardar miniatura associada à divisão independente no custeio
+ALTER TABLE custeio_items
+    ADD COLUMN IF NOT EXISTS icon_hint VARCHAR(512) NULL AFTER descricao;
+
 -- Guardar o estado inicial do BLK no backup de desperdicio (Nao Stock)
 ALTER TABLE custeio_desp_backup
     ADD COLUMN IF NOT EXISTS blk_original TINYINT(1) NOT NULL DEFAULT 0 AFTER desp_original;
@@ -61,4 +65,30 @@ ALTER TABLE orcamento_items
     MODIFY COLUMN margem_mp_orlas_perc DECIMAL(6,2) DEFAULT 0,
     MODIFY COLUMN margem_mao_obra_perc DECIMAL(6,2) DEFAULT 0,
     MODIFY COLUMN custo_colagem DECIMAL(14,2) DEFAULT 0;
+
+-- Tabela de clientes temporarios (clientes ainda nao existentes no PHC)
+CREATE TABLE IF NOT EXISTS clientes_temporarios (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    nome_simplex VARCHAR(255) NULL,
+    morada TEXT NULL,
+    email VARCHAR(255) NULL,
+    web_page VARCHAR(255) NULL,
+    telefone VARCHAR(64) NULL,
+    telemovel VARCHAR(64) NULL,
+    num_cliente_phc VARCHAR(64) NULL,
+    info_1 TEXT NULL,
+    info_2 TEXT NULL,
+    notas TEXT NULL,
+    extras JSON NULL,
+    reservado1 VARCHAR(255) NULL,
+    reservado2 VARCHAR(255) NULL,
+    reservado3 VARCHAR(255) NULL,
+    reservado4 VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX ix_clientes_temporarios_nome (nome),
+    INDEX ix_clientes_temporarios_simplex (nome_simplex),
+    INDEX ix_clientes_temporarios_num_phc (num_cliente_phc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

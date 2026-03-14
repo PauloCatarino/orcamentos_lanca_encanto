@@ -136,7 +136,7 @@ from Martelo_Orcamentos_V2.app.db import SessionLocal
 
 from Martelo_Orcamentos_V2.app.models import Orcamento, Client, User
 
-
+from Martelo_Orcamentos_V2.app.services.orcamentos import resolve_orcamento_cliente_nome
 
 from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 
@@ -266,13 +266,6 @@ MATERIAL_CLIP_FIELDS = [
 
 
     "id_mp",
-
-
-
-    "nao_stock",
-
-
-
 ]
 
 
@@ -660,6 +653,20 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
+    CENTER_ALIGN_FIELDS = {
+        "preco_tab",
+        "preco_liq",
+        "margem",
+        "desconto",
+        "und",
+        "desp",
+        "orl_0_4",
+        "orl_1_0",
+        "comp_mp",
+        "larg_mp",
+        "esp_mp",
+    }
+
     def __init__(self, columns: Sequence[ColumnSpec], rows: Optional[List[Dict]] = None, parent=None):
 
 
@@ -865,6 +872,8 @@ class DadosGeraisTableModel(QtCore.QAbstractTableModel):
 
 
 
+            if spec.field in self.CENTER_ALIGN_FIELDS:
+                return int(Qt.AlignCenter | Qt.AlignVCenter)
             if spec.kind in {"money", "decimal", "percent", "integer"}:
                 return int(Qt.AlignRight | Qt.AlignVCenter)
             if spec.kind == "bool":
@@ -2225,7 +2234,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         "grupo_ferragem": 180,
         "grupo_sistema": 200,
         "grupo_acabamento": 200,
-        "descricao": 200,
+        "descricao": 260,
         "ref_le": 120,
         "descricao_material": 320,
         "preco_tab": 90,
@@ -2236,14 +2245,15 @@ class DadosGeraisPage(QtWidgets.QWidget):
         "desp": 80,
         "tipo": 140,
         "familia": 150,
-        "comp_mp": 90,
-        "larg_mp": 90,
-        "esp_mp": 85,
+        "comp_mp": 70,
+        "larg_mp": 70,
+        "esp_mp": 60,
         "orl_0_4": 85,
         "orl_1_0": 85,
         "id_mp": 90,
-        "nao_stock": 95,
     }
+
+    FORCE_DEFAULT_COLUMN_FIELDS = {"descricao", "comp_mp", "larg_mp", "esp_mp"}
 
     HIDDEN_FIELDS = {"reserva_1", "reserva_2", "reserva_3"}
 
@@ -2251,6 +2261,52 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
         style = self.style() or QtWidgets.QApplication.style()
         return style.standardIcon(self._ICON_MAP.get(key, QtWidgets.QStyle.SP_FileIcon))
+
+    def _active_menu_key(self) -> Optional[str]:
+        tabs = getattr(self, "tabs", None)
+        if not isinstance(tabs, QtWidgets.QTabWidget):
+            return self.tab_order[0] if self.tab_order else None
+        idx = tabs.currentIndex()
+        if 0 <= idx < len(self.tab_order):
+            return self.tab_order[idx]
+        return self.tab_order[0] if self.tab_order else None
+
+    def _update_action_bar_for_tab(self) -> None:
+        key = self._active_menu_key()
+        btn_select_mp = getattr(self, "btn_action_select_mp", None)
+        if isinstance(btn_select_mp, QtWidgets.QPushButton):
+            btn_select_mp.setVisible(bool(key and key in self._menus_select_mp))
+
+    def _on_action_save_model_clicked(self) -> None:
+        key = self._active_menu_key()
+        if not key:
+            return
+        self.on_guardar_modelo(key)
+
+    def _on_action_import_model_clicked(self) -> None:
+        key = self._active_menu_key()
+        if not key:
+            return
+        self.on_importar_modelo(key)
+
+    def _on_action_select_mp_clicked(self) -> None:
+        key = self._active_menu_key()
+        if not key:
+            return
+        self.on_selecionar_mp(key)
+
+    def _on_action_refresh_clicked(self) -> None:
+        """
+        Atualiza a sessão para que novas alterações feitas por outros utilizadores
+        (ex.: modelos __GLOBAL__) fiquem visíveis sem reiniciar o programa.
+
+        Nota: em MySQL com isolamento REPEATABLE READ, uma sessão com transação aberta
+        pode não ver novos registos. Um rollback encerra o snapshot e força novo.
+        """
+        try:
+            self.session.rollback()
+        except Exception:
+            pass
 
 
 
@@ -2482,6 +2538,20 @@ class DadosGeraisPage(QtWidgets.QWidget):
         self._dirty = dirty
         self._update_save_button_texts()
 
+    def _show_toast(self, widget: Optional[QtWidgets.QWidget], text: str, timeout_ms: int = 3000) -> None:
+        if not text:
+            return
+        try:
+            if widget is not None:
+                rect = widget.rect()
+                center = rect.center()
+                global_pos = widget.mapToGlobal(center)
+                QtWidgets.QToolTip.showText(global_pos, text, widget, rect, timeout_ms)
+                return
+        except Exception:
+            pass
+        QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), text)
+
     def _update_save_button_texts(self) -> None:
         text = self._base_save_button_text
         if getattr(self, "_dirty", False) and not text.endswith("*"):
@@ -2554,7 +2624,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 table.setColumnHidden(idx, not spec.visible)
                 if not spec.visible:
                     continue
-                width = saved_widths.get(spec.field) or spec.width
+                width = spec.width if spec.field in self.FORCE_DEFAULT_COLUMN_FIELDS else (saved_widths.get(spec.field) or spec.width)
                 if width:
                     table.setColumnWidth(idx, int(width))
         finally:
@@ -2679,6 +2749,84 @@ class DadosGeraisPage(QtWidgets.QWidget):
         root.setContentsMargins(8, 8, 8, 8)
 
         root.setSpacing(8)
+
+        # Barra de ações (1ª linha, igual à lógica do menu Orçamentos)
+        actions_bar = QtWidgets.QWidget(self)
+        actions_layout = QHBoxLayout(actions_bar)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(6)
+
+        def _style_color_button(
+            btn: QtWidgets.QPushButton,
+            bg_color: str,
+            text_color: str = "white",
+            *,
+            big: bool = False,
+        ):
+            padding = "8px 12px" if big else "6px 10px"
+            btn.setStyleSheet(
+                f"background-color:{bg_color}; color:{text_color}; font-weight:bold; padding:{padding}; border-radius:4px;"
+            )
+            btn.setCursor(Qt.PointingHandCursor)
+
+        self.btn_action_save_model = QPushButton(self.menu_save_button_text)
+        self.btn_action_save_model.setIcon(self._standard_icon("save"))
+        self.btn_action_save_model.setToolTip("Guardar as linhas desta tabela como um modelo reutilizável.")
+        self.btn_action_save_model.clicked.connect(self._on_action_save_model_clicked)
+        _style_color_button(self.btn_action_save_model, "#4CAF50")
+
+        self.btn_guardar = QPushButton(self.save_button_text)
+        self.btn_guardar.setIcon(self._standard_icon("save"))
+        self.btn_guardar.setToolTip(
+            "Gravar os dados atuais (todas as tabelas) para o orçamento/item selecionado. Atalho: Ctrl+G."
+        )
+        self.btn_guardar.clicked.connect(self.on_guardar)
+        self._shortcut_save = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+G"), self)
+        self._shortcut_save.setContext(Qt.WidgetWithChildrenShortcut)
+        self._shortcut_save.activated.connect(self.on_guardar)
+        _style_color_button(self.btn_guardar, "#2196F3", big=True)
+
+        self.btn_action_select_mp = QPushButton("Selecionar Materia-Prima")
+        self.btn_action_select_mp.setIcon(self._standard_icon("select_mp"))
+        self.btn_action_select_mp.setToolTip(
+            "Selecionar uma matéria-prima para preencher os campos da linha selecionada."
+        )
+        self.btn_action_select_mp.clicked.connect(self._on_action_select_mp_clicked)
+        _style_color_button(self.btn_action_select_mp, "#F44336")
+
+        self.btn_action_import_model = QPushButton(self.import_button_text)
+        self.btn_action_import_model.setIcon(self._standard_icon("import"))
+        self.btn_action_import_model.setToolTip("Importar um modelo e preencher/atualizar esta tabela.")
+        self.btn_action_import_model.clicked.connect(self._on_action_import_model_clicked)
+        _style_color_button(self.btn_action_import_model, "#FF9800")
+
+        self.btn_action_import_multi = QPushButton(self.import_multi_button_text)
+        self.btn_action_import_multi.setIcon(self._standard_icon("import_multi"))
+        self.btn_action_import_multi.setToolTip("Importar múltiplos modelos e preencher as tabelas.")
+        self.btn_action_import_multi.clicked.connect(self.on_importar_multi_modelos)
+        _style_color_button(self.btn_action_import_multi, "#FFEB3B", text_color="black")
+
+        self.btn_action_refresh = QPushButton("Atualizar")
+        self.btn_action_refresh.setIcon(self._standard_icon("refresh"))
+        self.btn_action_refresh.setToolTip(
+            "Atualiza os modelos disponíveis (inclui modelos Global) sem reiniciar o programa.\n"
+            "- Útil quando outro utilizador acabou de guardar um modelo Global."
+        )
+        self.btn_action_refresh.clicked.connect(self._on_action_refresh_clicked)
+        _style_color_button(self.btn_action_refresh, "#E0E0E0", text_color="black")
+
+        # Nova ordem e cores (igual à lógica do menu Orçamentos)
+        # Guardar Modelo | Guardar Dados | Selecionar MP | Importar | Importar Multi
+        actions_layout.addWidget(self.btn_action_save_model)
+        actions_layout.addWidget(self.btn_guardar)
+        actions_layout.addWidget(self.btn_action_select_mp)
+        actions_layout.addWidget(self.btn_action_import_model)
+        actions_layout.addWidget(self.btn_action_import_multi)
+        actions_layout.addWidget(self.btn_action_refresh)
+
+        self._save_buttons = [self.btn_guardar]
+        actions_layout.addStretch(1)
+        root.addWidget(actions_bar)
 
 
 
@@ -2913,6 +3061,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
         self.tabs = QTabWidget(self)
+        self.tabs.currentChanged.connect(lambda _idx: self._update_action_bar_for_tab())
 
         root.addWidget(self.tabs, 1)
 
@@ -2921,10 +3070,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         self.models: Dict[str, DadosGeraisTableModel] = {}
 
         self.tables: Dict[str, QTableView] = {}
-
-        self._save_buttons: List[QtWidgets.QPushButton] = []
-
-        self.btn_guardar: Optional[QtWidgets.QPushButton] = None
+        self._table_shortcuts: Dict[str, Tuple[QtGui.QAction, QtGui.QAction]] = {}
 
 
 
@@ -2937,80 +3083,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
             layout.setContentsMargins(0, 0, 0, 0)
 
             layout.setSpacing(4)
-
-
-
-            toolbar = QHBoxLayout()
-
-            toolbar.setSpacing(6)
-
-
-
-            btn_save_model = QPushButton(self.menu_save_button_text)
-
-            btn_save_model.setIcon(self._standard_icon("save"))
-
-            btn_save_model.clicked.connect(lambda _, k=key: self.on_guardar_modelo(k))
-
-
-
-            btn_import_model = QPushButton(self.import_button_text)
-
-            btn_import_model.setIcon(self._standard_icon("import"))
-
-            btn_import_model.clicked.connect(lambda _, k=key: self.on_importar_modelo(k))
-
-
-
-            btn_import_multi = QPushButton(self.import_multi_button_text)
-
-            btn_import_multi.setIcon(self._standard_icon("import_multi"))
-
-            btn_import_multi.clicked.connect(self.on_importar_multi_modelos)
-
-
-
-            toolbar.addWidget(btn_save_model)
-
-            toolbar.addWidget(btn_import_model)
-
-            toolbar.addWidget(btn_import_multi)
-
-
-
-            btn_select_mp = QPushButton("Selecionar Materia-Prima")
-
-            btn_select_mp.setIcon(self._standard_icon("select_mp"))
-
-            btn_select_mp.clicked.connect(lambda _, k=key: self.on_selecionar_mp(k))
-
-            btn_select_mp.setVisible(key in self._menus_select_mp)
-
-            toolbar.addWidget(btn_select_mp)
-
-
-
-            btn_guardar_tab = QPushButton(self.save_button_text)
-
-            btn_guardar_tab.setIcon(self._standard_icon("save"))
-
-            btn_guardar_tab.clicked.connect(self.on_guardar)
-
-            toolbar.addWidget(btn_guardar_tab)
-
-            self._save_buttons.append(btn_guardar_tab)
-
-            if self.btn_guardar is None:
-
-                self.btn_guardar = btn_guardar_tab
-
-
-
-            toolbar.addStretch(1)
-
-
-
-            layout.addLayout(toolbar)
 
 
 
@@ -3045,6 +3117,21 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             table.customContextMenuRequested.connect(lambda pos, k=key: self._on_context_menu(pos, k))
 
+            # Atalhos de teclado (mesma lógica do menu do botão direito do rato)
+            act_copy = QtGui.QAction(table)
+            act_copy.setShortcut(QtGui.QKeySequence.Copy)
+            act_copy.setShortcutContext(QtCore.Qt.WidgetShortcut)
+            act_copy.triggered.connect(lambda _=False, k=key, t=table: self._copy_rows(k, self._selected_rows_from_table(t)))
+            table.addAction(act_copy)
+
+            act_paste = QtGui.QAction(table)
+            act_paste.setShortcut(QtGui.QKeySequence.Paste)
+            act_paste.setShortcutContext(QtCore.Qt.WidgetShortcut)
+            act_paste.triggered.connect(lambda _=False, k=key, t=table: self._paste_rows(k, t, self._selected_rows_from_table(t)))
+            table.addAction(act_paste)
+
+            self._table_shortcuts[key] = (act_copy, act_paste)
+
             layout.addWidget(table, 1)
 
 
@@ -3077,6 +3164,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
             self._configure_delegates(key)
 
         self._update_save_button_texts()
+        self._update_action_bar_for_tab()
 
 
     # --- delegates por coluna (combos, etc.) ----------------------------------
@@ -3550,6 +3638,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
                             'num_orcamento': orc.num_orcamento,
                             'versao': orc.versao,
                             'created_by': orc.created_by,
+                            'extras': getattr(orc, "extras", None),
                         }
                         # Use os dados diretamente sem tentar reatachá-los
                         orc = type('obj', (object,), orc_data)()
@@ -3587,7 +3676,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
                 except Exception:
                     pass
 
-            cliente_nome = (getattr(cliente, "nome", "") or "").strip()
+            cliente_nome = resolve_orcamento_cliente_nome(self.session, orc, client=cliente)
             ano_val = getattr(orc, "ano", "")
             ano_text = str(ano_val).strip() if ano_val is not None else ""
             numero_text = str(getattr(orc, "num_orcamento", "") or "")
@@ -3723,9 +3812,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
             self.session.commit()
 
-
-
-            QtWidgets.QMessageBox.information(self, "Sucesso", "Dados gerais guardados.")
+            self._show_toast(getattr(self, "btn_guardar", None), "Dados gerais guardados.", timeout_ms=3000)
             self._set_dirty(False)
 
 
@@ -4036,7 +4123,7 @@ class DadosGeraisPage(QtWidgets.QWidget):
         """
         Preenche campos faltantes a partir de materias_primas (match por ref_le) e resolve conflitos via dialogo.
         """
-        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp", "nao_stock"}
+        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp"}
         compare_fields = ["ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und"]
         conflicts: Dict[int, Dict[str, Any]] = {}
         merged: List[Dict[str, Any]] = []
@@ -4639,13 +4726,6 @@ class DadosGeraisPage(QtWidgets.QWidget):
 
 
             "id_mp": materia.id_mp,
-
-
-
-            "nao_stock": bool(getattr(materia, "stock", 0)),
-
-
-
         }
 
 
@@ -4990,22 +5070,24 @@ class GuardarModeloDialog(QDialog):
         self.linhas = [dict(row) for row in linhas]
         self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
         self.replace_model_id: Optional[int] = None
+        self._selected_model_id: Optional[int] = None
         self.model_name: str = ""
         self.is_global: bool = False
         self.add_timestamp: bool = True
 
-        self.resize(900, 600)
+        self.resize(1200, 650)
         layout = QVBoxLayout(self)
         split = QHBoxLayout()
 
         self.models_list = QListWidget()
+        self.models_list.setMinimumWidth(420)
         self.models_list.itemSelectionChanged.connect(self._on_model_selected)
-        split.addWidget(self.models_list, 1)
+        split.addWidget(self.models_list, 2)
 
         self.preview_table = QTableWidget()
         self.preview_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.preview_table.setSelectionMode(QAbstractItemView.NoSelection)
-        split.addWidget(self.preview_table, 2)
+        split.addWidget(self.preview_table, 3)
         layout.addLayout(split)
 
         form = QFormLayout()
@@ -5025,8 +5107,6 @@ class GuardarModeloDialog(QDialog):
 
         self._populate_models()
         self._populate_preview()
-        if self.models_list.count() > 0:
-            self.models_list.setCurrentRow(0)
 
     def _filtered_lines(self) -> List[Dict[str, Any]]:
         return [dict(row) for row in self.linhas]
@@ -5070,13 +5150,32 @@ class GuardarModeloDialog(QDialog):
         if not item:
             self.preview_table.clearContents()
             self.preview_table.setRowCount(0)
+            self._selected_model_id = None
             return
         model_id = item.data(Qt.UserRole)
         current_model = next((m for m in self.models if m.id == model_id), None)
         self.current_model = current_model
         if not current_model:
             return
-        self.model_name = current_model.nome_modelo
+        self._selected_model_id = int(current_model.id) if getattr(current_model, "id", None) is not None else None
+
+        full_name = current_model.nome_modelo
+        is_global = bool(full_name.startswith(self.global_prefix))
+        clean_name = full_name[len(self.global_prefix):] if is_global else full_name
+        try:
+            self.name_edit.setText(clean_name)
+        except Exception:
+            pass
+        try:
+            self.chk_global.setChecked(is_global)
+        except Exception:
+            pass
+        # Ao selecionar um modelo existente, o caso mais comum é "gravar por cima",
+        # por isso desativamos o timestamp para manter o nome igual.
+        try:
+            self.chk_timestamp.setChecked(False)
+        except Exception:
+            pass
         try:
             self.current_lines = self.svc.carregar_modelo(self.session, current_model.id)["linhas"]
         except Exception:
@@ -5099,21 +5198,67 @@ class GuardarModeloDialog(QDialog):
         self.is_global = self.chk_global.isChecked()
 
         replace_id: Optional[int] = None
-        target_name = f"{self.global_prefix if self.is_global else ''}{name}".lower()
-        for model in self.models:
-            existing_name = (getattr(model, "nome_modelo", "") or "").lower()
-            if existing_name == target_name:
+
+        # Se o utilizador selecionou um modelo e manteve o nome, assume substituição.
+        selected_model = getattr(self, "current_model", None)
+        if (
+            not self.add_timestamp
+            and selected_model is not None
+            and self._selected_model_id is not None
+            and (getattr(selected_model, "nome_modelo", "") or "").strip()
+        ):
+            selected_full = (getattr(selected_model, "nome_modelo", "") or "").strip()
+            selected_is_global = bool(selected_full.startswith(self.global_prefix))
+            selected_clean = selected_full[len(self.global_prefix):] if selected_is_global else selected_full
+            if selected_clean.strip().lower() == name.lower() and bool(self.is_global) == selected_is_global:
+                selected_user = getattr(selected_model, "user_id", None)
+                if selected_user != self.user_id:
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Aviso",
+                        "Este modelo pertence a outro utilizador e nao pode ser substituido.",
+                    )
+                    return
                 answer = QtWidgets.QMessageBox.question(
                     self,
                     "Substituir",
-                    f"Ja existe um modelo chamado '{name}'. Deseja substituir?",
+                    f"Deseja substituir o modelo selecionado '{name}'?",
                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                     QtWidgets.QMessageBox.No,
                 )
                 if answer != QtWidgets.QMessageBox.Yes:
                     return
-                replace_id = model.id
-                break
+                replace_id = self._selected_model_id
+
+        # Se nao for substituicao do selecionado, verifica colisao de nomes (apenas sem timestamp).
+        if replace_id is None and not self.add_timestamp:
+            target_name = f"{self.global_prefix if self.is_global else ''}{name}".lower()
+            for model in self.models:
+                existing_name = (getattr(model, "nome_modelo", "") or "").lower()
+                if existing_name == target_name:
+                    existing_user = getattr(model, "user_id", None)
+                    if existing_user != self.user_id:
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Aviso",
+                            "Ja existe um modelo com esse nome, mas pertence a outro utilizador e nao pode ser substituido.",
+                        )
+                        return
+                    answer = QtWidgets.QMessageBox.question(
+                        self,
+                        "Substituir",
+                        f"Ja existe um modelo chamado '{name}'. Deseja substituir?",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                        QtWidgets.QMessageBox.No,
+                    )
+                    if answer != QtWidgets.QMessageBox.Yes:
+                        return
+                    replace_id = model.id
+                    break
+
+        # Ao substituir, nao adicionar timestamp automaticamente (mantem nome).
+        if replace_id is not None:
+            self.add_timestamp = False
 
         self.model_name = name
         self.replace_model_id = replace_id
@@ -5236,7 +5381,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        self.resize(1100, 650)
+        self.resize(1500, 650)
 
 
 
@@ -5261,6 +5406,7 @@ class ImportarModeloDialog(QDialog):
 
 
         self.models_list = QListWidget()
+        self.models_list.setMinimumWidth(420)
 
 
 
@@ -5312,7 +5458,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        split.addLayout(left_layout, 1)
+        split.addLayout(left_layout, 2)
 
 
 
@@ -5332,7 +5478,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        split.addWidget(self.lines_table, 2)
+        split.addWidget(self.lines_table, 3)
 
 
 
@@ -5466,6 +5612,8 @@ class ImportarModeloDialog(QDialog):
 
             self.btn_rename.setEnabled(False)
 
+        self._update_model_actions()
+
 
 
 
@@ -5521,6 +5669,17 @@ class ImportarModeloDialog(QDialog):
 
 
                 item.setCheckState(state)
+
+    def _update_model_actions(self) -> None:
+        model = getattr(self, "current_model", None)
+        owner_id = getattr(model, "user_id", None) if model is not None else None
+        can_manage = bool(model is not None and owner_id == self.user_id)
+
+        tooltip = "" if can_manage else "Este modelo pertence a outro utilizador e não pode ser alterado."
+        self.btn_delete.setEnabled(can_manage)
+        self.btn_delete.setToolTip(tooltip)
+        self.btn_rename.setEnabled(can_manage)
+        self.btn_rename.setToolTip(tooltip)
 
 
 
@@ -5620,6 +5779,8 @@ class ImportarModeloDialog(QDialog):
 
 
 
+            self._update_model_actions()
+
             return
 
 
@@ -5661,6 +5822,7 @@ class ImportarModeloDialog(QDialog):
 
 
         self._populate_lines_table()
+        self._update_model_actions()
 
 
 
@@ -5760,6 +5922,15 @@ class ImportarModeloDialog(QDialog):
 
 
 
+        selected_model = next((m for m in self.models if m.id == model_id), None)
+        if not selected_model or getattr(selected_model, "user_id", None) != self.user_id:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Eliminar",
+                "Este modelo pertence a outro utilizador e não pode ser eliminado.",
+            )
+            return
+
         confirm = QtWidgets.QMessageBox.question(
 
 
@@ -5833,6 +6004,7 @@ class ImportarModeloDialog(QDialog):
 
 
         self.models_list.setCurrentRow(0 if self.models else -1)
+        self._update_model_actions()
 
 
 
@@ -5859,6 +6031,15 @@ class ImportarModeloDialog(QDialog):
         model_id = item.data(Qt.UserRole)
 
 
+
+        selected_model = next((m for m in self.models if m.id == model_id), None)
+        if not selected_model or getattr(selected_model, "user_id", None) != self.user_id:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Renomear",
+                "Este modelo pertence a outro utilizador e não pode ser renomeado.",
+            )
+            return
 
         model_name = item.text().split(" (")[0]
 

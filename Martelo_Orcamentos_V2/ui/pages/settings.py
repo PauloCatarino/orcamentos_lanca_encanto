@@ -1,11 +1,13 @@
 ﻿from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
 
 import logging
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 logger = logging.getLogger(__name__)
 import os
+import sys
 import datetime
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
@@ -15,15 +17,25 @@ from Martelo_Orcamentos_V2.app.services.materias_primas import (
     KEY_MATERIAS_BASE_PATH,
 )
 from Martelo_Orcamentos_V2.app.services import custeio_items as svc_custeio
+from Martelo_Orcamentos_V2.app.services import pesquisa_ia as svc_ia
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
+from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao_processos
+from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
+from Martelo_Orcamentos_V2.app.services import cutrite_automation as svc_cutrite
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 from Martelo_Orcamentos_V2.app.services import margens as svc_margens
+from Martelo_Orcamentos_V2.app.services import phc_sql as svc_phc
+from Martelo_Orcamentos_V2.app.services import feature_flags as svc_features
+from Martelo_Orcamentos_V2.app.models.user import User
+from Martelo_Orcamentos_V2.ui.models.qt_table import SimpleTableModel
 
 
 KEY_BASE_PATH = "base_path_orcamentos"
 KEY_ORC_DB_BASE = "base_path_dados_orcamento"
+KEY_PRODUCAO_BASE_PATH = "base_path_producao"
 DEFAULT_BASE_PATH = r"\\server_le\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\MARTELO_ORCAMENTOS_V2"
 DEFAULT_BASE_DADOS_ORC = r"\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Base_Dados_Orcamento"
+DEFAULT_BASE_PRODUCAO = r"\\SERVER_LE_Lanca_Encanto\LancaEncanto\Dep_Producao"
 
 AUTO_DIMS_HELP_TEXT = (
     "Quando ativo, o Martelo preenche automaticamente as colunas COMP e LARG "
@@ -31,6 +43,10 @@ AUTO_DIMS_HELP_TEXT = (
     "PRATELEIRA AMOVIVEL, PRAT. AMOV., PRATELEIRA FIXA, PRAT.FIXA) usando as "
     "dimensoes HM/LM/PM do item. Continua possivel editar manualmente os valores."
 )
+
+
+def _fmt_bool(value: object) -> str:
+    return "Sim" if bool(value) else "Nao"
 
 
 class AutoDimensionPiecesDialog(QtWidgets.QDialog):
@@ -143,16 +159,90 @@ class SettingsPage(QtWidgets.QWidget):
         self._producao_dirty: bool = True
         self._def_pecas_dirty: bool = True
         self._def_pecas_loading: bool = False
+        self._permissions_dirty: bool = False
+        self._permissions_loading: bool = False
 
         main_layout = QtWidgets.QVBoxLayout(self)
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.currentChanged.connect(self._on_tab_changed)
         main_layout.addWidget(self.tabs)
 
+        self._init_login_tab()
         self._init_general_tab()
+        self._init_phc_tab()
         self._init_producao_tab()
         self._init_def_pecas_tab()
         self._init_margens_tab()
+        self._init_qt_rules_tab()
+        if self._is_admin_user():
+            self._init_permissions_tab()
+        self._shortcut_save = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+G"), self)
+        self._shortcut_save.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
+        self._shortcut_save.activated.connect(self._on_shortcut_save)
+
+    def _is_admin_user(self) -> bool:
+        username = str(getattr(self.current_user, "username", "") or "").strip().lower()
+        role = str(getattr(self.current_user, "role", "") or "").strip().lower()
+        return username == "admin" or role == "admin"
+
+    # ------------------------------------------------------------------ Login
+    def _init_login_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        lay = QtWidgets.QFormLayout(tab)
+
+        # Configuração global de pré-preenchimento automático
+        self.chk_auto_fill_login = QtWidgets.QCheckBox("Ativar pré-preenchimento automático de utilizador")
+        self.chk_auto_fill_login.setToolTip(
+            "Quando ativo, o Martelo tenta identificar o utilizador do Windows "
+            "e pré-preenche automaticamente o campo de utilizador no login."
+        )
+        lay.addRow(self.chk_auto_fill_login)
+
+        # Grupo para mapeamentos de usuários
+        group_mapping = QtWidgets.QGroupBox("Mapeamento Utilizadores Windows ↔ Martelo")
+        mapping_layout = QtWidgets.QVBoxLayout(group_mapping)
+
+        description = QtWidgets.QLabel(
+            "Configure o mapeamento entre utilizadores do Windows e utilizadores do Martelo.\n"
+            "Quando um utilizador do Windows faz login, o Martelo pode pré-preencher automaticamente "
+            "o campo de utilizador correspondente."
+        )
+        description.setWordWrap(True)
+        description.setStyleSheet("color: #666666; font-size: 11px;")
+        mapping_layout.addWidget(description)
+
+        # Lista de mapeamentos existentes
+        self.list_user_mappings = QtWidgets.QListWidget()
+        self.list_user_mappings.setAlternatingRowColors(True)
+        self.list_user_mappings.setMaximumHeight(200)
+        mapping_layout.addWidget(self.list_user_mappings)
+
+        # Botões para gerir mapeamentos
+        buttons_layout = QtWidgets.QHBoxLayout()
+        
+        self.btn_add_mapping = QtWidgets.QPushButton("Adicionar Mapeamento")
+        self.btn_add_mapping.clicked.connect(self._on_add_user_mapping)
+        buttons_layout.addWidget(self.btn_add_mapping)
+
+        self.btn_remove_mapping = QtWidgets.QPushButton("Remover Selecionado")
+        self.btn_remove_mapping.clicked.connect(self._on_remove_user_mapping)
+        buttons_layout.addWidget(self.btn_remove_mapping)
+
+        buttons_layout.addStretch(1)
+        mapping_layout.addLayout(buttons_layout)
+
+        lay.addRow(group_mapping)
+
+        # Botão para gravar configurações
+        self.btn_save_login = QtWidgets.QPushButton("Gravar Configurações Login")
+        self.btn_save_login.setToolTip("Gravar configurações de login. Atalho: Ctrl+G.")
+        self.btn_save_login.clicked.connect(self._on_save_login_settings)
+        lay.addRow(self.btn_save_login)
+
+        self.tabs.addTab(tab, "Login")
+
+        # Carregar configurações existentes
+        self._load_login_settings()
 
     # ------------------------------------------------------------------ Geral
     def _init_general_tab(self) -> None:
@@ -184,9 +274,107 @@ class SettingsPage(QtWidgets.QWidget):
         h_db.addWidget(btn_db_browse)
         lay.addRow("Pasta Base Dados Orçamento", h_db)
 
-        btn_rules = QtWidgets.QPushButton("Configurar Regras de Quantidade")
-        btn_rules.clicked.connect(self._open_rules_dialog)
-        lay.addRow(btn_rules)
+        self.ed_base_producao = QtWidgets.QLineEdit()
+        btn_base_producao = QtWidgets.QPushButton("Procurar...")
+        btn_base_producao.clicked.connect(lambda: self._choose_directory(self.ed_base_producao))
+        h_prod = QtWidgets.QHBoxLayout()
+        h_prod.addWidget(self.ed_base_producao, 1)
+        h_prod.addWidget(btn_base_producao)
+        lay.addRow("Pasta base Produção", h_prod)
+
+        self.ed_imorder_base = QtWidgets.QLineEdit()
+        btn_imorder_base = QtWidgets.QPushButton("Procurar...")
+        btn_imorder_base.clicked.connect(lambda: self._choose_directory(self.ed_imorder_base))
+        h_imorder = QtWidgets.QHBoxLayout()
+        h_imorder.addWidget(self.ed_imorder_base, 1)
+        h_imorder.addWidget(btn_imorder_base)
+        lay.addRow("Pasta Base Imorder (Imos IX)", h_imorder)
+
+        self.ed_cutrite_exe = QtWidgets.QLineEdit()
+        btn_cutrite_exe = QtWidgets.QPushButton("Procurar...")
+        btn_cutrite_exe.clicked.connect(
+            lambda: self._choose_existing_file(
+                self.ed_cutrite_exe,
+                "Selecionar executavel CUT-RITE",
+                "Executaveis (*.exe);;Todos os ficheiros (*)",
+            )
+        )
+        h_cutrite = QtWidgets.QHBoxLayout()
+        h_cutrite.addWidget(self.ed_cutrite_exe, 1)
+        h_cutrite.addWidget(btn_cutrite_exe)
+        lay.addRow("Executavel CUT-RITE", h_cutrite)
+
+        self.ed_cutrite_workdir = QtWidgets.QLineEdit()
+        btn_cutrite_workdir = QtWidgets.QPushButton("Procurar...")
+        btn_cutrite_workdir.clicked.connect(lambda: self._choose_directory(self.ed_cutrite_workdir))
+        h_cutrite_workdir = QtWidgets.QHBoxLayout()
+        h_cutrite_workdir.addWidget(self.ed_cutrite_workdir, 1)
+        h_cutrite_workdir.addWidget(btn_cutrite_workdir)
+        lay.addRow("Pasta Trabalho CUT-RITE", h_cutrite_workdir)
+
+        self.ed_cutrite_data = QtWidgets.QLineEdit()
+        btn_cutrite_data = QtWidgets.QPushButton("Procurar...")
+        btn_cutrite_data.clicked.connect(lambda: self._choose_directory(self.ed_cutrite_data))
+        h_cutrite_data = QtWidgets.QHBoxLayout()
+        h_cutrite_data.addWidget(self.ed_cutrite_data, 1)
+        h_cutrite_data.addWidget(btn_cutrite_data)
+        lay.addRow("Pasta Dados CUT-RITE", h_cutrite_data)
+
+        self.ed_cnc_source_root = QtWidgets.QLineEdit()
+        btn_cnc_source_root = QtWidgets.QPushButton("Procurar...")
+        btn_cnc_source_root.clicked.connect(lambda: self._choose_directory(self.ed_cnc_source_root))
+        h_cnc_source_root = QtWidgets.QHBoxLayout()
+        h_cnc_source_root.addWidget(self.ed_cnc_source_root, 1)
+        h_cnc_source_root.addWidget(btn_cnc_source_root)
+        lay.addRow("Pasta Origem Programas CNC", h_cnc_source_root)
+
+        self.ed_mpr_root = QtWidgets.QLineEdit()
+        btn_mpr_root = QtWidgets.QPushButton("Procurar...")
+        btn_mpr_root.clicked.connect(lambda: self._choose_directory(self.ed_mpr_root))
+        h_mpr_root = QtWidgets.QHBoxLayout()
+        h_mpr_root.addWidget(self.ed_mpr_root, 1)
+        h_mpr_root.addWidget(btn_mpr_root)
+        lay.addRow("Pasta Destino Programas CNC", h_mpr_root)
+
+        self.ed_ia_base = QtWidgets.QLineEdit()
+        btn_ia_base = QtWidgets.QPushButton("Procurar...")
+        btn_ia_base.clicked.connect(lambda: self._choose_directory(self.ed_ia_base))
+        h_ia_base = QtWidgets.QHBoxLayout()
+        h_ia_base.addWidget(self.ed_ia_base, 1)
+        h_ia_base.addWidget(btn_ia_base)
+        lay.addRow("Pasta Pesquisa Profunda IA", h_ia_base)
+
+        self.ed_ia_emb = QtWidgets.QLineEdit()
+        btn_ia_emb = QtWidgets.QPushButton("Procurar...")
+        btn_ia_emb.clicked.connect(lambda: self._choose_directory(self.ed_ia_emb))
+        h_ia_emb = QtWidgets.QHBoxLayout()
+        h_ia_emb.addWidget(self.ed_ia_emb, 1)
+        h_ia_emb.addWidget(btn_ia_emb)
+        lay.addRow("Pasta Embeddings IA", h_ia_emb)
+
+        self.ed_ia_model = QtWidgets.QLineEdit()
+        btn_ia_model = QtWidgets.QPushButton("Procurar...")
+        btn_ia_model.clicked.connect(lambda: self._choose_directory(self.ed_ia_model))
+        h_ia_model = QtWidgets.QHBoxLayout()
+        h_ia_model.addWidget(self.ed_ia_model, 1)
+        h_ia_model.addWidget(btn_ia_model)
+        lay.addRow("Pasta Modelo IA (texto)", h_ia_model)
+        self.ed_log_path = QtWidgets.QLineEdit()
+        self.ed_log_path.setReadOnly(True)
+        self.ed_log_path.setToolTip("Caminho do ficheiro martelo_debug.log.")
+        btn_log_open = QtWidgets.QPushButton("Abrir log")
+        btn_log_open.clicked.connect(self._open_log_path)
+        h_log = QtWidgets.QHBoxLayout()
+        h_log.addWidget(self.ed_log_path, 1)
+        h_log.addWidget(btn_log_open)
+        lay.addRow("Ficheiro de log", h_log)
+
+        self.cmb_ia_provider = QtWidgets.QComboBox()
+        self.cmb_ia_provider.addItems(["auto", "local", "openai"])
+        lay.addRow("Provedor resposta IA", self.cmb_ia_provider)
+
+        self.ed_ia_openai_model = QtWidgets.QLineEdit()
+        lay.addRow("Modelo OpenAI (texto)", self.ed_ia_openai_model)
 
         self.btn_auto_dims = QtWidgets.QPushButton()
         self.btn_auto_dims.setCheckable(True)
@@ -226,9 +414,10 @@ class SettingsPage(QtWidgets.QWidget):
         self.lbl_auto_dims_summary.setStyleSheet("color: #555555; font-size: 11px;")
         lay.addRow("", self.lbl_auto_dims_summary)
 
-        btn_save = QtWidgets.QPushButton("Gravar Configurações")
-        btn_save.clicked.connect(self.on_save)
-        lay.addRow(btn_save)
+        self.btn_save_general = QtWidgets.QPushButton("Gravar Configurações")
+        self.btn_save_general.setToolTip("Gravar configurações gerais. Atalho: Ctrl+G.")
+        self.btn_save_general.clicked.connect(self.on_save)
+        lay.addRow(self.btn_save_general)
 
         self.tabs.addTab(tab, "Geral")
 
@@ -236,25 +425,262 @@ class SettingsPage(QtWidgets.QWidget):
         self.ed_base.setText(get_setting(self.db, KEY_BASE_PATH, DEFAULT_BASE_PATH))
         self.ed_materias.setText(get_setting(self.db, KEY_MATERIAS_BASE_PATH, DEFAULT_MATERIAS_BASE_PATH))
         self.ed_base_dados.setText(get_setting(self.db, KEY_ORC_DB_BASE, DEFAULT_BASE_DADOS_ORC))
+        self.ed_base_producao.setText(get_setting(self.db, KEY_PRODUCAO_BASE_PATH, DEFAULT_BASE_PRODUCAO))
+        self.ed_imorder_base.setText(
+            get_setting(
+                self.db,
+                svc_producao_processos.KEY_IMORDER_BASE_PATH,
+                svc_producao_processos.DEFAULT_IMORDER_BASE_PATH,
+            )
+        )
+        self.ed_cutrite_exe.setText(svc_cutrite.resolve_cutrite_exe_path(self.db) or "")
+        cutrite_workdir, cutrite_data_dir = svc_cutrite.resolve_configured_cutrite_paths(self.db)
+        self.ed_cutrite_workdir.setText(str(cutrite_workdir or ""))
+        self.ed_cutrite_data.setText(str(cutrite_data_dir or ""))
+        self.ed_cnc_source_root.setText(
+            get_setting(
+                self.db,
+                svc_producao_preparacao.KEY_PRODUCAO_CNC_SOURCE_ROOT,
+                svc_producao_preparacao.DEFAULT_PRODUCAO_CNC_SOURCE_ROOT,
+            )
+        )
+        self.ed_mpr_root.setText(
+            get_setting(
+                self.db,
+                svc_producao_preparacao.KEY_PRODUCAO_MPR_ROOT,
+                svc_producao_preparacao.DEFAULT_PRODUCAO_MPR_ROOT,
+            )
+        )
+        self.ed_ia_base.setText(svc_ia.ia_base_path(self.db))
+        self.ed_ia_emb.setText(svc_ia.ia_embeddings_path(self.db))
+        self.ed_ia_model.setText(svc_ia.ia_model_path(self.db))
+        self.ed_log_path.setText(str(self._resolve_log_path()))
+        self.cmb_ia_provider.setCurrentText(get_setting(self.db, svc_ia.KEY_IA_GEN_PROVIDER, svc_ia.DEFAULT_IA_GEN_PROVIDER))
+        self.ed_ia_openai_model.setText(get_setting(self.db, svc_ia.KEY_IA_OPENAI_MODEL, svc_ia.DEFAULT_IA_OPENAI_MODEL))
         self._refresh_auto_dims_summary()
+
+    def _resolve_log_path(self) -> Path:
+        candidates: list[Path] = []
+        if getattr(sys, "frozen", False):
+            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+            if base:
+                candidates.append(Path(base) / "Martelo_Orcamentos_V2")
+            try:
+                candidates.append(Path(sys.executable).resolve().parent)
+            except Exception:
+                pass
+        else:
+            candidates.append(Path(__file__).resolve().parents[2])
+        for log_dir in candidates:
+            log_path = log_dir / "martelo_debug.log"
+            if log_path.exists():
+                return log_path
+        return (candidates[0] / "martelo_debug.log") if candidates else Path("martelo_debug.log")
+
+    def _open_log_path(self) -> None:
+        if hasattr(self, "ed_log_path") and self.ed_log_path.text().strip():
+            log_path = Path(self.ed_log_path.text().strip())
+        else:
+            log_path = self._resolve_log_path()
+        if log_path.exists():
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(log_path)))
+            return
+        parent = log_path.parent
+        if parent.exists():
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(parent)))
+            QtWidgets.QMessageBox.information(
+                self,
+                "Log",
+                "O ficheiro de log ainda nao existe. Foi aberta a pasta.",
+            )
+            return
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Log",
+            "Nao foi possivel localizar a pasta de log.",
+        )
 
     def _choose_directory(self, line_edit: QtWidgets.QLineEdit) -> None:
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Escolher pasta")
         if directory:
             line_edit.setText(directory)
 
+    def _choose_existing_file(self, line_edit: QtWidgets.QLineEdit, title: str, file_filter: str) -> None:
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, title, line_edit.text().strip(), file_filter)
+        if file_path:
+            line_edit.setText(file_path)
+
+    # ------------------------------------------------------------------ PHC
+    def _init_phc_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        vbox = QtWidgets.QVBoxLayout(tab)
+
+        info = QtWidgets.QLabel(
+            "Ligação PHC (SQL Server).\n"
+            "IMPORTANTE: o Martelo apenas faz consultas SELECT ao PHC (nunca escreve)."
+        )
+        info.setWordWrap(True)
+        vbox.addWidget(info)
+
+        gb = QtWidgets.QGroupBox("Ligação PHC (SQL Server)")
+        form = QtWidgets.QFormLayout(gb)
+
+        self.ed_phc_server = QtWidgets.QLineEdit()
+        self.ed_phc_server.setToolTip("Servidor SQL do PHC (ex.: Server_le\\phc).")
+        self.ed_phc_database = QtWidgets.QLineEdit()
+        self.ed_phc_database.setToolTip("Base de dados do PHC (ex.: lancaencanto).")
+
+        self.chk_phc_trusted = QtWidgets.QCheckBox("Autenticação Windows (Trusted_Connection)")
+        self.chk_phc_trusted.setToolTip("Quando ativo usa autenticação Windows em vez de Utilizador/Password.")
+
+        self.chk_phc_trust_cert = QtWidgets.QCheckBox("TrustServerCertificate=yes (recomendado em redes internas)")
+        self.chk_phc_trust_cert.setToolTip("Evita problemas de certificado em redes internas.")
+
+        self.ed_phc_user = QtWidgets.QLineEdit()
+        self.ed_phc_user.setToolTip("Utilizador SQL do PHC (ex.: adriano.silva).")
+        self.ed_phc_password = QtWidgets.QLineEdit()
+        self.ed_phc_password.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.ed_phc_password.setToolTip("Password SQL do PHC.")
+
+        form.addRow("Servidor:", self.ed_phc_server)
+        form.addRow("Base de Dados:", self.ed_phc_database)
+        form.addRow("", self.chk_phc_trust_cert)
+        form.addRow("", self.chk_phc_trusted)
+        form.addRow("Utilizador:", self.ed_phc_user)
+        form.addRow("Password:", self.ed_phc_password)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        self.btn_phc_save = QtWidgets.QPushButton("Guardar Configuração PHC")
+        self.btn_phc_save.setToolTip(
+            "Guarda a configuração da ligação ao PHC na base de dados do Martelo. Atalho: Ctrl+G."
+        )
+        self.btn_phc_test = QtWidgets.QPushButton("Testar Ligação")
+        self.btn_phc_test.setToolTip("Testa a ligação ao PHC com uma query SELECT simples (read-only).")
+        btn_row.addWidget(self.btn_phc_save)
+        btn_row.addWidget(self.btn_phc_test)
+        btn_row.addStretch(1)
+        form.addRow(btn_row)
+
+        self.lbl_phc_status = QtWidgets.QLabel("")
+        self.lbl_phc_status.setStyleSheet("color:#555;")
+        form.addRow(self.lbl_phc_status)
+
+        self.btn_phc_save.clicked.connect(self._on_save_phc_settings)
+        self.btn_phc_test.clicked.connect(self._on_test_phc_connection)
+        self.chk_phc_trusted.toggled.connect(self._on_phc_trusted_toggled)
+
+        vbox.addWidget(gb)
+        vbox.addStretch(1)
+
+        self.tabs.addTab(tab, "PHC (SQL Server)")
+
+        cfg = svc_phc.load_phc_config(self.db)
+        self.ed_phc_server.setText(cfg["server"])
+        self.ed_phc_database.setText(cfg["database"])
+        self.chk_phc_trusted.setChecked(bool(cfg["trusted"]))
+        self.chk_phc_trust_cert.setChecked(bool(cfg["trust_server_certificate"]))
+        self.ed_phc_user.setText(cfg["user"])
+        self.ed_phc_password.setText(cfg["password"])
+        self._on_phc_trusted_toggled(bool(cfg["trusted"]))
+
+    def _on_phc_trusted_toggled(self, checked: bool) -> None:
+        enabled = not bool(checked)
+        self.ed_phc_user.setEnabled(enabled)
+        self.ed_phc_password.setEnabled(enabled)
+
+    def _on_save_phc_settings(self) -> None:
+        self.lbl_phc_status.setText("")
+        try:
+            set_setting(self.db, svc_phc.KEY_PHC_SERVER, self.ed_phc_server.text().strip() or None)
+            set_setting(self.db, svc_phc.KEY_PHC_DATABASE, self.ed_phc_database.text().strip() or None)
+            set_setting(self.db, svc_phc.KEY_PHC_TRUSTED, "1" if self.chk_phc_trusted.isChecked() else "0")
+            set_setting(self.db, svc_phc.KEY_PHC_TRUST_CERT, "1" if self.chk_phc_trust_cert.isChecked() else "0")
+            set_setting(self.db, svc_phc.KEY_PHC_USER, self.ed_phc_user.text().strip() or None)
+            password = self.ed_phc_password.text()
+            if str(password).strip():
+                set_setting(self.db, svc_phc.KEY_PHC_PASSWORD, password)
+            self.db.commit()
+            self.lbl_phc_status.setText("Configuração PHC gravada.")
+            QtWidgets.QMessageBox.information(self, "OK", "Configuração PHC gravada.")
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar configuração PHC: {exc}")
+
+    def _on_test_phc_connection(self) -> None:
+        self.lbl_phc_status.setText("")
+        try:
+            cfg: svc_phc.PHCConfig = {
+                "server": self.ed_phc_server.text().strip(),
+                "database": self.ed_phc_database.text().strip(),
+                "trusted": bool(self.chk_phc_trusted.isChecked()),
+                "trust_server_certificate": bool(self.chk_phc_trust_cert.isChecked()),
+                "user": self.ed_phc_user.text().strip(),
+                "password": self.ed_phc_password.text(),
+            }
+            conn_str = svc_phc.build_connection_string(cfg)
+            svc_phc.run_select(conn_str, "SELECT 1 AS OK;")
+            self.lbl_phc_status.setText("Ligação OK.")
+            QtWidgets.QMessageBox.information(self, "OK", "Ligação PHC OK.")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao testar ligação PHC:\n\n{exc}")
+
     def on_save(self) -> None:
         try:
             base_path = self.ed_base.text().strip() or DEFAULT_BASE_PATH
             materias_path = self.ed_materias.text().strip() or DEFAULT_MATERIAS_BASE_PATH
             base_dados = self.ed_base_dados.text().strip() or DEFAULT_BASE_DADOS_ORC
+            base_producao = self.ed_base_producao.text().strip() or DEFAULT_BASE_PRODUCAO
+            imorder_base = self.ed_imorder_base.text().strip() or svc_producao_processos.DEFAULT_IMORDER_BASE_PATH
+            cutrite_exe = self.ed_cutrite_exe.text().strip()
+            cutrite_workdir_input = self.ed_cutrite_workdir.text().strip()
+            cutrite_data_input = self.ed_cutrite_data.text().strip()
+            cnc_source_root = self.ed_cnc_source_root.text().strip() or svc_producao_preparacao.DEFAULT_PRODUCAO_CNC_SOURCE_ROOT
+            mpr_root = self.ed_mpr_root.text().strip() or svc_producao_preparacao.DEFAULT_PRODUCAO_MPR_ROOT
+            cutrite_workdir_path, cutrite_data_path, cutrite_paths_warning = svc_cutrite.normalize_cutrite_path_inputs(
+                cutrite_workdir_input,
+                cutrite_data_input,
+            )
+            if cutrite_workdir_input and cutrite_workdir_path is None:
+                raise ValueError(
+                    "A Pasta Trabalho CUT-RITE deve apontar para a pasta de perfil do utilizador.\n\n"
+                    "Exemplo: \\\\SERVER_LE\\Homag_iX\\Cutrite\\V12-Data\\Paulo_Catarino"
+                )
+            if cutrite_data_input and cutrite_data_path is None:
+                raise ValueError(
+                    "A Pasta Dados CUT-RITE deve apontar para uma pasta de dados existente.\n\n"
+                    "Exemplo: \\\\SERVER_LE\\Homag_iX\\Cutrite\\V12-Data\\Data"
+                )
+            ia_base = self.ed_ia_base.text().strip() or svc_ia.DEFAULT_IA_BASE_PATH
+            ia_emb = self.ed_ia_emb.text().strip() or svc_ia.DEFAULT_IA_EMB_PATH
+            ia_model = self.ed_ia_model.text().strip() or svc_ia.DEFAULT_IA_MODEL_PATH
+            ia_provider = self.cmb_ia_provider.currentText().strip() or svc_ia.DEFAULT_IA_GEN_PROVIDER
+            ia_openai_model = self.ed_ia_openai_model.text().strip() or svc_ia.DEFAULT_IA_OPENAI_MODEL
             set_setting(self.db, KEY_BASE_PATH, base_path)
             set_setting(self.db, KEY_MATERIAS_BASE_PATH, materias_path)
             set_setting(self.db, KEY_ORC_DB_BASE, base_dados)
+            set_setting(self.db, KEY_PRODUCAO_BASE_PATH, base_producao)
+            set_setting(self.db, svc_producao_processos.KEY_IMORDER_BASE_PATH, imorder_base)
+            set_setting(self.db, svc_cutrite.KEY_CUTRITE_EXE_PATH, cutrite_exe or None)
+            set_setting(self.db, svc_cutrite.KEY_CUTRITE_WORKDIR_PATH, str(cutrite_workdir_path) if cutrite_workdir_path else None)
+            set_setting(self.db, svc_cutrite.KEY_CUTRITE_DATA_PATH, str(cutrite_data_path) if cutrite_data_path else None)
+            set_setting(self.db, svc_producao_preparacao.KEY_PRODUCAO_CNC_SOURCE_ROOT, cnc_source_root)
+            set_setting(self.db, svc_producao_preparacao.KEY_PRODUCAO_MPR_ROOT, mpr_root)
+            set_setting(self.db, svc_ia.KEY_IA_BASE_PATH, ia_base)
+            set_setting(self.db, svc_ia.KEY_IA_EMB_PATH, ia_emb)
+            set_setting(self.db, svc_ia.KEY_IA_MODEL_PATH, ia_model)
+            set_setting(self.db, svc_ia.KEY_IA_GEN_PROVIDER, ia_provider)
+            set_setting(self.db, svc_ia.KEY_IA_OPENAI_MODEL, ia_openai_model)
             if self._current_user_id is not None:
                 svc_custeio.set_auto_dimension_enabled(self.db, self._current_user_id, self.btn_auto_dims.isChecked())
             self.db.commit()
-            QtWidgets.QMessageBox.information(self, "OK", "Configuracoes gravadas.")
+            self.ed_cutrite_workdir.setText(str(cutrite_workdir_path or ""))
+            self.ed_cutrite_data.setText(str(cutrite_data_path or ""))
+            self.ed_cnc_source_root.setText(cnc_source_root)
+            self.ed_mpr_root.setText(mpr_root)
+            message = "Configuracoes gravadas."
+            if cutrite_paths_warning:
+                message += f"\n\n{cutrite_paths_warning}"
+            QtWidgets.QMessageBox.information(self, "OK", message)
         except Exception as exc:
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar: {exc}")
@@ -427,6 +853,7 @@ class SettingsPage(QtWidgets.QWidget):
 
         btn_layout = QtWidgets.QHBoxLayout()
         self.btn_margens_save = QtWidgets.QPushButton("Guardar Margens")
+        self.btn_margens_save.setToolTip("Guardar margens e ajustes. Atalho: Ctrl+G.")
         self.btn_margens_save.clicked.connect(self._on_margens_save)
         self.btn_margens_reset = QtWidgets.QPushButton("Repor Valores Padrão")
         self.btn_margens_reset.clicked.connect(self._on_margens_reset)
@@ -440,6 +867,110 @@ class SettingsPage(QtWidgets.QWidget):
 
         self.tabs.addTab(tab, "Margens & Ajustes")
         self._load_margens_settings()
+
+    # ----------------------------------------------------- Regras de quantidade
+    def _init_qt_rules_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+
+        intro = QtWidgets.QLabel(
+            "Configure aqui as regras de quantidade (qt_und) aplicadas aos componentes filhos "
+            "na tabela de custeio. Pode editar regras padrão ou definir regras específicas por "
+            "orçamento/versão usando o editor dedicado."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        rules_box = QtWidgets.QGroupBox("Editor de Regras")
+        rules_box.setToolTip(
+            "Abra o editor para alterar expressoes/matches das regras de quantidade. "
+            "Pode carregar regras por orçamento/versão ou repor os valores padrão."
+        )
+        rules_layout = QtWidgets.QVBoxLayout(rules_box)
+        rules_layout.setSpacing(8)
+        rules_box.setMinimumWidth(980)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        self.btn_open_rules = QtWidgets.QPushButton("Abrir editor de regras")
+        self.btn_open_rules.setToolTip(
+            "Abre o editor de regras qt_und. Permite carregar/repor regras e gravar alteracoes."
+        )
+        self.btn_open_rules.clicked.connect(self._open_rules_dialog)
+        btn_row.addWidget(self.btn_open_rules)
+
+        self.btn_reset_rules = QtWidgets.QPushButton("Repor regras padrão")
+        self.btn_reset_rules.setToolTip("Repor regras padrão (STD) para todos os orçamentos.")
+        self.btn_reset_rules.clicked.connect(self._reset_qt_rules_default)
+        btn_row.addWidget(self.btn_reset_rules)
+
+        btn_row.addStretch(1)
+        rules_layout.addLayout(btn_row)
+
+        self.lbl_rules_summary = QtWidgets.QLabel()
+        self.lbl_rules_summary.setStyleSheet("color: #555555;")
+        rules_layout.addWidget(self.lbl_rules_summary)
+
+        helper = QtWidgets.QLabel(
+            "<b>Variáveis disponíveis:</b> COMP, LARG, ESP, COMP_MP, LARG_MP, ESP_MP, QT_PAI, QT_DIV, QT_MOD.<br>"
+            "Use Python simples (if/else) nas expressões. Ex.: <code>2 * QT_PAI</code>."
+        )
+        helper.setWordWrap(True)
+        rules_layout.addWidget(helper)
+
+        layout.addWidget(rules_box)
+        layout.addStretch(1)
+
+        self.tabs.addTab(tab, "Regras Qt_und")
+        self._refresh_rules_summary()
+
+    def _on_shortcut_save(self) -> None:
+        current = self.tabs.currentIndex() if hasattr(self, "tabs") else -1
+        btn = None
+        if current == 0:
+            btn = getattr(self, "btn_save_login", None)
+        elif current == 1:
+            btn = getattr(self, "btn_save_general", None)
+        elif current == 2:
+            btn = getattr(self, "btn_phc_save", None)
+        elif current == 3:
+            btn = getattr(self, "btn_producao_save", None)
+        elif current == 4:
+            btn = getattr(self, "btn_def_pecas_save", None)
+        elif current == 5:
+            btn = getattr(self, "btn_margens_save", None)
+        if btn is not None and btn.isEnabled():
+            btn.click()
+
+    def _refresh_rules_summary(self) -> None:
+        if not hasattr(self, "lbl_rules_summary"):
+            return
+        try:
+            regras = svc_custeio.load_qt_rules(self.db, None)
+            total = len(regras)
+            self.lbl_rules_summary.setText(f"Regras carregadas: {total}. Use o editor para ajustar ou duplicar regras.")
+        except Exception as exc:
+            self.lbl_rules_summary.setText(f"Não foi possível carregar as regras: {exc}")
+
+    def _reset_qt_rules_default(self) -> None:
+        if (
+            QtWidgets.QMessageBox.question(
+                self,
+                "Confirmar",
+                "Repor todas as regras de quantidade para o padrão (STD)? Esta ação é irreversível.",
+            )
+            != QtWidgets.QMessageBox.Yes
+        ):
+            return
+        try:
+            svc_custeio.reset_qt_rules(self.db, None, reset_default=True)
+            self.db.commit()
+            self._refresh_rules_summary()
+            QtWidgets.QMessageBox.information(self, "OK", "Regras padrão repostas.")
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao repor regras: {exc}")
 
     # -------------------------------------------------------- Dados produtivos
     def _init_producao_tab(self) -> None:
@@ -457,6 +988,7 @@ class SettingsPage(QtWidgets.QWidget):
         buttons_layout.addWidget(self.btn_producao_reset)
 
         self.btn_producao_save = QtWidgets.QPushButton("Gravar Dados Produtivos")
+        self.btn_producao_save.setToolTip("Gravar dados produtivos. Atalho: Ctrl+G.")
         self.btn_producao_save.clicked.connect(self._on_producao_save)
         buttons_layout.addWidget(self.btn_producao_save)
 
@@ -674,10 +1206,18 @@ class SettingsPage(QtWidgets.QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
 
         self.lbl_def_pecas_info = QtWidgets.QLabel(
-            "Tabela de referência para o cálculo das linhas do custeio. Altere ou acrescente peças conforme necessário."
+            "Tabela de referencia para o calculo das linhas do custeio. Altere ou acrescente pecas conforme necessario."
         )
         self.lbl_def_pecas_info.setWordWrap(True)
         layout.addWidget(self.lbl_def_pecas_info)
+
+        search_layout = QtWidgets.QHBoxLayout()
+        search_layout.addWidget(QtWidgets.QLabel("Pesquisar:"))
+        self.ed_def_pecas_search = QtWidgets.QLineEdit()
+        self.ed_def_pecas_search.setPlaceholderText("Filtrar nesta tabela (ID, nome, grupo, CPxx)...")
+        self.ed_def_pecas_search.textChanged.connect(self._apply_def_pecas_search)
+        search_layout.addWidget(self.ed_def_pecas_search, 1)
+        layout.addLayout(search_layout)
 
         buttons_layout = QtWidgets.QHBoxLayout()
         self.btn_def_pecas_add = QtWidgets.QPushButton("Adicionar Linha")
@@ -693,6 +1233,7 @@ class SettingsPage(QtWidgets.QWidget):
         buttons_layout.addWidget(self.btn_def_pecas_refresh)
 
         self.btn_def_pecas_save = QtWidgets.QPushButton("Gravar Definições")
+        self.btn_def_pecas_save.setToolTip("Gravar definições de peças. Atalho: Ctrl+G.")
         self.btn_def_pecas_save.clicked.connect(self._on_def_pecas_save)
         buttons_layout.addWidget(self.btn_def_pecas_save)
         buttons_layout.addStretch(1)
@@ -708,11 +1249,14 @@ class SettingsPage(QtWidgets.QWidget):
         self.tbl_def_pecas.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tbl_def_pecas.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.tbl_def_pecas.setEditTriggers(QtWidgets.QAbstractItemView.AllEditTriggers)
+        self.tbl_def_pecas.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tbl_def_pecas.customContextMenuRequested.connect(self._on_def_pecas_context_menu)
         self.tbl_def_pecas.itemChanged.connect(self._on_def_pecas_item_changed)
         layout.addWidget(self.tbl_def_pecas, 1)
 
         self.tabs.addTab(tab, "Definições Peças")
         self._set_def_pecas_controls_enabled(True)
+        self._def_pecas_all: List[Dict[str, Optional[str]]] = []
 
     def _set_def_pecas_controls_enabled(self, enabled: bool) -> None:
         for widget in (
@@ -750,7 +1294,8 @@ class SettingsPage(QtWidgets.QWidget):
             self._set_def_pecas_controls_enabled(False)
             return
 
-        self._populate_def_pecas_table(dados)
+        self._def_pecas_all = dados
+        self._apply_def_pecas_search()
         self._def_pecas_loading = False
         self._def_pecas_dirty = False
         self._set_def_pecas_controls_enabled(True)
@@ -794,6 +1339,171 @@ class SettingsPage(QtWidgets.QWidget):
                     item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
                 self.tbl_def_pecas.setItem(row_idx, col_idx, item)
         self.tbl_def_pecas.blockSignals(False)
+
+    def _apply_def_pecas_search(self) -> None:
+        dados = getattr(self, "_def_pecas_all", [])
+        termo = ""
+        if hasattr(self, "ed_def_pecas_search"):
+            try:
+                termo = self.ed_def_pecas_search.text().strip().casefold()
+            except Exception:
+                termo = ""
+        if not termo:
+            filtrado = dados
+        else:
+            filtrado = []
+            for linha in dados:
+                if any(termo in str(val).casefold() for val in linha.values() if val not in (None, "")):
+                    filtrado.append(linha)
+        self._populate_def_pecas_table(filtrado)
+
+    def _insert_def_pecas_row(self, values: Optional[List[str]] = None, position: Optional[int] = None) -> None:
+        if position is None or position < 0:
+            position = self.tbl_def_pecas.rowCount()
+        self.tbl_def_pecas.insertRow(position)
+        for col_idx in range(len(self.DEF_PECAS_HEADERS)):
+            text_val = ""
+            if values and col_idx < len(values):
+                text_val = values[col_idx] or ""
+            if col_idx == 0:
+                item = QtWidgets.QTableWidgetItem(text_val)
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+                item.setTextAlignment(QtCore.Qt.AlignCenter)
+            else:
+                if not text_val:
+                    text_val = "0" if col_idx in self.DEF_PECAS_NUMERIC_COLUMNS else ""
+                item = QtWidgets.QTableWidgetItem(text_val)
+                if col_idx in self.DEF_PECAS_NUMERIC_COLUMNS:
+                    item.setTextAlignment(QtCore.Qt.AlignCenter)
+                else:
+                    item.setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            self.tbl_def_pecas.setItem(position, col_idx, item)
+        self._def_pecas_dirty = True
+
+    def _on_def_pecas_context_menu(self, pos: QtCore.QPoint) -> None:
+        if not getattr(self, "tbl_def_pecas", None):
+            return
+        style = self.style() or QtWidgets.QApplication.style()
+        menu = QtWidgets.QMenu(self)
+        act_copy = menu.addAction(style.standardIcon(QtWidgets.QStyle.SP_FileIcon), "Copiar linha")
+        act_insert = menu.addAction(style.standardIcon(QtWidgets.QStyle.SP_FileDialogNewFolder), "Inserir linha")
+        act_remove = menu.addAction(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon), "Remover linha")
+        menu.addSeparator()
+        act_up = menu.addAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "Mover para cima")
+        act_down = menu.addAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowDown), "Mover para baixo")
+        action = menu.exec(self.tbl_def_pecas.viewport().mapToGlobal(pos))
+        if action == act_copy:
+            self._on_def_pecas_copy_rows()
+        elif action == act_insert:
+            self._on_def_pecas_insert_empty()
+        elif action == act_remove:
+            self._on_def_pecas_remove_rows()
+        elif action == act_up:
+            self._on_def_pecas_move_up()
+        elif action == act_down:
+            self._on_def_pecas_move_down()
+
+    def _on_def_pecas_copy_rows(self) -> None:
+        selection = self.tbl_def_pecas.selectionModel()
+        if not selection:
+            return
+        rows = sorted({idx.row() for idx in selection.selectedRows()})
+        if not rows:
+            return
+        insert_at = max(rows) + 1
+        collected: List[List[str]] = []
+        for row in rows:
+            values: List[str] = []
+            for col_idx in range(len(self.DEF_PECAS_HEADERS)):
+                item = self.tbl_def_pecas.item(row, col_idx)
+                values.append(item.text() if item else "")
+            if values:
+                values[0] = ""  # clear ID for new line
+                collected.append(values)
+        for offset, vals in enumerate(collected):
+            self._insert_def_pecas_row(vals, insert_at + offset)
+        self._def_pecas_dirty = True
+
+    def _on_def_pecas_insert_empty(self) -> None:
+        selection = self.tbl_def_pecas.selectionModel()
+        insert_at = self.tbl_def_pecas.rowCount()
+        if selection and selection.selectedRows():
+            insert_at = max(idx.row() for idx in selection.selectedRows()) + 1
+        self._insert_def_pecas_row(None, insert_at)
+
+    def _selected_def_pecas_rows(self) -> List[int]:
+        selection = self.tbl_def_pecas.selectionModel()
+        if not selection:
+            return []
+        return sorted({idx.row() for idx in selection.selectedRows()})
+
+    def _swap_def_pecas_rows(self, row_a: int, row_b: int) -> None:
+        if row_a == row_b:
+            return
+        if row_a < 0 or row_b < 0:
+            return
+        if row_a >= self.tbl_def_pecas.rowCount() or row_b >= self.tbl_def_pecas.rowCount():
+            return
+        for col in range(self.tbl_def_pecas.columnCount()):
+            item_a = self.tbl_def_pecas.takeItem(row_a, col)
+            item_b = self.tbl_def_pecas.takeItem(row_b, col)
+            if item_b is not None:
+                self.tbl_def_pecas.setItem(row_a, col, item_b)
+            if item_a is not None:
+                self.tbl_def_pecas.setItem(row_b, col, item_a)
+
+    def _on_def_pecas_move_up(self) -> None:
+        rows = self._selected_def_pecas_rows()
+        if not rows:
+            return
+        selected = set(rows)
+        moved_rows: List[int] = []
+        self.tbl_def_pecas.blockSignals(True)
+        for row in rows:
+            if row <= 0:
+                moved_rows.append(row)
+                continue
+            if (row - 1) in selected:
+                moved_rows.append(row)
+                continue
+            self._swap_def_pecas_rows(row, row - 1)
+            moved_rows.append(row - 1)
+        self.tbl_def_pecas.blockSignals(False)
+        self._def_pecas_dirty = True
+
+        sel_model = self.tbl_def_pecas.selectionModel()
+        if sel_model:
+            sel_model.clearSelection()
+            for row in sorted(set(moved_rows)):
+                index = self.tbl_def_pecas.model().index(row, 0)
+                sel_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+
+    def _on_def_pecas_move_down(self) -> None:
+        rows = self._selected_def_pecas_rows()
+        if not rows:
+            return
+        selected = set(rows)
+        moved_rows: List[int] = []
+        max_row = self.tbl_def_pecas.rowCount() - 1
+        self.tbl_def_pecas.blockSignals(True)
+        for row in sorted(rows, reverse=True):
+            if row >= max_row:
+                moved_rows.append(row)
+                continue
+            if (row + 1) in selected:
+                moved_rows.append(row)
+                continue
+            self._swap_def_pecas_rows(row, row + 1)
+            moved_rows.append(row + 1)
+        self.tbl_def_pecas.blockSignals(False)
+        self._def_pecas_dirty = True
+
+        sel_model = self.tbl_def_pecas.selectionModel()
+        if sel_model:
+            sel_model.clearSelection()
+            for row in sorted(set(moved_rows)):
+                index = self.tbl_def_pecas.model().index(row, 0)
+                sel_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
 
     def _collect_def_pecas_rows(self) -> List[Dict[str, Optional[str]]]:
         field_map = {
@@ -880,12 +1590,145 @@ class SettingsPage(QtWidgets.QWidget):
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar definições de peças: {exc}")
 
+    # ------------------------------------------------------------------ Permissoes
+    def _init_permissions_tab(self) -> None:
+        tab = QtWidgets.QWidget()
+        self.tab_permissions = tab
+        layout = QtWidgets.QVBoxLayout(tab)
+
+        info = QtWidgets.QLabel(
+            "Permissoes por utilizador. Apenas o administrador pode alterar estas opcoes."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        buttons = QtWidgets.QHBoxLayout()
+        self.btn_permissions_reload = QtWidgets.QPushButton("Recarregar")
+        self.btn_permissions_reload.clicked.connect(lambda: self._load_permissions_table(force=True))
+        self.btn_permissions_save = QtWidgets.QPushButton("Gravar Permissoes")
+        self.btn_permissions_save.setEnabled(False)
+        self.btn_permissions_save.clicked.connect(self._on_permissions_save)
+        buttons.addWidget(self.btn_permissions_reload)
+        buttons.addWidget(self.btn_permissions_save)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+        self.tbl_permissions = QtWidgets.QTableView(tab)
+        self.tbl_permissions.setAlternatingRowColors(True)
+        self.tbl_permissions.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_permissions.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.tbl_permissions.setSortingEnabled(True)
+
+        self.permissions_model = SimpleTableModel(
+            columns=[
+                {"header": "Utilizador", "attr": "username", "editable": False},
+                {"header": "Role", "attr": "role", "editable": False},
+                {"header": "Ativo", "attr": "is_active", "editable": False, "formatter": _fmt_bool},
+                {"header": "PDF Manager", "attr": "feature_pdf_manager", "type": "bool", "editable": True},
+                {"header": "Preparacao", "attr": "feature_producao_preparacao", "type": "bool", "editable": True},
+            ]
+        )
+        self.tbl_permissions.setModel(self.permissions_model)
+        self.permissions_model.dataChanged.connect(self._on_permissions_data_changed)
+        layout.addWidget(self.tbl_permissions, 1)
+
+        self.tabs.addTab(tab, "Permissoes")
+        self._permissions_dirty = True
+        self._load_permissions_table(force=True)
+
+    def _load_permissions_table(self, *, force: bool = False) -> None:
+        if self._permissions_loading:
+            return
+        if not force and not self._permissions_dirty:
+            return
+        self._permissions_loading = True
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
+        try:
+            users = self.db.query(User).order_by(User.username).all()
+            pdf_flags = svc_features.list_feature_flags(self.db, svc_features.FEATURE_PDF_MANAGER)
+            preparacao_flags = svc_features.list_feature_flags(
+                self.db,
+                svc_features.FEATURE_PRODUCAO_PREPARACAO,
+            )
+            rows = []
+            for user in users:
+                user_id = int(getattr(user, "id"))
+                rows.append(
+                    {
+                        "user_id": user_id,
+                        "username": getattr(user, "username", "") or "",
+                        "role": getattr(user, "role", "") or "",
+                        "is_active": bool(getattr(user, "is_active", False)),
+                        "feature_pdf_manager": bool(
+                            pdf_flags.get(
+                                user_id,
+                                svc_features.feature_default_enabled(svc_features.FEATURE_PDF_MANAGER),
+                            )
+                        ),
+                        "feature_producao_preparacao": bool(
+                            preparacao_flags.get(
+                                user_id,
+                                svc_features.feature_default_enabled(svc_features.FEATURE_PRODUCAO_PREPARACAO),
+                            )
+                        ),
+                    }
+                )
+            self.permissions_model.set_rows(rows)
+            self.tbl_permissions.resizeColumnsToContents()
+            self._permissions_dirty = False
+            self.btn_permissions_save.setEnabled(False)
+        finally:
+            self._permissions_loading = False
+
+    def _on_permissions_data_changed(self, *args) -> None:
+        if self._permissions_loading:
+            return
+        self._permissions_dirty = True
+        if hasattr(self, "btn_permissions_save"):
+            self.btn_permissions_save.setEnabled(True)
+
+    def _on_permissions_save(self) -> None:
+        rows = list(getattr(self.permissions_model, "_rows", []))
+        if not rows:
+            return
+        try:
+            for row in rows:
+                user_id = row.get("user_id")
+                if not user_id:
+                    continue
+                enabled = bool(row.get("feature_pdf_manager"))
+                svc_features.set_feature(
+                    self.db,
+                    int(user_id),
+                    svc_features.FEATURE_PDF_MANAGER,
+                    enabled,
+                )
+                preparacao_enabled = bool(row.get("feature_producao_preparacao"))
+                svc_features.set_feature(
+                    self.db,
+                    int(user_id),
+                    svc_features.FEATURE_PRODUCAO_PREPARACAO,
+                    preparacao_enabled,
+                )
+            self.db.commit()
+            self._permissions_dirty = False
+            self.btn_permissions_save.setEnabled(False)
+            QtWidgets.QMessageBox.information(self, "Permissoes", "Permissoes gravadas.")
+        except Exception as exc:
+            self.db.rollback()
+            QtWidgets.QMessageBox.critical(self, "Permissoes", f"Falha ao gravar permissoes: {exc}")
+
     def _on_tab_changed(self, index: int) -> None:
         widget = self.tabs.widget(index)
         if getattr(self, "tab_producao", None) is not None and widget is self.tab_producao and self._producao_ctx and self._producao_dirty:
             self._load_producao_table()
         if getattr(self, "tab_def_pecas", None) is not None and widget is self.tab_def_pecas and self._def_pecas_dirty:
             self._load_def_pecas_table(force=True)
+        if getattr(self, "tab_permissions", None) is not None and widget is self.tab_permissions and self._permissions_dirty:
+            self._load_permissions_table(force=True)
 
     def _clear_producao_table(self) -> None:
         self.tbl_producao.setRowCount(0)
@@ -1057,6 +1900,115 @@ class SettingsPage(QtWidgets.QWidget):
             return
         self._load_producao_table()
 
+    # ------------------------------------------------------------------ Login Settings
+    def _load_login_settings(self) -> None:
+        """Carrega as configurações de login existentes."""
+        try:
+            # Carregar configuração global de pré-preenchimento
+            auto_fill_enabled = get_setting(self.db, "auto_fill_login", "true").lower() == "true"
+            self.chk_auto_fill_login.setChecked(auto_fill_enabled)
+
+            # Carregar mapeamentos de usuários
+            self.list_user_mappings.clear()
+            
+            # Buscar todas as configurações que começam com "user_mapping_"
+            from Martelo_Orcamentos_V2.app.models.app_setting import AppSetting
+            mappings = self.db.query(AppSetting).filter(AppSetting.key.like("user_mapping_%")).all()
+            
+            for mapping in mappings:
+                # Extrair o nome do usuário Windows da chave
+                windows_user = mapping.key.replace("user_mapping_", "")
+                martelo_user = mapping.value
+                
+                item_text = f"Windows: {windows_user} → Martelo: {martelo_user}"
+                item = QtWidgets.QListWidgetItem(item_text)
+                item.setData(QtCore.Qt.UserRole, (windows_user, martelo_user))
+                self.list_user_mappings.addItem(item)
+                
+        except Exception as exc:
+            logger.exception("Erro ao carregar configurações de login: %s", exc)
+            QtWidgets.QMessageBox.warning(self, "Erro", f"Erro ao carregar configurações de login: {exc}")
+
+    def _on_add_user_mapping(self) -> None:
+        """Adiciona um novo mapeamento de usuário."""
+        dialog = UserMappingDialog(self)
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            windows_user, martelo_user = dialog.get_mapping()
+            if windows_user and martelo_user:
+                # Verificar se o mapeamento já existe
+                for i in range(self.list_user_mappings.count()):
+                    item = self.list_user_mappings.item(i)
+                    existing_windows, existing_martelo = item.data(QtCore.Qt.UserRole)
+                    if existing_windows == windows_user:
+                        QtWidgets.QMessageBox.warning(
+                            self, "Aviso", 
+                            f"Já existe um mapeamento para o usuário Windows '{windows_user}'."
+                        )
+                        return
+                
+                # Verificar se o usuário do Martelo existe
+                from Martelo_Orcamentos_V2.app.models import User
+                user_exists = self.db.query(User).filter(
+                    User.username == martelo_user, User.is_active == True
+                ).first() is not None
+                
+                if not user_exists:
+                    QtWidgets.QMessageBox.warning(
+                        self, "Aviso", 
+                        f"O usuário '{martelo_user}' não existe no Martelo ou não está ativo."
+                    )
+                    return
+                
+                # Adicionar à lista
+                item_text = f"Windows: {windows_user} → Martelo: {martelo_user}"
+                item = QtWidgets.QListWidgetItem(item_text)
+                item.setData(QtCore.Qt.UserRole, (windows_user, martelo_user))
+                self.list_user_mappings.addItem(item)
+
+    def _on_remove_user_mapping(self) -> None:
+        """Remove o mapeamento selecionado."""
+        current_item = self.list_user_mappings.currentItem()
+        if not current_item:
+            QtWidgets.QMessageBox.warning(self, "Aviso", "Selecione um mapeamento para remover.")
+            return
+        
+        windows_user, martelo_user = current_item.data(QtCore.Qt.UserRole)
+        confirm = QtWidgets.QMessageBox.question(
+            self, "Confirmar",
+            f"Remover mapeamento: Windows '{windows_user}' → Martelo '{martelo_user}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        )
+        
+        if confirm == QtWidgets.QMessageBox.Yes:
+            row = self.list_user_mappings.row(current_item)
+            self.list_user_mappings.takeItem(row)
+
+    def _on_save_login_settings(self) -> None:
+        """Grava as configurações de login."""
+        try:
+            # Salvar configuração global de pré-preenchimento
+            auto_fill_value = "true" if self.chk_auto_fill_login.isChecked() else "false"
+            set_setting(self.db, "auto_fill_login", auto_fill_value)
+            
+            # Primeiro, remover todos os mapeamentos existentes
+            from Martelo_Orcamentos_V2.app.models.app_setting import AppSetting
+            self.db.query(AppSetting).filter(AppSetting.key.like("user_mapping_%")).delete()
+            
+            # Salvar novos mapeamentos
+            for i in range(self.list_user_mappings.count()):
+                item = self.list_user_mappings.item(i)
+                windows_user, martelo_user = item.data(QtCore.Qt.UserRole)
+                key = f"user_mapping_{windows_user}"
+                set_setting(self.db, key, martelo_user)
+            
+            self.db.commit()
+            QtWidgets.QMessageBox.information(self, "OK", "Configurações de login gravadas com sucesso.")
+            
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception("Erro ao gravar configurações de login: %s", exc)
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Erro ao gravar configurações de login: {exc}")
+
     # ----------------------------------------------------------------- Helpers
     def closeEvent(self, event: QtCore.QEvent) -> None:  # type: ignore[override]
         try:
@@ -1066,32 +2018,44 @@ class SettingsPage(QtWidgets.QWidget):
 
 
 class QtRulesDialog(QtWidgets.QDialog):
-    HEADERS = ["Regra", "Matches", "Expressao", "Tooltip"]
+    HEADERS = ["Regra", "Matches", "Expressão", "Tooltip"]
 
     def __init__(self, session, parent=None):
         super().__init__(parent)
         self.session = session
-        self.setWindowTitle("Regras de Quantidade (Qt_und)")
-        self.resize(820, 480)
+        self.setWindowTitle("Regras de Quantidade (qt_und)")
+        self.resize(1550, 720)
 
         layout = QtWidgets.QVBoxLayout(self)
 
+        intro = QtWidgets.QLabel(
+            "Edite ou personalize as regras de quantidade. Use o ID/versão do orçamento para carregar regras específicas; "
+            "deixe em branco para editar as regras padrão."
+        )
+        intro.setWordWrap(True)
+        intro.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        layout.addWidget(intro)
+
         target_layout = QtWidgets.QHBoxLayout()
-        target_layout.addWidget(QtWidgets.QLabel("Orcamento ID:"))
+        target_layout.addWidget(QtWidgets.QLabel("Orçamento ID:"))
         self.ed_orcamento = QtWidgets.QLineEdit()
-        self.ed_orcamento.setPlaceholderText("Deixe vazio para regras padrao")
+        self.ed_orcamento.setPlaceholderText("Deixe vazio para regras padrão")
+        self.ed_orcamento.setToolTip("Opcional. Se preenchido, carrega/guarda regras apenas para este orçamento.")
         target_layout.addWidget(self.ed_orcamento)
 
-        target_layout.addWidget(QtWidgets.QLabel("Versao:"))
+        target_layout.addWidget(QtWidgets.QLabel("Versão:"))
         self.ed_versao = QtWidgets.QLineEdit()
         self.ed_versao.setPlaceholderText("01")
+        self.ed_versao.setToolTip("Opcional. Usado em conjunto com o ID do orçamento.")
         target_layout.addWidget(self.ed_versao)
 
         btn_load = QtWidgets.QPushButton("Carregar")
+        btn_load.setToolTip("Carrega regras a partir do ID/versão informados ou as regras padrão.")
         btn_load.clicked.connect(self._on_load)
         target_layout.addWidget(btn_load)
 
         btn_reset = QtWidgets.QPushButton("Repor")
+        btn_reset.setToolTip("Repor regras padrão para o alvo atual (ou padrão global se vazio).")
         btn_reset.clicked.connect(self._on_reset)
         target_layout.addWidget(btn_reset)
 
@@ -1100,21 +2064,41 @@ class QtRulesDialog(QtWidgets.QDialog):
 
         self.table = QtWidgets.QTableWidget(0, len(self.HEADERS))
         self.table.setHorizontalHeaderLabels(self.HEADERS)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        header = self.table.horizontalHeader()
+        header.setMinimumSectionSize(120)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Interactive)
+        header.resizeSection(3, 520)
+        self.table.setAlternatingRowColors(True)
+        self.table.setToolTip(
+            "Edite as regras diretamente. Colunas:\n"
+            "- Regra: nome único.\n- Matches: etiquetas/peças que ativam a regra (separadas por vírgula).\n"
+            "- Expressão: fórmula Python simples usando COMP, LARG, QT_PAI, etc.\n"
+            "- Tooltip: descrição exibida no custeio."
+        )
+        for idx, header in enumerate(self.HEADERS):
+            item = self.table.horizontalHeaderItem(idx)
+            if item:
+                item.setToolTip(self.HEADERS[idx])
         layout.addWidget(self.table, 1)
 
         actions_layout = QtWidgets.QHBoxLayout()
         btn_add = QtWidgets.QPushButton("Adicionar Regra")
+        btn_add.setToolTip("Cria uma nova linha em branco para definir uma regra personalizada.")
         btn_add.clicked.connect(self._on_add_rule)
         actions_layout.addWidget(btn_add)
 
         btn_remove = QtWidgets.QPushButton("Remover Selecionada")
+        btn_remove.setToolTip("Remove as linhas atualmente selecionadas na tabela.")
         btn_remove.clicked.connect(self._on_remove_rule)
         actions_layout.addWidget(btn_remove)
 
         actions_layout.addStretch(1)
 
         btn_save = QtWidgets.QPushButton("Guardar")
+        btn_save.setToolTip("Guarda as regras na base de dados (para o alvo definido ou padrão).")
         btn_save.clicked.connect(self._on_save)
         actions_layout.addWidget(btn_save)
 
@@ -1135,7 +2119,7 @@ class QtRulesDialog(QtWidgets.QDialog):
         try:
             orc_id = int(orc_text)
         except ValueError as exc:
-            raise ValueError("Orcamento deve ser numerico.") from exc
+            raise ValueError("Orçamento deve ser numérico.") from exc
         return orc_id, versao_text
 
     def _populate_table(self, rules: Dict[str, Dict[str, Any]]) -> None:
@@ -1153,7 +2137,8 @@ class QtRulesDialog(QtWidgets.QDialog):
             ]
             for col, item in enumerate(items):
                 self.table.setItem(row_idx, col, item)
-        self.table.resizeColumnsToContents()
+        self.table.resizeColumnToContents(0)
+        self.table.resizeColumnToContents(1)
 
     def _collect_rules(self) -> Dict[str, Dict[str, Any]]:
         rules: Dict[str, Dict[str, Any]] = {}
@@ -1224,3 +2209,38 @@ class QtRulesDialog(QtWidgets.QDialog):
             return
         svc_custeio.save_qt_rules(self.session, None, rules, orcamento_id=orcamento_id, versao=versao)
         QtWidgets.QMessageBox.information(self, "OK", "Regras gravadas com sucesso.")
+
+class UserMappingDialog(QtWidgets.QDialog):
+    """Diálogo para adicionar/editar mapeamento de usuário."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Adicionar Mapeamento Utilizador")
+        self.setModal(True)
+        
+        layout = QtWidgets.QFormLayout(self)
+        
+        self.ed_windows_user = QtWidgets.QLineEdit(self)
+        self.ed_windows_user.setPlaceholderText("ex.: joao.silva")
+        layout.addRow("Utilizador Windows", self.ed_windows_user)
+        
+        self.ed_martelo_user = QtWidgets.QLineEdit(self)
+        self.ed_martelo_user.setPlaceholderText("ex.: João Silva")
+        layout.addRow("Utilizador Martelo", self.ed_martelo_user)
+        
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+        
+        # Focar no primeiro campo
+        self.ed_windows_user.setFocus()
+    
+    def get_mapping(self) -> tuple[str, str]:
+        """Retorna o mapeamento (windows_user, martelo_user)."""
+        return (
+            self.ed_windows_user.text().strip().lower(),
+            self.ed_martelo_user.text().strip()
+        )

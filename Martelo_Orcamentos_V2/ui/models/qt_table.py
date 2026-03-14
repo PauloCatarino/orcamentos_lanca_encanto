@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Any, Dict, Iterable, Optional
 
 from Martelo_Orcamentos_V2.app.utils.bool_converter import bool_to_int, int_to_bool
+from Martelo_Orcamentos_V2.app.utils.display import repair_mojibake
 
 from PySide6 import QtCore
 
@@ -34,6 +35,10 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
 
     def get_row(self, row_index: int) -> Any:
         return self._rows[row_index]
+
+    # compat alias for older code paths
+    def row(self, row_index: int) -> Any:
+        return self.get_row(row_index)
 
     def _col_spec(self, col: Any) -> Dict[str, Any]:
         """
@@ -131,14 +136,26 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         if role == QtCore.Qt.ToolTipRole:
             tooltip = spec.get("tooltip")
             if not tooltip:
-                return None
+                if col_type == "bool":
+                    return None
+                if val in (None, ""):
+                    return None
+                formatted = None
+                if formatter:
+                    try:
+                        formatted = formatter(val)
+                    except Exception:
+                        formatted = None
+                if formatted is None:
+                    formatted = str(val)
+                return repair_mojibake(formatted)
             if callable(tooltip):
                 try:
                     return tooltip(row_obj, val, spec)
                 except Exception:
                     return None
             if val in (None, ""):
-                return tooltip
+                return repair_mojibake(tooltip)
             formatted = None
             if formatter:
                 try:
@@ -147,10 +164,18 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                     formatted = None
             if formatted is None:
                 formatted = str(val)
-            return f"{tooltip}\nValor atual: {formatted}"
+            return repair_mojibake(f"{tooltip}\nValor atual: {formatted}")
 
         # display / edit role
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+        if role == QtCore.Qt.DisplayRole:
+            if formatter and val is not None:
+                try:
+                    return repair_mojibake(formatter(val))
+                except Exception:
+                    pass
+            return "" if val is None else repair_mojibake(str(val))
+
+        if role == QtCore.Qt.EditRole:
             if formatter and val is not None:
                 try:
                     return formatter(val)
@@ -247,9 +272,10 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             col = self._columns[section]
             spec = self._col_spec(col)
             if role == QtCore.Qt.DisplayRole:
-                return spec.get("header", "")
+                return repair_mojibake(spec.get("header", ""))
             if role == QtCore.Qt.ToolTipRole:
-                return spec.get("tooltip")
+                tooltip = spec.get("tooltip")
+                return repair_mojibake(tooltip) if isinstance(tooltip, str) else tooltip
             return None
         if role == QtCore.Qt.DisplayRole:
             return str(section + 1)
@@ -272,9 +298,29 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             except Exception:
                 return None
 
+        old_rows = list(self._rows)
+        new_rows = sorted(old_rows, key=lambda row_obj: (raw_value(row_obj) is None, raw_value(row_obj)), reverse=reverse)
+        if new_rows == old_rows:
+            return
+
         self.layoutAboutToBeChanged.emit()
         try:
-            self._rows.sort(key=lambda row_obj: (raw_value(row_obj) is None, raw_value(row_obj)), reverse=reverse)
+            # Atualiza indexes persistentes (ex.: selecao/cursor) para manter a linha correta após ordenacao.
+            old_persistent = self.persistentIndexList()
+            if old_persistent:
+                old_by_objid: dict[int, list[int]] = {}
+                for old_index, row_obj in enumerate(old_rows):
+                    old_by_objid.setdefault(id(row_obj), []).append(old_index)
+
+                old_to_new: dict[int, int] = {}
+                for new_index, row_obj in enumerate(new_rows):
+                    old_index = old_by_objid[id(row_obj)].pop(0)
+                    old_to_new[old_index] = new_index
+
+                new_persistent = [self.index(old_to_new.get(idx.row(), idx.row()), idx.column()) for idx in old_persistent]
+                self.changePersistentIndexList(old_persistent, new_persistent)
+
+            self._rows = new_rows
         finally:
             self.layoutChanged.emit()
 

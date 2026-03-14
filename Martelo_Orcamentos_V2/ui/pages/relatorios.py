@@ -1419,8 +1419,6 @@ class RelatoriosPage(QtWidgets.QWidget):
         if not item_ids:
             return
 
-        target_total = float(row_data.get("custo_placas_utilizadas") or 0) or 0.0
-
         try:
             with SessionLocal() as session:
                 itens = (
@@ -1434,29 +1432,15 @@ class RelatoriosPage(QtWidgets.QWidget):
 
                 touched_items = set()
 
-                # ✅ CRITICAL FIX: Join with OrcamentoItem to get real quantities
-                # Build mapping of CusteioItem.item_id -> OrcamentoItem.qt
-                custeio_item_ids = [ci.id for ci in placas_items]
-                orcamento_items = (
-                    session.query(OrcamentoItem)
-                    .filter(
-                        OrcamentoItem.id_item.in_([ci.item_id for ci in placas_items if ci.item_id]),
-                        OrcamentoItem.id_orcamento == orc.id,
-                        OrcamentoItem.versao == orc.versao
-                    )
-                    .all()
-                )
-                orcamento_item_map = {oi.id_item: oi for oi in orcamento_items}
-
                 if checked:
-                    # Calculate current_total using actual quantities from OrcamentoItem
-                    current_total = 0.0
-                    for ci in placas_items:
-                        item_id = getattr(ci, "item_id", None)
-                        oi = None
-                        if item_id and item_id in orcamento_item_map:
-                            oi = orcamento_item_map[item_id]
-                        current_total += self._calc_custo_mp_total_estimate(ci, oi)
+                    try:
+                        m2_total_pecas = float(row_data.get("m2_total_pecas") or 0) or 0.0
+                        area_placa = float(row_data.get("area_placa") or 0) or 0.0
+                        qt_placas = float(row_data.get("qt_placas_utilizadas") or 0) or 0.0
+                    except Exception:
+                        m2_total_pecas = 0.0
+                        area_placa = 0.0
+                        qt_placas = 0.0
 
                     # Step 1: Backup original values
                     for ci in placas_items:
@@ -1482,23 +1466,19 @@ class RelatoriosPage(QtWidgets.QWidget):
                                 existing.blk_original = blk_before
                             existing.nao_stock_active = True
 
-                    if target_total <= 0 or current_total <= 0:
+                    if m2_total_pecas <= 0 or area_placa <= 0 or qt_placas <= 0:
                         session.commit()
                         return
 
-                    # Step 2: Calculate aggregate qt from OrcamentoItem (FIXED - use real item quantities)
-                    qt_total_agregada = 0.0
-                    for ci in placas_items:
-                        item_id = getattr(ci, "item_id", None)
-                        if item_id and item_id in orcamento_item_map:
-                            oi = orcamento_item_map[item_id]
-                            qt_total_agregada += float(oi.qt or 0) or 0.0
+                    tolerance_ratio = 0.001
+                    tolerance_m2 = area_placa * qt_placas * tolerance_ratio
+                    target_m2 = max((area_placa * qt_placas) - tolerance_m2, 0.0)
+                    novo_desp = (target_m2 / m2_total_pecas) - 1.0
+                    if novo_desp < 0:
+                        novo_desp = 0.0
+                    novo_desp_pct = novo_desp * 100.0
 
-                    # Step 3: Calculate custo_excesso and distribute proportionally
-                    custo_excesso = max(target_total - current_total, 0.0)
-                    
                     for ci in placas_items:
-                        # Mark BLK flag
                         blk_before = bool(getattr(ci, "blk", False))
                         if not blk_before:
                             try:
@@ -1506,55 +1486,12 @@ class RelatoriosPage(QtWidgets.QWidget):
                             except Exception:
                                 pass
 
-                        # Calculate new desp considering item quantity from OrcamentoItem
-                        item_id = getattr(ci, "item_id", None)
-                        qt_item = 0.0
-                        if item_id and item_id in orcamento_item_map:
-                            try:
-                                oi = orcamento_item_map[item_id]
-                                qt_item = float(oi.qt or 0) or 0.0
-                            except Exception:
-                                qt_item = 0.0
-
-                        if qt_total_agregada > 0 and custo_excesso > 0:
-                            # Distribute excess cost proportionally to item quantity
-                            desp_absoluto_item = (custo_excesso * qt_item) / qt_total_agregada
-                            
-                            # Get unit cost without new desp (to convert from absolute to percentage)
-                            try:
-                                und = (ci.und or "").upper()
-                            except Exception:
-                                und = "UND"
-                            
-                            base = 0.0
-                            if und == "M2":
-                                base = float(ci.area_m2_und or 0) or 0.0
-                            elif und == "ML":
-                                base = float(ci.spp_ml_und or 0) or 0.0
-                            elif und == "UND":
-                                base = 1.0
-
-                            try:
-                                pliq = float(ci.pliq or 0) or 0.0
-                            except Exception:
-                                pliq = 0.0
-
-                            if base > 0 and pliq > 0:
-                                custo_unitario = base * pliq
-                                novo_desp_pct = (desp_absoluto_item / custo_unitario) * 100.0
-                                novo_desp_pct = max(novo_desp_pct, 0.0)  # Prevent negative
-                            else:
-                                novo_desp_pct = 0.0
-                        else:
-                            # Fallback: no excess cost or invalid data
-                            novo_desp_pct = 0.0
-
-                        # Apply new desp percentage
                         try:
                             ci.desp = Decimal(str(novo_desp_pct)).quantize(Decimal("0.0001"))
                         except Exception:
                             ci.desp = novo_desp_pct
-                        
+
+                        item_id = getattr(ci, "item_id", None)
                         if item_id:
                             touched_items.add(item_id)
                 else:
@@ -2392,6 +2329,10 @@ class RelatoriosPage(QtWidgets.QWidget):
 
                 header = rows[0]
                 body = rows[1:]
+                if not body:
+                    ax.text(0.5, 0.5, "Sem dados", ha="center", va="center")
+                    ax.set_title(title_sub, fontsize=10, fontweight="bold", pad=title_pad)
+                    continue
 
                 # usa width_map definido no scope exterior (mantive a lógica original)
                 widths = width_map.get(title_sub)
@@ -3810,6 +3751,8 @@ def _export_excel_phc_full(self, export_dir: Path, orc: Orcamento) -> Path:
     """
     Gera um ficheiro Excel no formato esperado pelo PHC.
     """
+    PHC_VENDA_TEXT_NUM_FORMAT = "@"
+
     filename = f"{orc.num_orcamento or 'orcamento'}_{self._format_versao(orc.versao)}_PHC.xlsx"
     dest = export_dir / filename
 
@@ -3827,6 +3770,18 @@ def _export_excel_phc_full(self, export_dir: Path, orc: Orcamento) -> Path:
             return float(value)
         except Exception:
             return None
+
+    def _to_venda_text(value):
+        num = _to_num(value)
+        if num is None:
+            return None
+        try:
+            return f"{Decimal(str(num)):.2f}".replace(".", ",")
+        except Exception:
+            try:
+                return f"{float(num):.2f}".replace(".", ",")
+            except Exception:
+                return None
 
     for item in self._current_items:
         desc_entries = self._parse_description(item.descricao)
@@ -3852,6 +3807,7 @@ def _export_excel_phc_full(self, export_dir: Path, orc: Orcamento) -> Path:
         und_val = (getattr(item, "unidade", "") or "").strip() or "un"
         if und_val.lower() == "und":
             und_val = "un"
+        venda_val = _to_venda_text(item.preco_unitario)
 
         ws.append(
             [
@@ -3863,9 +3819,12 @@ def _export_excel_phc_full(self, export_dir: Path, orc: Orcamento) -> Path:
                 _to_num(item.profundidade),
                 _to_num(item.qt),
                 und_val,
-                _to_num(item.preco_unitario),
+                venda_val,
             ]
         )
+        venda_cell = ws.cell(row=ws.max_row, column=9)
+        if venda_val is not None:
+            venda_cell.number_format = PHC_VENDA_TEXT_NUM_FORMAT
         for extra in extra_lines:
             ws.append(["", "", extra, None, None, None, None, None, None])
 

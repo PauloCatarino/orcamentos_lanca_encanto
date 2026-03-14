@@ -100,7 +100,7 @@ class DadosItemsPage(DadosGeraisPage):
         Preenche campos faltantes a partir de materias_primas (match por ref_le).
         Se houver conflito (modelo vs MP), apresenta dialogo para o utilizador decidir.
         """
-        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp", "nao_stock"}
+        fill_fields = {"desp", "orl_0_4", "orl_1_0", "comp_mp", "larg_mp", "esp_mp", "id_mp"}
         compare_fields = ["ref_le", "descricao_material", "preco_tab", "preco_liq", "margem", "desconto", "und"]
         conflicts: Dict[int, Dict[str, Any]] = {}
         merged: List[Dict[str, Any]] = []
@@ -504,7 +504,7 @@ class DadosItemsPage(DadosGeraisPage):
             f"Dados do Item: {item_text} para o Orcamento: {getattr(ctx, 'num_orcamento', '-')}"
             f" com Versao: {versao_text} gravados com sucesso."
         )
-        QtWidgets.QMessageBox.information(self, "Sucesso", mensagem)
+        self._show_toast(getattr(self, "btn_guardar", None), mensagem, timeout_ms=3000)
 
     # ------------------------------------------------------------------ Local models
 
@@ -654,7 +654,7 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         self._selected_rows: List[Dict[str, Any]] = []
 
         self.setWindowTitle("Importar Dados Items")
-        self.resize(1100, 650)
+        self.resize(1500, 650)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -693,6 +693,7 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
             actions_layout.addWidget(btn_rename)
             actions_layout.addWidget(btn_delete)
             list_container = QtWidgets.QWidget()
+            list_container.setMinimumWidth(420)
             list_layout = QtWidgets.QVBoxLayout(list_container)
             list_layout.setContentsMargins(0, 0, 0, 0)
             list_layout.addWidget(list_widget)
@@ -705,8 +706,8 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
             table.setAlternatingRowColors(True)
             splitter.addWidget(table)
 
-            splitter.setStretchFactor(0, 1)
-            splitter.setStretchFactor(1, 2)
+            splitter.setStretchFactor(0, 2)
+            splitter.setStretchFactor(1, 3)
 
             page_layout.addWidget(splitter, 1)
             self.tabs.addTab(page, titles[origin])
