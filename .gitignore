@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # Ficheiros de configuração VSCode e outros IDEs
 .vscode/
@@ -14,6 +15,7 @@ __pycache__/
 *.log
 *.bak
 *~
+~$*.docx
 
 # Ficheiros PDF e ficheiros de relatórios
 *.pdf
@@ -24,6 +26,7 @@ venv/
 
 # Ficheiros de bases de dados locais (caso uses SQLite em testes)
 *.sqlite3
+Base_Dados/
 
 # Ficheiros de exportação temporária Excel/CSV
 *.xlsx
@@ -35,6 +38,7 @@ dist/
 build/
 *.exe
 *.spec
+installer/Output/
 
 # Não versionar ficheiros de configuração específicos assinaturas de mails
 *.ini
