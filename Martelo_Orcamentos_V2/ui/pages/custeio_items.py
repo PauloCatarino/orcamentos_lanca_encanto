@@ -4889,6 +4889,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._production_rates_by_desc: Dict[str, Dict[str, float]] = {}
         self._production_rates_by_abbrev: Dict[str, Dict[str, float]] = {}
         self._last_gravar_row: Optional[int] = None
+        self._pending_module_imports: List[Dict[str, Any]] = []
         self._bold_font_cache: Dict[str, QtGui.QFont] = {}
         self._full_plates_mode: bool = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
         self._full_plates_mode: bool = bool(getattr(svc_custeio, "FULL_PLATES_MODE", False))
@@ -5014,6 +5015,63 @@ class CusteioItemsPage(QtWidgets.QWidget):
             self.btn_auto_fill.setStyleSheet("background-color: #f8d7da; color: #842029;")
             self.btn_auto_fill.setToolTip("Dados Items nao preenchidos. Clique para preencher.")
         self._auto_fill_icon_busy = False
+
+    def _current_module_import_entries(self) -> List[Dict[str, Any]]:
+        saved_entries = svc_modulos.listar_registos_importacao_modulos(
+            getattr(self._current_item_obj, "extras", None) if self._current_item_obj is not None else None
+        )
+        if not self._pending_module_imports:
+            return saved_entries
+        return saved_entries + [dict(entry) for entry in self._pending_module_imports]
+
+    def _update_module_trace_label(self) -> None:
+        if not hasattr(self, "lbl_modulos_importados"):
+            return
+
+        if self.context is None or self._current_item_obj is None:
+            self.lbl_modulos_importados.setText("Modulos importados: -")
+            self.lbl_modulos_importados.setToolTip("Nenhum modulo registado neste item.")
+            self.lbl_modulos_importados.setStyleSheet("color: #777777; font-style: italic;")
+            return
+
+        entries = self._current_module_import_entries()
+        if not entries:
+            self.lbl_modulos_importados.setText("Modulos importados: -")
+            self.lbl_modulos_importados.setToolTip("Nenhum modulo registado neste item.")
+            self.lbl_modulos_importados.setStyleSheet("color: #777777; font-style: italic;")
+            return
+
+        summary = svc_modulos.resumir_registos_importacao_modulos(entries)
+        tooltip = svc_modulos.formatar_registos_importacao_modulos_tooltip(entries)
+        if self._pending_module_imports:
+            summary = f"{summary} *"
+            tooltip = "Inclui importacoes ainda nao guardadas.\n\n" + tooltip
+            style = "color: #7a4f01; font-style: italic;"
+        else:
+            style = "color: #0f5132; font-style: italic;"
+
+        self.lbl_modulos_importados.setText(f"Modulos importados: {summary}")
+        self.lbl_modulos_importados.setToolTip(tooltip)
+        self.lbl_modulos_importados.setStyleSheet(style)
+
+    def _add_pending_module_imports(self, modulos: Sequence[Mapping[str, Any]]) -> None:
+        novos_registos = svc_modulos.construir_registos_importacao_modulos(modulos)
+        if not novos_registos:
+            return
+        self._pending_module_imports.extend(novos_registos)
+        self._update_module_trace_label()
+
+    def _persist_pending_module_imports(self) -> None:
+        if not self._pending_module_imports:
+            return
+        if self._current_item_obj is None and self.current_item_id:
+            self._current_item_obj = svc_custeio.carregar_item(self.session, int(self.current_item_id))
+        if self._current_item_obj is None:
+            raise ValueError("Nao foi possivel carregar o item atual para registar a origem do modulo.")
+        self._current_item_obj.extras = svc_modulos.anexar_registos_importacao_modulos(
+            getattr(self._current_item_obj, "extras", None),
+            self._pending_module_imports,
+        )
 
     def get_production_rate_info(self, key: str) -> Optional[Dict[str, float]]:
         self._ensure_production_cache()
@@ -5440,6 +5498,12 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         right_layout.addLayout(actions_layout)
 
+        self.lbl_modulos_importados = QtWidgets.QLabel("Modulos importados: -")
+        self.lbl_modulos_importados.setWordWrap(True)
+        self.lbl_modulos_importados.setStyleSheet("color: #777777; font-style: italic;")
+        self.lbl_modulos_importados.setToolTip("Nenhum modulo registado neste item.")
+        right_layout.addWidget(self.lbl_modulos_importados)
+
         cache_font = self._bold_font_cache
 
         def _bold(btn: QtWidgets.QAbstractButton) -> None:
@@ -5594,6 +5658,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._update_table_placeholder_visibility()
         self._update_save_button_text()
+        self._update_module_trace_label()
 
 
 
@@ -6450,6 +6515,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if dialog.exec() != QtWidgets.QDialog.Accepted:
             return
         linhas = dialog.linhas_importadas()
+        modulos_importados = dialog.modulos_importados()
         if not linhas:
             QtWidgets.QMessageBox.information(self, "Informacao", "Nenhum modulo selecionado para importar.")
             return
@@ -6462,6 +6528,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
                 pass
         self.table_model.append_rows(linhas)
         self.table_model.recalculate_all()
+        self._add_pending_module_imports(modulos_importados)
         self._update_table_placeholder_visibility()
         self._update_auto_fill_icon()
 
@@ -6649,6 +6716,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             len(linhas),
         )
         try:
+            self._persist_pending_module_imports()
 
             svc_custeio.salvar_custeio_items(self.session, self.context, linhas, dimensoes)
 
@@ -6678,6 +6746,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
             return False
 
         self._nst_override_snapshot = snapshot if any(snapshot) else []
+        self._pending_module_imports = []
 
         self._dimensions_dirty = False
 
@@ -6698,6 +6767,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self._update_table_placeholder_visibility()
         self._update_auto_fill_icon()
+        self._update_module_trace_label()
 
         self._update_save_button_text()
         logger.info(
@@ -8018,6 +8088,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         self.current_orcamento_id = orcamento_id
         self._nst_override_snapshot = []
+        self._pending_module_imports = []
 
         normalized_item_id = item_id
 
@@ -8050,8 +8121,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
         if not orcamento_id:
 
             self.context = None
+            self._current_item_obj = None
 
             self._reset_header()
+            self._update_module_trace_label()
 
             self.table_model.clear()
 
@@ -8067,8 +8140,10 @@ class CusteioItemsPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Erro", "Orcamento nao encontrado.")
 
             self.context = None
+            self._current_item_obj = None
 
             self._reset_header()
+            self._update_module_trace_label()
 
             self._refresh_item_sequence(None)
 
@@ -8099,9 +8174,9 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
 
 
-        self._apply_item_header(item_obj)
-
         self._current_item_obj = item_obj
+        self._apply_item_header(item_obj)
+        self._update_module_trace_label()
 
 
 
@@ -8122,6 +8197,8 @@ class CusteioItemsPage(QtWidgets.QWidget):
         else:
 
             self.context = None
+
+        self._update_module_trace_label()
 
 
 
@@ -8162,6 +8239,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self.current_item_id = None
 
         self._current_item_obj = None
+        self._pending_module_imports = []
         self._ordered_item_ids = []
         self._current_item_index = -1
         self._update_item_nav_buttons()
@@ -8176,6 +8254,7 @@ class CusteioItemsPage(QtWidgets.QWidget):
         self._production_rates_by_abbrev.clear()
 
         self._reset_header()
+        self._update_module_trace_label()
 
         self._clear_all_checks()
 

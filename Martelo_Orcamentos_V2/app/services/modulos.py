@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from decimal import Decimal
+from datetime import datetime
+import json
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from sqlalchemy import delete, select
@@ -13,6 +15,7 @@ from Martelo_Orcamentos_V2.app.services.settings import get_setting
 
 KEY_ORC_DB_BASE = "base_path_dados_orcamento"
 DEFAULT_BASE_DADOS_ORC = r"\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Base_Dados_Orcamento"
+MODULOS_IMPORTADOS_EXTRAS_KEY = "modulos_importados"
 
 MODULE_ROW_KEYS: Sequence[str] = (
     "descricao_livre",
@@ -60,6 +63,181 @@ def _coerce_value(value: Any) -> Any:
         return float(value)
     except Exception:
         return None
+
+
+def _coerce_extras_dict(extras_raw: Any) -> Dict[str, Any]:
+    if not extras_raw:
+        return {}
+    if isinstance(extras_raw, dict):
+        return dict(extras_raw)
+    if isinstance(extras_raw, str):
+        try:
+            parsed = json.loads(extras_raw)
+        except Exception:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _coerce_positive_int(value: Any) -> Optional[int]:
+    if value in (None, ""):
+        return None
+    try:
+        number = int(value)
+    except Exception:
+        return None
+    return number if number > 0 else None
+
+
+def _normalize_scope(value: Any, *, is_global: Optional[bool] = None) -> str:
+    if is_global is True:
+        return "global"
+    if is_global is False:
+        return "user"
+    scope = str(value or "").strip().lower()
+    return "global" if scope == "global" else "user"
+
+
+def listar_registos_importacao_modulos(extras_raw: Any) -> List[Dict[str, Any]]:
+    extras = _coerce_extras_dict(extras_raw)
+    registos_raw = extras.get(MODULOS_IMPORTADOS_EXTRAS_KEY)
+    if not isinstance(registos_raw, list):
+        return []
+
+    registos: List[Dict[str, Any]] = []
+    for raw in registos_raw:
+        if not isinstance(raw, dict):
+            continue
+        modulo_id = _coerce_positive_int(raw.get("modulo_id"))
+        nome = str(raw.get("nome") or "").strip()
+        if not nome and modulo_id is None:
+            continue
+        linhas_importadas = _coerce_positive_int(raw.get("linhas_importadas"))
+        importado_em = str(raw.get("importado_em") or "").strip() or None
+        registos.append(
+            {
+                "modulo_id": modulo_id,
+                "nome": nome or f"Modulo {modulo_id}",
+                "scope": _normalize_scope(raw.get("scope"), is_global=raw.get("is_global")),
+                "linhas_importadas": linhas_importadas,
+                "importado_em": importado_em,
+            }
+        )
+    return registos
+
+
+def construir_registos_importacao_modulos(
+    modulos: Sequence[Mapping[str, Any]],
+    *,
+    imported_at: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    fallback_timestamp = imported_at or datetime.now().astimezone().isoformat(timespec="seconds")
+    registos: List[Dict[str, Any]] = []
+    for modulo in modulos:
+        if not isinstance(modulo, Mapping):
+            continue
+        modulo_id = _coerce_positive_int(modulo.get("modulo_id") or modulo.get("id"))
+        nome = str(modulo.get("nome") or "").strip()
+        if not nome and modulo_id is None:
+            continue
+        linhas_importadas = _coerce_positive_int(modulo.get("linhas_importadas"))
+        timestamp = str(modulo.get("importado_em") or "").strip() or fallback_timestamp
+        registos.append(
+            {
+                "modulo_id": modulo_id,
+                "nome": nome or f"Modulo {modulo_id}",
+                "scope": _normalize_scope(modulo.get("scope"), is_global=modulo.get("is_global")),
+                "linhas_importadas": linhas_importadas,
+                "importado_em": timestamp,
+            }
+        )
+    return registos
+
+
+def anexar_registos_importacao_modulos(extras_raw: Any, registos: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    extras = _coerce_extras_dict(extras_raw)
+    novos_registos = construir_registos_importacao_modulos(registos) if registos else []
+    if not novos_registos:
+        return extras or None
+
+    atuais = listar_registos_importacao_modulos(extras)
+    extras[MODULOS_IMPORTADOS_EXTRAS_KEY] = atuais + novos_registos
+    return extras or None
+
+
+def resumir_registos_importacao_modulos(
+    registos: Sequence[Mapping[str, Any]],
+    *,
+    max_names: int = 3,
+) -> str:
+    if not registos:
+        return "-"
+
+    agregados: Dict[str, int] = {}
+    ordem: List[str] = []
+    for registo in registos:
+        if not isinstance(registo, Mapping):
+            continue
+        nome = str(registo.get("nome") or "").strip()
+        if not nome:
+            modulo_id = _coerce_positive_int(registo.get("modulo_id"))
+            if modulo_id is None:
+                continue
+            nome = f"Modulo {modulo_id}"
+        if nome not in agregados:
+            agregados[nome] = 0
+            ordem.append(nome)
+        agregados[nome] += 1
+
+    labels = [f"{nome} ({agregados[nome]}x)" if agregados[nome] > 1 else nome for nome in ordem]
+    if not labels:
+        return "-"
+    resumo = ", ".join(labels[:max_names])
+    restantes = len(labels) - max_names
+    if restantes > 0:
+        resumo = f"{resumo} +{restantes}"
+    return resumo
+
+
+def formatar_registos_importacao_modulos_tooltip(registos: Sequence[Mapping[str, Any]]) -> str:
+    if not registos:
+        return "Nenhum modulo registado neste item."
+
+    linhas: List[str] = []
+    for registo in registos:
+        if not isinstance(registo, Mapping):
+            continue
+        nome = str(registo.get("nome") or "").strip()
+        if not nome:
+            modulo_id = _coerce_positive_int(registo.get("modulo_id"))
+            if modulo_id is None:
+                continue
+            nome = f"Modulo {modulo_id}"
+
+        partes: List[str] = [nome]
+        scope = _normalize_scope(registo.get("scope"), is_global=registo.get("is_global"))
+        if scope == "global":
+            partes.append("Global")
+        elif scope == "user":
+            partes.append("Utilizador")
+
+        linhas_importadas = _coerce_positive_int(registo.get("linhas_importadas"))
+        if linhas_importadas is not None:
+            suffix = "linha" if linhas_importadas == 1 else "linhas"
+            partes.append(f"{linhas_importadas} {suffix}")
+
+        importado_em = str(registo.get("importado_em") or "").strip()
+        if importado_em:
+            try:
+                dt = datetime.fromisoformat(importado_em)
+            except Exception:
+                partes.append(importado_em)
+            else:
+                partes.append(dt.strftime("%d-%m-%Y %H:%M"))
+
+        linhas.append(" | ".join(partes))
+
+    return "\n".join(linhas) if linhas else "Nenhum modulo registado neste item."
 
 
 def limpar_linha_para_modulo(row: Mapping[str, Any]) -> Dict[str, Any]:

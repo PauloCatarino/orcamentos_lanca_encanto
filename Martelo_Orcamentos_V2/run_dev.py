@@ -14,6 +14,7 @@ from Martelo_Orcamentos_V2.app.config import settings
 from Martelo_Orcamentos_V2.app.db import SessionLocal, init_db
 from Martelo_Orcamentos_V2.app.services.modulos import DEFAULT_BASE_DADOS_ORC, KEY_ORC_DB_BASE
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
+from Martelo_Orcamentos_V2.app.services import modulos_referencia as svc_modulos_referencia
 from Martelo_Orcamentos_V2.ui.login import LoginDialog
 import getpass
 import os
@@ -132,6 +133,8 @@ def _setup_logging() -> Path:
             logging.getLogger("Martelo_Orcamentos_V2.app.services.dados_gerais").setLevel(logging.INFO)
             logging.getLogger("Martelo_Orcamentos_V2.ui.models.qt_table").setLevel(logging.INFO)
             logging.getLogger("Martelo_Orcamentos_V2.ui.pages.dados_gerais").setLevel(logging.INFO)
+            logging.getLogger("matplotlib").setLevel(logging.WARNING)
+            logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
             logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 
             masked_uri = _mask_db_uri(settings.DB_URI)
@@ -276,6 +279,27 @@ def main():
     )
     app.setStyleSheet(f"{base_stylesheet}\n{selection_style}")
     init_db()
+
+    bootstrap_db = SessionLocal()
+    try:
+        created_reference_modules = svc_modulos_referencia.ensure_reference_modules(bootstrap_db)
+        bootstrap_db.commit()
+        if created_reference_modules:
+            logging.getLogger(__name__).info(
+                "Modulos globais de referencia criados no arranque: %s",
+                created_reference_modules,
+            )
+    except Exception as exc:
+        try:
+            bootstrap_db.rollback()
+        except Exception:
+            pass
+        logging.getLogger(__name__).warning(
+            "Falha ao garantir modulos globais de referencia: %s",
+            exc,
+        )
+    finally:
+        bootstrap_db.close()
     
     # Tenta obter credenciais de login automático
     db = SessionLocal()

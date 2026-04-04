@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, delete
 from sqlalchemy.orm import Session
 
 from ..utils.date_utils import today_storage
@@ -41,6 +41,31 @@ logger = logging.getLogger(__name__)
 PRECO_MANUAL_KEY = "preco_manual"
 TEMP_CLIENT_ID_KEY = "temp_client_id"
 TEMP_CLIENT_NAME_KEY = "temp_client_nome"
+
+
+def _delete_item_related_rows(db: Session, id_item: int) -> None:
+    model_ids = db.execute(
+        select(DadosItemsModelo.id).where(DadosItemsModelo.item_id == id_item)
+    ).scalars().all()
+    if model_ids:
+        db.execute(
+            delete(DadosItemsModeloItem).where(DadosItemsModeloItem.modelo_id.in_(model_ids))
+        )
+
+    delete_specs = (
+        (CusteioItemDimensoes, CusteioItemDimensoes.item_id == id_item),
+        (CusteioItem, CusteioItem.item_id == id_item),
+        (DadosItemsModelo, DadosItemsModelo.item_id == id_item),
+        (DadosItemsAcabamento, DadosItemsAcabamento.item_id == id_item),
+        (DadosItemsSistemaCorrer, DadosItemsSistemaCorrer.item_id == id_item),
+        (DadosItemsFerragem, DadosItemsFerragem.item_id == id_item),
+        (DadosItemsMaterial, DadosItemsMaterial.item_id == id_item),
+        (DadosDefPecas, DadosDefPecas.id_item_fk == id_item),
+        (DadosModuloMedidas, DadosModuloMedidas.id_item_fk == id_item),
+    )
+    for model, condition in delete_specs:
+        db.execute(delete(model).where(condition))
+    db.flush()
 
 
 @dataclass
@@ -259,7 +284,8 @@ def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
                 temp_simplex_map[int(getattr(temp, "id", 0) or 0)] = name
     parsed: List[OrcamentoResumo] = []
     for row, extras in zip(rows, extras_list):
-        preco_manual = bool(extras.get(PRECO_MANUAL_KEY)) if isinstance(extras, dict) else False
+        legacy_preco_manual = bool(extras.get(PRECO_MANUAL_KEY)) if isinstance(extras, dict) else False
+        preco_total_manual = 1 if bool(getattr(row, "preco_total_manual", 0) or legacy_preco_manual) else 0
         temp_nome = ""
         temp_id = None
         if isinstance(extras, dict):
@@ -290,8 +316,8 @@ def _rows_from_stmt(db: Session, stmt) -> List[OrcamentoResumo]:
                 temp_client_nome=temp_nome,
                 data=row.data or "",
                 preco=row.preco_total,
-                preco_manual=preco_manual,
-                preco_total_manual=getattr(row, "preco_total_manual", 0) or 0,
+                preco_manual=bool(preco_total_manual),
+                preco_total_manual=preco_total_manual,
                 preco_atualizado_em=getattr(row, "preco_atualizado_em", None),
                 utilizador=row.utilizador or "",
                 estado=row.estado or "",
@@ -490,6 +516,7 @@ def delete_item(
         deleted_by,
     )
 
+    _delete_item_related_rows(db, id_item)
     db.delete(it)
     db.flush()
 

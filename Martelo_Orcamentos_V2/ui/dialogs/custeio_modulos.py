@@ -311,18 +311,20 @@ class ImportModuloDialog(QtWidgets.QDialog):
         self._modules: List[Dict[str, Any]] = []
         self._module_data_cache: Dict[int, Dict[str, Any]] = {}
         self._selected_rows: List[Dict[str, Any]] = []
+        self._selected_modules: List[Dict[str, Any]] = []
+        self._preview_image_path: Optional[str] = None
 
         self.setWindowTitle("Importar Módulo Guardado")
         self._build_ui()
-        _configurar_janela_dialog(self, default_width=1200, default_height=900)
+        _configurar_janela_dialog(self, default_width=1520, default_height=980)
         self._load_modules()
         self._rebuild_list()
 
     # UI -----------------------------------------------------------------
     def _build_ui(self) -> None:
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
 
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.addTab(QtWidgets.QWidget(), "Utilizador")
@@ -333,52 +335,111 @@ class ImportModuloDialog(QtWidgets.QDialog):
         search_row = QtWidgets.QHBoxLayout()
         lbl_search = QtWidgets.QLabel("Pesquisar módulos (use % para separar palavras):")
         self.edit_search = QtWidgets.QLineEdit()
+        self.edit_search.setPlaceholderText("Ex: roupeiro % portas % gavetas")
         self.edit_search.textChanged.connect(self._rebuild_list)
+        self.lbl_results = QtWidgets.QLabel("0 módulos")
+        self.lbl_results.setStyleSheet("color: #666666;")
         search_row.addWidget(lbl_search)
         search_row.addWidget(self.edit_search, 1)
+        search_row.addWidget(self.lbl_results)
         layout.addLayout(search_row)
 
-        body = QtWidgets.QHBoxLayout()
-        body.setSpacing(12)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(10)
 
-        left = QtWidgets.QVBoxLayout()
+        left_panel = QtWidgets.QWidget()
+        left = QtWidgets.QVBoxLayout(left_panel)
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(8)
+
+        lbl_catalogo = QtWidgets.QLabel("Catálogo de módulos")
+        font_catalogo = lbl_catalogo.font()
+        font_catalogo.setBold(True)
+        lbl_catalogo.setFont(font_catalogo)
+        left.addWidget(lbl_catalogo)
+
+        self.lbl_catalog_hint = QtWidgets.QLabel(
+            "Visualização em grelha. Use Ctrl/Shift para selecionar vários módulos."
+        )
+        self.lbl_catalog_hint.setWordWrap(True)
+        self.lbl_catalog_hint.setStyleSheet("color: #777777; font-style: italic;")
+        left.addWidget(self.lbl_catalog_hint)
+
         self.list_modulos = QtWidgets.QListWidget()
         self.list_modulos.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.list_modulos.setIconSize(QtCore.QSize(96, 96))
-        self.list_modulos.setSpacing(4)
+        self.list_modulos.setViewMode(QtWidgets.QListView.IconMode)
+        self.list_modulos.setFlow(QtWidgets.QListView.LeftToRight)
+        self.list_modulos.setMovement(QtWidgets.QListView.Static)
+        self.list_modulos.setResizeMode(QtWidgets.QListView.Adjust)
+        self.list_modulos.setWrapping(True)
+        self.list_modulos.setWordWrap(True)
+        self.list_modulos.setUniformItemSizes(False)
+        self.list_modulos.setSelectionRectVisible(True)
+        self.list_modulos.setTextElideMode(QtCore.Qt.ElideNone)
+        self.list_modulos.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.list_modulos.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+        self.list_modulos.setSpacing(12)
+        self.list_modulos.setIconSize(QtCore.QSize(180, 180))
+        self.list_modulos.setGridSize(QtCore.QSize(220, 260))
+        self.list_modulos.setStyleSheet(
+            "QListWidget { background: #fafafa; border: 1px solid #d9d9d9; border-radius: 8px; padding: 8px; }"
+            "QListWidget::item { color: #1f1f1f; border: 1px solid transparent; border-radius: 8px; padding: 6px; margin: 2px; }"
+            "QListWidget::item:selected { color: #111111; background: #e8f1ff; border: 1px solid #5b9cff; }"
+            "QListWidget::item:selected:active { color: #111111; }"
+            "QListWidget::item:selected:!active { color: #111111; }"
+            "QListWidget::item:hover { background: #f2f6fb; }"
+        )
         self.list_modulos.itemSelectionChanged.connect(self._on_selection_changed)
+        self.list_modulos.itemDoubleClicked.connect(lambda _item: self._on_accept())
         left.addWidget(self.list_modulos, 1)
-        body.addLayout(left, 1)
+        splitter.addWidget(left_panel)
 
-        right = QtWidgets.QVBoxLayout()
-        self.lbl_nome = QtWidgets.QLabel("Nome:")
+        right_panel = QtWidgets.QWidget()
+        right = QtWidgets.QVBoxLayout(right_panel)
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(8)
+
+        self.lbl_nome = QtWidgets.QLabel("Selecione um módulo")
         font_bold = self.lbl_nome.font()
         font_bold.setBold(True)
+        font_bold.setPointSize(font_bold.pointSize() + 2)
         self.lbl_nome.setFont(font_bold)
         right.addWidget(self.lbl_nome)
 
         self.txt_descricao = QtWidgets.QTextEdit()
         self.txt_descricao.setReadOnly(True)
-        self.txt_descricao.setMinimumHeight(80)
-        right.addWidget(self.txt_descricao)
+        self.txt_descricao.setMinimumHeight(60)
+        self.txt_descricao.setMaximumHeight(95)
+        self.txt_descricao.setPlaceholderText("Descrição do módulo")
+        right.addWidget(self.txt_descricao, 0)
 
-        right_img_row = QtWidgets.QHBoxLayout()
+        self.lbl_imagem_titulo = QtWidgets.QLabel("Preview do módulo")
+        self.lbl_imagem_titulo.setStyleSheet("color: #555555;")
+        right.addWidget(self.lbl_imagem_titulo)
+
         self.lbl_imagem = QtWidgets.QLabel("Sem imagem")
         self.lbl_imagem.setAlignment(QtCore.Qt.AlignCenter)
         self.lbl_imagem.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.lbl_imagem.setMinimumSize(220, 220)
+        self.lbl_imagem.setMinimumSize(460, 380)
         self.lbl_imagem.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        right_img_row.addWidget(self.lbl_imagem, 1)
-        right.addLayout(right_img_row)
+        self.lbl_imagem.setStyleSheet("background: #fbfbfb; border: 1px solid #d9d9d9; border-radius: 8px;")
+        right.addWidget(self.lbl_imagem, 1)
 
-        right.addWidget(QtWidgets.QLabel("Peças do módulo selecionado:"))
+        self.lbl_pecas_titulo = QtWidgets.QLabel("Peças do módulo selecionado:")
+        right.addWidget(self.lbl_pecas_titulo)
         self.tabela_linhas = QtWidgets.QTableWidget()
         self.tabela_linhas.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        self.tabela_linhas.setMinimumHeight(160)
-        right.addWidget(self.tabela_linhas, 1)
+        self.tabela_linhas.setMinimumHeight(140)
+        self.tabela_linhas.setMaximumHeight(230)
+        self.tabela_linhas.setStyleSheet("QTableWidget { border: 1px solid #d9d9d9; border-radius: 6px; }")
+        right.addWidget(self.tabela_linhas, 0)
 
-        body.addLayout(right, 2)
-        layout.addLayout(body, 1)
+        splitter.addWidget(right_panel)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([930, 590])
+        layout.addWidget(splitter, 1)
 
         self.buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Open | QtWidgets.QDialogButtonBox.Cancel)
         self.buttons.button(QtWidgets.QDialogButtonBox.Open).setText("Importar Módulo")
@@ -406,7 +467,44 @@ class ImportModuloDialog(QtWidgets.QDialog):
                 filtered.append(mod)
         return filtered
 
+    def _build_gallery_icon(self, image_path: Optional[str]) -> QtGui.QIcon:
+        canvas_w = 188
+        canvas_h = 188
+        pixmap = QtGui.QPixmap(canvas_w, canvas_h)
+        pixmap.fill(QtCore.Qt.transparent)
+
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
+
+        card_rect = QtCore.QRectF(4, 4, canvas_w - 8, canvas_h - 8)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#d7d7d7")))
+        painter.setBrush(QtGui.QColor("#ffffff"))
+        painter.drawRoundedRect(card_rect, 10, 10)
+
+        pix = QtGui.QPixmap(image_path) if image_path and Path(image_path).is_file() else QtGui.QPixmap()
+        if not pix.isNull():
+            thumb = pix.scaled(164, 164, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+            x = int((canvas_w - thumb.width()) / 2)
+            y = int((canvas_h - thumb.height()) / 2)
+            painter.drawPixmap(x, y, thumb)
+        else:
+            inner_rect = QtCore.QRectF(18, 18, canvas_w - 36, canvas_h - 36)
+            painter.setPen(QtGui.QPen(QtGui.QColor("#d0d0d0")))
+            painter.setBrush(QtGui.QColor("#f5f5f5"))
+            painter.drawRoundedRect(inner_rect, 8, 8)
+            painter.setPen(QtGui.QColor("#8a8a8a"))
+            font = painter.font()
+            font.setBold(True)
+            font.setPointSize(max(font.pointSize(), 9))
+            painter.setFont(font)
+            painter.drawText(inner_rect, QtCore.Qt.AlignCenter | QtCore.Qt.TextWordWrap, "Sem\nimagem")
+
+        painter.end()
+        return QtGui.QIcon(pixmap)
+
     def _rebuild_list(self) -> None:
+        previous_ids = set(self._selected_ids())
         mods = self._filter_modules()
         self.list_modulos.blockSignals(True)
         self.list_modulos.clear()
@@ -414,25 +512,44 @@ class ImportModuloDialog(QtWidgets.QDialog):
             text = mod.get("nome") or "Sem nome"
             item = QtWidgets.QListWidgetItem(text)
             item.setData(QtCore.Qt.UserRole, mod.get("id"))
-            img_path = mod.get("imagem_path")
-            if img_path and Path(img_path).is_file():
-                pix = QtGui.QPixmap(img_path)
-                if not pix.isNull():
-                    thumb = pix.scaled(96, 96, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
-                    item.setIcon(QtGui.QIcon(thumb))
-                    item.setSizeHint(QtCore.QSize(140, 110))
-                else:
-                    item.setSizeHint(QtCore.QSize(140, 64))
-            else:
-                item.setSizeHint(QtCore.QSize(140, 64))
+            item.setIcon(self._build_gallery_icon(mod.get("imagem_path")))
+            item.setSizeHint(QtCore.QSize(212, 246))
+            item.setTextAlignment(QtCore.Qt.AlignHCenter)
+            item.setToolTip(text)
             self.list_modulos.addItem(item)
+
+        restored = False
+        if previous_ids:
+            for idx in range(self.list_modulos.count()):
+                item = self.list_modulos.item(idx)
+                if item is None:
+                    continue
+                modulo_id = item.data(QtCore.Qt.UserRole)
+                if modulo_id in previous_ids:
+                    item.setSelected(True)
+                    restored = True
+
+        if not restored and self.list_modulos.count():
+            self.list_modulos.setCurrentRow(0)
+
         self.list_modulos.blockSignals(False)
-        self._update_details(None)
+        ids = self._selected_ids()
+        self._update_details(ids[0] if ids else None)
+        if hasattr(self, "lbl_results"):
+            if len(mods) == 1:
+                self.lbl_results.setText("1 módulo")
+            else:
+                self.lbl_results.setText(f"{len(mods)} módulos")
         self._update_buttons()
 
     def _update_buttons(self) -> None:
-        has_selection = bool(self.list_modulos.selectedItems())
-        self.buttons.button(QtWidgets.QDialogButtonBox.Open).setEnabled(has_selection)
+        selected_count = len(self.list_modulos.selectedItems())
+        open_button = self.buttons.button(QtWidgets.QDialogButtonBox.Open)
+        open_button.setEnabled(selected_count > 0)
+        if selected_count <= 1:
+            open_button.setText("Importar Módulo")
+        else:
+            open_button.setText(f"Importar {selected_count} Módulos")
 
     def _selected_ids(self) -> List[int]:
         ids: List[int] = []
@@ -444,7 +561,8 @@ class ImportModuloDialog(QtWidgets.QDialog):
 
     def _update_details(self, modulo_id: Optional[int]) -> None:
         if modulo_id is None:
-            self.lbl_nome.setText("Nome:")
+            self.lbl_nome.setText("Selecione um módulo")
+            self.lbl_pecas_titulo.setText("Peças do módulo selecionado:")
             self.txt_descricao.clear()
             self._render_image(None)
             _montar_tabela_linhas(self.tabela_linhas, [])
@@ -458,30 +576,54 @@ class ImportModuloDialog(QtWidgets.QDialog):
             if data:
                 self._module_data_cache[modulo_id] = data
         if not data:
-            self.lbl_nome.setText("Nome:")
+            self.lbl_nome.setText("Selecione um módulo")
+            self.lbl_pecas_titulo.setText("Peças do módulo selecionado:")
             self.txt_descricao.clear()
             self._render_image(None)
             _montar_tabela_linhas(self.tabela_linhas, [])
             return
-        self.lbl_nome.setText(f"Nome: {data.get('nome')}")
-        self.txt_descricao.setPlainText(data.get("descricao") or "")
+        self.lbl_nome.setText(data.get("nome") or "Sem nome")
+        descricao = (data.get("descricao") or "").strip()
+        if descricao:
+            self.txt_descricao.setPlainText(descricao)
+        else:
+            self.txt_descricao.setPlainText("Sem descrição.")
         self._render_image(data.get("imagem_path"))
-        _montar_tabela_linhas(self.tabela_linhas, data.get("linhas") or [])
+        linhas = data.get("linhas") or []
+        self.lbl_pecas_titulo.setText(f"Peças do módulo selecionado: {len(linhas)}")
+        _montar_tabela_linhas(self.tabela_linhas, linhas)
 
     def _render_image(self, path: Optional[str]) -> None:
-        if path and Path(path).is_file():
-            pix = QtGui.QPixmap(path)
+        self._preview_image_path = path if path and Path(path).is_file() else None
+        if self._preview_image_path:
+            pix = QtGui.QPixmap(self._preview_image_path)
             if not pix.isNull():
-                self.lbl_imagem.setPixmap(pix.scaled(260, 260, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))
-                self.lbl_imagem.setToolTip(path)
+                target = self.lbl_imagem.size()
+                target_w = max(int(target.width()) - 24, 420)
+                target_h = max(int(target.height()) - 24, 320)
+                scaled = pix.scaled(
+                    target_w,
+                    target_h,
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation,
+                )
+                self.lbl_imagem.setPixmap(scaled)
+                self.lbl_imagem.setText("")
+                self.lbl_imagem.setToolTip(self._preview_image_path)
                 return
         self.lbl_imagem.setPixmap(QtGui.QPixmap())
         self.lbl_imagem.setText("Sem imagem")
         self.lbl_imagem.setToolTip("")
 
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "lbl_imagem"):
+            self._render_image(self._preview_image_path)
+
     # Slots --------------------------------------------------------------
     def _on_scope_changed(self, index: int) -> None:
         self._scope = "global" if index == 1 else "user"
+        self._module_data_cache.clear()
         self._load_modules()
         self._rebuild_list()
 
@@ -497,6 +639,7 @@ class ImportModuloDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.information(self, "Informação", "Selecione pelo menos um módulo.")
             return
         aggregated: List[Dict[str, Any]] = []
+        selected_modules: List[Dict[str, Any]] = []
         for modulo_id in ids:
             data = self._module_data_cache.get(modulo_id)
             if data is None:
@@ -513,15 +656,27 @@ class ImportModuloDialog(QtWidgets.QDialog):
                 imagem_path=data.get("imagem_path"),
             )
             aggregated.extend(linhas)
+            selected_modules.append(
+                {
+                    "modulo_id": data.get("id") or modulo_id,
+                    "nome": data.get("nome"),
+                    "scope": "global" if data.get("is_global") else "user",
+                    "linhas_importadas": len(linhas),
+                }
+            )
         if not aggregated:
             QtWidgets.QMessageBox.warning(self, "Aviso", "Nenhuma linha disponível para importar.")
             return
         self._selected_rows = aggregated
+        self._selected_modules = selected_modules
         self.accept()
 
     # Public API ---------------------------------------------------------
     def linhas_importadas(self) -> List[Dict[str, Any]]:
         return list(self._selected_rows)
+
+    def modulos_importados(self) -> List[Dict[str, Any]]:
+        return [dict(modulo) for modulo in self._selected_modules]
 
 
 class GerenciadorModulosDialog(QtWidgets.QDialog):
