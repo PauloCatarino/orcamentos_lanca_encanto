@@ -138,18 +138,39 @@ def _ensure_runtime_columns() -> None:
     """Add small backward-compatible columns that `create_all()` cannot add."""
     try:
         inspector = inspect(engine)
-        if "custeio_items" not in inspector.get_table_names():
-            return
-        existing_columns = {col["name"] for col in inspector.get_columns("custeio_items")}
-        if "qt_manual_override" not in existing_columns:
-            with engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "ALTER TABLE custeio_items "
-                        "ADD COLUMN qt_manual_override BOOLEAN NOT NULL DEFAULT 0"
+        table_names = set(inspector.get_table_names())
+        if "custeio_items" in table_names:
+            existing_columns = {col["name"] for col in inspector.get_columns("custeio_items")}
+            if "qt_manual_override" not in existing_columns:
+                with engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            "ALTER TABLE custeio_items "
+                            "ADD COLUMN qt_manual_override BOOLEAN NOT NULL DEFAULT 0"
+                        )
                     )
+                logger.info("Coluna custeio_items.qt_manual_override adicionada com sucesso.")
+
+        if "definicoes_pecas" in table_names:
+            existing_def_cols = {col["name"] for col in inspector.get_columns("definicoes_pecas")}
+            alter_statements = []
+            if "mat_default_origem" not in existing_def_cols:
+                alter_statements.append(
+                    "ALTER TABLE definicoes_pecas ADD COLUMN mat_default_origem VARCHAR(32) NULL"
                 )
-            logger.info("Coluna custeio_items.qt_manual_override adicionada com sucesso.")
+            if "mat_default_grupos" not in existing_def_cols:
+                alter_statements.append(
+                    "ALTER TABLE definicoes_pecas ADD COLUMN mat_default_grupos TEXT NULL"
+                )
+            if "mat_default_default" not in existing_def_cols:
+                alter_statements.append(
+                    "ALTER TABLE definicoes_pecas ADD COLUMN mat_default_default VARCHAR(128) NULL"
+                )
+            if alter_statements:
+                with engine.begin() as connection:
+                    for statement in alter_statements:
+                        connection.execute(text(statement))
+                logger.info("Colunas Mat_Default em definicoes_pecas adicionadas com sucesso.")
     except Exception as exc:
         logger.warning("Nao foi possivel verificar/adicionar colunas runtime: %s", exc)
 

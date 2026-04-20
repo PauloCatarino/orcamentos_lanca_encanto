@@ -33,11 +33,14 @@ class TempClientDialog(QtWidgets.QDialog):
         self.ed_search = QtWidgets.QLineEdit()
         self.ed_search.setPlaceholderText("Pesquisar clientes temporarios (use % para multi-termos)")
         self.ed_search.textChanged.connect(self._on_search)
-        btn_clear = QtWidgets.QToolButton()
-        btn_clear.setText("X")
-        btn_clear.clicked.connect(lambda: self.ed_search.setText(""))
+        self.ed_search.textChanged.connect(self._update_clear_search_button)
+        self.btn_clear_search = QtWidgets.QToolButton()
+        self.btn_clear_search.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton))
+        self.btn_clear_search.setToolTip("Limpar pesquisa")
+        self.btn_clear_search.setEnabled(False)
+        self.btn_clear_search.clicked.connect(self._clear_search)
         search_row.addWidget(self.ed_search, 1)
-        search_row.addWidget(btn_clear)
+        search_row.addWidget(self.btn_clear_search)
         layout.addLayout(search_row)
 
         self.table = QtWidgets.QTableView(self)
@@ -139,6 +142,18 @@ class TempClientDialog(QtWidgets.QDialog):
         layout.addLayout(actions)
 
         self._refresh_table()
+
+    def _update_clear_search_button(self, _text: str = "") -> None:
+        btn = getattr(self, "btn_clear_search", None)
+        ed = getattr(self, "ed_search", None)
+        if btn is None or ed is None:
+            return
+        btn.setEnabled(bool(ed.text().strip()))
+
+    def _clear_search(self) -> None:
+        if not hasattr(self, "ed_search"):
+            return
+        self.ed_search.clear()
 
     def _on_search(self, text: str) -> None:
         self._refresh_table(text or "")

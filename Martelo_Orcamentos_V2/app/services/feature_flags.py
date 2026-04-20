@@ -8,10 +8,12 @@ from Martelo_Orcamentos_V2.app.models.user_feature_flag import UserFeatureFlag
 
 FEATURE_PDF_MANAGER = "feature_pdf_manager"
 FEATURE_PRODUCAO_PREPARACAO = "feature_producao_preparacao"
+FEATURE_LISTA_MATERIAL_AUDIT = "feature_lista_material_audit"
 
 _DEFAULT_FEATURE_STATES = {
     FEATURE_PDF_MANAGER: False,
     FEATURE_PRODUCAO_PREPARACAO: True,
+    FEATURE_LISTA_MATERIAL_AUDIT: False,
 }
 
 

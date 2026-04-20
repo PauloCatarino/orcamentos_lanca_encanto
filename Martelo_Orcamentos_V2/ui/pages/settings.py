@@ -21,6 +21,7 @@ from Martelo_Orcamentos_V2.app.services import pesquisa_ia as svc_ia
 from Martelo_Orcamentos_V2.app.services import producao as svc_producao
 from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao_processos
 from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
+from Martelo_Orcamentos_V2.app.services import producao_lista_material_audit as svc_lista_material_audit
 from Martelo_Orcamentos_V2.app.services import cutrite_automation as svc_cutrite
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 from Martelo_Orcamentos_V2.app.services import margens as svc_margens
@@ -127,6 +128,9 @@ class SettingsPage(QtWidgets.QWidget):
         "Tipo_Peca_Principal",
         "Subgrupo_Peca",
         "Nome_da_Peca",
+        "MatDefault_Menu",
+        "MatDefault_Filtros",
+        "MatDefault_Padrao",
         "CP01_SEC",
         "CP02_ORL",
         "CP03_CNC",
@@ -136,7 +140,7 @@ class SettingsPage(QtWidgets.QWidget):
         "CP07_EMBALAGEM",
         "CP08_MAO_DE_OBRA",
     ]
-    DEF_PECAS_NUMERIC_COLUMNS = {4, 5, 6, 7, 8, 9, 10, 11}
+    DEF_PECAS_NUMERIC_COLUMNS = {7, 8, 9, 10, 11, 12, 13, 14}
 
     def __init__(self, parent=None, current_user=None):
         super().__init__(parent)
@@ -336,6 +340,14 @@ class SettingsPage(QtWidgets.QWidget):
         h_mpr_root.addWidget(btn_mpr_root)
         lay.addRow("Pasta Destino Programas CNC", h_mpr_root)
 
+        self.ed_lista_material_audit_root = QtWidgets.QLineEdit()
+        btn_lista_material_audit_root = QtWidgets.QPushButton("Procurar...")
+        btn_lista_material_audit_root.clicked.connect(lambda: self._choose_directory(self.ed_lista_material_audit_root))
+        h_lista_material_audit_root = QtWidgets.QHBoxLayout()
+        h_lista_material_audit_root.addWidget(self.ed_lista_material_audit_root, 1)
+        h_lista_material_audit_root.addWidget(btn_lista_material_audit_root)
+        lay.addRow("Pasta Auditoria Lista Material", h_lista_material_audit_root)
+
         self.ed_ia_base = QtWidgets.QLineEdit()
         btn_ia_base = QtWidgets.QPushButton("Procurar...")
         btn_ia_base.clicked.connect(lambda: self._choose_directory(self.ed_ia_base))
@@ -449,6 +461,13 @@ class SettingsPage(QtWidgets.QWidget):
                 self.db,
                 svc_producao_preparacao.KEY_PRODUCAO_MPR_ROOT,
                 svc_producao_preparacao.DEFAULT_PRODUCAO_MPR_ROOT,
+            )
+        )
+        self.ed_lista_material_audit_root.setText(
+            get_setting(
+                self.db,
+                svc_lista_material_audit.KEY_LISTA_MATERIAL_AUDIT_CONFIG_ROOT,
+                svc_lista_material_audit.default_config_root(self.ed_base_producao.text().strip() or DEFAULT_BASE_PRODUCAO),
             )
         )
         self.ed_ia_base.setText(svc_ia.ia_base_path(self.db))
@@ -636,6 +655,10 @@ class SettingsPage(QtWidgets.QWidget):
             cutrite_data_input = self.ed_cutrite_data.text().strip()
             cnc_source_root = self.ed_cnc_source_root.text().strip() or svc_producao_preparacao.DEFAULT_PRODUCAO_CNC_SOURCE_ROOT
             mpr_root = self.ed_mpr_root.text().strip() or svc_producao_preparacao.DEFAULT_PRODUCAO_MPR_ROOT
+            lista_material_audit_root = (
+                self.ed_lista_material_audit_root.text().strip()
+                or svc_lista_material_audit.default_config_root(base_producao)
+            )
             cutrite_workdir_path, cutrite_data_path, cutrite_paths_warning = svc_cutrite.normalize_cutrite_path_inputs(
                 cutrite_workdir_input,
                 cutrite_data_input,
@@ -665,6 +688,7 @@ class SettingsPage(QtWidgets.QWidget):
             set_setting(self.db, svc_cutrite.KEY_CUTRITE_DATA_PATH, str(cutrite_data_path) if cutrite_data_path else None)
             set_setting(self.db, svc_producao_preparacao.KEY_PRODUCAO_CNC_SOURCE_ROOT, cnc_source_root)
             set_setting(self.db, svc_producao_preparacao.KEY_PRODUCAO_MPR_ROOT, mpr_root)
+            set_setting(self.db, svc_lista_material_audit.KEY_LISTA_MATERIAL_AUDIT_CONFIG_ROOT, lista_material_audit_root)
             set_setting(self.db, svc_ia.KEY_IA_BASE_PATH, ia_base)
             set_setting(self.db, svc_ia.KEY_IA_EMB_PATH, ia_emb)
             set_setting(self.db, svc_ia.KEY_IA_MODEL_PATH, ia_model)
@@ -677,6 +701,7 @@ class SettingsPage(QtWidgets.QWidget):
             self.ed_cutrite_data.setText(str(cutrite_data_path or ""))
             self.ed_cnc_source_root.setText(cnc_source_root)
             self.ed_mpr_root.setText(mpr_root)
+            self.ed_lista_material_audit_root.setText(lista_material_audit_root)
             message = "Configuracoes gravadas."
             if cutrite_paths_warning:
                 message += f"\n\n{cutrite_paths_warning}"
@@ -1216,7 +1241,14 @@ class SettingsPage(QtWidgets.QWidget):
         self.ed_def_pecas_search = QtWidgets.QLineEdit()
         self.ed_def_pecas_search.setPlaceholderText("Filtrar nesta tabela (ID, nome, grupo, CPxx)...")
         self.ed_def_pecas_search.textChanged.connect(self._apply_def_pecas_search)
+        self.ed_def_pecas_search.textChanged.connect(self._update_def_pecas_search_clear_button)
         search_layout.addWidget(self.ed_def_pecas_search, 1)
+        self.btn_def_pecas_clear_search = QtWidgets.QToolButton()
+        self.btn_def_pecas_clear_search.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton))
+        self.btn_def_pecas_clear_search.setToolTip("Limpar pesquisa e mostrar todas as linhas atualmente carregadas")
+        self.btn_def_pecas_clear_search.setAutoRaise(True)
+        self.btn_def_pecas_clear_search.clicked.connect(self._clear_def_pecas_search)
+        search_layout.addWidget(self.btn_def_pecas_clear_search)
         layout.addLayout(search_layout)
 
         buttons_layout = QtWidgets.QHBoxLayout()
@@ -1239,11 +1271,24 @@ class SettingsPage(QtWidgets.QWidget):
         buttons_layout.addStretch(1)
         layout.addLayout(buttons_layout)
 
+        help_label = QtWidgets.QLabel(
+            "Mat_Default: `MatDefault_Menu` indica de que tabela dos Dados Items vem a lista "
+            "(`materiais`, `ferragens` ou `sistemas_correr`). `MatDefault_Filtros` recebe os nomes "
+            "dos grupos que queres que aparecam na dropdown, separados por `;`, por exemplo "
+            "`Dobradica Reta; Dobradica Canto Sego`. `MatDefault_Padrao` indica o grupo sugerido. "
+            "Se `MatDefault_Filtros` ficar vazio, o Custeio tenta derivar a lista a partir de "
+            "`Subgrupo_Peca` e `Nome_da_Peca` antes de usar o fallback atual."
+        )
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("color: #666666;")
+        layout.addWidget(help_label)
+
         self.tbl_def_pecas = QtWidgets.QTableWidget(0, len(self.DEF_PECAS_HEADERS))
         self.tbl_def_pecas.setHorizontalHeaderLabels(self.DEF_PECAS_HEADERS)
         header = self.tbl_def_pecas.horizontalHeader()
-        header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
-        header.setMinimumSectionSize(120)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setMinimumSectionSize(70)
+        header.setStretchLastSection(False)
         self.tbl_def_pecas.verticalHeader().setVisible(False)
         self.tbl_def_pecas.setAlternatingRowColors(True)
         self.tbl_def_pecas.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -1252,11 +1297,34 @@ class SettingsPage(QtWidgets.QWidget):
         self.tbl_def_pecas.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.tbl_def_pecas.customContextMenuRequested.connect(self._on_def_pecas_context_menu)
         self.tbl_def_pecas.itemChanged.connect(self._on_def_pecas_item_changed)
+        default_widths = {
+            0: 60,
+            1: 150,
+            2: 180,
+            3: 200,
+            4: 120,
+            5: 280,
+            6: 150,
+        }
+        for col_idx, width in default_widths.items():
+            self.tbl_def_pecas.setColumnWidth(col_idx, width)
+        for col_idx in range(7, len(self.DEF_PECAS_HEADERS)):
+            self.tbl_def_pecas.setColumnWidth(col_idx, 95)
+        header_tooltips = {
+            4: "Tabela de Dados Items usada como origem da dropdown: materiais, ferragens ou sistemas_correr.",
+            5: "Grupos que devem aparecer na lista suspensa do Mat_Default, separados por ';'.",
+            6: "Grupo sugerido ou a colocar em primeiro lugar na dropdown do Mat_Default.",
+        }
+        for col_idx, tooltip in header_tooltips.items():
+            item = self.tbl_def_pecas.horizontalHeaderItem(col_idx)
+            if item is not None:
+                item.setToolTip(tooltip)
         layout.addWidget(self.tbl_def_pecas, 1)
 
         self.tabs.addTab(tab, "Definições Peças")
         self._set_def_pecas_controls_enabled(True)
         self._def_pecas_all: List[Dict[str, Optional[str]]] = []
+        self._update_def_pecas_search_clear_button()
 
     def _set_def_pecas_controls_enabled(self, enabled: bool) -> None:
         for widget in (
@@ -1295,6 +1363,7 @@ class SettingsPage(QtWidgets.QWidget):
             return
 
         self._def_pecas_all = dados
+        self._populate_def_pecas_table(dados)
         self._apply_def_pecas_search()
         self._def_pecas_loading = False
         self._def_pecas_dirty = False
@@ -1306,6 +1375,9 @@ class SettingsPage(QtWidgets.QWidget):
             "Tipo_Peca_Principal": "tipo_peca_principal",
             "Subgrupo_Peca": "subgrupo_peca",
             "Nome_da_Peca": "nome_da_peca",
+            "MatDefault_Menu": "mat_default_origem",
+            "MatDefault_Filtros": "mat_default_grupos",
+            "MatDefault_Padrao": "mat_default_default",
             "CP01_SEC": "cp01_sec",
             "CP02_ORL": "cp02_orl",
             "CP03_CNC": "cp03_cnc",
@@ -1340,22 +1412,51 @@ class SettingsPage(QtWidgets.QWidget):
                 self.tbl_def_pecas.setItem(row_idx, col_idx, item)
         self.tbl_def_pecas.blockSignals(False)
 
+    def _row_matches_def_pecas_search(self, row: int, termo: str) -> bool:
+        if not termo:
+            return True
+        for col_idx in range(self.tbl_def_pecas.columnCount()):
+            item = self.tbl_def_pecas.item(row, col_idx)
+            if item is None:
+                continue
+            if termo in item.text().strip().casefold():
+                return True
+        return False
+
     def _apply_def_pecas_search(self) -> None:
-        dados = getattr(self, "_def_pecas_all", [])
+        if not getattr(self, "tbl_def_pecas", None):
+            return
         termo = ""
         if hasattr(self, "ed_def_pecas_search"):
             try:
                 termo = self.ed_def_pecas_search.text().strip().casefold()
             except Exception:
                 termo = ""
-        if not termo:
-            filtrado = dados
+        for row in range(self.tbl_def_pecas.rowCount()):
+            self.tbl_def_pecas.setRowHidden(row, not self._row_matches_def_pecas_search(row, termo))
+
+    def _update_def_pecas_search_clear_button(self) -> None:
+        ed = getattr(self, "ed_def_pecas_search", None)
+        btn = getattr(self, "btn_def_pecas_clear_search", None)
+        if btn is None or ed is None:
+            return
+        btn.setEnabled(True)
+        if ed.text().strip():
+            btn.setToolTip("Limpar pesquisa e mostrar todas as linhas atualmente carregadas")
         else:
-            filtrado = []
-            for linha in dados:
-                if any(termo in str(val).casefold() for val in linha.values() if val not in (None, "")):
-                    filtrado.append(linha)
-        self._populate_def_pecas_table(filtrado)
+            btn.setToolTip("Repor a vista completa da tabela")
+
+    def _clear_def_pecas_search(self) -> None:
+        if not hasattr(self, "ed_def_pecas_search"):
+            return
+        block = self.ed_def_pecas_search.blockSignals(True)
+        try:
+            self.ed_def_pecas_search.clear()
+        finally:
+            self.ed_def_pecas_search.blockSignals(block)
+        for row in range(self.tbl_def_pecas.rowCount()):
+            self.tbl_def_pecas.setRowHidden(row, False)
+        self._update_def_pecas_search_clear_button()
 
     def _insert_def_pecas_row(self, values: Optional[List[str]] = None, position: Optional[int] = None) -> None:
         if position is None or position < 0:
@@ -1511,6 +1612,9 @@ class SettingsPage(QtWidgets.QWidget):
             "Tipo_Peca_Principal": "tipo_peca_principal",
             "Subgrupo_Peca": "subgrupo_peca",
             "Nome_da_Peca": "nome_da_peca",
+            "MatDefault_Menu": "mat_default_origem",
+            "MatDefault_Filtros": "mat_default_grupos",
+            "MatDefault_Padrao": "mat_default_default",
             "CP01_SEC": "cp01_sec",
             "CP02_ORL": "cp02_orl",
             "CP03_CNC": "cp03_cnc",
@@ -1539,6 +1643,7 @@ class SettingsPage(QtWidgets.QWidget):
         if self._def_pecas_loading:
             return
         self._def_pecas_dirty = True
+        header = self.DEF_PECAS_HEADERS[item.column()]
         if item.column() in self.DEF_PECAS_NUMERIC_COLUMNS:
             texto = item.text().strip()
             if texto:
@@ -1546,9 +1651,14 @@ class SettingsPage(QtWidgets.QWidget):
                     valor = float(texto.replace(",", "."))
                 except ValueError:
                     valor = 0.0
-                item.setText(f"{valor:.4f}".rstrip("0").rstrip(".") or "0")
+                    item.setText(f"{valor:.4f}".rstrip("0").rstrip(".") or "0")
             else:
                 item.setText("0")
+        elif header == "MatDefault_Menu":
+            normalizado = svc_def_pecas.normalizar_origem_mat_default(item.text())
+            item.setText(normalizado or "")
+        elif header == "MatDefault_Filtros":
+            item.setText(svc_def_pecas.serializar_grupos_mat_default(item.text()) or "")
 
     def _on_def_pecas_add_row(self) -> None:
         row = self.tbl_def_pecas.rowCount()
@@ -1626,6 +1736,7 @@ class SettingsPage(QtWidgets.QWidget):
                 {"header": "Ativo", "attr": "is_active", "editable": False, "formatter": _fmt_bool},
                 {"header": "PDF Manager", "attr": "feature_pdf_manager", "type": "bool", "editable": True},
                 {"header": "Preparacao", "attr": "feature_producao_preparacao", "type": "bool", "editable": True},
+                {"header": "Auditoria Lista Material", "attr": "feature_lista_material_audit", "type": "bool", "editable": True},
             ]
         )
         self.tbl_permissions.setModel(self.permissions_model)
@@ -1653,6 +1764,10 @@ class SettingsPage(QtWidgets.QWidget):
                 self.db,
                 svc_features.FEATURE_PRODUCAO_PREPARACAO,
             )
+            audit_flags = svc_features.list_feature_flags(
+                self.db,
+                svc_features.FEATURE_LISTA_MATERIAL_AUDIT,
+            )
             rows = []
             for user in users:
                 user_id = int(getattr(user, "id"))
@@ -1672,6 +1787,12 @@ class SettingsPage(QtWidgets.QWidget):
                             preparacao_flags.get(
                                 user_id,
                                 svc_features.feature_default_enabled(svc_features.FEATURE_PRODUCAO_PREPARACAO),
+                            )
+                        ),
+                        "feature_lista_material_audit": bool(
+                            audit_flags.get(
+                                user_id,
+                                svc_features.feature_default_enabled(svc_features.FEATURE_LISTA_MATERIAL_AUDIT),
                             )
                         ),
                     }
@@ -1712,6 +1833,13 @@ class SettingsPage(QtWidgets.QWidget):
                     int(user_id),
                     svc_features.FEATURE_PRODUCAO_PREPARACAO,
                     preparacao_enabled,
+                )
+                audit_enabled = bool(row.get("feature_lista_material_audit"))
+                svc_features.set_feature(
+                    self.db,
+                    int(user_id),
+                    svc_features.FEATURE_LISTA_MATERIAL_AUDIT,
+                    audit_enabled,
                 )
             self.db.commit()
             self._permissions_dirty = False

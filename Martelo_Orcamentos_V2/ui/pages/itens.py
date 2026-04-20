@@ -1637,6 +1637,9 @@ class ItensPage(QtWidgets.QWidget):
 
         self.refresh(select_id=self.selected_id())
         self._apply_selection_to_form()
+        self._update_revert_button_state()
+        if self._orc_id:
+            self.price_changed.emit(self._orc_id, total_calculado)
         if hasattr(self, "btn_margens_save"):
             self.btn_margens_save.setEnabled(False)
 
@@ -1774,6 +1777,7 @@ class ItensPage(QtWidgets.QWidget):
             QtCore.QTimer.singleShot(0, _unlock_update_costs)
 
         selected_item_id = self.selected_id()
+        orc_id = self._orc_id
         try:
             self.db.flush()
         except Exception:
@@ -1792,6 +1796,14 @@ class ItensPage(QtWidgets.QWidget):
             # NOVO: Importar serviços de price management
             from Martelo_Orcamentos_V2.app.services import price_management as svc_price
             from Martelo_Orcamentos_V2.ui.dialogs.price_management import show_price_conflict_dialog
+
+            def _normalize_currency(value: object) -> Optional[Decimal]:
+                if value in (None, ""):
+                    return None
+                try:
+                    return Decimal(str(value)).quantize(Decimal("0.01"))
+                except (InvalidOperation, TypeError, ValueError):
+                    return None
             
             if self._persist_margens_config(auto=True, commit=False) is None:
                 _schedule_unlock_update_costs()
@@ -1810,7 +1822,7 @@ class ItensPage(QtWidgets.QWidget):
             # Se o preço foi editado manualmente E o novo valor calculado é diferente,
             # perguntar ao utilizador o que fazer
             if preço_anterior_manual and total_preco is not None:
-                if preço_anterior != total_preco:
+                if _normalize_currency(preço_anterior) != _normalize_currency(total_preco):
                     QtWidgets.QApplication.restoreOverrideCursor()
                     
                     # Mostrar diálogo de conflito
@@ -1872,6 +1884,9 @@ class ItensPage(QtWidgets.QWidget):
                 self._update_sum_preco_label(total_preco)
 
             self._set_costs_dirty(False)
+            self._update_revert_button_state()
+            if orc_id:
+                self.price_changed.emit(orc_id, total_preco)
 
             if atualizados:
                 self._show_toast(button or self.table, f"Custos atualizados para {atualizados} item(s).")

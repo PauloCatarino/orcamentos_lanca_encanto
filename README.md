@@ -148,7 +148,25 @@ Se queres, eu:
 
 Para distribuir o Martelo em PCs sem Python/VS Code, recomenda-se usar:
 
-1) Build do executável (PyInstaller):
+1) Release completa com incremento automatico de versao:
+
+```powershell
+.\release.bat
+```
+
+Por omissao incrementa a versao `patch`, gera o executavel, gera o instalador e copia o `Setup_*.exe` para `\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Instalador_Setup_Martelo`.
+
+Exemplos:
+
+```powershell
+.\release.bat patch
+.\release.bat minor
+.\release.bat major
+```
+
+O comando usa `Martelo_Orcamentos_V2\version.py` como unica fonte de verdade para a versao e, por omissao, usa a password `Martelo_V2` (ou `MARTELO_SETUP_PASSWORD`, se estiver definida).
+
+2) Build do executavel (PyInstaller):
 
 ```powershell
 .\build_exe.bat
@@ -156,21 +174,15 @@ Para distribuir o Martelo em PCs sem Python/VS Code, recomenda-se usar:
 
 O resultado fica em `dist\Martelo_Orcamentos_V2\` (executar `Martelo_Orcamentos_V2.exe`).
 
-2) Build do instalador (Setup.exe), usando o template `installer\Martelo_Orcamentos_V2.iss`:
+3) Build do instalador (Setup.exe), usando o template `installer\Martelo_Orcamentos_V2.iss`:
 
 ```powershell
 .\build_installer.bat
 ```
 
-(Opcional) para forçar uma versão no nome do setup:
-
-```powershell
-.\build_installer.bat 2.0.1
-```
-
 O instalador fica em `installer\Output\Setup_*.exe`.
 
 Notas:
-- O instalador copia o ficheiro `.env` apenas na 1ª instalação (para não sobrescrever configurações locais).
-- O instalador pede uma password (definida no build com `/DSetupPassword=...`).
+- O instalador copia o ficheiro `.env` apenas na 1a instalacao (para nao sobrescrever configuracoes locais).
+- O instalador usa por omissao a password `Martelo_V2`, mas pode ser sobreposta pela variavel de ambiente `MARTELO_SETUP_PASSWORD`.
 - Se algum PC acusar falta de runtime, instalar "Microsoft Visual C++ Redistributable 2015-2022 (x64)".

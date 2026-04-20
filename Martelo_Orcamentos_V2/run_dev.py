@@ -13,6 +13,7 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from Martelo_Orcamentos_V2.app.config import settings
 from Martelo_Orcamentos_V2.app.db import SessionLocal, init_db
 from Martelo_Orcamentos_V2.app.services.modulos import DEFAULT_BASE_DADOS_ORC, KEY_ORC_DB_BASE
+
 from Martelo_Orcamentos_V2.app.services.settings import get_setting
 from Martelo_Orcamentos_V2.app.services import modulos_referencia as svc_modulos_referencia
 from Martelo_Orcamentos_V2.ui.login import LoginDialog
@@ -28,13 +29,11 @@ from Martelo_Orcamentos_V2.ui.main_window import MainWindow
 # 1º Ativar o ambiente virtual powershell  ->    .\.venv_Martelo\Scripts\Activate.ps1         -> RESULTADO NO TERMINAL   (.venv_Martelo) PS C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2>
 # 2º para testar Orçamentos ->                 python -m Martelo_Orcamentos_V2.run_dev            -> RESULTADO NO TERMINAL (.venv_Martelo) PS C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2> python -m Martelo_Orcamentos_V2.run_dev                                    
 
-# 3º para criar o executável (após fazer build, o executável fica na pasta dist)  ->    pyinstaller --noconfirm --onefile --windowed --icon=Martelo_Orcamentos_V2\ui\resources\icons\martelo_icon.ico --add-data "Martelo_Orcamentos_V2\ui\resources;Martelo_Orcamentos_V2\ui\resources" --add-data "Martelo_Orcamentos_V2\app\config;Martelo_Orcamentos_V2\app\config" Martelo_Orcamentos_V2\run_dev.py
-#  .\build_exe.bat    -> para criar o executável (na pasta dist) Martelo_Orcamentos_V2.exe
-
-# 4º Para criar o ficheiro executavel 'Setup_Martelo_Orcamentos_V2.exe' de instalação do Martelo_Orcamentos_V2 ->  Inno Setup Compiler -> abrir o ficheiro Martelo_Orcamentos_V2\scripts\setup_installer.iss -> clicar em 'Compile' (F9)  -> o ficheiro Setup_Martelo_Orcamentos_V2.exe fica na pasta Martelo_Orcamentos_V2\scripts\output_installer
-# Abrir o PowerShell na pasta -> C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2  para isso escrever no power shell -> cd 'C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2'   depois->    .\build_installer.bat
-# Vai complicar o ficheiro de instalação Setup_Martelo_Orcamentos_V2.exe e pedir password do administrador do pc para instalar a aplicação, o ficheiro de instalação fica na pasta C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2\installer\Output
-
+# 3º Para criar o ficheiro executavel 'Setup_Martelo_Orcamentos_V2.exe' com indicação automatica da proxima versao existe um ficheiro release.bat que tem o seguinte conteudo (atualizar o numero da versao antes de correr):
+# este ficheiro "release.bat" tem o seguinte conteudo (atualizar o numero da versao antes de correr):
+# esta na pasta C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2\release.bat 
+# o ficheiro *executavel 'Setup_Martelo_Orcamentos_V2.exe' fica na pasta C:\Users\Utilizador\Documents\Martelo_Orcamentos_V2\dist\Setup_Martelo_Orcamentos_V2.exe e fica tambem 
+# na pasta do servidor para ser partilhado com os utilizadores na pasta \\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep._Orcamentos\Instalador_Setup_Martelo_Orcamentos_V2 
 '''
 git pull origin main  # Atualizar o repositório local
 # Fazer as alterações necessárias no código

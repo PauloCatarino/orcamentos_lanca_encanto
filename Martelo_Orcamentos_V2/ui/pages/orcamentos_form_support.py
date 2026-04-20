@@ -231,11 +231,16 @@ def build_loaded_orcamento_selection_state(
         getattr(o, "extras", None),
         temp_client_name_key=temp_client_name_key,
     )
+    manual_flag_raw = getattr(o, "preco_total_manual", None)
+    if manual_flag_raw in (None, ""):
+        manual_flag = bool(manual_flag_extractor(getattr(o, "extras", None)))
+    else:
+        manual_flag = bool(manual_flag_raw)
     client_name = str(getattr(client, "nome", None) or "").strip()
     selected_client_name = temp_nome or (client_name if client_name in available_client_names else "")
     return LoadedOrcamentoSelectionState(
         current_id=int(getattr(o, "id")),
-        manual_flag=bool(manual_flag_extractor(getattr(o, "extras", None))),
+        manual_flag=manual_flag,
         selected_client_name=selected_client_name,
         selected_user_id=int(getattr(o, "created_by")) if getattr(o, "created_by", None) not in (None, "") else None,
         folder_path=folder_path_builder(o, client),

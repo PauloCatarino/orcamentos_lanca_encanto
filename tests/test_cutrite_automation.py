@@ -590,6 +590,41 @@ class CutRiteAutomationTests(unittest.TestCase):
         fallback_mock.assert_called()
         wait_mock.assert_called_once()
 
+    def test_activate_cutrite_window_does_not_restore_window_when_not_minimized(self):
+        window = unittest.mock.Mock()
+
+        with patch.object(
+            cutrite_automation, "_get_cutrite_window_handle", return_value=123
+        ), patch.object(
+            cutrite_automation, "_is_cutrite_window_minimized", return_value=False
+        ), patch.object(
+            cutrite_automation, "_sleep_cutrite"
+        ):
+            cutrite_automation._activate_cutrite_window(window)
+
+        window.restore.assert_not_called()
+        window.set_focus.assert_called_once_with()
+
+    def test_activate_cutrite_window_restores_only_minimized_window(self):
+        window = unittest.mock.Mock()
+        fake_user32 = SimpleNamespace(ShowWindow=unittest.mock.Mock())
+        fake_windll = SimpleNamespace(user32=fake_user32)
+
+        with patch.object(
+            cutrite_automation, "_get_cutrite_window_handle", return_value=123
+        ), patch.object(
+            cutrite_automation, "_is_cutrite_window_minimized", return_value=True
+        ), patch.object(
+            cutrite_automation.ctypes, "windll", fake_windll, create=True
+        ), patch.object(
+            cutrite_automation, "_sleep_cutrite"
+        ):
+            cutrite_automation._activate_cutrite_window(window)
+
+        fake_user32.ShowWindow.assert_called_once_with(123, cutrite_automation.SW_RESTORE)
+        window.restore.assert_called_once_with()
+        window.set_focus.assert_called_once_with()
+
     def test_maximize_cutrite_window_returns_when_window_is_already_maximized(self):
         window = self._Element(name="CutRite", control_type="Window")
         with patch.object(
@@ -632,6 +667,71 @@ class CutRiteAutomationTests(unittest.TestCase):
             result = cutrite_automation._maximize_cutrite_window(window, window_label="principal do CUT-RITE")
 
         self.assertFalse(result)
+
+    def test_execute_cutrite_ui_import_maximizes_main_and_parts_windows(self):
+        desktop = object()
+        main_window = self._Element(name="CutRite", control_type="Window")
+        parts_window = self._Element(name="Lista de pecas", control_type="Window")
+        desktop_factory = unittest.mock.Mock(return_value=desktop)
+        mouse = object()
+        keyboard = unittest.mock.Mock()
+        context = cutrite_automation.CutRiteImportContext(
+            processo=SimpleNamespace(id=7),
+            folder_path=Path(r"C:\tmp"),
+            source_workbook_path=Path(r"C:\tmp\Lista_Material_0417_01_26_JF_VIVA.xlsm"),
+            import_workbook_path=Path(r"C:\tmp\0417_01_01_JF_VIVA.xls"),
+            cutrite_input_path=Path(r"C:\V12\_WORK\IMPORT\0417_01_01_JF_VIVA.xls"),
+            plan_name="0417_01_01_JF_VIVA",
+            cutrite_exe_path=Path(r"C:\V12\V12.exe"),
+            import_exe_path=Path(r"C:\V12\Import.exe"),
+            cutrite_root=Path(r"C:\V12"),
+            cutrite_profile_dir=Path(r"\\SERVER\Cutrite\Paulo_Catarino"),
+            cutrite_workdir=Path(r"C:\V12\_WORK\USER1"),
+            cutrite_data_dir=Path(r"C:\V12\_WORK\USER1\DATA"),
+            cutrite_target_data_dir=Path(r"C:\V12\_WORK\USER1\DATA"),
+        )
+
+        with patch.object(
+            cutrite_automation, "_load_cutrite_ui_modules", return_value=(desktop_factory, mouse, keyboard)
+        ), patch.object(
+            cutrite_automation, "_find_cutrite_main_window", return_value=None
+        ), patch.object(
+            cutrite_automation.subprocess, "Popen"
+        ), patch.object(
+            cutrite_automation, "_wait_for_cutrite_window", return_value=main_window
+        ), patch.object(
+            cutrite_automation, "_activate_cutrite_window"
+        ), patch.object(
+            cutrite_automation, "_sleep_cutrite"
+        ), patch.object(
+            cutrite_automation, "_ensure_cutrite_parts_window", return_value=parts_window
+        ), patch.object(
+            cutrite_automation, "_wait_for_cutrite_parts_window_ready"
+        ), patch.object(
+            cutrite_automation, "_set_cutrite_clipboard_text"
+        ), patch.object(
+            cutrite_automation, "_set_cutrite_parts_title"
+        ), patch.object(
+            cutrite_automation, "_navigate_to_cutrite_parts_table"
+        ), patch.object(
+            cutrite_automation, "_dismiss_cutrite_confirmation_dialog"
+        ), patch.object(
+            cutrite_automation, "_save_cutrite_parts_list", return_value=True
+        ), patch.object(
+            cutrite_automation, "_wait_for_cutrite_output_files"
+        ), patch.object(
+            cutrite_automation, "_maximize_cutrite_window", return_value=True
+        ) as maximize_mock:
+            result = cutrite_automation._execute_cutrite_ui_import(
+                context,
+                paste_text="A\tB",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(result, (False, True))
+        maximize_mock.assert_any_call(main_window, window_label="principal do CUT-RITE")
+        maximize_mock.assert_any_call(parts_window, window_label="Lista de pecas do CUT-RITE")
+        self.assertEqual(maximize_mock.call_count, 3)
 
     def test_prepare_cutrite_import_builds_expected_paths(self):
         processo = SimpleNamespace(id=7, codigo_processo="26.0417_01_01")

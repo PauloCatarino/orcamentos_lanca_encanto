@@ -140,6 +140,62 @@ def _simplex_from_nome(nome: str) -> str:
     return base[:10] + "..."
 
 
+def _normalize_simplex_value(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def phc_simplex_is_missing(value: object) -> bool:
+    simplex = _normalize_simplex_value(value)
+    return (not simplex) or simplex.endswith("...")
+
+
+def phc_simplex_has_unjoined_words(value: object) -> bool:
+    simplex = _normalize_simplex_value(value)
+    return len(simplex.split()) >= 2
+
+
+def phc_simplex_validation_issue(
+    *,
+    cliente_nome: str,
+    num_phc: Optional[str],
+    simplex: object,
+    action_label: str = "continuar",
+) -> Optional[tuple[str, str]]:
+    cliente_label = _normalize_simplex_value(cliente_nome) or "Cliente"
+    num_phc_label = _normalize_simplex_value(num_phc) or "n/d"
+    simplex_label = _normalize_simplex_value(simplex)
+
+    if phc_simplex_is_missing(simplex_label):
+        return (
+            "Abreviado (PHC) em falta",
+            "O nome cliente 'Simplex' do Martelo termina em '...' (ou esta vazio), o que indica que no PHC o campo "
+            "'Abreviatura' nao esta preenchido/sincronizado.\n\n"
+            f"Antes de {action_label}:\n"
+            "1) No PHC, preencha o campo 'Abreviatura' do cliente.\n"
+            "2) No Martelo, va a Clientes e clique em 'Atualizar PHC'.\n\n"
+            f"Cliente: {cliente_label} (PHC: {num_phc_label})\n"
+            f"Simplex atual: {simplex_label or '(vazio)'}\n\n"
+            "Depois volte e tente novamente.",
+        )
+
+    if phc_simplex_has_unjoined_words(simplex_label):
+        return (
+            "Abreviado (PHC) invalido",
+            "O campo 'Abreviatura' do cliente no PHC contem 2 ou mais palavras separadas por espacos.\n\n"
+            "Atualize esse campo no PHC usando '_' para unir as palavras (ex.: ALEXANDRE_CASAIS).\n\n"
+            f"Antes de {action_label}:\n"
+            "1) No PHC, atualize o campo 'Abreviatura' do cliente.\n"
+            "2) No Martelo, va a Clientes e clique em 'Atualizar PHC'.\n\n"
+            f"Cliente: {cliente_label} (PHC: {num_phc_label})\n"
+            f"Abreviatura atual no PHC: {simplex_label}\n\n"
+            "Depois volte e tente novamente.",
+        )
+
+    return None
+
+
 def sync_clients_from_phc(db: Session) -> dict:
     """
     Sincroniza a tabela `clients` do Martelo a partir do PHC (dbo.CL).

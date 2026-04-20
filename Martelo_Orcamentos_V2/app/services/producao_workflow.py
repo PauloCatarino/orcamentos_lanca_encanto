@@ -6,20 +6,22 @@ import os
 import subprocess
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 import tempfile
 import re
 import unicodedata
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models import Orcamento, Producao
+from Martelo_Orcamentos_V2.app.services.clients import phc_simplex_validation_issue
 from Martelo_Orcamentos_V2.app.services.modulos import pasta_imagens_base
 from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao
 from Martelo_Orcamentos_V2.app.services import phc_sql as svc_phc
-from Martelo_Orcamentos_V2.app.services.settings import get_setting
+from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 from Martelo_Orcamentos_V2.app.utils.date_utils import format_date_display, parse_date_value
 
 
@@ -102,6 +104,64 @@ class NovaVersaoPreparation:
     creation_data: dict
 
 
+@dataclass(frozen=True)
+class PHCStatusSyncChange:
+    processo_id: int
+    codigo_processo: str
+    cliente: str
+    estado_anterior: str
+    estado_novo: str
+    phc_estado: str
+
+
+@dataclass(frozen=True)
+class PHCStatusSyncIssue:
+    processo_id: int
+    codigo_processo: str
+    responsavel: str
+    reason: str
+    martelo_ano: str
+    martelo_num_enc_phc: str
+    martelo_num_cliente_phc: str
+    martelo_nome_cliente: str
+    phc_anos: tuple[str, ...]
+    phc_num_encs: tuple[str, ...]
+    phc_num_clientes: tuple[str, ...]
+    phc_nomes: tuple[str, ...]
+    phc_estados: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PHCStatusSyncResult:
+    checked_total: int
+    changed: tuple[PHCStatusSyncChange, ...]
+    issues: tuple[PHCStatusSyncIssue, ...]
+    skipped_daily: bool
+
+
+@dataclass(frozen=True)
+class PHCStatusUserIssue:
+    issue: PHCStatusSyncIssue
+    hidden: bool = False
+
+
+@dataclass(frozen=True)
+class PHCStatusUserIssueSummary:
+    user_id: int
+    username: str
+    today: date
+    total_count: int
+    hidden_count: int
+    items: list[PHCStatusUserIssue]
+
+
+KEY_PRODUCAO_PHC_STATUS_LAST_SYNC_DATE = "producao_phc_status_last_sync_date"
+KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_DATE = "producao_phc_status_issues_cache_date"
+KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_JSON = "producao_phc_status_issues_cache_json"
+AUTO_SHOW_PRODUCAO_PHC_STATUS_ISSUES_PREFIX = "producao_phc_status_issues_seen"
+HIDDEN_PRODUCAO_PHC_STATUS_ISSUES_PREFIX = "producao_phc_status_issues_hidden"
+
+
 def validate_processo_payload(data: dict) -> dict:
     payload = dict(data or {})
     payload["ano"] = str(payload.get("ano") or "").strip()
@@ -119,6 +179,407 @@ def _simplex_from_text(text: str) -> str:
     base = re.sub(r"[^A-Za-z0-9]+", "_", base)
     base = re.sub(r"_+", "_", base).strip("_").upper()
     return base or "CLIENTE"
+
+
+def _normalize_match_text(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").strip())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"\s+", " ", text).strip().upper()
+    return text
+
+
+def _normalize_match_number(value: object) -> str:
+    text = str(value or "").strip()
+    digits = re.sub(r"\D", "", text)
+    if not digits:
+        return text.upper()
+    try:
+        return str(int(digits))
+    except Exception:
+        stripped = digits.lstrip("0")
+        return stripped or "0"
+
+
+def _map_phc_status_to_martelo(value: object) -> Optional[str]:
+    text = _normalize_match_text(value)
+    if not text:
+        return None
+    if "ARQUIV" in text:
+        return "Arquivado"
+    if "FINALIZ" in text:
+        return "Finalizado"
+    return None
+
+
+def _row_nome_phc(row: dict) -> str:
+    return (
+        str(row.get("CL_Nome") or "").strip()
+        or str(row.get("BO_Nome") or "").strip()
+        or str(row.get("BI_Nome") or "").strip()
+    )
+
+
+def _row_estado_phc_text(row: dict) -> str:
+    return (
+        str(row.get("Estado_PHC") or "").strip()
+        or str(row.get("BO_Tabela1") or "").strip()
+        or str(row.get("BI_Tabela1") or "").strip()
+    )
+
+
+def _summarize_candidate_values(rows: list[dict], extractor) -> tuple[str, ...]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        raw = str(extractor(row) or "").strip()
+        if not raw:
+            continue
+        key = _normalize_match_text(raw)
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(raw)
+    return tuple(values)
+
+
+def _build_phc_status_issue(
+    proc: Producao,
+    *,
+    reason: str,
+    rows: list[dict],
+) -> PHCStatusSyncIssue:
+    return PHCStatusSyncIssue(
+        processo_id=int(getattr(proc, "id", 0) or 0),
+        codigo_processo=str(getattr(proc, "codigo_processo", "") or "").strip(),
+        responsavel=str(getattr(proc, "responsavel", "") or "").strip(),
+        reason=reason,
+        martelo_ano=str(getattr(proc, "ano", "") or "").strip(),
+        martelo_num_enc_phc=str(getattr(proc, "num_enc_phc", "") or "").strip(),
+        martelo_num_cliente_phc=str(getattr(proc, "num_cliente_phc", "") or "").strip(),
+        martelo_nome_cliente=str(getattr(proc, "nome_cliente", "") or "").strip(),
+        phc_anos=_summarize_candidate_values(rows, lambda row: row.get("Ano")),
+        phc_num_encs=_summarize_candidate_values(rows, lambda row: row.get("Enc_No")),
+        phc_num_clientes=_summarize_candidate_values(rows, lambda row: row.get("Num_PHC")),
+        phc_nomes=_summarize_candidate_values(rows, _row_nome_phc),
+        phc_estados=_summarize_candidate_values(rows, _row_estado_phc_text),
+    )
+
+
+def _find_direct_phc_status_row(proc: Producao, rows: list[dict]) -> Optional[dict]:
+    proc_ano = str(getattr(proc, "ano", "") or "").strip()
+    proc_enc = _normalize_match_number(getattr(proc, "num_enc_phc", None))
+    proc_num_cliente = _normalize_match_number(getattr(proc, "num_cliente_phc", None))
+    proc_nome = _normalize_match_text(getattr(proc, "nome_cliente", None))
+    if not (proc_ano and proc_enc and proc_num_cliente and proc_nome):
+        return None
+
+    for row in rows:
+        row_ano = str(row.get("Ano") or "").strip()
+        row_enc = _normalize_match_number(row.get("Enc_No"))
+        row_num_cliente = _normalize_match_number(row.get("Num_PHC"))
+        row_nome = _normalize_match_text(_row_nome_phc(row))
+        if row_ano != proc_ano:
+            continue
+        if row_enc != proc_enc:
+            continue
+        if row_num_cliente != proc_num_cliente:
+            continue
+        if row_nome != proc_nome:
+            continue
+        return row
+    return None
+
+
+def _serialize_phc_status_issue(issue: PHCStatusSyncIssue) -> dict:
+    return {
+        "processo_id": int(issue.processo_id),
+        "codigo_processo": str(issue.codigo_processo or "").strip(),
+        "responsavel": str(issue.responsavel or "").strip(),
+        "reason": str(issue.reason or "").strip(),
+        "martelo_ano": str(issue.martelo_ano or "").strip(),
+        "martelo_num_enc_phc": str(issue.martelo_num_enc_phc or "").strip(),
+        "martelo_num_cliente_phc": str(issue.martelo_num_cliente_phc or "").strip(),
+        "martelo_nome_cliente": str(issue.martelo_nome_cliente or "").strip(),
+        "phc_anos": list(issue.phc_anos),
+        "phc_num_encs": list(issue.phc_num_encs),
+        "phc_num_clientes": list(issue.phc_num_clientes),
+        "phc_nomes": list(issue.phc_nomes),
+        "phc_estados": list(issue.phc_estados),
+    }
+
+
+def _deserialize_phc_status_issue(payload: dict) -> Optional[PHCStatusSyncIssue]:
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return PHCStatusSyncIssue(
+            processo_id=int(payload.get("processo_id") or 0),
+            codigo_processo=str(payload.get("codigo_processo") or "").strip(),
+            responsavel=str(payload.get("responsavel") or "").strip(),
+            reason=str(payload.get("reason") or "").strip(),
+            martelo_ano=str(payload.get("martelo_ano") or "").strip(),
+            martelo_num_enc_phc=str(payload.get("martelo_num_enc_phc") or "").strip(),
+            martelo_num_cliente_phc=str(payload.get("martelo_num_cliente_phc") or "").strip(),
+            martelo_nome_cliente=str(payload.get("martelo_nome_cliente") or "").strip(),
+            phc_anos=tuple(str(value or "").strip() for value in (payload.get("phc_anos") or []) if str(value or "").strip()),
+            phc_num_encs=tuple(
+                str(value or "").strip() for value in (payload.get("phc_num_encs") or []) if str(value or "").strip()
+            ),
+            phc_num_clientes=tuple(
+                str(value or "").strip()
+                for value in (payload.get("phc_num_clientes") or [])
+                if str(value or "").strip()
+            ),
+            phc_nomes=tuple(str(value or "").strip() for value in (payload.get("phc_nomes") or []) if str(value or "").strip()),
+            phc_estados=tuple(
+                str(value or "").strip() for value in (payload.get("phc_estados") or []) if str(value or "").strip()
+            ),
+        )
+    except Exception:
+        return None
+
+
+def _cache_phc_status_issues(session: Session, *, issues: list[PHCStatusSyncIssue], today_text: str) -> None:
+    payload = json.dumps([_serialize_phc_status_issue(issue) for issue in issues], ensure_ascii=False)
+    set_setting(session, KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_DATE, today_text)
+    set_setting(session, KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_JSON, payload)
+
+
+def _phc_status_issue_hidden_setting_key(user_id: int) -> str:
+    return f"{HIDDEN_PRODUCAO_PHC_STATUS_ISSUES_PREFIX}_{int(user_id)}"
+
+
+def _phc_status_issue_seen_setting_key(user_id: int) -> str:
+    return f"{AUTO_SHOW_PRODUCAO_PHC_STATUS_ISSUES_PREFIX}_{int(user_id)}"
+
+
+def get_hidden_producao_phc_issue_ids(db: Session, *, user_id: int) -> set[int]:
+    raw = get_setting(db, _phc_status_issue_hidden_setting_key(user_id), "[]")
+    try:
+        parsed = json.loads(raw or "[]")
+    except Exception:
+        parsed = []
+    hidden_ids: set[int] = set()
+    if isinstance(parsed, list):
+        for value in parsed:
+            try:
+                hidden_ids.add(int(value))
+            except Exception:
+                continue
+    return hidden_ids
+
+
+def set_producao_phc_issue_hidden(db: Session, *, user_id: int, processo_id: int, hidden: bool) -> None:
+    hidden_ids = get_hidden_producao_phc_issue_ids(db, user_id=user_id)
+    target_id = int(processo_id)
+    if hidden:
+        hidden_ids.add(target_id)
+    else:
+        hidden_ids.discard(target_id)
+    set_setting(db, _phc_status_issue_hidden_setting_key(user_id), json.dumps(sorted(hidden_ids)))
+
+
+def should_auto_show_producao_phc_issues(db: Session, *, user_id: int, today: Optional[date] = None) -> bool:
+    current_day = (today or date.today()).isoformat()
+    last_seen = get_setting(db, _phc_status_issue_seen_setting_key(user_id), "")
+    return str(last_seen or "").strip() != current_day
+
+
+def mark_producao_phc_issues_seen(db: Session, *, user_id: int, today: Optional[date] = None) -> None:
+    set_setting(db, _phc_status_issue_seen_setting_key(user_id), (today or date.today()).isoformat())
+
+
+def load_cached_phc_status_issues(db: Session, *, today: Optional[date] = None) -> tuple[PHCStatusSyncIssue, ...]:
+    current_day = (today or date.today()).isoformat()
+    cached_day = str(get_setting(db, KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_DATE, "") or "").strip()
+    if cached_day != current_day:
+        return ()
+
+    raw = get_setting(db, KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_JSON, "[]")
+    try:
+        parsed = json.loads(raw or "[]")
+    except Exception:
+        parsed = []
+
+    items: list[PHCStatusSyncIssue] = []
+    if isinstance(parsed, list):
+        for payload in parsed:
+            issue = _deserialize_phc_status_issue(payload)
+            if issue is not None:
+                items.append(issue)
+
+    items.sort(key=lambda issue: (issue.codigo_processo.casefold(), issue.processo_id))
+    return tuple(items)
+
+
+def build_user_phc_status_issue_summary(
+    db: Session,
+    *,
+    user_id: int,
+    username: str,
+    today: Optional[date] = None,
+    include_hidden: bool = False,
+) -> PHCStatusUserIssueSummary:
+    current_day = today or date.today()
+    username_key = _normalize_match_text(username)
+    hidden_ids = get_hidden_producao_phc_issue_ids(db, user_id=user_id)
+    cached_issues = load_cached_phc_status_issues(db, today=current_day)
+
+    items: list[PHCStatusUserIssue] = []
+    total_count = 0
+    hidden_count = 0
+    for issue in cached_issues:
+        if username_key:
+            issue_responsavel = _normalize_match_text(issue.responsavel)
+            if issue_responsavel != username_key:
+                continue
+        elif str(issue.responsavel or "").strip():
+            continue
+
+        total_count += 1
+        is_hidden = int(issue.processo_id) in hidden_ids
+        if is_hidden:
+            hidden_count += 1
+        if is_hidden and not include_hidden:
+            continue
+        items.append(PHCStatusUserIssue(issue=issue, hidden=is_hidden))
+
+    items.sort(key=lambda entry: (1 if entry.hidden else 0, entry.issue.codigo_processo.casefold(), entry.issue.processo_id))
+    return PHCStatusUserIssueSummary(
+        user_id=int(user_id),
+        username=str(username or "").strip(),
+        today=current_day,
+        total_count=total_count,
+        hidden_count=hidden_count,
+        items=items,
+    )
+
+
+def sync_producao_statuses_from_phc(
+    session: Session,
+    *,
+    current_user_id: Optional[int] = None,
+    force: bool = False,
+    today: Optional[date] = None,
+) -> PHCStatusSyncResult:
+    today_text = (today or date.today()).isoformat()
+    last_sync = str(get_setting(session, KEY_PRODUCAO_PHC_STATUS_LAST_SYNC_DATE, "") or "").strip()
+    if not force and last_sync == today_text:
+        return PHCStatusSyncResult(checked_total=0, changed=(), issues=(), skipped_daily=True)
+
+    processes = session.execute(
+        select(Producao)
+        .where(
+            Producao.tipo_pasta == svc_producao.DEFAULT_PASTA_ENCOMENDA,
+            Producao.num_enc_phc.is_not(None),
+            Producao.ano.is_not(None),
+        )
+        .where((Producao.estado.is_(None)) | (Producao.estado != "Arquivado"))
+        .order_by(Producao.id.desc())
+    ).scalars().all()
+
+    years = sorted({str(getattr(proc, "ano", "") or "").strip() for proc in processes if str(getattr(proc, "ano", "") or "").strip()})
+    phc_rows_all: list[dict] = []
+    for year in years:
+        phc_rows_all.extend(
+            svc_phc.query_phc_estado_debug_rows(
+                session,
+                ano=year,
+                max_rows=0,
+            )
+        )
+
+    rows_by_year_enc: dict[tuple[str, str], list[dict]] = {}
+    rows_by_enc: dict[str, list[dict]] = {}
+    for row in phc_rows_all:
+        row_year = str(row.get("Ano") or "").strip()
+        row_enc = str(row.get("Enc_No") or "").strip()
+        if row_year and row_enc:
+            rows_by_year_enc.setdefault((row_year, row_enc), []).append(row)
+        if row_enc:
+            rows_by_enc.setdefault(row_enc, []).append(row)
+
+    changed: list[PHCStatusSyncChange] = []
+    issues: list[PHCStatusSyncIssue] = []
+    checked_total = 0
+
+    for proc in processes:
+        checked_total += 1
+        proc_ano = str(getattr(proc, "ano", "") or "").strip()
+        proc_enc = str(getattr(proc, "num_enc_phc", "") or "").strip()
+        proc_num_cliente = str(getattr(proc, "num_cliente_phc", "") or "").strip()
+        proc_nome = str(getattr(proc, "nome_cliente", "") or "").strip()
+
+        if not (proc_ano and proc_enc):
+            issues.append(
+                _build_phc_status_issue(
+                    proc,
+                    reason="Campos do Martelo em falta para consultar o PHC (Ano e/ou Num Enc PHC).",
+                    rows=[],
+                )
+            )
+            continue
+
+        rows = rows_by_year_enc.get((proc_ano, _normalize_match_number(proc_enc)), [])
+        if not rows:
+            rows = rows_by_year_enc.get((proc_ano, proc_enc), [])
+
+        if not (proc_ano and proc_enc and proc_num_cliente and proc_nome):
+            fallback_rows = rows_by_enc.get(_normalize_match_number(proc_enc), []) or rows_by_enc.get(proc_enc, [])
+            issues.append(
+                _build_phc_status_issue(
+                    proc,
+                    reason="Campos do Martelo em falta para validar com seguranca (Ano, Num Enc PHC, Num cliente PHC e Nome Cliente).",
+                    rows=fallback_rows or rows,
+                )
+            )
+            continue
+
+        match_row = _find_direct_phc_status_row(proc, rows)
+        if match_row is None:
+            fallback_rows = rows_by_enc.get(_normalize_match_number(proc_enc), []) or rows_by_enc.get(proc_enc, [])
+            issues.append(
+                _build_phc_status_issue(
+                    proc,
+                    reason="Nao foi encontrada correspondencia direta entre Martelo e PHC para esta encomenda.",
+                    rows=fallback_rows or rows,
+                )
+            )
+            continue
+
+        phc_estado = _row_estado_phc_text(match_row)
+        novo_estado = _map_phc_status_to_martelo(phc_estado)
+        if not novo_estado:
+            continue
+
+        estado_atual = str(getattr(proc, "estado", "") or "").strip()
+        if estado_atual == novo_estado:
+            continue
+
+        proc.estado = novo_estado
+        if current_user_id is not None:
+            proc.updated_by = current_user_id
+        session.add(proc)
+        changed.append(
+            PHCStatusSyncChange(
+                processo_id=int(getattr(proc, "id", 0) or 0),
+                codigo_processo=str(getattr(proc, "codigo_processo", "") or "").strip(),
+                cliente=proc_nome,
+                estado_anterior=estado_atual or "(vazio)",
+                estado_novo=novo_estado,
+                phc_estado=phc_estado,
+            )
+        )
+
+    set_setting(session, KEY_PRODUCAO_PHC_STATUS_LAST_SYNC_DATE, today_text)
+    _cache_phc_status_issues(session, issues=issues, today_text=today_text)
+    session.flush()
+    return PHCStatusSyncResult(
+        checked_total=checked_total,
+        changed=tuple(changed),
+        issues=tuple(issues),
+        skipped_daily=False,
+    )
 
 
 def load_processo_required(
@@ -587,11 +1048,16 @@ def create_process_from_orcamento_conversion(
     base = rows_phc[0] or {}
     nome_cliente = str(base.get("Cliente") or "").strip()
     nome_simplex = str(base.get("Cliente_Abreviado") or "").strip()
-    if not nome_simplex and nome_cliente:
-        base_simplex = _simplex_from_text(nome_cliente)
-        nome_simplex = (base_simplex[:10] + "...") if len(base_simplex) > 10 else base_simplex
     num_cliente_phc = str(base.get("Num_PHC") or "").strip()
     ref_cliente = str(base.get("Ref_Cliente") or "").strip()
+    validation_issue = phc_simplex_validation_issue(
+        cliente_nome=nome_cliente,
+        num_phc=num_cliente_phc,
+        simplex=nome_simplex,
+        action_label="criar o processo",
+    )
+    if validation_issue:
+        raise ValueError(validation_issue[1])
 
     seen: set[str] = set()
     descr_list: list[str] = []

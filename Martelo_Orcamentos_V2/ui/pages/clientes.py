@@ -184,10 +184,13 @@ class ClientesTab(QtWidgets.QWidget):
         self.ed_search = QtWidgets.QLineEdit()
         self.ed_search.setPlaceholderText(search_placeholder)
         self.ed_search.textChanged.connect(self.on_search)
+        self.ed_search.textChanged.connect(self._update_clear_search_button)
 
         self.btn_clear = QtWidgets.QToolButton()
-        self.btn_clear.setText("X")
-        self.btn_clear.clicked.connect(lambda: self.ed_search.setText(""))
+        self.btn_clear.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton))
+        self.btn_clear.setToolTip("Limpar pesquisa")
+        self.btn_clear.setEnabled(False)
+        self.btn_clear.clicked.connect(self.ed_search.clear)
 
         search_bar = QtWidgets.QHBoxLayout()
         search_bar.setSpacing(6)
@@ -207,7 +210,7 @@ class ClientesTab(QtWidgets.QWidget):
                 ("WEB", "web_page"),
                 ("Telefone", "telefone", phone_formatter),
                 ("Telemovel", "telemovel", phone_formatter),
-                ("Num_PHC", "num_cliente_phc"),
+                {"header": "Num_PHC", "attr": "num_cliente_phc", "type": "int"},
                 ("Info 1", "info_1"),
                 ("Info 2", "info_2"),
             ]
@@ -226,27 +229,23 @@ class ClientesTab(QtWidgets.QWidget):
 
         # --- Mapeamento de larguras por coluna (%% AJUSTAR AQUI %%) ---
         # Se queres alterar larguras iniciais, muda aqui.
-        width_map = {
-            "ID": 40,
-            "Nome": 210,
-            "Simplex": 110,
-            "Morada": 220,
-            "Email": 210,
-            "WEB": 120,
-            "Telefone": 110,
-            "Telemovel": 110,
-            "Num_PHC": 90,
-            "Info 1": 250,   # largura desejada para Info 1 (%% AJUSTAR AQUI %%)
-            "Info 2": 250,   # largura desejada para Info 2 (%% AJUSTAR AQUI %%)
+        self._table_width_map = {
+            "ID": 48,
+            "Nome": 260,
+            "Simplex": 170,
+            "Morada": 320,
+            "Email": 260,
+            "WEB": 150,
+            "Telefone": 125,
+            "Telemovel": 125,
+            "Num_PHC": 100,
+            "Info 1": 280,
+            "Info 2": 280,
         }
+        self._table_fixed_headers = {"ID", "Telefone", "Telemovel", "Num_PHC"}
+        self._table_stretch_headers = {"Nome", "Morada", "Email", "Info 1", "Info 2"}
 
-        for idx, col in enumerate(self.model.columns):
-            label = col[0]
-            if label in width_map:
-                header.resizeSection(idx, width_map[label])
-            if label in ("Info 1", "Info 2"):
-                # força modo FIXED para garantir largura
-                header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Fixed)
+        self._apply_table_column_layout()
 
         # Conectar mudança de seleção
         self.table.selectionModel().selectionChanged.connect(lambda *_: self.load_selected())
@@ -414,23 +413,39 @@ class ClientesTab(QtWidgets.QWidget):
         self._current_id = None
         self.refresh()
         self._setup_completer()
+        self._update_clear_search_button(self.ed_search.text())
 
     # ------------------ Helpers / Operações sobre a tabela ------------------
+    def _column_header(self, col) -> str:
+        return self.model._col_spec(col).get("header", "")
+
+    def _apply_table_column_layout(self):
+        header = self.table.horizontalHeader()
+        for idx, col in enumerate(self.model.columns):
+            label = self._column_header(col)
+            if label in self._table_fixed_headers:
+                header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Fixed)
+            elif label in self._table_stretch_headers:
+                header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Stretch)
+            else:
+                header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Interactive)
+
+            width = self._table_width_map.get(label)
+            if width is not None:
+                header.resizeSection(idx, width)
+
+    def _update_clear_search_button(self, text: str):
+        self.btn_clear.setEnabled(bool((text or "").strip()))
+
     def refresh(self):
-        """Recarrega a tabela a partir da base de dados e reaplica larguras fixas."""
+        """Recarrega a tabela a partir da base de dados e reaplica o layout das colunas."""
         rows = self._list_fn(self.db)
         self.model.set_rows(rows)
         if rows:
             self.table.selectRow(0)
             self.load_selected()
 
-        # Reaplicar tamanhos fixos para Info1 / Info2 (ajuda a garantir 200px)
-        header = self.table.horizontalHeader()
-        for idx, col in enumerate(self.model.columns):
-            label = col[0]
-            if label in ("Info 1", "Info 2"):
-                header.resizeSection(idx, 200)
-                header.setSectionResizeMode(idx, QtWidgets.QHeaderView.Fixed)
+        self._apply_table_column_layout()
 
     def _setup_completer(self):
         toks = self._suggestion_fn(self.db)

@@ -1785,26 +1785,17 @@ class MateriaPrimaPicker(QDialog):
 
 
         self.ed_search = QLineEdit()
-
-
-
         self.ed_search.setPlaceholderText("Pesquisar... use % para varios termos")
-
-
+        self.ed_search.textChanged.connect(self._update_clear_search_button)
 
         btn_search = QPushButton("Pesquisar")
-
-
-
         btn_search.clicked.connect(self.refresh)
 
-
-
-        btn_clear = QPushButton("Limpar Filtro")
-
-
-
-        btn_clear.clicked.connect(self.on_clear_filters)
+        self.btn_clear_search = QtWidgets.QToolButton()
+        self.btn_clear_search.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton))
+        self.btn_clear_search.setToolTip("Limpar pesquisa e filtros")
+        self.btn_clear_search.setEnabled(False)
+        self.btn_clear_search.clicked.connect(self.on_clear_filters)
 
 
 
@@ -1829,6 +1820,7 @@ class MateriaPrimaPicker(QDialog):
 
 
         self._update_filter_label()
+        self._update_clear_search_button()
 
 
 
@@ -1981,7 +1973,7 @@ class MateriaPrimaPicker(QDialog):
 
         controls_row.addWidget(btn_search)
 
-        controls_row.addWidget(btn_clear)
+        controls_row.addWidget(self.btn_clear_search)
 
         controls_row.addSpacing(12)
 
@@ -2039,6 +2031,36 @@ class MateriaPrimaPicker(QDialog):
 
         self._search_timer.start(250)
 
+    def _update_clear_search_button(self, _text: str = "") -> None:
+
+
+
+        btn = getattr(self, "btn_clear_search", None)
+
+
+
+        ed = getattr(self, "ed_search", None)
+
+
+
+        if btn is None or ed is None:
+
+
+
+            return
+
+
+
+        has_search = bool(ed.text().strip())
+
+
+
+        has_filters = bool(self.filter_tipo or self.filter_familia)
+
+
+
+        btn.setEnabled(has_search or has_filters)
+
 
 
 
@@ -2069,6 +2091,26 @@ class MateriaPrimaPicker(QDialog):
 
 
 
+        try:
+
+
+
+            self.ed_search.blockSignals(True)
+
+
+
+            self.ed_search.clear()
+
+
+
+        finally:
+
+
+
+            self.ed_search.blockSignals(False)
+
+
+
         self.filter_tipo = None
 
 
@@ -2078,6 +2120,11 @@ class MateriaPrimaPicker(QDialog):
 
 
         self._update_filter_label()
+        self._update_clear_search_button()
+
+
+
+        self._update_clear_search_button()
 
 
 
@@ -5045,6 +5092,67 @@ def _format_preview_value(kind: str, value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _split_model_name(full_name: Any, global_prefix: str = "__GLOBAL__|") -> Tuple[str, bool]:
+    name = str(full_name or "").strip()
+    is_global = bool(name.startswith(global_prefix))
+    clean = name[len(global_prefix):] if is_global else name
+    return clean, is_global
+
+
+def _partition_models_by_scope(models: Sequence[Any], global_prefix: str = "__GLOBAL__|") -> Dict[str, List[Any]]:
+    grouped: Dict[str, List[Any]] = {"user": [], "global": []}
+    for model in models:
+        _, is_global = _split_model_name(getattr(model, "nome_modelo", ""), global_prefix)
+        grouped["global" if is_global else "user"].append(model)
+    return grouped
+
+
+def _describe_model(model: Any, user_id: Optional[int], global_prefix: str = "__GLOBAL__|") -> str:
+    clean_name, is_global = _split_model_name(getattr(model, "nome_modelo", ""), global_prefix)
+    owner_id = getattr(model, "user_id", None)
+    created = getattr(model, "created_at", None)
+    lines = [
+        f"Nome: {clean_name or '-'}",
+        f"Origem: {'Global' if is_global else 'Utilizador'}",
+        f"Criado em: {created or '-'}",
+        f"Pode gerir: {'Sim' if owner_id == user_id else 'Nao'}",
+    ]
+    return "\n".join(lines)
+
+
+def _fill_model_preview_table(
+    table: QTableWidget,
+    tipo_menu: str,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    include_checkbox: bool = False,
+) -> None:
+    columns = PREVIEW_COLUMNS.get(tipo_menu, PREVIEW_COLUMNS["ferragens"])
+    table.clear()
+    table.setRowCount(len(rows))
+    table.setColumnCount(len(columns) + (1 if include_checkbox else 0))
+    headers = [col[0] for col in columns]
+    if include_checkbox:
+        headers = ["Importar"] + headers
+    table.setHorizontalHeaderLabels(headers)
+
+    for row_idx, row_data in enumerate(rows):
+        col_offset = 0
+        if include_checkbox:
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setCheckState(Qt.Checked)
+            table.setItem(row_idx, 0, check_item)
+            col_offset = 1
+        for col_idx, (_, key, kind) in enumerate(columns, start=col_offset):
+            item = QTableWidgetItem(_format_preview_value(kind, row_data.get(key)))
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            table.setItem(row_idx, col_idx, item)
+
+    if rows:
+        table.resizeColumnsToContents()
+
+
 
 
 
@@ -5069,28 +5177,77 @@ class GuardarModeloDialog(QDialog):
 
         self.linhas = [dict(row) for row in linhas]
         self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.models_by_scope: Dict[str, List[Any]] = {"user": [], "global": []}
         self.replace_model_id: Optional[int] = None
         self._selected_model_id: Optional[int] = None
         self.model_name: str = ""
         self.is_global: bool = False
         self.add_timestamp: bool = True
+        self.current_model = None
+        self._scope_tab_index = {"user": 0, "global": 1}
 
-        self.resize(1200, 650)
+        self.resize(1380, 760)
         layout = QVBoxLayout(self)
         split = QHBoxLayout()
 
-        self.models_list = QListWidget()
-        self.models_list.setMinimumWidth(420)
-        self.models_list.itemSelectionChanged.connect(self._on_model_selected)
-        split.addWidget(self.models_list, 2)
+        left_container = QtWidgets.QWidget()
+        left_layout = QVBoxLayout(left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(8)
+
+        self.lbl_existing = QLabel(
+            "Modelos existentes\n"
+            "Selecione um modelo existente se quiser reaproveitar o nome ou gravar por cima."
+        )
+        self.lbl_existing.setWordWrap(True)
+        left_layout.addWidget(self.lbl_existing)
+
+        self.scope_tabs = QTabWidget()
+        self.scope_lists: Dict[str, QListWidget] = {}
+        self.scope_info_labels: Dict[str, QLabel] = {}
+        for scope, title in (("user", "Utilizador"), ("global", "Global")):
+            page = QtWidgets.QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(6, 6, 6, 6)
+            page_layout.setSpacing(6)
+
+            info = QLabel("Sem modelo selecionado.")
+            info.setWordWrap(True)
+            page_layout.addWidget(info)
+
+            list_widget = QListWidget()
+            list_widget.setMinimumWidth(420)
+            list_widget.itemSelectionChanged.connect(self._on_model_selected)
+            page_layout.addWidget(list_widget, 1)
+
+            self.scope_tabs.addTab(page, title)
+            self.scope_lists[scope] = list_widget
+            self.scope_info_labels[scope] = info
+
+        self.scope_tabs.currentChanged.connect(self._on_scope_changed)
+        left_layout.addWidget(self.scope_tabs, 1)
+        split.addWidget(left_container, 2)
+
+        right_container = QtWidgets.QWidget()
+        right_layout = QVBoxLayout(right_container)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(6)
+
+        self.lbl_preview = QLabel("Linhas que vao ser guardadas")
+        self.lbl_preview_count = QLabel("")
+        self.lbl_preview_count.setStyleSheet("color: #666666;")
+        right_layout.addWidget(self.lbl_preview)
+        right_layout.addWidget(self.lbl_preview_count)
 
         self.preview_table = QTableWidget()
         self.preview_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.preview_table.setSelectionMode(QAbstractItemView.NoSelection)
-        split.addWidget(self.preview_table, 3)
+        right_layout.addWidget(self.preview_table, 1)
+        split.addWidget(right_container, 3)
         layout.addLayout(split)
 
-        form = QFormLayout()
+        form_box = QGroupBox("Destino do modelo")
+        form = QFormLayout(form_box)
         self.name_edit = QLineEdit()
         form.addRow("Nome do modelo:", self.name_edit)
         self.chk_timestamp = QCheckBox("Adicionar data/hora ao nome")
@@ -5098,7 +5255,7 @@ class GuardarModeloDialog(QDialog):
         form.addRow("", self.chk_timestamp)
         self.chk_global = QCheckBox("Disponibilizar como Global (todos os utilizadores)")
         form.addRow("", self.chk_global)
-        layout.addLayout(form)
+        layout.addWidget(form_box)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         self.button_box.accepted.connect(self.accept)
@@ -5111,83 +5268,76 @@ class GuardarModeloDialog(QDialog):
     def _filtered_lines(self) -> List[Dict[str, Any]]:
         return [dict(row) for row in self.linhas]
 
-    def _display_name(self, model) -> str:
-        name = getattr(model, "nome_modelo", "") or ""
-        is_global = name.startswith(self.global_prefix)
-        clean = name[len(self.global_prefix):] if is_global else name
-        label = f"[Global] {clean}" if is_global else clean
-        created = getattr(model, "created_at", None)
-        if created:
-            label += f" ({created})"
-        return label
+    def _current_scope(self) -> str:
+        return "global" if self.scope_tabs.currentIndex() == self._scope_tab_index["global"] else "user"
+
+    def _current_list(self) -> QListWidget:
+        return self.scope_lists[self._current_scope()]
+
+    def _find_model(self, model_id: Optional[int]) -> Any:
+        if model_id is None:
+            return None
+        for model in self.models:
+            if getattr(model, "id", None) == model_id:
+                return model
+        return None
+
+    def _update_scope_headers(self) -> None:
+        self.scope_tabs.setTabText(self._scope_tab_index["user"], f"Utilizador ({len(self.models_by_scope['user'])})")
+        self.scope_tabs.setTabText(self._scope_tab_index["global"], f"Global ({len(self.models_by_scope['global'])})")
 
     def _populate_models(self) -> None:
-        self.models_list.clear()
-        for model in self.models:
-            item = QListWidgetItem(self._display_name(model))
-            item.setData(Qt.UserRole, model.id)
-            self.models_list.addItem(item)
+        self.models_by_scope = _partition_models_by_scope(self.models, self.global_prefix)
+        for scope, list_widget in self.scope_lists.items():
+            list_widget.clear()
+            for model in self.models_by_scope.get(scope, []):
+                clean_name, _ = _split_model_name(getattr(model, "nome_modelo", ""), self.global_prefix)
+                item = QListWidgetItem(clean_name or "(sem nome)")
+                item.setData(Qt.UserRole, getattr(model, "id", None))
+                item.setToolTip(_describe_model(model, self.user_id, self.global_prefix))
+                list_widget.addItem(item)
+            self.scope_info_labels[scope].setText(
+                "Sem modelos disponiveis." if not self.models_by_scope.get(scope) else "Selecione um modelo para reutilizar o nome."
+            )
+        self._update_scope_headers()
+        self.scope_tabs.setCurrentIndex(
+            self._scope_tab_index["user"] if self.scope_lists["user"].count() > 0 else self._scope_tab_index["global"]
+        )
 
     def _populate_preview(self) -> None:
-        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
         rows = self._filtered_lines()
-        limit = min(len(rows), 12)
-        self.preview_table.setColumnCount(len(columns))
-        self.preview_table.setRowCount(limit)
-        for col_idx, (header, _, _) in enumerate(columns):
-            item = QtWidgets.QTableWidgetItem(header)
-            f = item.font(); f.setBold(True); item.setFont(f)
-            self.preview_table.setHorizontalHeaderItem(col_idx, item)
-        for row_idx in range(limit):
-            row_data = rows[row_idx]
-            for col_idx, (_, key, kind) in enumerate(columns):
-                item = QtWidgets.QTableWidgetItem(_format_preview_value(kind, row_data.get(key)))
-                self.preview_table.setItem(row_idx, col_idx, item)
-        self.preview_table.resizeColumnsToContents()
+        self.lbl_preview_count.setText(f"{len(rows)} linhas preparadas para gravar.")
+        _fill_model_preview_table(self.preview_table, self.tipo_menu, rows[: min(len(rows), 12)])
 
     def _on_model_selected(self) -> None:
-        item = self.models_list.currentItem()
+        scope = self._current_scope()
+        item = self._current_list().currentItem()
         if not item:
-            self.preview_table.clearContents()
-            self.preview_table.setRowCount(0)
+            self.current_model = None
             self._selected_model_id = None
+            self.scope_info_labels[scope].setText("Sem modelo selecionado.")
             return
         model_id = item.data(Qt.UserRole)
-        current_model = next((m for m in self.models if m.id == model_id), None)
+        current_model = self._find_model(model_id)
         self.current_model = current_model
         if not current_model:
             return
         self._selected_model_id = int(current_model.id) if getattr(current_model, "id", None) is not None else None
 
-        full_name = current_model.nome_modelo
-        is_global = bool(full_name.startswith(self.global_prefix))
-        clean_name = full_name[len(self.global_prefix):] if is_global else full_name
-        try:
-            self.name_edit.setText(clean_name)
-        except Exception:
-            pass
-        try:
-            self.chk_global.setChecked(is_global)
-        except Exception:
-            pass
+        clean_name, is_global = _split_model_name(getattr(current_model, "nome_modelo", ""), self.global_prefix)
+        self.name_edit.setText(clean_name)
+        self.chk_global.setChecked(is_global)
         # Ao selecionar um modelo existente, o caso mais comum é "gravar por cima",
         # por isso desativamos o timestamp para manter o nome igual.
-        try:
-            self.chk_timestamp.setChecked(False)
-        except Exception:
-            pass
-        try:
-            self.current_lines = self.svc.carregar_modelo(self.session, current_model.id)["linhas"]
-        except Exception:
-            self.current_lines = []
-        self.preview_table.clearContents()
-        self.preview_table.setRowCount(len(self.current_lines))
-        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
-        for row_idx, row_data in enumerate(self.current_lines):
-            for col_idx, (_, key, kind) in enumerate(columns):
-                item = QtWidgets.QTableWidgetItem(_format_preview_value(kind, row_data.get(key)))
-                self.preview_table.setItem(row_idx, col_idx, item)
-        self.preview_table.resizeColumnsToContents()
+        self.chk_timestamp.setChecked(False)
+        self.scope_info_labels[scope].setText(_describe_model(current_model, self.user_id, self.global_prefix))
+
+    def _on_scope_changed(self, _index: int) -> None:
+        current_list = self._current_list()
+        if current_list.count() > 0 and current_list.currentRow() < 0:
+            current_list.setCurrentRow(0)
+            return
+        self._on_model_selected()
 
     def accept(self) -> None:
         name = self.name_edit.text().strip()
@@ -5333,6 +5483,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
+        self.global_prefix = getattr(self.svc, "GLOBAL_PREFIX", "__GLOBAL__|")
         self.window_title = window_title or "Importar Modelo"
 
 
@@ -5350,6 +5501,7 @@ class ImportarModeloDialog(QDialog):
 
 
         self.models = self.svc.listar_modelos(self.session, user_id=user_id, tipo_menu=tipo_menu)
+        self.models_by_scope: Dict[str, List[Any]] = {"user": [], "global": []}
 
 
 
@@ -5370,6 +5522,7 @@ class ImportarModeloDialog(QDialog):
 
 
         self.replace_existing: bool = True
+        self._scope_tab_index = {"user": 0, "global": 1}
 
 
 
@@ -5381,7 +5534,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        self.resize(1500, 650)
+        self.resize(1580, 760)
 
 
 
@@ -5403,18 +5556,37 @@ class ImportarModeloDialog(QDialog):
 
         left_layout = QVBoxLayout()
 
+        self.lbl_model_sources = QLabel(
+            "Escolha a origem do modelo.\n"
+            "Os modelos de Utilizador e os modelos Globais aparecem separados."
+        )
+        self.lbl_model_sources.setWordWrap(True)
+        left_layout.addWidget(self.lbl_model_sources)
 
+        self.scope_tabs = QTabWidget()
+        self.scope_lists: Dict[str, QListWidget] = {}
+        self.scope_info_labels: Dict[str, QLabel] = {}
+        for scope, title in (("user", "Utilizador"), ("global", "Global")):
+            page = QtWidgets.QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(6, 6, 6, 6)
+            page_layout.setSpacing(6)
 
-        self.models_list = QListWidget()
-        self.models_list.setMinimumWidth(420)
+            info = QLabel("Sem modelo selecionado.")
+            info.setWordWrap(True)
+            page_layout.addWidget(info)
 
+            list_widget = QListWidget()
+            list_widget.setMinimumWidth(420)
+            list_widget.itemSelectionChanged.connect(self._on_model_selected)
+            page_layout.addWidget(list_widget, 1)
 
+            self.scope_tabs.addTab(page, title)
+            self.scope_lists[scope] = list_widget
+            self.scope_info_labels[scope] = info
 
-        self.models_list.itemSelectionChanged.connect(self._on_model_selected)
-
-
-
-        left_layout.addWidget(self.models_list)
+        self.scope_tabs.currentChanged.connect(self._on_scope_changed)
+        left_layout.addWidget(self.scope_tabs, 1)
 
 
 
@@ -5592,24 +5764,14 @@ class ImportarModeloDialog(QDialog):
 
         self._populate_models()
 
-
-
-        if self.models_list.count() > 0:
-
-
-
-            self.models_list.setCurrentRow(0)
-
-
-
+        if self.scope_lists["user"].count() > 0:
+            self.scope_tabs.setCurrentIndex(self._scope_tab_index["user"])
+            self.scope_lists["user"].setCurrentRow(0)
+        elif self.scope_lists["global"].count() > 0:
+            self.scope_tabs.setCurrentIndex(self._scope_tab_index["global"])
+            self.scope_lists["global"].setCurrentRow(0)
         else:
-
-
-
             self.btn_delete.setEnabled(False)
-
-
-
             self.btn_rename.setEnabled(False)
 
         self._update_model_actions()
@@ -5645,6 +5807,24 @@ class ImportarModeloDialog(QDialog):
 
 
         return filtered
+
+    def _current_scope(self) -> str:
+        return "global" if self.scope_tabs.currentIndex() == self._scope_tab_index["global"] else "user"
+
+    def _current_list(self) -> QListWidget:
+        return self.scope_lists[self._current_scope()]
+
+    def _find_model(self, model_id: Optional[int]) -> Any:
+        if model_id is None:
+            return None
+        for model in self.models:
+            if getattr(model, "id", None) == model_id:
+                return model
+        return None
+
+    def _update_scope_headers(self) -> None:
+        self.scope_tabs.setTabText(self._scope_tab_index["user"], f"Utilizador ({len(self.models_by_scope['user'])})")
+        self.scope_tabs.setTabText(self._scope_tab_index["global"], f"Global ({len(self.models_by_scope['global'])})")
 
 
 
@@ -5688,54 +5868,19 @@ class ImportarModeloDialog(QDialog):
 
 
     def _populate_models(self) -> None:
-
-
-
-        self.models_list.clear()
-
-
-
-        for model in self.models:
-
-
-
-            display = model.nome_modelo
-
-
-
-            created = getattr(model, "created_at", None)
-
-
-
-            if created:
-
-
-
-                try:
-
-
-
-                    display += f" ({created})"
-
-
-
-                except Exception:
-
-
-
-                    display += f" ({str(created)})"
-
-
-
-            item = QListWidgetItem(display)
-
-
-
-            item.setData(Qt.UserRole, model.id)
-
-
-
-            self.models_list.addItem(item)
+        self.models_by_scope = _partition_models_by_scope(self.models, self.global_prefix)
+        for scope, list_widget in self.scope_lists.items():
+            list_widget.clear()
+            for model in self.models_by_scope.get(scope, []):
+                clean_name, _ = _split_model_name(getattr(model, "nome_modelo", ""), self.global_prefix)
+                item = QListWidgetItem(clean_name or "(sem nome)")
+                item.setData(Qt.UserRole, getattr(model, "id", None))
+                item.setToolTip(_describe_model(model, self.user_id, self.global_prefix))
+                list_widget.addItem(item)
+            self.scope_info_labels[scope].setText(
+                "Sem modelos disponiveis." if not self.models_by_scope.get(scope) else "Selecione um modelo para importar."
+            )
+        self._update_scope_headers()
 
 
 
@@ -5747,7 +5892,8 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        item = self.models_list.currentItem()
+        scope = self._current_scope()
+        item = self._current_list().currentItem()
 
 
 
@@ -5779,6 +5925,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
+            self.scope_info_labels[scope].setText("Sem modelo selecionado.")
             self._update_model_actions()
 
             return
@@ -5821,8 +5968,18 @@ class ImportarModeloDialog(QDialog):
 
 
 
+        self.scope_info_labels[scope].setText(
+            _describe_model(self.current_model, self.user_id, self.global_prefix) if self.current_model is not None else "Sem modelo selecionado."
+        )
         self._populate_lines_table()
         self._update_model_actions()
+
+    def _on_scope_changed(self, _index: int) -> None:
+        current_list = self._current_list()
+        if current_list.count() > 0 and current_list.currentRow() < 0:
+            current_list.setCurrentRow(0)
+            return
+        self._on_model_selected()
 
 
 
@@ -5834,67 +5991,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        columns = PREVIEW_COLUMNS.get(self.tipo_menu, PREVIEW_COLUMNS["ferragens"])
-
-
-
-        self.lines_table.setColumnCount(len(columns) + 1)
-
-
-
-        headers = ["Importar"] + [col[0] for col in columns]
-
-
-
-        self.lines_table.setHorizontalHeaderLabels(headers)
-
-
-
-        self.lines_table.setRowCount(len(self.display_lines))
-
-
-
-        for row_idx, row_data in enumerate(self.display_lines):
-
-
-
-            check_item = QTableWidgetItem()
-
-
-
-            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-
-
-
-            check_item.setCheckState(Qt.Checked)
-
-
-
-            self.lines_table.setItem(row_idx, 0, check_item)
-
-
-
-            for col_idx, (_, key, kind) in enumerate(columns, start=1):
-
-
-
-                text = _format_preview_value(kind, row_data.get(key))
-
-
-
-                item = QTableWidgetItem(text)
-
-
-
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-
-
-
-                self.lines_table.setItem(row_idx, col_idx, item)
-
-
-
-        self.lines_table.resizeColumnsToContents()
+        _fill_model_preview_table(self.lines_table, self.tipo_menu, self.display_lines, include_checkbox=True)
 
 
 
@@ -5906,7 +6003,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        item = self.models_list.currentItem()
+        item = self._current_list().currentItem()
 
 
 
@@ -5922,7 +6019,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        selected_model = next((m for m in self.models if m.id == model_id), None)
+        selected_model = self._find_model(model_id)
         if not selected_model or getattr(selected_model, "user_id", None) != self.user_id:
             QtWidgets.QMessageBox.information(
                 self,
@@ -5995,15 +6092,19 @@ class ImportarModeloDialog(QDialog):
 
 
 
+        scope = self._current_scope()
         self.models = [m for m in self.models if m.id != model_id]
-
-
-
+        self.current_model = None
+        self.current_lines = []
+        self.display_lines = []
         self._populate_models()
-
-
-
-        self.models_list.setCurrentRow(0 if self.models else -1)
+        current_list = self.scope_lists[scope]
+        current_list.setCurrentRow(0 if current_list.count() else -1)
+        if current_list.count() == 0:
+            self.lines_table.clear()
+            self.lines_table.setRowCount(0)
+            self.lines_table.setColumnCount(0)
+            self.scope_info_labels[scope].setText("Sem modelos disponiveis.")
         self._update_model_actions()
 
 
@@ -6016,7 +6117,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        item = self.models_list.currentItem()
+        item = self._current_list().currentItem()
 
 
 
@@ -6032,7 +6133,7 @@ class ImportarModeloDialog(QDialog):
 
 
 
-        selected_model = next((m for m in self.models if m.id == model_id), None)
+        selected_model = self._find_model(model_id)
         if not selected_model or getattr(selected_model, "user_id", None) != self.user_id:
             QtWidgets.QMessageBox.information(
                 self,
@@ -6041,7 +6142,7 @@ class ImportarModeloDialog(QDialog):
             )
             return
 
-        model_name = item.text().split(" (")[0]
+        model_name, is_global = _split_model_name(getattr(selected_model, "nome_modelo", ""), self.global_prefix)
 
 
 
@@ -6061,7 +6162,8 @@ class ImportarModeloDialog(QDialog):
 
 
 
-            self.svc.renomear_modelo(self.session, modelo_id=model_id, user_id=self.user_id, novo_nome=new_name.strip())
+            final_name = f"{self.global_prefix}{new_name.strip()}" if is_global else new_name.strip()
+            self.svc.renomear_modelo(self.session, modelo_id=model_id, user_id=self.user_id, novo_nome=final_name)
 
 
 
@@ -6085,26 +6187,13 @@ class ImportarModeloDialog(QDialog):
 
 
 
+        scope = self._current_scope()
         self.models = self.svc.listar_modelos(self.session, user_id=self.user_id, tipo_menu=self.tipo_menu)
-
-
-
         self._populate_models()
-
-
-
-        for idx in range(self.models_list.count()):
-
-
-
-            if self.models_list.item(idx).data(Qt.UserRole) == model_id:
-
-
-
-                self.models_list.setCurrentRow(idx)
-
-
-
+        current_list = self.scope_lists[scope]
+        for idx in range(current_list.count()):
+            if current_list.item(idx).data(Qt.UserRole) == model_id:
+                current_list.setCurrentRow(idx)
                 break
 
 
@@ -6269,7 +6358,7 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
-        self.resize(600, 420)
+        self.resize(760, 560)
 
 
 
@@ -6278,6 +6367,12 @@ class ImportarMultiModelosDialog(QDialog):
 
 
         layout = QVBoxLayout(self)
+        info = QLabel(
+            "Escolha para cada tabela um modelo de Utilizador ou um modelo Global.\n"
+            "As duas origens aparecem separadas para evitar confusao."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
 
 
 
@@ -6310,82 +6405,63 @@ class ImportarMultiModelosDialog(QDialog):
 
 
             box = QGroupBox(titulo)
-
-
-
             box_layout = QVBoxLayout(box)
 
-
-
-            combo = QComboBox()
-
-
-
-            combo.addItem("(nenhum)", None)
-
-
+            scope_tabs = QTabWidget()
+            user_combo = QComboBox()
+            global_combo = QComboBox()
+            for combo in (user_combo, global_combo):
+                combo.addItem("(nenhum)", None)
 
             modelos = self.svc.listar_modelos(self.session, user_id=self.user_id, tipo_menu=menu)
+            modelos_por_scope = _partition_models_by_scope(
+                modelos,
+                getattr(self.svc, "GLOBAL_PREFIX", "__GLOBAL__|"),
+            )
 
+            for modelo in modelos_por_scope["user"]:
+                clean_name, _ = _split_model_name(
+                    getattr(modelo, "nome_modelo", ""),
+                    getattr(self.svc, "GLOBAL_PREFIX", "__GLOBAL__|"),
+                )
+                user_combo.addItem(clean_name or "(sem nome)", modelo.id)
 
+            for modelo in modelos_por_scope["global"]:
+                clean_name, _ = _split_model_name(
+                    getattr(modelo, "nome_modelo", ""),
+                    getattr(self.svc, "GLOBAL_PREFIX", "__GLOBAL__|"),
+                )
+                global_combo.addItem(clean_name or "(sem nome)", modelo.id)
 
-            for modelo in modelos:
+            user_page = QtWidgets.QWidget()
+            user_layout = QVBoxLayout(user_page)
+            user_layout.setContentsMargins(6, 6, 6, 6)
+            user_layout.addWidget(user_combo)
+            scope_tabs.addTab(user_page, f"Utilizador ({max(0, user_combo.count() - 1)})")
 
+            global_page = QtWidgets.QWidget()
+            global_layout = QVBoxLayout(global_page)
+            global_layout.setContentsMargins(6, 6, 6, 6)
+            global_layout.addWidget(global_combo)
+            scope_tabs.addTab(global_page, f"Global ({max(0, global_combo.count() - 1)})")
 
-
-                display = modelo.nome_modelo
-
-
-
-                created = getattr(modelo, "created_at", None)
-
-
-
-                if created:
-
-
-
-                    try:
-
-
-
-                        display += f" ({created})"
-
-
-
-                    except Exception:
-
-
-
-                        display += f" ({str(created)})"
-
-
-
-                combo.addItem(display, modelo.id)
-
-
+            if user_combo.count() <= 1 and global_combo.count() > 1:
+                scope_tabs.setCurrentIndex(1)
 
             replace_check = QCheckBox("Substituir linhas atuais")
-
-
-
             replace_check.setChecked(True)
 
-
-
-            box_layout.addWidget(combo)
-
-
-
+            box_layout.addWidget(scope_tabs)
             box_layout.addWidget(replace_check)
-
-
 
             layout.addWidget(box)
 
-
-
-            self.sections[menu] = {"combo": combo, "replace": replace_check}
+            self.sections[menu] = {
+                "tabs": scope_tabs,
+                "user_combo": user_combo,
+                "global_combo": global_combo,
+                "replace": replace_check,
+            }
 
 
 
@@ -6425,10 +6501,8 @@ class ImportarMultiModelosDialog(QDialog):
 
 
 
-            combo: QComboBox = widgets["combo"]
-
-
-
+            tabs: QTabWidget = widgets["tabs"]
+            combo: QComboBox = widgets["global_combo"] if tabs.currentIndex() == 1 else widgets["user_combo"]
             modelo_id = combo.currentData()
 
 

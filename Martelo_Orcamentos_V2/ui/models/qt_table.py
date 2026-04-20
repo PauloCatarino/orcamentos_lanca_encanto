@@ -14,6 +14,9 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
     Linhas podem ser objetos com atributos ou dicionarios.
     """
 
+    _NUMERIC_TYPES = {"int", "integer", "number", "float", "decimal"}
+    _INTEGER_TYPES = {"int", "integer"}
+
     def __init__(self, rows: Optional[Iterable[Any]] = None, columns: Optional[Iterable[Any]] = None, parent=None):
         super().__init__(parent)
         self._rows = list(rows) if rows is not None else []
@@ -64,6 +67,8 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             attr = col.get("attr") or col.get("field")
             formatter = col.get("formatter")
             col_type = col.get("type") or col.get("kind")
+            if isinstance(col_type, str):
+                col_type = col_type.lower()
             editable = col.get("editable")
             if editable is None:
                 editable = not col.get("readonly", False)
@@ -96,6 +101,46 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
             "editable": editable_attr,
             "tooltip": tooltip,
         }
+
+    def _coerce_numeric_value(self, value: Any, col_type: Optional[str]) -> Optional[Any]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return value
+        if isinstance(value, Decimal):
+            try:
+                return int(value) if col_type in self._INTEGER_TYPES else float(value)
+            except Exception:
+                return None
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            try:
+                return int(text) if col_type in self._INTEGER_TYPES else float(text)
+            except Exception:
+                return None
+        return None
+
+    def _sort_key(self, value: Any, col_type: Optional[str]) -> tuple[int, Any]:
+        if value is None:
+            return (2, "")
+        if col_type in self._NUMERIC_TYPES:
+            numeric_value = self._coerce_numeric_value(value, col_type)
+            if numeric_value is not None:
+                return (0, numeric_value)
+        if isinstance(value, str):
+            return (1, repair_mojibake(value).casefold())
+        if isinstance(value, Decimal):
+            try:
+                return (0, float(value))
+            except Exception:
+                return (1, str(value).casefold())
+        return (0, value)
 
     # -------- Qt Model API ----------
     def rowCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
@@ -185,7 +230,11 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
 
         # alinhamento: numeros a direita
         if role == QtCore.Qt.TextAlignmentRole:
-            if isinstance(val, (int, float)) or str(type(val)).endswith("Decimal'>"):
+            if (
+                isinstance(val, (int, float))
+                or str(type(val)).endswith("Decimal'>")
+                or (col_type in self._NUMERIC_TYPES and self._coerce_numeric_value(val, col_type) is not None)
+            ):
                 return int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
         if role == QtCore.Qt.UserRole:
@@ -288,6 +337,7 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
         col = self._columns[column]
         spec = self._col_spec(col)
         attr = spec["attr"]
+        col_type = spec.get("type")
         reverse = order == QtCore.Qt.SortOrder.DescendingOrder
 
         def raw_value(row_obj: Any):
@@ -299,7 +349,7 @@ class SimpleTableModel(QtCore.QAbstractTableModel):
                 return None
 
         old_rows = list(self._rows)
-        new_rows = sorted(old_rows, key=lambda row_obj: (raw_value(row_obj) is None, raw_value(row_obj)), reverse=reverse)
+        new_rows = sorted(old_rows, key=lambda row_obj: self._sort_key(raw_value(row_obj), col_type), reverse=reverse)
         if new_rows == old_rows:
             return
 

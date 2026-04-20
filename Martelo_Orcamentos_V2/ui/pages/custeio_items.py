@@ -39,136 +39,7 @@ from ..utils.header import apply_highlight_text, init_highlight_label
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate, BoolDelegate
 from ..dialogs.custeio_modulos import ImportModuloDialog, SaveModuloDialog, GerenciadorModulosDialog
 
-SPECIAL_MAT_DEFAULTS = {
-    "divisoria": "Divisorias",
-    "travessa": "Travessas",
-    "prumo": "Prumos",
-    "fundo aluminio 1": "Fundo aluminio",
-    "teto acabamento": "Tetos Acabamentos",
-    "fundo acabamento": "Fundos Acabamentos",
-    "lateral acabamento": "Laterais Acabamentos",
-    "costa acabamento": "Costas Acabamentos",
-}
-PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
-    "Painel Porta Correr 1",
-    "Painel Porta Correr 2",
-    "Painel Porta Correr 3",
-    "Painel Porta Correr 4",
-    "Painel Porta Correr 5",
-    "Painel Espelho Correr 1",
-    "Painel Espelho Correr 2",
-    "Painel Espelho Correr 3",
-)
-SPP_DEF_LABELS: Tuple[str, ...] = (
-    "PUXADOR VERTICAL 1",
-    "PUXADOR VERTICAL 2",
-    "CALHA SUPERIOR {SPP} 1 CORRER",
-    "CALHA SUPERIOR {SPP} 2 CORRER",
-    "CALHA INFERIOR {SPP} 1 CORRER",
-    "CALHA INFERIOR {SPP} 2 CORRER",
-    "PERFIL HORIZONTAL H {SPP}",
-    "PERFIL HORIZONTAL U {SPP}",
-    "PERFIL HORIZONTAL L {SPP}",
-    "ACESSORIO {SPP} 7 CORRER",
-    "ACESSORIO {SPP} 8 CORRER",
-)
-SPP_DEF_TOKENS: Set[str] = {
-    svc_custeio._normalize_token(label) for label in SPP_DEF_LABELS
-}
-SPP_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
-    "Puxador Vertical 1",
-    "Puxador Vertical 2",
-    "Calha Superior 1 SPP",
-    "Calha Superior 2 SPP",
-    "Calha Inferior 1 SPP",
-    "Calha Inferior 2 SPP",
-    "Perfil Horizontal H SPP",
-    "Perfil Horizontal U SPP",
-    "Perfil Horizontal L SPP",
-    "Acessorio 7 SPP",
-    "Acessorio 8 SPP",
-)
-RODIZIO_DEF_LABELS: Tuple[str, ...] = (
-    "RODIZIO SUP 1",
-    "RODIZIO SUP 2",
-    "RODIZIO INF 1",
-    "RODIZIO INF 2",
-)
-RODIZIO_DEF_TOKENS: Set[str] = {
-    svc_custeio._normalize_token(label) for label in RODIZIO_DEF_LABELS
-}
-RODIZIO_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
-    "Rodizio Sup 1",
-    "Rodizio Sup 2",
-    "Rodizio Inf 1",
-    "Rodizio Inf 2",
-)
-ACESSORIO_CORRER_LABELS: Tuple[str, ...] = (
-    "ACESSORIO 1 CORRER",
-    "ACESSORIO 2 CORRER",
-    "ACESSORIO 3 CORRER",
-    "ACESSORIO 4 CORRER",
-    "ACESSORIO 5 CORRER",
-    "ACESSORIO 6 CORRER",
-)
-ACESSORIO_CORRER_TOKENS: Set[str] = {
-    svc_custeio._normalize_token(label) for label in ACESSORIO_CORRER_LABELS
-}
-ACESSORIO_CORRER_OPTIONS: Tuple[str, ...] = (
-    "Acessorio 1",
-    "Acessorio 2",
-    "Acessorio 3",
-    "Acessorio 4",
-    "Acessorio 5",
-    "Acessorio 6",
-)
-COZINHAS_SPECIAL_DEFS: Tuple[str, ...] = (
-    "Balde Lixo",
-    "Canto Cozinha 1",
-    "Canto Cozinha 2",
-    "Porta Talheres",
-    "Tulha 1",
-    "Tulha 2",
-    "Fundo Aluminio 1",
-    "Fundo Aluminio 2",
-    "Fundo Plastico Frigorifico",
-    "Salva Sifao",
-    "Ferragens Diversas 1",
-    "Ferragens Diversas 2",
-    "Ferragens Diversas 3",
-    "Ferragens Diversas 4",
-    "Ferragens Diversas 5",
-)
-COZINHAS_MAT_DEFAULT_OPTIONS: Tuple[str, ...] = (
-    "Balde Lixo",
-    "Canto Cozinha 1",
-    "Canto Cozinha 2",
-    "Porta talheres",
-    "Porta calcas",
-    "Tulha",
-    "Fundo aluminio",
-    "Grelha Veludo",
-    "Acessorio cozinha 1",
-    "Acessorio cozinha 2",
-    "Acessorio cozinha 3",
-    "Ferragens Diversas 1",
-    "Ferragens Diversas 2",
-    "Ferragens Diversas 3",
-    "Ferragens Diversas 4",
-    "Ferragens Diversas 5",
-    "Ferragens Diversas 6 SPP",
-    "Ferragens Diversas 7 SPP",
-)
-COZINHAS_SPECIAL_TOKENS: Set[str] = {
-    svc_custeio._normalize_token(name) for name in COZINHAS_SPECIAL_DEFS
-}
-COZINHAS_TYPE_HINTS: Tuple[str, ...] = (
-    "FERRAGENS & ACESSORIOS",
-    "FERRAGENS OU ACESSORIOS",
-    "FERRAGENS E ACESSORIOS",
-    "FERRAGENS",
-    "ACESSORIOS",
-)
+SPECIAL_MAT_DEFAULTS = svc_custeio.SPECIAL_MAT_DEFAULTS
 
 COLAGEM_LABEL = getattr(svc_custeio, "COLAGEM_REVESTIMENTO_LABEL", "COLAGEM/REVESTIMENTO (M2)")
 _COLAGEM_LABEL_ALIASES = {
@@ -750,7 +621,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
         self._icon_hint_size = QtCore.QSize(28, 28)
 
         self.rows: List[Dict[str, Any]] = []
-        self._orla_info_cache: Dict[Tuple[str, Optional[float]], Tuple[float, float, Optional[str]]] = {}
+        self._orla_info_cache: Dict[Tuple[str, Optional[float]], Dict[str, Any]] = {}
         self._acabamento_info_cache: Dict[str, Optional[Dict[str, Any]]] = {}
 
     # --- Helpers ------------------------------------------------------
@@ -873,8 +744,8 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
     def _coerce_checked(value: Any) -> bool:
         return svc_custeio._coerce_checkbox_to_bool(value)
 
-    def _ensure_orla_info(self, row_data: Dict[str, Any], side: str) -> Tuple[Optional[float], Optional[float], Optional[str]]:
-        """Garante que os campos orl_pliq e orl_desp para o lado indicado est├úo preenchidos a partir da Materia Prima."""
+    def _ensure_orla_info(self, row_data: Dict[str, Any], side: str) -> Tuple[Optional[float], Optional[float], Optional[str], Optional[str]]:
+        """Garante que os campos da orla para o lado indicado estão preenchidos a partir da Matéria Prima."""
         ref_raw = row_data.get(f"orl_ref_{side}") or row_data.get("ref_le")
         ref_clean = None
         if ref_raw not in (None, ""):
@@ -886,6 +757,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
 
         pliq = row_data.get(f"orl_pliq_{side}")
         desp = row_data.get(f"orl_desp_{side}")
+        und = row_data.get(f"orl_und_{side}")
 
         base_pliq = row_data.get("pliq")
 
@@ -924,22 +796,35 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                 info = self._orla_info_cache.get(cache_key)
                 if info is None:
                     try:
-                        info = svc_custeio._obter_info_orla_por_ref(session, ref_clean, esp_esperada=esp_val)
+                        info = svc_custeio._obter_detalhes_orla_por_ref(session, ref_clean, esp_esperada=esp_val)
                     except Exception:
-                        info = (0.0, 0.0, ref_clean)
+                        info = {
+                            "pliq": 0.0,
+                            "desp": 0.0,
+                            "matched_ref": ref_clean,
+                            "und": None,
+                            "tipo": None,
+                            "familia": None,
+                        }
                     self._orla_info_cache[cache_key] = info
-                preco_m2, desp_percent, matched = info
-                if preco_m2:
-                    row_data[f"orl_pliq_{side}"] = preco_m2
-                    pliq = preco_m2
+                preco_base = info.get("pliq")
+                desp_percent = info.get("desp")
+                matched = info.get("matched_ref")
+                und_val = info.get("und")
+                if preco_base:
+                    row_data[f"orl_pliq_{side}"] = preco_base
+                    pliq = preco_base
                 if desp_percent not in (None, ""):
                     row_data[f"orl_desp_{side}"] = desp_percent
                     desp = desp_percent
+                if und_val not in (None, ""):
+                    row_data[f"orl_und_{side}"] = und_val
+                    und = und_val
                 if matched:
                     row_data[f"orl_ref_{side}"] = matched
                     ref_clean = matched
 
-        return pliq, desp, ref_clean
+        return pliq, desp, ref_clean, und
 
     def _get_acabamento_info(self, nome: Optional[str]) -> Optional[Dict[str, Any]]:
         if not nome:
@@ -1637,7 +1522,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             raw_orl_10 = _clean_ref(row_data.get("orl_1_0"))
             matched_ref = _clean_ref(row_data.get(f"orl_ref_{side}"))
 
-            ensured_pliq, ensured_desp, ensured_ref = self._ensure_orla_info(row_data, side)
+            ensured_pliq, ensured_desp, ensured_ref, ensured_und = self._ensure_orla_info(row_data, side)
             if ensured_ref:
                 matched_ref = ensured_ref
 
@@ -1673,6 +1558,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             pliq_orla = ensured_pliq if ensured_pliq not in (None, "") else row_data.get(f"orl_pliq_{side}")
             if pliq_orla in (None, ""):
                 pliq_orla = row_data.get("pliq")
+            und_orla = ensured_und if ensured_und not in (None, "") else row_data.get(f"orl_und_{side}")
 
             desp_orla = ensured_desp if ensured_desp not in (None, "") else row_data.get(f"orl_desp_{side}")
             if desp_orla in (None, ""):
@@ -1750,9 +1636,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             if pliq_orla not in (None, "", 0):
                 try:
                     pliq_val = float(pliq_orla)
-                    lines.append(f"6) PliQ materia-prima: {pliq_val:.2f} €/m2")
+                    und_label = (str(und_orla or "").strip().upper() or "M2")
+                    if und_label == "ML":
+                        lines.append(f"6) PliQ materia-prima: {pliq_val:.2f} €/ml (preco direto)")
+                    else:
+                        lines.append(f"6) PliQ materia-prima: {pliq_val:.2f} €/m2")
                 except Exception:
-                    lines.append(f"6) PliQ materia-prima: {pliq_orla} €/m2")
+                    und_label = (str(und_orla or "").strip().upper() or "M2")
+                    unit_text = "€/ml" if und_label == "ML" else "€/m2"
+                    lines.append(f"6) PliQ materia-prima: {pliq_orla} {unit_text}")
             else:
                 lines.append("6) PliQ materia-prima: sem valor disponivel")
 
@@ -1868,7 +1760,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             raw_orl_10 = _clean_ref(row_data.get("orl_1_0"))
             matched_ref = _clean_ref(row_data.get(f"orl_ref_{side}"))
 
-            ensured_pliq, ensured_desp, ensured_ref = self._ensure_orla_info(row_data, side)
+            ensured_pliq, ensured_desp, ensured_ref, ensured_und = self._ensure_orla_info(row_data, side)
             if ensured_ref:
                 matched_ref = ensured_ref
 
@@ -1904,6 +1796,7 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             pliq_orla = ensured_pliq if ensured_pliq not in (None, "") else row_data.get(f"orl_pliq_{side}")
             if pliq_orla in (None, ""):
                 pliq_orla = row_data.get("pliq")
+            und_orla = ensured_und if ensured_und not in (None, "") else row_data.get(f"orl_und_{side}")
 
             desp_orla = ensured_desp if ensured_desp not in (None, "") else row_data.get(f"orl_desp_{side}")
             if desp_orla in (None, ""):
@@ -1956,13 +1849,15 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
             except Exception:
                 pliq_val = 0.0
 
+            euro_ml_decimal, pricing_mode = svc_custeio._resolver_preco_orla_por_ml(
+                pliq=pliq_val,
+                und=und_orla,
+                esp_peca=row_data.get("esp_res"),
+            )
             try:
-                _, fator = svc_custeio._get_orla_width_factor(row_data.get("esp_res"))
-                fator_float = float(fator)
+                euro_ml_val = float(euro_ml_decimal)
             except Exception:
-                fator_float = 0.0
-
-            euro_ml_val = (pliq_val / fator_float) if fator_float else 0.0
+                euro_ml_val = 0.0
 
             ml_base_display = self._format_result_number(ml_per_unit_base) or "0"
             per_unit_display = self._format_result_number(per_unit_with_waste) or "0"
@@ -1997,11 +1892,22 @@ class CusteioTableModel(QtCore.QAbstractTableModel):
                     missing_line += f" | Espessura lado: {esp_display}"
                 lines.append(missing_line)
 
-            if pliq_val and fator_float:
-                fator_display = int(fator_float) if abs(fator_float - int(fator_float)) < 1e-6 else round(fator_float, 2)
-                lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 @ fator {fator_display} = {euro_ml_val:.2f} €/ml")
+            if pliq_val and pricing_mode == "direct_ml":
+                lines.append(f"5) Preco direto da orla: {pliq_val:.2f} €/ml (UND=ML)")
+            elif pliq_val and pricing_mode == "from_m2_factor":
+                try:
+                    _, fator = svc_custeio._get_orla_width_factor(row_data.get("esp_res"))
+                    fator_float = float(fator)
+                except Exception:
+                    fator_float = 0.0
+                if fator_float:
+                    fator_display = int(fator_float) if abs(fator_float - int(fator_float)) < 1e-6 else round(fator_float, 2)
+                    lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 @ fator {fator_display} = {euro_ml_val:.2f} €/ml")
+                else:
+                    lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 (fator indisponivel)")
             elif pliq_val:
-                lines.append(f"5) Conversao preco: {pliq_val:.2f} €/m2 (fator indisponivel)")
+                und_label = (str(und_orla or "").strip().upper() or "M2")
+                lines.append(f"5) Conversao preco: {pliq_val:.2f} €/{und_label} (sem regra aplicavel)")
             else:
                 lines.append("5) Conversao preco: sem dados de PliQ")
 
@@ -4497,130 +4403,35 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
         except Exception:
 
             row = {}
+        return svc_custeio.resolver_opcoes_mat_default(session, context, row)
 
-        # DIVISAO_INDEPENDENTE should NOT receive mat_default or characteristics
-        def_peca_norm = svc_custeio._normalize_token(row.get("def_peca") or "")
-        if def_peca_norm == "DIVISAO INDEPENDENTE":
-            return []
 
-        row_type = (row.get("_row_type") or "").strip().casefold()
-        def_peca_value = str(row.get("def_peca") or "").strip()
-        def_peca_base = def_peca_value
-        if row_type == "parent" and "+" in def_peca_value:
-            def_peca_base = def_peca_value.split("+", 1)[0].strip()
+    def _row_for_index(self, index: QtCore.QModelIndex) -> Dict[str, Any]:
+        page = self._page
+        if page is None:
+            return {}
+        try:
+            return page.table_model.rows[index.row()]
+        except Exception:
+            return {}
 
-        familia_val = (row.get("familia") or "").strip()
-        familia_norm = familia_val.casefold() if familia_val else ""
-        normalized_def = (row.get("_normalized_def") or "").strip().casefold()
-        normalized_child = (row.get("_normalized_child") or "").strip().casefold()
-        tipo_norm = (row.get("tipo") or "").strip().casefold()
 
-        if row_type == "parent" and def_peca_base:
-            normalized_def = svc_custeio._normalize_token(def_peca_base).casefold()
-            normalized_child = ""
+    def _update_editor_tooltip(self, editor: QtWidgets.QComboBox, preview_text: str) -> None:
+        editor.setToolTip(preview_text)
+        popup = editor.view()
+        if not preview_text:
+            QtWidgets.QToolTip.hideText()
+            return
+        anchor = popup.viewport().mapToGlobal(QtCore.QPoint(popup.viewport().width(), 0))
+        QtWidgets.QToolTip.showText(anchor, preview_text, popup.viewport(), popup.visualRect(popup.currentIndex()))
 
-        normalized_candidates = {
-            normalized_def,
-            normalized_child,
-            svc_custeio._normalize_token(def_peca_base or row.get("def_peca")),
-            svc_custeio._normalize_token(row.get("_child_source")) if row_type != "parent" else "",
-            svc_custeio._normalize_token(row.get("descricao")),
-            # Note: descricao_livre is excluded (user helper text, not for calculation logic)
-        }
-        spp_match = any(token in SPP_DEF_TOKENS for token in normalized_candidates if token)
-        rodizio_match = any(token in RODIZIO_DEF_TOKENS for token in normalized_candidates if token)
-        if rodizio_match:
-            options = svc_custeio.lista_mat_default_sis_correr(
-                session,
-                context,
-                grupos=RODIZIO_SIS_CORRER_OPTIONS,
-            )
-            if options:
-                return options
-            return list(RODIZIO_SIS_CORRER_OPTIONS)
 
-        acessorio_match = any(token in ACESSORIO_CORRER_TOKENS for token in normalized_candidates if token)
-        if acessorio_match:
-            options = svc_custeio.lista_mat_default_sis_correr(
-                session,
-                context,
-                grupos=ACESSORIO_CORRER_OPTIONS,
-            )
-            if options:
-                return options
-            return list(ACESSORIO_CORRER_OPTIONS)
-
-        if spp_match:
-            options = svc_custeio.lista_mat_default_sis_correr(
-                session,
-                context,
-                "FERRAGENS",
-                grupos=SPP_SIS_CORRER_OPTIONS,
-            )
-            if options:
-                return options
-            return list(SPP_SIS_CORRER_OPTIONS)
-
-        # Para linhas "parent" (componentes compostos), ignorar o filho na inferência do filtro.
-        info_ferragem = (
-            svc_custeio.inferir_ferragem_info(def_peca_base) if row_type == "parent" else svc_custeio.inferir_ferragem_info(row)
-        ) if row else None
-        info_familia_norm = (
-            (info_ferragem.get("familia") or "").strip().casefold() if info_ferragem else ""
-        )
-        is_ferragens = familia_norm == "ferragens" or info_familia_norm == "ferragens"
-
-        if is_ferragens:
-            tipo_hint: Optional[str] = None
-            if row.get("tipo"):
-                tipo_hint = row.get("tipo")
-            elif info_ferragem and info_ferragem.get("tipo"):
-                tipo_hint = info_ferragem["tipo"]
-            elif row.get("_child_source") and row_type != "parent":
-                tipo_hint = row.get("_child_source")
-            options = svc_custeio.lista_mat_default_ferragens(session, context, tipo_hint)
-            if options:
-                return options
-
-        painel_match = any(
-            token in {
-                svc_custeio._normalize_token("PAINEL CORRER [0000]"),
-                svc_custeio._normalize_token("PAINEL CORRER [2222]"),
-                svc_custeio._normalize_token("PAINEL ESPELHO [2222]"),
-                svc_custeio._normalize_token("PAINEL CORRER"),
-                svc_custeio._normalize_token("PAINEL ESPELHO"),
-                svc_custeio._normalize_token("PAINEL"),
-            }
-            for token in normalized_candidates
-            if token
-        )
-        painel_family = familia_norm == "sistemas correr" or info_familia_norm == "sistemas correr"
-        if painel_family or painel_match:
-            options = svc_custeio.lista_mat_default_sis_correr(
-                session,
-                context,
-                "PLACAS",
-                grupos=PAINEL_SIS_CORRER_OPTIONS,
-            )
-            if options:
-                return options
-            return list(PAINEL_SIS_CORRER_OPTIONS)
-
-        cozinha_match = any(token in COZINHAS_SPECIAL_TOKENS for token in normalized_candidates if token)
-        if cozinha_match:
-            options = svc_custeio.lista_mat_default_ferragens_multi(session, context, COZINHAS_TYPE_HINTS)
-            if options:
-                return options
-            generic = svc_custeio.lista_mat_default(session, context, "FERRAGENS")
-            if generic:
-                return generic
-            return list(COZINHAS_MAT_DEFAULT_OPTIONS)
-
-        familia = row.get("familia") or row.get("mat_default")
-
-        options = svc_custeio.lista_mat_default(session, context, familia)
-
-        return options or svc_custeio.lista_mat_default()
+    def _preview_text_for_index(self, row: Mapping[str, Any], option_text: str) -> str:
+        page = self._page
+        if page is None or not getattr(page, "context", None) or not getattr(page, "session", None):
+            return ""
+        preview = svc_custeio.obter_preview_mat_default(page.session, page.context, row, option_text)
+        return svc_custeio.formatar_tooltip_preview_mat_default(preview)
 
 
     def createEditor(self, parent, option, index):
@@ -4633,17 +4444,21 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
 
         editor.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
 
+        row = self._row_for_index(index)
+
         seen = set()
 
         editor.addItem("")
 
         seen.add("")
+        editor.setItemData(0, "", QtCore.Qt.ToolTipRole)
 
         current_value = (index.data(QtCore.Qt.EditRole) or "").strip()
 
         if current_value and current_value not in seen:
 
             editor.addItem(current_value)
+            editor.setItemData(editor.count() - 1, self._preview_text_for_index(row, current_value), QtCore.Qt.ToolTipRole)
 
             seen.add(current_value)
 
@@ -4656,8 +4471,17 @@ class MatDefaultDelegate(QtWidgets.QStyledItemDelegate):
                 continue
 
             editor.addItem(text)
+            editor.setItemData(editor.count() - 1, self._preview_text_for_index(row, text), QtCore.Qt.ToolTipRole)
 
             seen.add(text)
+
+        def _show_preview(pos: int) -> None:
+            preview_text = editor.itemData(pos, QtCore.Qt.ToolTipRole) or ""
+            self._update_editor_tooltip(editor, str(preview_text or ""))
+
+        editor.highlighted.connect(_show_preview)
+        editor.textHighlighted.connect(lambda _text: _show_preview(editor.currentIndex()))
+        editor.currentIndexChanged.connect(lambda pos: _show_preview(pos))
 
         editor.setProperty("_custeio_editor", True)
 

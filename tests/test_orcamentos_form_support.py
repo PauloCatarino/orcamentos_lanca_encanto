@@ -144,6 +144,38 @@ class OrcamentosFormSupportTests(unittest.TestCase):
         self.assertEqual(state.folder_path, "10:Cliente Real")
         self.assertEqual(state.form_values.preco_text, "10.00")
 
+    def test_build_loaded_orcamento_selection_state_prefers_column_flag_over_legacy_extras(self):
+        orc = SimpleNamespace(
+            id=10,
+            ano="2026",
+            num_orcamento="260262",
+            versao="01",
+            data="2026-03-05",
+            status="Adjudicado",
+            created_by=12,
+            extras={"manual": True},
+            preco_total=10.0,
+            preco_total_manual=0,
+            descricao_orcamento="Desc",
+            localizacao="Loc",
+            info_1="I1",
+            info_2="I2",
+        )
+        client = SimpleNamespace(nome="Cliente Real")
+
+        state = build_loaded_orcamento_selection_state(
+            orc,
+            client=client,
+            available_client_names={"Cliente Real"},
+            temp_client_name_key="temp_client_name",
+            format_version=lambda v: str(v).zfill(2),
+            format_currency=lambda v: f"{v:.2f}",
+            manual_flag_extractor=lambda extras: bool(extras.get("manual")),
+            folder_path_builder=lambda loaded_orc, loaded_client: None,
+        )
+
+        self.assertFalse(state.manual_flag)
+
     def test_prepare_loaded_orcamento_selection_uses_loader_and_handles_missing_row(self):
         orc = SimpleNamespace(
             id=10,

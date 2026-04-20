@@ -5,7 +5,9 @@ from typing import Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from Martelo_Orcamentos_V2.app.services import feature_flags as svc_features
 from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
+from Martelo_Orcamentos_V2.ui.dialogs.lista_material_audit import ListaMaterialAuditDialog
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,8 @@ class PreparacaoPreferencesDialog(QtWidgets.QDialog):
         layout.setSpacing(10)
 
         info = QtWidgets.QLabel(
-            "Escolha os ficheiros que este utilizador considera obrigatorios para validar a obra antes de entrar em Producao.\n"
-            "As validacoes dos programas CNC mantem-se sempre obrigatorias."
+            "Escolha as validacoes deste utilizador que devem aparecer no painel de Preparacao de Producao.\n"
+            "As validacoes dos programas CNC mantem-se sempre visiveis e obrigatorias."
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -127,6 +129,11 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
         self.context: Optional[svc_producao_preparacao.ProducaoPreparacaoContext] = None
         self.statuses: list[svc_producao_preparacao.ProducaoPreparacaoStatus] = []
         self.required_keys: set[str] = set()
+        self._lista_material_audit_enabled = svc_features.has_feature(
+            self.db,
+            self.current_user_id,
+            svc_features.FEATURE_LISTA_MATERIAL_AUDIT,
+        )
 
         self.setWindowTitle("Preparacao de Producao")
         self.resize(1560, 980)
@@ -190,12 +197,17 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
         buttons = QtWidgets.QHBoxLayout()
         self.btn_refresh = QtWidgets.QPushButton("Atualizar", self)
         self.btn_refresh.clicked.connect(self._refresh)
+        self.btn_lista_material_audit = QtWidgets.QPushButton("Auditar Lista Material...", self)
+        self.btn_lista_material_audit.clicked.connect(self._open_lista_material_audit)
+        self.btn_lista_material_audit.setVisible(self._lista_material_audit_enabled)
         self.btn_preferences = QtWidgets.QPushButton("Preferencias...", self)
         self.btn_preferences.clicked.connect(self._open_preferences)
         self.btn_preferences.setEnabled(bool(self.current_user_id))
         self.btn_close = QtWidgets.QPushButton("Fechar", self)
         self.btn_close.clicked.connect(self.accept)
         buttons.addWidget(self.btn_refresh)
+        if self._lista_material_audit_enabled:
+            buttons.addWidget(self.btn_lista_material_audit)
         buttons.addWidget(self.btn_preferences)
         buttons.addStretch(1)
         buttons.addWidget(self.btn_close)
@@ -237,18 +249,11 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
             for status in self.statuses
             if status.key != "obra_pronta" and status.required and not status.ok
         ]
-        optional_pending = [
-            status.label
-            for status in self.statuses
-            if status.key != "obra_pronta" and status.configurable and not status.required and not status.ok
-        ]
 
         if required_pending:
             text = "Pendencias obrigatorias atuais:\n- " + "\n- ".join(required_pending)
         else:
             text = "Sem pendencias obrigatorias detetadas nesta preparacao."
-        if optional_pending:
-            text += "\n\nPendencias opcionais:\n- " + "\n- ".join(optional_pending)
         self.lbl_summary.setText(text)
 
     def _render_statuses(self) -> None:
@@ -256,10 +261,7 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
         for row, status in enumerate(self.statuses):
             self.tbl_status.setCellWidget(row, 0, self._build_action_widget(status))
 
-            label_text = status.label
-            if status.configurable and not status.required:
-                label_text += " (Opcional)"
-            label_item = QtWidgets.QTableWidgetItem(label_text)
+            label_item = QtWidgets.QTableWidgetItem(status.label)
             label_item.setToolTip(self._validation_tooltip(status))
 
             state_item = QtWidgets.QTableWidgetItem(self._state_text(status))
@@ -301,14 +303,14 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
         status: svc_producao_preparacao.ProducaoPreparacaoStatus,
     ) -> str:
         descriptions = {
-            "caderno_encargos": "Valida se existe na pasta da obra o ficheiro Caderno de Encargos (*.xlsm).",
-            "lista_material_pdf": "Valida o PDF Lista_Material_*.pdf e sinaliza quando estiver em falta ou desatualizado face a origem mais recente.",
+            "caderno_encargos": "Valida se existe o Excel Caderno de Encargos (*.xlsm) e prepara-o automaticamente com a imagem do IMOS no separador CD&RP.",
+            "lista_material_pdf": "Valida apenas se existe na pasta da obra o ficheiro Lista_Material_*.pdf.",
             "ferragens_a4_pdf": "Valida se existe o PDF 1_List_FerragensA4.pdf na pasta da obra.",
             "projeto_pdf": "Valida se o ficheiro 2_Projeto_Producao.pdf foi gerado a partir do CONJ.pdf em formato A4 horizontal.",
             "resumo_geral_pdf": "Valida se existe o PDF 3_Resumo_Geral_Encomenda.pdf na pasta da obra.",
             "etiqueta_palete_pdf": "Valida se existe o PDF 5_Etiqueta_Palete.pdf na pasta da obra.",
             "resumo_ml_orlas_pdf": "Valida se existe o PDF 6_Resumo_ML_OrlasA4.pdf na pasta da obra.",
-            "cutrite_pdf": "Valida se existe o PDF exportado do plano CUT-RITE com o nome definido no campo 'Nome Plano CUT-RITE'.",
+            "cutrite_pdf": "Valida se existe na pasta da obra o PDF exportado do plano CUT-RITE com o nome definido no campo 'Nome Plano CUT-RITE'.",
             "conj_pdf": "Valida se existe o ficheiro CONJ.pdf na pasta da obra.",
             "cnc_source": "Valida se a pasta de programas CNC existe na origem IMOS e mostra a quantidade de ficheiros encontrada.",
             "cnc_work": "Valida se os programas CNC ja foram copiados para a pasta da obra e se estao atualizados face a origem IMOS.",
@@ -374,6 +376,9 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
             if action_key == svc_producao_preparacao.ACTION_GENERATE_PROJETO_PDF:
                 path = svc_producao_preparacao.generate_projeto_producao_pdf(self.context)
                 message = f"PDF gerado com sucesso.\n\n{path}"
+            elif action_key == svc_producao_preparacao.ACTION_COPY_CUTRITE_PDF_TO_WORK:
+                path = svc_producao_preparacao.copy_cutrite_pdf_para_obra(self.context)
+                message = f"PDF do plano CUT-RITE copiado para a pasta da obra.\n\n{path}"
             elif action_key == svc_producao_preparacao.ACTION_COPY_PROGRAMS_TO_WORK:
                 path = svc_producao_preparacao.copy_programas_para_obra(self.context)
                 message = f"Programas CNC copiados para a obra.\n\n{path}"
@@ -405,3 +410,12 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
         )
         if dialog.exec() == QtWidgets.QDialog.Accepted:
             self._refresh()
+
+    def _open_lista_material_audit(self) -> None:
+        dialog = ListaMaterialAuditDialog(
+            db_session=self.db,
+            work_folder=str(self.context.work_folder if self.context is not None else self.pasta_servidor),
+            nome_enc_imos=self.nome_enc_imos,
+            parent=self,
+        )
+        dialog.exec()

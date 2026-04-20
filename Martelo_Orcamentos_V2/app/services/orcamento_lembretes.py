@@ -65,6 +65,7 @@ class OrcamentoReminder:
     num_orcamento: str
     versao: str
     cliente: str
+    ref_cliente: str
     estado: str
     data_orcamento: str
     descricao: str
@@ -274,6 +275,7 @@ def build_daily_summary(
                 num_orcamento=str(getattr(orcamento, "num_orcamento", "") or ""),
                 versao=_format_versao(getattr(orcamento, "versao", None)),
                 cliente=resolve_orcamento_cliente_nome(db, orcamento, client=client),
+                ref_cliente=str(getattr(orcamento, "ref_cliente", "") or "").strip(),
                 estado=svc_tasks.TASK_STATUS_PENDING,
                 data_orcamento=format_date_display(getattr(orcamento, "data", None))
                 or str(getattr(orcamento, "data", "") or ""),
@@ -338,6 +340,7 @@ def build_daily_summary(
                 num_orcamento=str(getattr(orcamento, "num_orcamento", "") or ""),
                 versao=_format_versao(getattr(orcamento, "versao", None)),
                 cliente=resolve_orcamento_cliente_nome(db, orcamento, client=client),
+                ref_cliente=str(getattr(orcamento, "ref_cliente", "") or "").strip(),
                 estado=str(getattr(orcamento, "status", "") or ""),
                 data_orcamento=format_date_display(getattr(orcamento, "data", None))
                 or str(getattr(orcamento, "data", "") or ""),

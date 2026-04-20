@@ -13,7 +13,7 @@
 #define AppExeName "Martelo_Orcamentos_V2.exe"
 
 #ifndef AppVersion
-  #define AppVersion "2.2.1"
+  #define AppVersion "2.2.2"
 #endif
 
 ; =========================================================@

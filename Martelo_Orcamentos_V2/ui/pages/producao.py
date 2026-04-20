@@ -23,6 +23,7 @@ from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.ui.dialogs.orcamento_picker import OrcamentoPicker
 from Martelo_Orcamentos_V2.ui.dialogs.cutrite_progress import CutRiteProgressDialog
 from Martelo_Orcamentos_V2.ui.dialogs.producao_new_process import NovoProcessoDialog
+from Martelo_Orcamentos_V2.ui.dialogs.producao_phc_issues import ProducaoPHCIssuesDialog
 from Martelo_Orcamentos_V2.ui.dialogs.producao_preparacao import ProducaoPreparacaoDialog
 from Martelo_Orcamentos_V2.ui.dialogs.producao_versioning import NovaVersaoProcessoDialog, PastasExistentesDialog
 from Martelo_Orcamentos_V2.ui.models.qt_table import SimpleTableModel
@@ -125,6 +126,7 @@ class ProducaoPage(QtWidgets.QWidget):
 
         self._build_ui()
         self._load_table()
+        QtCore.QTimer.singleShot(0, self._run_daily_phc_status_sync_if_needed)
 
     def _current_username(self) -> str:
         return (
@@ -345,12 +347,12 @@ class ProducaoPage(QtWidgets.QWidget):
         self.btn_refresh.setIcon(s.standardIcon(QStyle.SP_BrowserReload))
         self.btn_refresh.setToolTip("Atualizar a lista de processos.")
         _style_secondary(self.btn_refresh)
-        self.btn_refresh.clicked.connect(self._load_table)
+        self.btn_refresh.clicked.connect(self._on_refresh_clicked)
 
         if self._pdf_manager_enabled:
-            self.btn_pdf_manager = QtWidgets.QPushButton("Imprimir PDFs")
+            self.btn_pdf_manager = QtWidgets.QPushButton("Imprimir")
             self.btn_pdf_manager.setIcon(_printer_icon())
-            self.btn_pdf_manager.setToolTip("Abrir gestor de impressao de PDFs do processo.")
+            self.btn_pdf_manager.setToolTip("Abrir gestor de impressao dos documentos do processo.")
             _style_secondary(self.btn_pdf_manager)
             self.btn_pdf_manager.clicked.connect(self.on_pdf_manager)
 
@@ -1025,6 +1027,193 @@ class ProducaoPage(QtWidgets.QWidget):
             self._on_select_row()
         else:
             self._clear_form()
+
+    def _on_refresh_clicked(self) -> None:
+        self._load_table()
+        self._run_daily_phc_status_sync_if_needed()
+
+    @staticmethod
+    def _format_phc_status_sync_changes(changes: tuple) -> str:
+        lines = [
+            "Foram alterados estados da Producao por consulta automatica ao PHC.",
+            "Esta validacao e executada 1 vez por dia.",
+            "",
+        ]
+        max_lines = 12
+        for change in changes[:max_lines]:
+            lines.append(
+                f"- Obra {change.codigo_processo}: {change.estado_anterior} -> {change.estado_novo} "
+                f"(PHC: {change.phc_estado or 'n/d'})"
+            )
+        remaining = len(changes) - max_lines
+        if remaining > 0:
+            lines.append(f"... e mais {remaining} obra(s).")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_phc_compare_values(values: tuple, *, max_items: int = 3) -> str:
+        picked = [str(value or "").strip() for value in values if str(value or "").strip()]
+        if not picked:
+            return "(sem linhas)"
+        if len(picked) <= max_items:
+            return ", ".join(picked)
+        shown = ", ".join(picked[:max_items])
+        return f"{shown}, ..."
+
+    @staticmethod
+    def _phc_value_matches_martelo(martelo_value: str, phc_values: tuple, *, numeric: bool = False) -> bool:
+        martelo_text = str(martelo_value or "").strip()
+        if not martelo_text:
+            return False
+        if numeric:
+            martelo_key = svc_producao_workflow._normalize_match_number(martelo_text)
+            return any(
+                svc_producao_workflow._normalize_match_number(value) == martelo_key
+                for value in phc_values
+                if str(value or "").strip()
+            )
+        martelo_key = svc_producao_workflow._normalize_match_text(martelo_text)
+        return any(
+            svc_producao_workflow._normalize_match_text(value) == martelo_key
+            for value in phc_values
+            if str(value or "").strip()
+        )
+
+    @classmethod
+    def _format_phc_compare_line(
+        cls,
+        label: str,
+        martelo_value: str,
+        phc_values: tuple,
+        *,
+        numeric: bool = False,
+    ) -> str:
+        status = "OK" if cls._phc_value_matches_martelo(martelo_value, phc_values, numeric=numeric) else "DIF"
+        martelo_text = str(martelo_value or "").strip() or "(vazio)"
+        phc_text = cls._format_phc_compare_values(phc_values)
+        return f"  {status} {label}: Martelo={martelo_text} | PHC={phc_text}"
+
+    @classmethod
+    def _format_phc_status_sync_issues(cls, issues: tuple) -> str:
+        lines = [
+            "Nao foi possivel validar diretamente algumas encomendas do Martelo contra o PHC.",
+            "Revise a comparacao Martelo vs PHC abaixo para perceber o que esta diferente.",
+            "Linhas com OK coincidem. Linhas com DIF precisam de correcao no Martelo ou no PHC.",
+            "Esta validacao e executada 1 vez por dia.",
+            "",
+        ]
+        max_lines = 6
+        for issue in issues[:max_lines]:
+            lines.extend(
+                [
+                    f"- Obra {issue.codigo_processo}",
+                    f"  Motivo: {issue.reason}",
+                    cls._format_phc_compare_line("Ano", issue.martelo_ano, issue.phc_anos),
+                    cls._format_phc_compare_line(
+                        "Num Enc PHC",
+                        issue.martelo_num_enc_phc,
+                        issue.phc_num_encs,
+                        numeric=True,
+                    ),
+                    cls._format_phc_compare_line(
+                        "Num Cliente PHC",
+                        issue.martelo_num_cliente_phc,
+                        issue.phc_num_clientes,
+                        numeric=True,
+                    ),
+                    cls._format_phc_compare_line("Nome Cliente", issue.martelo_nome_cliente, issue.phc_nomes),
+                    f"  PHC Estado encontrado: {cls._format_phc_compare_values(issue.phc_estados)}",
+                    "",
+                ]
+            )
+        remaining = len(issues) - max_lines
+        if remaining > 0:
+            lines.append(f"... e mais {remaining} inconsistencia(s).")
+        return "\n".join(lines).rstrip()
+
+    def show_phc_status_issues_dialog(self, *, force: bool = False) -> bool:
+        user_id = self._current_user_id()
+        username = self._current_username()
+        if not user_id or not username:
+            return False
+
+        try:
+            summary = svc_producao_workflow.build_user_phc_status_issue_summary(
+                self.db,
+                user_id=int(user_id),
+                username=username,
+            )
+        except Exception as exc:
+            logger.exception("Falha ao preparar divergencias Martelo vs PHC para user_id=%s: %s", user_id, exc)
+            if force:
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Diferencas Martelo vs PHC",
+                    f"Falha ao preparar a lista de divergencias: {exc}",
+                )
+            return False
+
+        if not summary.items:
+            if force:
+                message = "Nao existem divergencias visiveis do PHC para o utilizador atual."
+                if getattr(summary, "hidden_count", 0):
+                    message += "\n\nExistem apenas linhas silenciadas."
+                QtWidgets.QMessageBox.information(self, "Diferencas Martelo vs PHC", message)
+            return False
+
+        if (not force) and (not svc_producao_workflow.should_auto_show_producao_phc_issues(self.db, user_id=int(user_id), today=summary.today)):
+            return False
+
+        dlg = ProducaoPHCIssuesDialog(
+            summary,
+            db_session=self.db,
+            user_id=int(user_id),
+            username=username,
+            parent=self,
+        )
+        dlg.exec()
+
+        selected_id = dlg.selected_processo_id()
+        if selected_id is not None:
+            self._load_table(select_id=selected_id)
+
+        if not force:
+            try:
+                svc_producao_workflow.mark_producao_phc_issues_seen(self.db, user_id=int(user_id), today=summary.today)
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception("Falha ao marcar divergencias PHC como vistas para user_id=%s", user_id)
+        return True
+
+    def _run_daily_phc_status_sync_if_needed(self) -> None:
+        current_id = self._current_id
+        try:
+            result = svc_producao_workflow.sync_producao_statuses_from_phc(
+                self.db,
+                current_user_id=self._current_user_id(),
+            )
+            self.db.commit()
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception("Falha ao sincronizar estados da producao com o PHC: %s", exc)
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Validacao PHC",
+                "Nao foi possivel validar automaticamente os estados da Producao no PHC.\n\n"
+                f"Detalhe: {exc}",
+            )
+            return
+
+        if (not getattr(result, "skipped_daily", False)) and getattr(result, "changed", ()):
+            self._load_table(select_id=current_id)
+            QtWidgets.QMessageBox.information(
+                self,
+                "Estado atualizado por PHC",
+                self._format_phc_status_sync_changes(result.changed),
+            )
+
+        self.show_phc_status_issues_dialog(force=False)
 
     def _clear_form(self):
         self._loading_form = True

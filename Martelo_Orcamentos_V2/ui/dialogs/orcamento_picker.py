@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt
 
 from Martelo_Orcamentos_V2.app.services.orcamentos import list_orcamentos, search_orcamentos
@@ -27,10 +27,19 @@ class OrcamentoPicker(QtWidgets.QDialog):
         search_row = QtWidgets.QHBoxLayout()
         self.ed_search = QtWidgets.QLineEdit()
         self.ed_search.setPlaceholderText("Pesquisar orcamentos (cliente, codigo, ref, obra...)")
-        btn_search = QtWidgets.QPushButton("Pesquisar")
-        btn_search.clicked.connect(self._reload)
+        self.ed_search.installEventFilter(self)
+        self._clear_search_action = self.ed_search.addAction(
+            self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton),
+            QtWidgets.QLineEdit.TrailingPosition,
+        )
+        self._clear_search_action.setToolTip("Limpar pesquisa")
+        self._clear_search_action.triggered.connect(self.ed_search.clear)
+        self._clear_search_action.setVisible(False)
+        self.ed_search.textChanged.connect(self._on_search_text_changed)
+        self.btn_search = QtWidgets.QPushButton("Pesquisar")
+        self.btn_search.clicked.connect(self._reload)
         search_row.addWidget(self.ed_search, 1)
-        search_row.addWidget(btn_search)
+        search_row.addWidget(self.btn_search)
         layout.addLayout(search_row)
 
         self.table = QtWidgets.QTableView(self)
@@ -72,6 +81,7 @@ class OrcamentoPicker(QtWidgets.QDialog):
             if label in width_map:
                 header.resizeSection(idx, width_map[label])
         self.table.doubleClicked.connect(self._accept_current)
+        self.table.activated.connect(self._accept_current)
         layout.addWidget(self.table, 1)
 
         btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -80,6 +90,20 @@ class OrcamentoPicker(QtWidgets.QDialog):
         layout.addWidget(btns)
 
         self._reload()
+
+    def eventFilter(self, watched, event):
+        if (
+            watched is self.ed_search
+            and event.type() == QtCore.QEvent.KeyPress
+            and event.key() in (Qt.Key_Return, Qt.Key_Enter)
+        ):
+            self._reload()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _on_search_text_changed(self, text: str) -> None:
+        if hasattr(self, "_clear_search_action"):
+            self._clear_search_action.setVisible(bool(str(text or "").strip()))
 
     def _reload(self):
         text = self.ed_search.text().strip()

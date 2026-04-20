@@ -234,6 +234,158 @@ _FERRAGEM_TIPO_KEYWORDS: Dict[str, Sequence[str]] = {
     _normalize_token("PES"): ("pes",),
     _normalize_token("DOBRADICAS"): ("dobradica",),
 }
+SPECIAL_MAT_DEFAULTS = {
+    "divisoria": "Divisorias",
+    "travessa": "Travessas",
+    "prumo": "Prumos",
+    "fundo aluminio 1": "Fundo aluminio",
+    "teto acabamento": "Tetos Acabamentos",
+    "fundo acabamento": "Fundos Acabamentos",
+    "lateral acabamento": "Laterais Acabamentos",
+    "costa acabamento": "Costas Acabamentos",
+}
+PAINEL_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Painel Porta Correr 1",
+    "Painel Porta Correr 2",
+    "Painel Porta Correr 3",
+    "Painel Porta Correr 4",
+    "Painel Porta Correr 5",
+    "Painel Espelho Correr 1",
+    "Painel Espelho Correr 2",
+    "Painel Espelho Correr 3",
+)
+SPP_DEF_LABELS: Tuple[str, ...] = (
+    "PUXADOR VERTICAL 1",
+    "PUXADOR VERTICAL 2",
+    "CALHA SUPERIOR {SPP} 1 CORRER",
+    "CALHA SUPERIOR {SPP} 2 CORRER",
+    "CALHA INFERIOR {SPP} 1 CORRER",
+    "CALHA INFERIOR {SPP} 2 CORRER",
+    "PERFIL HORIZONTAL H {SPP}",
+    "PERFIL HORIZONTAL U {SPP}",
+    "PERFIL HORIZONTAL L {SPP}",
+    "ACESSORIO {SPP} 7 CORRER",
+    "ACESSORIO {SPP} 8 CORRER",
+)
+SPP_DEF_TOKENS: Set[str] = {_normalize_token(label) for label in SPP_DEF_LABELS}
+SPP_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Puxador Vertical 1",
+    "Puxador Vertical 2",
+    "Calha Superior 1 SPP",
+    "Calha Superior 2 SPP",
+    "Calha Inferior 1 SPP",
+    "Calha Inferior 2 SPP",
+    "Perfil Horizontal H SPP",
+    "Perfil Horizontal U SPP",
+    "Perfil Horizontal L SPP",
+    "Acessorio 7 SPP",
+    "Acessorio 8 SPP",
+)
+RODIZIO_DEF_LABELS: Tuple[str, ...] = (
+    "RODIZIO SUP 1",
+    "RODIZIO SUP 2",
+    "RODIZIO INF 1",
+    "RODIZIO INF 2",
+)
+RODIZIO_DEF_TOKENS: Set[str] = {_normalize_token(label) for label in RODIZIO_DEF_LABELS}
+RODIZIO_SIS_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Rodizio Sup 1",
+    "Rodizio Sup 2",
+    "Rodizio Inf 1",
+    "Rodizio Inf 2",
+)
+ACESSORIO_CORRER_LABELS: Tuple[str, ...] = (
+    "ACESSORIO 1 CORRER",
+    "ACESSORIO 2 CORRER",
+    "ACESSORIO 3 CORRER",
+    "ACESSORIO 4 CORRER",
+    "ACESSORIO 5 CORRER",
+    "ACESSORIO 6 CORRER",
+)
+ACESSORIO_CORRER_TOKENS: Set[str] = {_normalize_token(label) for label in ACESSORIO_CORRER_LABELS}
+ACESSORIO_CORRER_OPTIONS: Tuple[str, ...] = (
+    "Acessorio 1",
+    "Acessorio 2",
+    "Acessorio 3",
+    "Acessorio 4",
+    "Acessorio 5",
+    "Acessorio 6",
+)
+COZINHAS_SPECIAL_DEFS: Tuple[str, ...] = (
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta Talheres",
+    "Tulha 1",
+    "Tulha 2",
+    "Fundo Aluminio 1",
+    "Fundo Aluminio 2",
+    "Fundo Plastico Frigorifico",
+    "Salva Sifao",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+)
+COZINHAS_MAT_DEFAULT_OPTIONS: Tuple[str, ...] = (
+    "Balde Lixo",
+    "Canto Cozinha 1",
+    "Canto Cozinha 2",
+    "Porta talheres",
+    "Porta calcas",
+    "Tulha",
+    "Fundo aluminio",
+    "Grelha Veludo",
+    "Acessorio cozinha 1",
+    "Acessorio cozinha 2",
+    "Acessorio cozinha 3",
+    "Ferragens Diversas 1",
+    "Ferragens Diversas 2",
+    "Ferragens Diversas 3",
+    "Ferragens Diversas 4",
+    "Ferragens Diversas 5",
+    "Ferragens Diversas 6 SPP",
+    "Ferragens Diversas 7 SPP",
+)
+COZINHAS_SPECIAL_TOKENS: Set[str] = {_normalize_token(name) for name in COZINHAS_SPECIAL_DEFS}
+COZINHAS_TYPE_HINTS: Tuple[str, ...] = (
+    "FERRAGENS & ACESSORIOS",
+    "FERRAGENS OU ACESSORIOS",
+    "FERRAGENS E ACESSORIOS",
+    "FERRAGENS",
+    "ACESSORIOS",
+)
+MATERIAL_CONTEXT_GROUPS: Dict[str, Tuple[str, ...]] = {
+    _normalize_token("Costas"): ("Costas", "Laterais", "Tetos", "Fundos"),
+    _normalize_token("Laterais"): ("Laterais", "Costas", "Tetos", "Fundos"),
+    _normalize_token("Tetos"): ("Tetos", "Laterais", "Fundos", "Costas"),
+    _normalize_token("Fundos"): ("Fundos", "Tetos", "Laterais", "Costas"),
+    _normalize_token("Prateleiras"): (
+        "Prateleiras",
+        "Prateleiras Fixas",
+        "Prateleiras Amoviveis",
+        "Prateleiras Parede",
+    ),
+    _normalize_token("Prateleiras Fixas"): (
+        "Prateleiras Fixas",
+        "Prateleiras",
+        "Prateleiras Amoviveis",
+        "Prateleiras Parede",
+    ),
+    _normalize_token("Prateleiras Amoviveis"): (
+        "Prateleiras Amoviveis",
+        "Prateleiras",
+        "Prateleiras Fixas",
+        "Prateleiras Parede",
+    ),
+    _normalize_token("Prateleiras Parede"): (
+        "Prateleiras Parede",
+        "Prateleiras",
+        "Prateleiras Fixas",
+        "Prateleiras Amoviveis",
+    ),
+}
 
 DEFAULT_QT_RULES: Dict[str, Dict[str, Any]] = {
     "PES": {
@@ -977,6 +1129,63 @@ def _sort_groups_by_tipo(options: Sequence[str], tipo: Optional[str]) -> List[st
     return [texto for _, _, texto in ranked]
 
 
+def _ordered_filter(options: Sequence[str], preferred: Sequence[str]) -> List[str]:
+    preferred_map = {_normalize_token(text): idx for idx, text in enumerate(preferred) if str(text).strip()}
+    buckets: Dict[str, List[str]] = {}
+    for option in options:
+        token = _normalize_token(option)
+        if token in preferred_map:
+            buckets.setdefault(token, []).append(option)
+    resultado: List[str] = []
+    for preferred_text in preferred:
+        token = _normalize_token(preferred_text)
+        for option in buckets.get(token, []):
+            if option not in resultado:
+                resultado.append(option)
+    return resultado
+
+
+def _hint_keywords_for_matching(value: Optional[str]) -> Tuple[str, ...]:
+    token = _normalize_token(value)
+    if not token:
+        return ()
+    resultado: List[str] = []
+    vistos: Set[str] = set()
+    for part in token.replace("/", " ").replace("&", " ").split():
+        part = part.strip()
+        if not part:
+            continue
+        candidatos = [part]
+        if len(part) > 4 and part.endswith("s"):
+            candidatos.append(part[:-1])
+        for candidato in candidatos:
+            if candidato and candidato not in vistos:
+                vistos.add(candidato)
+                resultado.append(candidato)
+    return tuple(resultado)
+
+
+def _score_option_against_hints(option: str, hints: Sequence[str]) -> int:
+    option_token = _normalize_token(option)
+    if not option_token:
+        return 0
+    score = 0
+    for hint in hints:
+        hint_token = _normalize_token(hint)
+        if not hint_token:
+            continue
+        if option_token == hint_token:
+            score = max(score, 400)
+        if option_token.startswith(hint_token) or hint_token.startswith(option_token):
+            score = max(score, 220)
+        if hint_token in option_token:
+            score = max(score, 180)
+        for kw in _hint_keywords_for_matching(hint):
+            if kw and kw in option_token:
+                score += 40
+    return score
+
+
 def _buscar_ferragem_por_tipo(
     session: Session,
     ctx: svc_dados_items.DadosItemsContext,
@@ -1713,18 +1922,47 @@ def _get_orla_width_factor(esp_peca: Any) -> Tuple[float, float]:
     return 60, 16
 
 
-def _obter_info_orla_por_ref(
+def _obter_detalhes_orla_por_ref(
     session: Session,
     ref_candidate: Optional[str],
     esp_esperada: Optional[float] = None,
-) -> Tuple[float, float, Optional[str]]:
-    """Retorna (preco_m2, desp_percent, matched_ref_le) para a orla escolhida."""
+) -> Dict[str, Any]:
+    """Retorna detalhes da materia-prima usada para a orla escolhida."""
     if not ref_candidate:
-        return 0.0, 0.0, None
+        return {"pliq": 0.0, "desp": 0.0, "matched_ref": None, "und": None, "tipo": None, "familia": None}
 
     chave = str(ref_candidate).strip()
     if not chave:
-        return 0.0, 0.0, None
+        return {"pliq": 0.0, "desp": 0.0, "matched_ref": None, "und": None, "tipo": None, "familia": None}
+
+    def _build_result(mat: Optional[MateriaPrima], fallback_ref: Optional[str] = None) -> Dict[str, Any]:
+        if not mat:
+            return {
+                "pliq": 0.0,
+                "desp": 0.0,
+                "matched_ref": fallback_ref,
+                "und": None,
+                "tipo": None,
+                "familia": None,
+            }
+        try:
+            return {
+                "pliq": float(mat.pliq or 0.0),
+                "desp": float(getattr(mat, "desp", 0) or 0.0),
+                "matched_ref": mat.ref_le or fallback_ref,
+                "und": getattr(mat, "und", None),
+                "tipo": getattr(mat, "tipo", None),
+                "familia": getattr(mat, "familia", None),
+            }
+        except Exception:
+            return {
+                "pliq": 0.0,
+                "desp": 0.0,
+                "matched_ref": fallback_ref,
+                "und": getattr(mat, "und", None),
+                "tipo": getattr(mat, "tipo", None),
+                "familia": getattr(mat, "familia", None),
+            }
 
     stmt = (
         select(MateriaPrima)
@@ -1733,10 +1971,7 @@ def _obter_info_orla_por_ref(
     )
     mat = session.execute(stmt).scalar_one_or_none()
     if mat:
-        try:
-            return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or chave)
-        except Exception:
-            return 0.0, 0.0, None
+        return _build_result(mat, chave)
 
     stmt2 = (
         select(MateriaPrima)
@@ -1745,10 +1980,7 @@ def _obter_info_orla_por_ref(
     )
     mat = session.execute(stmt2).scalar_one_or_none()
     if mat:
-        try:
-            return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or chave)
-        except Exception:
-            return 0.0, 0.0, None
+        return _build_result(mat, chave)
 
     if esp_esperada is not None:
         try:
@@ -1764,12 +1996,57 @@ def _obter_info_orla_por_ref(
             )
             mat = session.execute(stmt3).scalar_one_or_none()
             if mat:
-                try:
-                    return float(mat.pliq or 0.0), float(getattr(mat, "desp", 0) or 0.0), (mat.ref_le or None)
-                except Exception:
-                    return 0.0, 0.0, None
+                return _build_result(mat, None)
 
-    return 0.0, 0.0, None
+    return {"pliq": 0.0, "desp": 0.0, "matched_ref": None, "und": None, "tipo": None, "familia": None}
+
+
+def _obter_info_orla_por_ref(
+    session: Session,
+    ref_candidate: Optional[str],
+    esp_esperada: Optional[float] = None,
+) -> Tuple[float, float, Optional[str]]:
+    """Compat: retorna (preco, desperdicio, ref) para a orla escolhida."""
+    info = _obter_detalhes_orla_por_ref(session, ref_candidate, esp_esperada=esp_esperada)
+    return (
+        float(info.get("pliq") or 0.0),
+        float(info.get("desp") or 0.0),
+        info.get("matched_ref"),
+    )
+
+
+def _resolver_preco_orla_por_ml(
+    *,
+    pliq: Optional[float],
+    und: Optional[str],
+    esp_peca: Any,
+) -> Tuple[Decimal, str]:
+    """Resolve o preço por metro linear da orla.
+
+    - UND=ML: usa o PLIQ diretamente, sem fator de conversão.
+    - resto: mantém a lógica histórica €/m2 -> €/ml via fator da espessura.
+    """
+    try:
+        pliq_decimal = Decimal(str(float(pliq or 0.0)))
+    except Exception:
+        pliq_decimal = Decimal("0.00")
+
+    if pliq_decimal <= Decimal("0.00"):
+        return Decimal("0.00"), "missing"
+
+    und_norm = str(und or "").strip().upper()
+    if und_norm == "ML":
+        return pliq_decimal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "direct_ml"
+
+    try:
+        _, fator = _get_orla_width_factor(esp_peca)
+        if fator:
+            euro_por_ml = (pliq_decimal / Decimal(str(fator))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            return euro_por_ml, "from_m2_factor"
+    except Exception:
+        pass
+
+    return Decimal("0.00"), "missing"
 
 
 def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -> None:
@@ -1787,7 +2064,7 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
     )
     registros = session.execute(stmt).scalars().all()
 
-    ref_cache: Dict[str, Tuple[float, float, Optional[str]]] = {}
+    ref_cache: Dict[str, Dict[str, Any]] = {}
 
     for reg in registros:
         comp_res_val = _parse_float_value(reg.comp_res)
@@ -1917,16 +2194,21 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
                 if ref_cand:
                     ref_cand = str(ref_cand).strip() or None
 
-                preco_m2 = 0.0
+                pliq_orla = 0.0
                 desp_percent = 0.0
                 matched_ref: Optional[str] = None
+                und_orla: Optional[str] = None
                 if ref_cand:
                     cache_key = ref_cand
                     if cache_key in ref_cache:
-                        preco_m2, desp_percent, matched_ref = ref_cache[cache_key]
+                        info_orla = ref_cache[cache_key]
                     else:
-                        preco_m2, desp_percent, matched_ref = _obter_info_orla_por_ref(session, ref_cand, esp_esperada=esp_orla)
-                        ref_cache[cache_key] = (preco_m2, desp_percent, matched_ref)
+                        info_orla = _obter_detalhes_orla_por_ref(session, ref_cand, esp_esperada=esp_orla)
+                        ref_cache[cache_key] = info_orla
+                    pliq_orla = float(info_orla.get("pliq") or 0.0)
+                    desp_percent = float(info_orla.get("desp") or 0.0)
+                    matched_ref = info_orla.get("matched_ref")
+                    und_orla = info_orla.get("und")
 
                 ml_base = dim_m.quantize(Decimal("0.01"))
 
@@ -1952,14 +2234,11 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
 
                 ml_val = (ml_unit_with_waste * qt_total).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-                try:
-                    _, fator = _get_orla_width_factor(esp_res)
-                    if fator and preco_m2:
-                        euro_por_ml = (Decimal(str(preco_m2)) / Decimal(str(fator))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                    else:
-                        euro_por_ml = Decimal("0.00")
-                except Exception:
-                    euro_por_ml = Decimal("0.00")
+                euro_por_ml, _ = _resolver_preco_orla_por_ml(
+                    pliq=pliq_orla,
+                    und=und_orla,
+                    esp_peca=esp_res,
+                )
 
                 custo_val = (ml_val * euro_por_ml).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -2669,6 +2948,294 @@ def lista_mat_default_sis_correr(
         menu_override=svc_dados_items.MENU_SIS_CORRER,
         extra_filters=filters or None,
     )
+
+
+def _prioritize_default_option(options: Sequence[str], default: Optional[str]) -> List[str]:
+    resultado = [str(option).strip() for option in options if str(option).strip()]
+    if not default:
+        return resultado
+    default_token = _normalize_token(default)
+    for idx, option in enumerate(resultado):
+        if _normalize_token(option) == default_token:
+            return [resultado[idx]] + resultado[:idx] + resultado[idx + 1 :]
+    return resultado
+
+
+def _normalized_row_candidates(row: Mapping[str, Any]) -> Tuple[str, str, Set[str]]:
+    row_type = str(row.get("_row_type") or "").strip().casefold()
+    def_peca_value = str(row.get("def_peca") or "").strip()
+    def_peca_base = def_peca_value
+    if row_type == "parent" and "+" in def_peca_value:
+        def_peca_base = def_peca_value.split("+", 1)[0].strip()
+
+    normalized_def = str(row.get("_normalized_def") or "").strip().casefold()
+    normalized_child = str(row.get("_normalized_child") or "").strip().casefold()
+    if row_type == "parent" and def_peca_base:
+        normalized_def = _normalize_token(def_peca_base).casefold()
+        normalized_child = ""
+
+    normalized_candidates = {
+        normalized_def,
+        normalized_child,
+        _normalize_token(def_peca_base or row.get("def_peca")),
+        _normalize_token(row.get("_child_source")) if row_type != "parent" else "",
+        _normalize_token(row.get("descricao")),
+    }
+    normalized_candidates.discard("")
+    return row_type, def_peca_base, normalized_candidates
+
+
+def _contextual_material_options(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    row: Mapping[str, Any],
+    current_options: Sequence[str],
+) -> List[str]:
+    if not current_options:
+        return []
+    familia_norm = _normalize_token(row.get("familia"))
+    if familia_norm and familia_norm != _normalize_token("PLACAS"):
+        return list(current_options)
+
+    default_group = grupo_por_def_peca(str(row.get("def_peca") or "").strip())
+    if not default_group and row.get("_child_source"):
+        default_group = grupo_por_def_peca(str(row.get("_child_source") or "").strip()) or str(row.get("_child_source") or "").strip()
+    if not default_group:
+        return list(current_options)
+
+    preferred = MATERIAL_CONTEXT_GROUPS.get(_normalize_token(default_group))
+    if not preferred:
+        return list(current_options)
+
+    filtered = _ordered_filter(current_options, preferred)
+    return filtered or list(current_options)
+
+
+def _resolver_opcoes_mat_default_hardcoded(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    row: Mapping[str, Any],
+) -> List[str]:
+    def_peca_norm = _normalize_token(row.get("def_peca") or "")
+    if def_peca_norm == _DIVISAO_LABEL_TOKEN.casefold():
+        return []
+
+    row_type, def_peca_base, normalized_candidates = _normalized_row_candidates(row)
+    familia_val = str(row.get("familia") or "").strip()
+    familia_norm = familia_val.casefold() if familia_val else ""
+
+    rodizio_match = any(token in RODIZIO_DEF_TOKENS for token in normalized_candidates)
+    if rodizio_match:
+        options = lista_mat_default_sis_correr(session, ctx, grupos=RODIZIO_SIS_CORRER_OPTIONS)
+        return options or list(RODIZIO_SIS_CORRER_OPTIONS)
+
+    acessorio_match = any(token in ACESSORIO_CORRER_TOKENS for token in normalized_candidates)
+    if acessorio_match:
+        options = lista_mat_default_sis_correr(session, ctx, grupos=ACESSORIO_CORRER_OPTIONS)
+        return options or list(ACESSORIO_CORRER_OPTIONS)
+
+    spp_match = any(token in SPP_DEF_TOKENS for token in normalized_candidates)
+    if spp_match:
+        options = lista_mat_default_sis_correr(
+            session,
+            ctx,
+            "FERRAGENS",
+            grupos=SPP_SIS_CORRER_OPTIONS,
+        )
+        return options or list(SPP_SIS_CORRER_OPTIONS)
+
+    info_ferragem = (
+        inferir_ferragem_info(def_peca_base) if row_type == "parent" else inferir_ferragem_info(row)
+    ) if row else None
+    info_familia_norm = (info_ferragem.get("familia") or "").strip().casefold() if info_ferragem else ""
+    is_ferragens = familia_norm == "ferragens" or info_familia_norm == "ferragens"
+    if is_ferragens:
+        tipo_hint: Optional[str] = None
+        if row.get("tipo"):
+            tipo_hint = row.get("tipo")
+        elif info_ferragem and info_ferragem.get("tipo"):
+            tipo_hint = info_ferragem["tipo"]
+        elif row.get("_child_source") and row_type != "parent":
+            tipo_hint = row.get("_child_source")
+        options = lista_mat_default_ferragens(session, ctx, tipo_hint)
+        if options:
+            return options
+
+    painel_tokens = {
+        _normalize_token("PAINEL CORRER [0000]"),
+        _normalize_token("PAINEL CORRER [2222]"),
+        _normalize_token("PAINEL ESPELHO [2222]"),
+        _normalize_token("PAINEL CORRER"),
+        _normalize_token("PAINEL ESPELHO"),
+        _normalize_token("PAINEL"),
+    }
+    painel_match = any(token in painel_tokens for token in normalized_candidates)
+    painel_family = familia_norm == "sistemas correr" or info_familia_norm == "sistemas correr"
+    if painel_family or painel_match:
+        options = lista_mat_default_sis_correr(
+            session,
+            ctx,
+            "PLACAS",
+            grupos=PAINEL_SIS_CORRER_OPTIONS,
+        )
+        return options or list(PAINEL_SIS_CORRER_OPTIONS)
+
+    cozinha_match = any(token in COZINHAS_SPECIAL_TOKENS for token in normalized_candidates)
+    if cozinha_match:
+        options = lista_mat_default_ferragens_multi(session, ctx, COZINHAS_TYPE_HINTS)
+        if options:
+            return options
+        generic = lista_mat_default(session, ctx, "FERRAGENS")
+        return generic or list(COZINHAS_MAT_DEFAULT_OPTIONS)
+
+    familia = row.get("familia") or row.get("mat_default")
+    options = lista_mat_default(session, ctx, familia)
+    return _contextual_material_options(session, ctx, row, options or lista_mat_default())
+
+
+def _infer_rule_menu(rule: Mapping[str, Any], row: Mapping[str, Any]) -> Optional[str]:
+    explicit = rule.get("menu")
+    if explicit:
+        return explicit
+    tipo_principal = rule.get("tipo_peca_principal")
+    menu = _menu_for_familia(tipo_principal)
+    if menu:
+        return menu
+    familia_row = row.get("familia") or row.get("mat_default")
+    menu = _menu_for_familia(familia_row)
+    if menu:
+        return menu
+    info = inferir_ferragem_info(row)
+    if info:
+        menu = _menu_for_familia(info.get("familia"))
+        if menu:
+            return menu
+    return None
+
+
+def _derive_groups_from_rule_hints(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    menu: str,
+    rule: Mapping[str, Any],
+) -> List[str]:
+    options = _collect_group_options(session, ctx, menu)
+    if not options:
+        return []
+
+    hints: List[str] = []
+    for key in ("subgrupo_peca", "nome_da_peca", "tipo_peca_principal", "default"):
+        value = str(rule.get(key) or "").strip()
+        if value:
+            hints.append(value)
+
+    ranked: List[Tuple[int, int, str]] = []
+    for idx, option in enumerate(options):
+        score = _score_option_against_hints(option, hints)
+        if score > 0:
+            ranked.append((-score, idx, option))
+
+    ranked.sort()
+    return [option for _, _, option in ranked]
+
+
+def _options_from_definicao_mat_default(
+    session: Session,
+    ctx: svc_dados_items.DadosItemsContext,
+    rule: Mapping[str, Any],
+    row: Mapping[str, Any],
+) -> List[str]:
+    grupos = list(rule.get("grupos") or [])
+    menu = _infer_rule_menu(rule, row)
+
+    if grupos:
+        if menu:
+            primary = svc_dados_items.MENU_PRIMARY_FIELD.get(menu)
+            if primary:
+                options = _collect_group_options(session, ctx, menu, extra_filters={primary: grupos})
+                filtered = _ordered_filter(options, grupos)
+                if filtered:
+                    return _prioritize_default_option(filtered, rule.get("default"))
+
+        resultado: List[str] = []
+        for menu_name in (
+            svc_dados_items.MENU_MATERIAIS,
+            svc_dados_items.MENU_FERRAGENS,
+            svc_dados_items.MENU_SIS_CORRER,
+        ):
+            primary = svc_dados_items.MENU_PRIMARY_FIELD.get(menu_name)
+            if not primary:
+                continue
+            options = _collect_group_options(session, ctx, menu_name, extra_filters={primary: grupos})
+            for option in _ordered_filter(options, grupos):
+                if option not in resultado:
+                    resultado.append(option)
+        return _prioritize_default_option(resultado, rule.get("default"))
+
+    if menu:
+        derived = _derive_groups_from_rule_hints(session, ctx, menu, rule)
+        if derived:
+            return _prioritize_default_option(derived, rule.get("default"))
+    return []
+
+
+def resolver_opcoes_mat_default(
+    session: Optional[Session],
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    row: Optional[Mapping[str, Any]],
+) -> List[str]:
+    if not session or not ctx or not row:
+        return lista_mat_default()
+
+    def_peca_norm = _normalize_token(row.get("def_peca") or "")
+    if def_peca_norm == _DIVISAO_LABEL_TOKEN.casefold():
+        return []
+
+    rule = svc_def_pecas.resolver_regra_mat_default(session, row)
+    if rule:
+        rule_options = _options_from_definicao_mat_default(session, ctx, rule, row)
+        if rule_options:
+            return rule_options
+
+    fallback = _resolver_opcoes_mat_default_hardcoded(session, ctx, row)
+    if rule and rule.get("default"):
+        return _prioritize_default_option(fallback, rule.get("default"))
+    return fallback
+
+
+def obter_preview_mat_default(
+    session: Optional[Session],
+    ctx: Optional[svc_dados_items.DadosItemsContext],
+    row: Optional[Mapping[str, Any]],
+    grupo: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not session or not ctx or not row or not grupo:
+        return None
+    familia = row.get("familia") or row.get("mat_default")
+    material = obter_material_por_familia(session, ctx, familia, grupo)
+    if not material:
+        material = obter_material_por_grupo(session, ctx, grupo, familia)
+    if not material:
+        return None
+    preco_liq = getattr(material, "preco_liq", None)
+    try:
+        preco_liq_text = f"{float(preco_liq):.2f} €".replace(".", ",") if preco_liq not in (None, "") else ""
+    except Exception:
+        preco_liq_text = str(preco_liq or "")
+    return {
+        "grupo": str(grupo).strip(),
+        "descricao_material": str(getattr(material, "descricao_material", "") or "").strip(),
+        "preco_liq": preco_liq,
+        "preco_liq_text": preco_liq_text,
+    }
+
+
+def formatar_tooltip_preview_mat_default(preview: Optional[Mapping[str, Any]]) -> str:
+    if not preview:
+        return ""
+    descricao = str(preview.get("descricao_material") or "").strip() or "Sem descricao disponivel"
+    preco = str(preview.get("preco_liq_text") or "").strip() or "-"
+    return f"Descricao Material: {descricao}\nPreco Liquido: {preco}"
 
 
 def _coerce_decimal_two(value: Any) -> Decimal:

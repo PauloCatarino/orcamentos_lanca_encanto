@@ -75,7 +75,7 @@ class DailyOrcamentoReminderDialog(QtWidgets.QDialog):
         layout.addWidget(hint)
 
         self.table = QtWidgets.QTableWidget(self)
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels(
             [
                 "Acao",
@@ -83,6 +83,7 @@ class DailyOrcamentoReminderDialog(QtWidgets.QDialog):
                 "Prioridade",
                 "N Orc",
                 "Cliente",
+                "Ref.Cliente",
                 "Estado",
                 "Data Orc",
                 "Prazo",
@@ -247,6 +248,7 @@ class DailyOrcamentoReminderDialog(QtWidgets.QDialog):
                     reminder.priority_label,
                     number_label,
                     reminder.cliente or "-",
+                    reminder.ref_cliente or "-",
                     status_label,
                     reminder.data_orcamento or "-",
                     prazo or "-",
@@ -267,11 +269,11 @@ class DailyOrcamentoReminderDialog(QtWidgets.QDialog):
                             item.setForeground(QtGui.QBrush(QtGui.QColor("#7f1d1d")))
                         elif reminder.hidden:
                             item.setForeground(QtGui.QBrush(QtGui.QColor("#374151")))
-                    elif col_idx == 8:
-                        item.setToolTip(description_text)
                     elif col_idx == 9:
+                        item.setToolTip(description_text)
+                    elif col_idx == 10:
                         item.setToolTip(reminder_text)
-                    elif col_idx == 7 and prazo:
+                    elif col_idx == 8 and prazo:
                         flags = []
                         if reminder.overdue:
                             flags.append("atrasada")
@@ -295,8 +297,9 @@ class DailyOrcamentoReminderDialog(QtWidgets.QDialog):
             header.setSectionResizeMode(5, QtWidgets.QHeaderView.ResizeToContents)
             header.setSectionResizeMode(6, QtWidgets.QHeaderView.ResizeToContents)
             header.setSectionResizeMode(7, QtWidgets.QHeaderView.ResizeToContents)
-            header.setSectionResizeMode(8, QtWidgets.QHeaderView.Stretch)
+            header.setSectionResizeMode(8, QtWidgets.QHeaderView.ResizeToContents)
             header.setSectionResizeMode(9, QtWidgets.QHeaderView.Stretch)
+            header.setSectionResizeMode(10, QtWidgets.QHeaderView.Stretch)
             if self.table.rowCount() > 0:
                 self.table.selectRow(0)
         finally:

@@ -22,6 +22,7 @@ from PySide6 import QtCore, QtWidgets, QtGui
 from PySide6.QtCore import Qt
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
+from Martelo_Orcamentos_V2.app.services import phc_sql as svc_phc
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 from Martelo_Orcamentos_V2.ui.models.qt_table import SimpleTableModel
 
@@ -65,9 +66,9 @@ KEY_ST_TRUSTED = "streamlit_sql_trusted"
 KEY_ST_TRUST_CERT = "streamlit_sql_trust_server_certificate"
 
 # Defaults (sem password hardcoded; pode vir de settings/.env)
-DEFAULT_ST_SERVER = r"DESKTOP-9TG3VTH,1433"
+DEFAULT_ST_SERVER = r"DESKTOP-PTJ4TE6,1433"
 DEFAULT_ST_DATABASE = "Lanca_Encanto2026"
-DEFAULT_ST_USER = "Streamlit"
+DEFAULT_ST_USER = "Lanca_Encanto_Stream"
 DEFAULT_ST_TRUSTED = False
 DEFAULT_ST_TRUST_CERT = True
 
@@ -553,6 +554,133 @@ try {
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar encomendas do PHC:\n\n{exc}")
 
 
+class EncomendasPHCEstadoDebugTab(QtWidgets.QWidget):
+    """
+    Tab temporaria de diagnostico para inspecionar os campos BI/BO usados
+    na validacao de estado da Producao.
+    """
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.db = SessionLocal()
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        info = QtWidgets.QLabel(
+            "Diagnostico temporario do estado PHC.\n"
+            "Usa a mesma configuracao SQL guardada no separador 'Encomendas PHC' e executa apenas SELECT."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        filters = QtWidgets.QGridLayout()
+        filters.setHorizontalSpacing(8)
+        filters.setVerticalSpacing(6)
+
+        self.ed_num_enc = QtWidgets.QLineEdit()
+        self.ed_num_enc.setPlaceholderText("Num Enc PHC opcional (ex.: 402)")
+        self.ed_num_enc.setValidator(QtGui.QIntValidator(0, 999999999, self))
+
+        self.sp_min_year = QtWidgets.QSpinBox()
+        self.sp_min_year.setRange(2000, 2100)
+        self.sp_min_year.setValue(2026)
+
+        self.sp_max_rows = QtWidgets.QSpinBox()
+        self.sp_max_rows.setRange(1, 50000)
+        self.sp_max_rows.setSingleStep(100)
+        self.sp_max_rows.setValue(2000)
+
+        self.btn_load = QtWidgets.QPushButton("Carregar Diagnostico")
+        self.btn_load.clicked.connect(self.on_load_rows)
+
+        self.lbl_status = QtWidgets.QLabel("")
+        self.lbl_status.setWordWrap(True)
+
+        filters.addWidget(QtWidgets.QLabel("Num Enc PHC:"), 0, 0)
+        filters.addWidget(self.ed_num_enc, 0, 1)
+        filters.addWidget(QtWidgets.QLabel("Ano minimo:"), 0, 2)
+        filters.addWidget(self.sp_min_year, 0, 3)
+        filters.addWidget(QtWidgets.QLabel("Max. linhas:"), 0, 4)
+        filters.addWidget(self.sp_max_rows, 0, 5)
+        filters.addWidget(self.btn_load, 0, 6)
+        filters.addWidget(self.lbl_status, 1, 0, 1, 7)
+        layout.addLayout(filters)
+
+        search_row = QtWidgets.QHBoxLayout()
+        self.ed_search = QtWidgets.QLineEdit()
+        self.ed_search.setPlaceholderText("Pesquisar na tabela de diagnostico")
+        self.btn_clear = QtWidgets.QToolButton()
+        self.btn_clear.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton))
+        self.btn_clear.setToolTip("Limpar pesquisa")
+        self.btn_clear.setEnabled(False)
+        self.btn_clear.clicked.connect(self.ed_search.clear)
+        self.ed_search.textChanged.connect(lambda text: self.btn_clear.setEnabled(bool((text or "").strip())))
+        search_row.addWidget(self.ed_search, 1)
+        search_row.addWidget(self.btn_clear)
+        layout.addLayout(search_row)
+
+        self.model = SimpleTableModel(
+            columns=[
+                {"header": "Ano", "attr": "Ano", "type": "int"},
+                {"header": "Enc_No", "attr": "Enc_No", "type": "int"},
+                {"header": "Num_PHC", "attr": "Num_PHC", "type": "int"},
+                ("Estado_PHC", "Estado_PHC"),
+                ("BI_Tabela1", "BI_Tabela1"),
+                ("BO_Tabela1", "BO_Tabela1"),
+                ("BI_Nome", "BI_Nome"),
+                ("BO_Nome", "BO_Nome"),
+                ("CL_Nome", "CL_Nome"),
+                ("NMDoc", "NMDoc"),
+                ("FData", "FData"),
+                ("BI_DataObra", "BI_DataObra"),
+                ("BO_DataObra", "BO_DataObra"),
+                ("BI_Bostamp", "BI_Bostamp"),
+                ("BO_Bostamp", "BO_Bostamp"),
+            ],
+            parent=self,
+        )
+        self.proxy = QtCore.QSortFilterProxyModel(self)
+        self.proxy.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.proxy.setFilterKeyColumn(-1)
+        self.proxy.setSourceModel(self.model)
+
+        self.table = QtWidgets.QTableView(self)
+        self.table.setModel(self.proxy)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        layout.addWidget(self.table, 1)
+
+        self.ed_search.textChanged.connect(self._on_search_changed)
+
+    def _on_search_changed(self, text: str) -> None:
+        self.proxy.setFilterFixedString((text or "").strip())
+
+    def on_load_rows(self) -> None:
+        self.lbl_status.setText("")
+        try:
+            rows = svc_phc.query_phc_estado_debug_rows(
+                self.db,
+                min_year=self.sp_min_year.value(),
+                max_rows=self.sp_max_rows.value(),
+                num_enc_phc=(self.ed_num_enc.text() or "").strip() or None,
+            )
+            self.model.set_rows(rows)
+            self.lbl_status.setText(f"{len(rows)} linha(s) de diagnostico carregada(s).")
+        except Exception as exc:
+            logger.exception("Diagnostico Estado PHC: falha ao carregar dados: %s", exc)
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar diagnostico do estado PHC:\n\n{exc}")
+
+
 class EncomendasPHCPage(QtWidgets.QWidget):
     """
     Container do menu "Encomendas PHC" com separadores.
@@ -576,6 +704,9 @@ class EncomendasPHCPage(QtWidgets.QWidget):
 
         self.tab_cliente_final = EncomendasClienteFinalTab(parent=self)
         self.tabs.addTab(self.tab_cliente_final, "Encomendas Cliente Final")
+
+        self.tab_estado_debug = EncomendasPHCEstadoDebugTab(parent=self)
+        self.tabs.addTab(self.tab_estado_debug, "Diagnostico Estado PHC")
 
 
 class EncomendasClienteFinalTab(QtWidgets.QWidget):
@@ -897,7 +1028,7 @@ class EncomendasClienteFinalTab(QtWidgets.QWidget):
         if not server or not database:
             raise ValueError("Servidor e Base de Dados sao obrigatorios.")
 
-        parts = [f"Server={server}", f"Database={database}", "Connection Timeout=30"]
+        parts = [f"Server={server}", f"Database={database}", "Encrypt=False", "Connection Timeout=60"]
         if trusted:
             parts.append("Integrated Security=True")
         else:

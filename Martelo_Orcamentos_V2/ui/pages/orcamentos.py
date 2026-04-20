@@ -179,11 +179,13 @@ class OrcamentosPage(QtWidgets.QWidget):
         self.ed_search = QtWidgets.QLineEdit()
         self.ed_search.setMinimumWidth(320)
         self.ed_search.setPlaceholderText("Pesquisar orcamentos - use % para multi-termos")
-        btn_clear = QToolButton()
-        btn_clear.setText("X")
-        btn_clear.setToolTip("Limpar pesquisa")
-        btn_clear.clicked.connect(lambda: self.ed_search.setText(""))
         self.ed_search.textChanged.connect(self.on_search)
+        self.ed_search.textChanged.connect(self._update_clear_search_button)
+        self.btn_clear_search = QToolButton()
+        self.btn_clear_search.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
+        self.btn_clear_search.setToolTip("Limpar pesquisa")
+        self.btn_clear_search.setEnabled(False)
+        self.btn_clear_search.clicked.connect(self._clear_search)
 
         # Filtros adicionais
         self.cb_estado_filter = QtWidgets.QComboBox()
@@ -203,7 +205,7 @@ class OrcamentosPage(QtWidgets.QWidget):
 
         search_bar.addWidget(lbl_search)
         search_bar.addWidget(self.ed_search, 3)
-        search_bar.addWidget(btn_clear)
+        search_bar.addWidget(self.btn_clear_search)
         search_bar.addSpacing(8)
         search_bar.addWidget(QtWidgets.QLabel("Estado:"))
         search_bar.addWidget(self.cb_estado_filter)
@@ -561,12 +563,30 @@ class OrcamentosPage(QtWidgets.QWidget):
     def on_price_changed_from_itens(self, orc_id: int, novo_preco: object) -> None:
         """NOVO: Callback quando o preco e revertido/atualizado no menu Items."""
         try:
-            if self._current_id == orc_id:
-                # O orcamento atual teve seu preco sincronizado
-                # Apenas refrescar tooltip e UI se necessorio
+            if self._current_id == orc_id and not getattr(self, "_dirty", False):
+                from Martelo_Orcamentos_V2.app.models import Orcamento
+
+                try:
+                    self.db.expire_all()
+                except Exception:
+                    pass
+                orcamento = self.db.get(Orcamento, orc_id)
+                if orcamento and hasattr(self, "ed_preco"):
+                    preco_atual = getattr(orcamento, "preco_total", None)
+                    self.ed_preco.blockSignals(True)
+                    try:
+                        self.ed_preco.setText("" if preco_atual is None else self._format_currency(preco_atual))
+                    finally:
+                        self.ed_preco.blockSignals(False)
+                    self._preco_manual_active = bool(getattr(orcamento, "preco_total_manual", False))
+                    self._preco_manual_changed = False
                 self._update_preco_tooltip()
         except Exception:
             pass
+
+    def refresh_table(self) -> None:
+        """Atualiza a lista geral preservando o contexto visual atual."""
+        self._smart_refresh_table()
 
     def _on_preco_edited(self, *_args) -> None:
         if getattr(self, "_loading_form", False):
@@ -909,6 +929,7 @@ class OrcamentosPage(QtWidgets.QWidget):
             self.ed_search.clear()
         finally:
             self.ed_search.blockSignals(False)
+        self._update_clear_search_button()
 
         for combo in (
             getattr(self, "cb_estado_filter", None),
@@ -924,6 +945,18 @@ class OrcamentosPage(QtWidgets.QWidget):
                 combo.setCurrentText("Todos")
             finally:
                 combo.blockSignals(False)
+
+    def _update_clear_search_button(self, _text: str = "") -> None:
+        btn = getattr(self, "btn_clear_search", None)
+        ed = getattr(self, "ed_search", None)
+        if btn is None or ed is None:
+            return
+        btn.setEnabled(bool(ed.text().strip()))
+
+    def _clear_search(self) -> None:
+        if not hasattr(self, "ed_search"):
+            return
+        self.ed_search.clear()
 
     def focus_orcamento_by_id(self, oid: int, *, open_items: bool = False) -> bool:
         request = build_focus_request(oid, open_items=open_items)

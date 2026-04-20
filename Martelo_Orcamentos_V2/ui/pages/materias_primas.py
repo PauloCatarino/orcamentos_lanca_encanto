@@ -329,6 +329,40 @@ def _format_decimal(value, places: int = 2) -> str:
             return str(value)
 
 
+def _excel_like_icon(size: int = 16) -> QtGui.QIcon:
+    pixmap = QtGui.QPixmap(size, size)
+    pixmap.fill(QtCore.Qt.transparent)
+
+    painter = QtGui.QPainter(pixmap)
+    painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+
+    rect = QtCore.QRectF(1, 1, size - 2, size - 2)
+    painter.setPen(QtGui.QPen(QtGui.QColor("#1F6F43"), 1))
+    painter.setBrush(QtGui.QColor("#217346"))
+    painter.drawRoundedRect(rect, 2.5, 2.5)
+
+    fold = QtGui.QPolygonF(
+        [
+            QtCore.QPointF(size - 5.5, 1.5),
+            QtCore.QPointF(size - 1.5, 1.5),
+            QtCore.QPointF(size - 1.5, 5.5),
+        ]
+    )
+    painter.setPen(QtCore.Qt.NoPen)
+    painter.setBrush(QtGui.QColor("#DFF1E5"))
+    painter.drawPolygon(fold)
+
+    painter.setPen(QtGui.QPen(QtGui.QColor("white"), 2))
+    painter.drawLine(int(size * 0.28), int(size * 0.32), int(size * 0.48), int(size * 0.50))
+    painter.drawLine(int(size * 0.48), int(size * 0.50), int(size * 0.28), int(size * 0.68))
+    painter.drawLine(int(size * 0.56), int(size * 0.32), int(size * 0.76), int(size * 0.32))
+    painter.drawLine(int(size * 0.56), int(size * 0.50), int(size * 0.76), int(size * 0.50))
+    painter.drawLine(int(size * 0.56), int(size * 0.68), int(size * 0.76), int(size * 0.68))
+    painter.end()
+
+    return QtGui.QIcon(pixmap)
+
+
 
 
 
@@ -1533,6 +1567,13 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
 
         self.search_edit.textChanged.connect(self.on_search_text_changed)
+        self.search_edit.textChanged.connect(self._update_clear_search_button)
+
+        self.btn_clear_search = QtWidgets.QToolButton()
+        self.btn_clear_search.setIcon(style.standardIcon(QStyle.SP_DialogResetButton))
+        self.btn_clear_search.setToolTip("Limpar pesquisa e mostrar todas as matérias primas")
+        self.btn_clear_search.setAutoRaise(True)
+        self.btn_clear_search.clicked.connect(self._clear_search)
 
 
 
@@ -1556,7 +1597,8 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
 
 
-        btn_open.setIcon(style.standardIcon(QStyle.SP_DialogOpenButton))
+        btn_open.setIcon(_excel_like_icon())
+        btn_open.setIconSize(QtCore.QSize(16, 16))
 
 
 
@@ -1726,6 +1768,7 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
 
         header_layout.addWidget(self.search_edit, 1)
+        header_layout.addWidget(self.btn_clear_search)
 
 
 
@@ -1767,6 +1810,7 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
 
         header_layout.addWidget(self.lbl_path, 1)
+        self._update_clear_search_button()
 
 
 
@@ -2597,6 +2641,26 @@ class MateriasPrimasPage(QtWidgets.QWidget):
 
 
 
+
+    def _update_clear_search_button(self) -> None:
+        btn = getattr(self, "btn_clear_search", None)
+        ed = getattr(self, "search_edit", None)
+        if btn is None or ed is None:
+            return
+        btn.setEnabled(bool(ed.text().strip()))
+
+    def _clear_search(self) -> None:
+        if not hasattr(self, "search_edit"):
+            return
+        block = self.search_edit.blockSignals(True)
+        try:
+            self.search_edit.clear()
+        finally:
+            self.search_edit.blockSignals(block)
+        if hasattr(self, "_search_timer"):
+            self._search_timer.stop()
+        self._update_clear_search_button()
+        self.refresh_table()
 
     def refresh_table(self) -> None:
 

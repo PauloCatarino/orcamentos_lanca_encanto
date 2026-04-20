@@ -9,6 +9,7 @@ from typing import Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
 
+from Martelo_Orcamentos_V2.app.services.clients import phc_simplex_validation_issue
 from Martelo_Orcamentos_V2.app.services import phc_sql as svc_phc
 from Martelo_Orcamentos_V2.app.services import streamlit_sql as svc_streamlit
 from Martelo_Orcamentos_V2.app.utils.date_utils import format_date_display, parse_date_value
@@ -395,6 +396,15 @@ class NovoProcessoDialog(QtWidgets.QDialog):
             num_enc = re.sub(r"\\D", "", str(base.get("Enc_No") or ""))
             num_phc = (base.get("Num_PHC") or "").strip()
             ref_cliente = (base.get("Ref_Cliente") or "").strip()
+            validation_issue = phc_simplex_validation_issue(
+                cliente_nome=nome_cliente,
+                num_phc=num_phc,
+                simplex=nome_simplex,
+                action_label="criar o novo processo",
+            )
+            if validation_issue:
+                QtWidgets.QMessageBox.warning(self, validation_issue[0], validation_issue[1])
+                return
 
             # descricoes (itens) -> texto multi-linha, mantendo ordem e evitando duplicados
             seen = set()

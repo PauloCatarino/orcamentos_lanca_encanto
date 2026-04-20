@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import os
 import shutil
+import struct
+import subprocess
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -16,6 +21,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
+from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao_processos
 from Martelo_Orcamentos_V2.app.services import producao_workflow as svc_producao_workflow
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
 
@@ -23,10 +29,14 @@ logger = logging.getLogger(__name__)
 
 KEY_PRODUCAO_CNC_SOURCE_ROOT = "producao_cnc_source_root"
 KEY_PRODUCAO_MPR_ROOT = "producao_mpr_root"
+KEY_PRODUCAO_CUTRITE_EXPORT_ROOT = "producao_cutrite_export_root"
 KEY_PREPARACAO_REQUIRED_FILES_TEMPLATE = "producao_preparacao_required_files_user_{user_id}"
 
 DEFAULT_PRODUCAO_CNC_SOURCE_ROOT = r"\\SERVER_LE\Homag_iX\_ProgramasCNC"
 DEFAULT_PRODUCAO_MPR_ROOT = r"\\SERVER_LE\_Lanca_Encanto\Operador\FICHEIROS_MPR"
+DEFAULT_PRODUCAO_CUTRITE_EXPORT_ROOT = (
+    r"\\SERVER_LE\_Lanca_Encanto\LancaEncanto\Dep_Producao\Cut_Rite_Exportacoes"
+)
 
 CONJ_PDF_FILENAME = "CONJ.pdf"
 PROJETO_PRODUCAO_PDF_FILENAME = "2_Projeto_Producao.pdf"
@@ -39,8 +49,25 @@ STATUS_BLOCKED = "blocked"
 ACTION_GENERATE_PROJETO_PDF = "generate_projeto_pdf"
 ACTION_COPY_PROGRAMS_TO_WORK = "copy_programs_to_work"
 ACTION_SEND_PROGRAMS_TO_MPR = "send_programs_to_mpr"
+ACTION_COPY_CUTRITE_PDF_TO_WORK = "copy_cutrite_pdf_to_work"
 
 A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT = landscape(A4)
+XL_PLACEMENT_MOVE_AND_SIZE = 1
+XL_ORIENTATION_PORTRAIT = 1
+XL_PAPER_A4 = 9
+MSO_SHAPE_PICTURE_TYPES = {11, 13}
+CADERNO_IMAGE_SHAPE_NAME = "IMOS_PNG_A17"
+CADERNO_PLACE_IN_CELL_IDMSO_CANDIDATES = (
+    "PicturePlaceInCell",
+    "PicturesPlaceInCell",
+    "PlacePictureInCell",
+    "PictureFormatPlaceInCell",
+    "PictureInCell",
+)
+CADERNO_WORKSHEET_CANDIDATES = ("CD&RP", "2_CAD_ENCARGOS")
+CADERNO_PRINT_MACRO_NAME = "todos_setores"
+DM_DUPLEX_FLAG = 0x1000
+DMDUP_VERTICAL = 2
 
 
 @dataclass(frozen=True)
@@ -57,6 +84,15 @@ class ProducaoPreparacaoContext:
     mpr_programs_folder: Path
     conj_pdf_path: Path
     projeto_pdf_path: Path
+    cutrite_export_root: Optional[Path] = None
+    imorder_root: Optional[Path] = None
+
+
+@dataclass(frozen=True)
+class CadernoEncargosPreparationResult:
+    workbook_path: Path
+    image_path: Path
+    worksheet_name: str
 
 
 @dataclass(frozen=True)
@@ -226,8 +262,20 @@ def resolve_preparacao_context(
     mpr_root = Path(
         get_setting(db, KEY_PRODUCAO_MPR_ROOT, DEFAULT_PRODUCAO_MPR_ROOT) or DEFAULT_PRODUCAO_MPR_ROOT
     )
+    cutrite_export_root = Path(
+        get_setting(db, KEY_PRODUCAO_CUTRITE_EXPORT_ROOT, DEFAULT_PRODUCAO_CUTRITE_EXPORT_ROOT)
+        or DEFAULT_PRODUCAO_CUTRITE_EXPORT_ROOT
+    )
     year_folder = mpr_root / f"{datetime.now().year}_MPR"
     work_programs_folder = work_folder / nome_enc_imos_clean
+    imorder_root = Path(
+        get_setting(
+            db,
+            svc_producao_processos.KEY_IMORDER_BASE_PATH,
+            svc_producao_processos.DEFAULT_IMORDER_BASE_PATH,
+        )
+        or svc_producao_processos.DEFAULT_IMORDER_BASE_PATH
+    )
 
     return ProducaoPreparacaoContext(
         processo=processo,
@@ -242,6 +290,8 @@ def resolve_preparacao_context(
         mpr_programs_folder=year_folder / nome_enc_imos_clean,
         conj_pdf_path=work_folder / CONJ_PDF_FILENAME,
         projeto_pdf_path=work_folder / PROJETO_PRODUCAO_PDF_FILENAME,
+        cutrite_export_root=cutrite_export_root,
+        imorder_root=imorder_root,
     )
 
 
@@ -251,7 +301,11 @@ def collect_preparacao_statuses(
     required_keys: Optional[set[str]] = None,
 ) -> list[ProducaoPreparacaoStatus]:
     required = set(required_keys or set(CONFIGURABLE_FILE_KEYS) | set(ALWAYS_REQUIRED_KEYS))
-    statuses = [_build_file_status(context, spec, spec.key in required) for spec in CONFIGURABLE_FILE_SPECS]
+    statuses = [
+        _build_file_status(context, spec, True)
+        for spec in CONFIGURABLE_FILE_SPECS
+        if spec.key in required
+    ]
     statuses.extend(_build_cnc_statuses(context, required))
     statuses.append(_build_ready_status(statuses, required))
     return statuses
@@ -303,6 +357,70 @@ def send_programas_para_mpr(context: ProducaoPreparacaoContext) -> Path:
     return context.mpr_programs_folder
 
 
+def copy_cutrite_pdf_para_obra(context: ProducaoPreparacaoContext) -> Path:
+    target_path = _resolve_cutrite_work_pdf_path(context)
+    source_path = _resolve_cutrite_export_pdf_path(context)
+    if target_path is None or source_path is None:
+        raise ValueError("Nome Plano CUT-RITE em falta no processo.")
+    if not source_path.exists():
+        raise ValueError(f"PDF exportado do CUT-RITE em falta:\n{source_path}")
+    context.work_folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, target_path)
+    return target_path
+
+
+def resolve_caderno_encargos_path(context: ProducaoPreparacaoContext) -> Optional[Path]:
+    matches = sorted(context.work_folder.glob("Caderno de Encargos_*.xlsm"))
+    return matches[0] if matches else None
+
+
+def prepare_caderno_encargos_workbook(
+    context: ProducaoPreparacaoContext,
+    *,
+    workbook_path: Optional[Path] = None,
+) -> CadernoEncargosPreparationResult:
+    target_path = Path(workbook_path) if workbook_path is not None else resolve_caderno_encargos_path(context)
+    if target_path is None or not target_path.exists():
+        raise ValueError(f"Caderno de Encargos em falta:\n{context.work_folder}\\Caderno de Encargos_*.xlsm")
+
+    image_path = _resolve_latest_imos_png_path(context)
+    worksheet_name = _prepare_caderno_encargos_with_excel(
+        workbook_path=target_path,
+        image_path=image_path,
+        run_print_macro=False,
+        copies=1,
+    )
+    return CadernoEncargosPreparationResult(
+        workbook_path=target_path,
+        image_path=image_path,
+        worksheet_name=worksheet_name,
+    )
+
+
+def print_caderno_encargos_workbook(
+    context: ProducaoPreparacaoContext,
+    *,
+    copies: int = 1,
+    workbook_path: Optional[Path] = None,
+) -> CadernoEncargosPreparationResult:
+    target_path = Path(workbook_path) if workbook_path is not None else resolve_caderno_encargos_path(context)
+    if target_path is None or not target_path.exists():
+        raise ValueError(f"Caderno de Encargos em falta:\n{context.work_folder}\\Caderno de Encargos_*.xlsm")
+
+    image_path = _resolve_latest_imos_png_path(context)
+    worksheet_name = _prepare_caderno_encargos_with_excel(
+        workbook_path=target_path,
+        image_path=image_path,
+        run_print_macro=True,
+        copies=max(1, int(copies or 1)),
+    )
+    return CadernoEncargosPreparationResult(
+        workbook_path=target_path,
+        image_path=image_path,
+        worksheet_name=worksheet_name,
+    )
+
+
 def _build_file_status(
     context: ProducaoPreparacaoContext,
     spec: _FileSpec,
@@ -310,8 +428,15 @@ def _build_file_status(
 ) -> ProducaoPreparacaoStatus:
     path = _resolve_spec_path(context, spec)
     source_paths = _resolve_source_paths(context, spec)
-    action_key = ACTION_GENERATE_PROJETO_PDF if spec.key == "projeto_pdf" else ""
-    action_label = "Gerar" if action_key else ""
+    if spec.key == "projeto_pdf":
+        action_key = ACTION_GENERATE_PROJETO_PDF
+        action_label = "Gerar"
+    elif spec.key == "cutrite_pdf":
+        action_key = ACTION_COPY_CUTRITE_PDF_TO_WORK
+        action_label = "Copiar"
+    else:
+        action_key = ""
+        action_label = ""
 
     if spec.key == "cutrite_pdf" and not context.nome_plano_cut_rite:
         return ProducaoPreparacaoStatus(
@@ -332,6 +457,42 @@ def _build_file_status(
             label=spec.label,
             state=STATUS_MISSING,
             detail=detail,
+            required=is_required,
+            configurable=True,
+            action_key=action_key,
+            action_label=action_label,
+        )
+
+    if spec.key == "caderno_encargos":
+        try:
+            prepared = prepare_caderno_encargos_workbook(context, workbook_path=path)
+        except Exception as exc:
+            return ProducaoPreparacaoStatus(
+                key=spec.key,
+                label=spec.label,
+                state=STATUS_BLOCKED,
+                detail=f"{path}\nFalha ao preparar o Caderno de Encargos: {exc}",
+                required=is_required,
+                configurable=True,
+            )
+        return ProducaoPreparacaoStatus(
+            key=spec.key,
+            label=spec.label,
+            state=STATUS_OK,
+            detail=(
+                f"{prepared.workbook_path}\n"
+                f"Imagem IMOS inserida em {prepared.worksheet_name}!A17: {prepared.image_path}"
+            ),
+            required=is_required,
+            configurable=True,
+        )
+
+    if spec.key == "lista_material_pdf":
+        return ProducaoPreparacaoStatus(
+            key=spec.key,
+            label=spec.label,
+            state=STATUS_OK,
+            detail=str(path),
             required=is_required,
             configurable=True,
             action_key=action_key,
@@ -500,9 +661,7 @@ def _build_ready_status(
 
 def _resolve_spec_path(context: ProducaoPreparacaoContext, spec: _FileSpec) -> Optional[Path]:
     if spec.key == "cutrite_pdf":
-        if not context.nome_plano_cut_rite:
-            return None
-        return context.work_folder / f"{context.nome_plano_cut_rite}.pdf"
+        return _resolve_cutrite_work_pdf_path(context)
     if spec.key == "conj_pdf":
         return context.conj_pdf_path
     if spec.key == "projeto_pdf":
@@ -513,6 +672,9 @@ def _resolve_spec_path(context: ProducaoPreparacaoContext, spec: _FileSpec) -> O
 
 
 def _resolve_source_paths(context: ProducaoPreparacaoContext, spec: _FileSpec) -> list[Path]:
+    if spec.key == "cutrite_pdf":
+        source_path = _resolve_cutrite_export_pdf_path(context)
+        return [source_path] if source_path is not None and source_path.exists() else []
     if spec.key == "projeto_pdf":
         return [context.conj_pdf_path] if context.conj_pdf_path.exists() else []
 
@@ -524,8 +686,83 @@ def _resolve_source_paths(context: ProducaoPreparacaoContext, spec: _FileSpec) -
 
 def _missing_file_detail(context: ProducaoPreparacaoContext, spec: _FileSpec) -> str:
     if spec.key == "cutrite_pdf":
-        return str(context.work_folder / f"{context.nome_plano_cut_rite}.pdf")
+        target_path = _resolve_cutrite_work_pdf_path(context)
+        export_path = _resolve_cutrite_export_pdf_path(context)
+        if target_path is None:
+            return "Nome Plano CUT-RITE em falta no processo."
+        detail = f"{target_path} (em falta)"
+        if export_path is not None:
+            detail += f"\nOrigem CUT-RITE esperada: {export_path}"
+        return detail
     return f"{context.work_folder}\\{spec.pattern} (em falta)"
+
+
+def _cutrite_pdf_filename(nome_plano_cut_rite: str) -> str:
+    name = str(nome_plano_cut_rite or "").strip()
+    if not name:
+        return ""
+    return name if name.casefold().endswith(".pdf") else f"{name}.pdf"
+
+
+def _resolve_cutrite_work_pdf_path(context: ProducaoPreparacaoContext) -> Optional[Path]:
+    filename = _cutrite_pdf_filename(context.nome_plano_cut_rite)
+    if not filename:
+        return None
+    return context.work_folder / filename
+
+
+def _resolve_cutrite_export_pdf_path(context: ProducaoPreparacaoContext) -> Optional[Path]:
+    filename = _cutrite_pdf_filename(context.nome_plano_cut_rite)
+    if not filename:
+        return None
+    export_root = Path(context.cutrite_export_root or DEFAULT_PRODUCAO_CUTRITE_EXPORT_ROOT)
+    return export_root / filename
+
+
+def _resolve_latest_imos_png_path(context: ProducaoPreparacaoContext) -> Path:
+    imorder_root = Path(context.imorder_root or svc_producao_processos.DEFAULT_IMORDER_BASE_PATH)
+    if not imorder_root.exists() or not imorder_root.is_dir():
+        raise ValueError(f"Pasta base Imorder nao encontrada:\n{imorder_root}")
+
+    folder_candidates: list[Path] = []
+    exact_folder = imorder_root / str(context.nome_enc_imos or "").strip()
+    if exact_folder.exists() and exact_folder.is_dir():
+        folder_candidates.append(exact_folder)
+
+    nome_key = str(context.nome_enc_imos or "").strip().casefold()
+    if nome_key:
+        for entry in imorder_root.iterdir():
+            try:
+                if not entry.is_dir():
+                    continue
+            except Exception:
+                continue
+            if nome_key in entry.name.casefold() and entry not in folder_candidates:
+                folder_candidates.append(entry)
+
+    if not folder_candidates:
+        raise ValueError(
+            "Nao encontrei a pasta da obra no Imorder.\n\n"
+            f"Nome esperado: {context.nome_enc_imos}\n"
+            f"Base: {imorder_root}"
+        )
+
+    folder_candidates.sort(key=lambda path: _safe_mtime(path), reverse=True)
+    for folder in folder_candidates:
+        png_paths = [
+            path
+            for path in list(folder.glob("*.png")) + list(folder.glob("*.PNG"))
+            if path.is_file()
+        ]
+        if not png_paths:
+            continue
+        png_paths.sort(key=lambda path: _safe_mtime(path), reverse=True)
+        return png_paths[0]
+
+    raise ValueError(
+        "Nao encontrei nenhum ficheiro PNG na pasta IMOS da obra.\n\n"
+        f"Pastas verificadas: {', '.join(str(path) for path in folder_candidates[:5])}"
+    )
 
 
 def _newest_existing(paths: Iterable[Path]) -> Optional[Path]:
@@ -567,6 +804,582 @@ def _fmt_ts(value: float) -> str:
     if not value:
         return "-"
     return datetime.fromtimestamp(value).strftime("%d-%m-%Y %H:%M")
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return float(path.stat().st_mtime)
+    except Exception:
+        return 0.0
+
+
+def _prepare_caderno_encargos_with_excel(
+    *,
+    workbook_path: Path,
+    image_path: Path,
+    run_print_macro: bool,
+    copies: int,
+) -> str:
+    try:
+        win32_client = importlib.import_module("win32com.client")
+        pythoncom = importlib.import_module("pythoncom")
+    except Exception as exc:
+        raise RuntimeError(
+            "A preparacao/impressao do Caderno de Encargos requer o pacote 'pywin32' instalado."
+        ) from exc
+
+    worksheet_name = _prepare_caderno_encargos_with_powershell(
+        workbook_path=workbook_path,
+        image_path=image_path,
+    )
+    workbook_name = workbook_path.name
+    if not _workbook_has_in_cell_picture_data(workbook_path):
+        raise RuntimeError(
+            "O Excel nao gravou a imagem IMOS como 'na celula'. "
+            "A imagem flutuante foi mantida e a preparacao foi interrompida."
+        )
+
+    _force_caderno_duplex_long_edge(workbook_path)
+
+    if run_print_macro:
+        pythoncom.CoInitialize()
+        excel = None
+        workbook = None
+        try:
+            excel = win32_client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            try:
+                excel.AutomationSecurity = 1
+            except Exception:
+                pass
+
+            workbook = excel.Workbooks.Open(str(workbook_path))
+            worksheet = _resolve_caderno_worksheet(workbook)
+            worksheet.Activate()
+            for _ in range(max(1, copies)):
+                _run_excel_macro(excel, workbook_name, CADERNO_PRINT_MACRO_NAME)
+        finally:
+            if workbook is not None:
+                try:
+                    workbook.Close(False)
+                except Exception:
+                    pass
+            if excel is not None:
+                try:
+                    excel.Quit()
+                except Exception:
+                    pass
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+    return worksheet_name
+
+
+def _prepare_caderno_encargos_with_powershell(
+    *,
+    workbook_path: Path,
+    image_path: Path,
+) -> str:
+    script_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".ps1", delete=False) as handle:
+            handle.write(_caderno_prepare_ps_script())
+            script_path = handle.name
+
+        cmd = [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-STA",
+            "-File",
+            script_path,
+            str(workbook_path),
+            str(image_path),
+        ]
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
+            creationflags=creationflags,
+        )
+        if result.returncode != 0:
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            detail = "\n".join(part for part in (stderr, stdout) if part)
+            raise RuntimeError(detail or f"Codigo de saida: {result.returncode}")
+
+        worksheet_name = (result.stdout or "").strip().splitlines()
+        return worksheet_name[-1].strip() if worksheet_name else CADERNO_WORKSHEET_CANDIDATES[0]
+    finally:
+        if script_path:
+            try:
+                os.unlink(script_path)
+            except Exception:
+                pass
+
+
+def _caderno_prepare_ps_script() -> str:
+    return r"""
+param(
+    [Parameter(Mandatory = $true)][string]$WorkbookPath,
+    [Parameter(Mandatory = $true)][string]$ImagePath
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Get-CadernoWorksheet($Workbook) {
+    foreach ($candidate in @('CD&RP', '2_CAD_ENCARGOS')) {
+        try {
+            return $Workbook.Worksheets.Item($candidate)
+        } catch {
+        }
+    }
+    for ($index = 1; $index -le $Workbook.Worksheets.Count; $index++) {
+        $worksheet = $Workbook.Worksheets.Item($index)
+        $name = [string]$worksheet.Name
+        if ($name.ToLower().Contains('cd&rp') -or $name.ToLower().Contains('cad')) {
+            return $worksheet
+        }
+    }
+    return $Workbook.Worksheets.Item(1)
+}
+
+function Remove-CadernoFloatingPictures($Worksheet) {
+    for ($index = $Worksheet.Shapes.Count; $index -ge 1; $index--) {
+        try {
+            $shape = $Worksheet.Shapes.Item($index)
+        } catch {
+            continue
+        }
+
+        $shapeType = 0
+        try {
+            $shapeType = [int]$shape.Type
+        } catch {
+            $shapeType = 0
+        }
+        if ($shapeType -notin @(11, 13)) {
+            continue
+        }
+        try {
+            $shape.Delete()
+        } catch {
+        }
+    }
+}
+
+$excel = $null
+$workbook = $null
+$worksheetName = 'CD&RP'
+try {
+    $excel = New-Object -ComObject Excel.Application
+    $excel.Visible = $false
+    $excel.DisplayAlerts = $false
+    try {
+        $excel.AutomationSecurity = 3
+    } catch {
+    }
+
+    $workbook = $excel.Workbooks.Open($WorkbookPath)
+    $worksheet = Get-CadernoWorksheet $workbook
+    $worksheet.Activate() | Out-Null
+    $worksheet.PageSetup.Orientation = 1
+    $worksheet.PageSetup.PaperSize = 9
+    $target = $worksheet.Range('A17').MergeArea
+    $left = [double]$target.Left
+    $top = [double]$target.Top
+    $width = [double]$target.Width
+    $height = [double]$target.Height
+    $shape = $worksheet.Shapes.AddPicture(
+        $ImagePath,
+        $false,
+        $true,
+        $left,
+        $top,
+        $width,
+        $height
+    )
+    $shape.Name = 'IMOS_PNG_A17'
+    try {
+        $shape.AlternativeText = 'IMOS_PNG_A17'
+    } catch {
+    }
+    try {
+        $shape.Placement = 1
+    } catch {
+    }
+    try {
+        $shape.PrintObject = $true
+    } catch {
+    }
+    try {
+        $shape.ZOrder(0)
+    } catch {
+    }
+
+    $shape.Select() | Out-Null
+    $shape.PlacePictureInCell()
+    $worksheetName = [string]$worksheet.Name
+    $workbook.Save()
+} finally {
+    if ($workbook -ne $null) {
+        try {
+            $workbook.Close($false)
+        } catch {
+        }
+    }
+    if ($excel -ne $null) {
+        try {
+            $excel.Quit()
+        } catch {
+        }
+    }
+}
+
+$excel = $null
+$workbook = $null
+try {
+    $excel = New-Object -ComObject Excel.Application
+    $excel.Visible = $false
+    $excel.DisplayAlerts = $false
+    try {
+        $excel.AutomationSecurity = 3
+    } catch {
+    }
+
+    $workbook = $excel.Workbooks.Open($WorkbookPath)
+    $worksheet = Get-CadernoWorksheet $workbook
+    $worksheet.Activate() | Out-Null
+    Remove-CadernoFloatingPictures $worksheet
+    $worksheetName = [string]$worksheet.Name
+    $workbook.Save()
+} finally {
+    if ($workbook -ne $null) {
+        try {
+            $workbook.Close($false)
+        } catch {
+        }
+    }
+    if ($excel -ne $null) {
+        try {
+            $excel.Quit()
+        } catch {
+        }
+    }
+}
+
+Write-Output $worksheetName
+"""
+
+
+def _resolve_caderno_worksheet(workbook):
+    for candidate in CADERNO_WORKSHEET_CANDIDATES:
+        try:
+            return workbook.Worksheets(candidate)
+        except Exception:
+            continue
+
+    for index in range(1, int(workbook.Worksheets.Count) + 1):
+        worksheet = workbook.Worksheets(index)
+        worksheet_name = str(getattr(worksheet, "Name", "") or "").strip().casefold()
+        if "cd&rp" in worksheet_name or "cad" in worksheet_name:
+            return worksheet
+
+    return workbook.Worksheets(1)
+
+
+def _resolve_caderno_target_range(worksheet):
+    anchor = worksheet.Range("A17")
+    try:
+        if bool(anchor.MergeCells):
+            return anchor.MergeArea
+    except Exception:
+        pass
+    return worksheet.Range("A17:O24")
+
+
+def _replace_caderno_imos_picture(excel, worksheet, image_path: Path) -> None:
+    target = _resolve_caderno_target_range(worksheet)
+    shape = worksheet.Shapes.AddPicture(
+        str(image_path),
+        False,
+        True,
+        float(target.Left),
+        float(target.Top),
+        float(target.Width),
+        float(target.Height),
+    )
+    shape.Name = CADERNO_IMAGE_SHAPE_NAME
+    try:
+        shape.AlternativeText = CADERNO_IMAGE_SHAPE_NAME
+    except Exception:
+        pass
+    try:
+        shape.Placement = XL_PLACEMENT_MOVE_AND_SIZE
+    except Exception:
+        pass
+    try:
+        shape.PrintObject = True
+    except Exception:
+        pass
+    try:
+        shape.ZOrder(0)
+    except Exception:
+        pass
+    if _try_place_caderno_picture_in_cell(excel, shape):
+        return
+
+    try:
+        shape.Delete()
+    except Exception:
+        pass
+    raise RuntimeError("O Excel nao conseguiu converter a imagem IMOS para 'Colocar na Celula'.")
+
+
+def _try_place_caderno_picture_in_cell(excel, shape) -> bool:
+    try:
+        shape.Select()
+    except Exception:
+        pass
+    try:
+        shape.PlacePictureInCell()
+        logger.info("Excel converteu a imagem IMOS para 'Colocar na Celula' via Shape.PlacePictureInCell().")
+        return True
+    except Exception as exc:
+        logger.warning(
+            "Shape.PlacePictureInCell() falhou para a imagem IMOS. "
+            "Vou tentar fallback por idMso. Erro: %s",
+            exc,
+        )
+
+    command_bars = getattr(excel, "CommandBars", None)
+    if command_bars is None:
+        return False
+
+    last_error = None
+    for candidate in CADERNO_PLACE_IN_CELL_IDMSO_CANDIDATES:
+        try:
+            shape.Select()
+        except Exception:
+            pass
+        try:
+            command_bars.ExecuteMso(candidate)
+            logger.info("Excel converteu a imagem IMOS para 'Colocar na Celula' com idMso=%s", candidate)
+            return True
+        except Exception as exc:
+            last_error = exc
+
+    if last_error is not None:
+        logger.warning(
+            "Nao foi possivel executar o comando nativo do Excel para 'Colocar na Celula'. "
+            "A imagem IMOS ficara como shape ajustada ao intervalo alvo. Ultimo erro: %s",
+            last_error,
+        )
+    return False
+
+
+def _delete_caderno_previous_shapes(worksheet, target_range, *, delete_main: bool) -> None:
+    for index in range(int(worksheet.Shapes.Count), 0, -1):
+        try:
+            shape = worksheet.Shapes(index)
+        except Exception:
+            continue
+
+        shape_name = str(getattr(shape, "Name", "") or "").strip().casefold()
+        alternative = str(getattr(shape, "AlternativeText", "") or "").strip().casefold()
+        if shape_name == CADERNO_IMAGE_SHAPE_NAME.casefold() or alternative == CADERNO_IMAGE_SHAPE_NAME.casefold():
+            if delete_main:
+                try:
+                    shape.Delete()
+                except Exception:
+                    pass
+            continue
+
+        try:
+            shape_type = int(shape.Type)
+        except Exception:
+            shape_type = 0
+        if shape_type not in MSO_SHAPE_PICTURE_TYPES:
+            continue
+
+        if delete_main and _shape_overlaps_target(shape, target_range):
+            try:
+                shape.Delete()
+            except Exception:
+                pass
+            continue
+
+        try:
+            is_thumbnail = float(shape.Width) < 60 and float(shape.Height) < 60 and float(shape.Top) < float(target_range.Top)
+        except Exception:
+            is_thumbnail = False
+        if is_thumbnail:
+            try:
+                shape.Delete()
+            except Exception:
+                pass
+
+
+def _shape_overlaps_target(shape, target_range) -> bool:
+    try:
+        shape_left = float(shape.Left)
+        shape_top = float(shape.Top)
+        shape_right = shape_left + float(shape.Width)
+        shape_bottom = shape_top + float(shape.Height)
+        target_left = float(target_range.Left)
+        target_top = float(target_range.Top)
+        target_right = target_left + float(target_range.Width)
+        target_bottom = target_top + float(target_range.Height)
+    except Exception:
+        return False
+
+    return (
+        shape_left < target_right
+        and shape_right > target_left
+        and shape_top < target_bottom
+        and shape_bottom > target_top
+    )
+
+
+def _cleanup_caderno_floating_shapes(workbook_path: Path) -> None:
+    try:
+        win32_client = importlib.import_module("win32com.client")
+        pythoncom = importlib.import_module("pythoncom")
+    except Exception as exc:
+        raise RuntimeError(
+            "A limpeza final do Caderno de Encargos requer o pacote 'pywin32' instalado."
+        ) from exc
+
+    pythoncom.CoInitialize()
+    excel = None
+    workbook = None
+    try:
+        excel = win32_client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        workbook = excel.Workbooks.Open(str(workbook_path))
+        worksheet = _resolve_caderno_worksheet(workbook)
+        worksheet.Activate()
+        target = _resolve_caderno_target_range(worksheet)
+        _delete_caderno_previous_shapes(worksheet, target, delete_main=True)
+        workbook.Save()
+    finally:
+        if workbook is not None:
+            try:
+                workbook.Close(False)
+            except Exception:
+                pass
+        if excel is not None:
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
+
+
+def _workbook_has_in_cell_picture_data(workbook_path: Path) -> bool:
+    if not workbook_path.exists():
+        return False
+
+    try:
+        with zipfile.ZipFile(workbook_path, "r") as archive:
+            return archive.getinfo("xl/richData/rdrichvalue.xml") is not None
+    except KeyError:
+        return False
+    except Exception:
+        return False
+
+
+def _configure_caderno_page_setup(worksheet) -> None:
+    page_setup = worksheet.PageSetup
+    try:
+        page_setup.Orientation = XL_ORIENTATION_PORTRAIT
+    except Exception:
+        pass
+    try:
+        page_setup.PaperSize = XL_PAPER_A4
+    except Exception:
+        pass
+
+
+def _force_caderno_duplex_long_edge(workbook_path: Path) -> None:
+    if not workbook_path.exists():
+        raise ValueError(f"Caderno de Encargos nao encontrado:\n{workbook_path}")
+
+    temp_path = workbook_path.with_name(f"{workbook_path.stem}__tmp_duplex{workbook_path.suffix}")
+    patched_any = False
+    with zipfile.ZipFile(workbook_path, "r") as src_zip, zipfile.ZipFile(temp_path, "w") as dst_zip:
+        for info in src_zip.infolist():
+            data = src_zip.read(info.filename)
+            if info.filename.startswith("xl/printerSettings/") and info.filename.lower().endswith(".bin"):
+                patched = _patch_printer_settings_blob(data)
+                if patched is not None:
+                    data = patched
+                    patched_any = True
+            dst_zip.writestr(info, data)
+
+    if patched_any:
+        shutil.move(str(temp_path), str(workbook_path))
+        return
+
+    try:
+        temp_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+    raise RuntimeError(
+        "Nao foi possivel localizar a configuracao de impressao interna do Caderno de Encargos para ativar duplex."
+    )
+
+
+def _patch_printer_settings_blob(data: bytes) -> Optional[bytes]:
+    if not data or len(data) < 96:
+        return None
+
+    blob = bytearray(data)
+    try:
+        dm_fields = struct.unpack_from("<I", blob, 72)[0]
+        dm_size = struct.unpack_from("<H", blob, 68)[0]
+    except struct.error:
+        return None
+
+    if dm_size < 96:
+        return None
+
+    dm_fields |= DM_DUPLEX_FLAG
+    try:
+        struct.pack_into("<I", blob, 72, dm_fields)
+        struct.pack_into("<h", blob, 94, DMDUP_VERTICAL)
+    except struct.error:
+        return None
+    return bytes(blob)
+
+
+def _run_excel_macro(excel, workbook_name: str, macro_name: str) -> None:
+    candidates = (
+        macro_name,
+        f"{workbook_name}!{macro_name}",
+        f"'{workbook_name}'!{macro_name}",
+    )
+    last_error = None
+    for candidate in candidates:
+        try:
+            excel.Run(candidate)
+            return
+        except Exception as exc:
+            last_error = exc
+    if last_error is not None:
+        raise RuntimeError(f"Falha ao executar a macro '{macro_name}': {last_error}") from last_error
 
 
 def _replace_tree(source: Path, target: Path) -> None:

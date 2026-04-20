@@ -14,7 +14,13 @@ from Martelo_Orcamentos_V2.app.services import dados_gerais as svc_dg
 from Martelo_Orcamentos_V2.app.services import materias_primas as svc_mp
 from Martelo_Orcamentos_V2.ui.delegates import DadosGeraisDelegate
 
-from .dados_gerais import DadosGeraisPage, PREVIEW_COLUMNS, _format_preview_value
+from .dados_gerais import (
+    DadosGeraisPage,
+    PREVIEW_COLUMNS,
+    _describe_model,
+    _format_preview_value,
+    _split_model_name,
+)
 from ..utils.header import apply_highlight_text, init_highlight_label
 
 logger = logging.getLogger(__name__)
@@ -784,6 +790,24 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         for model in models:
             item = QtWidgets.QListWidgetItem(self._model_display(model))
             item.setData(QtCore.Qt.UserRole, getattr(model, "id", None))
+            if origin == "local":
+                item.setToolTip(
+                    "\n".join(
+                        [
+                            f"Nome: {self._model_display(model)}",
+                            "Origem: Dados Items",
+                            f"Criado em: {getattr(model, 'created_at', '-') or '-'}",
+                        ]
+                    )
+                )
+            else:
+                item.setToolTip(
+                    _describe_model(
+                        model,
+                        getattr(self.current_user, "id", None),
+                        "__GLOBAL__|",
+                    )
+                )
             list_widget.addItem(item)
         list_widget.blockSignals(False)
 
@@ -795,16 +819,8 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         table.setColumnCount(0)
 
     def _model_display(self, model: Any) -> str:
-        display = getattr(model, "nome_modelo", str(model))
-        if display.startswith("__GLOBAL__|"):
-            display = f"[Global] {display[len('__GLOBAL__|'):]}"
-        created = getattr(model, "created_at", None)
-        if created:
-            try:
-                display += f" ({created})"
-            except Exception:
-                pass
-        return display
+        clean, _ = _split_model_name(getattr(model, "nome_modelo", str(model)), "__GLOBAL__|")
+        return clean or "(sem nome)"
 
     def _on_model_selected(self, origin: str) -> None:
         list_widget = self.models_list[origin]
@@ -970,7 +986,11 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
         model_id = item.data(QtCore.Qt.UserRole)
         if not model_id:
             return
-        base_name = item.text().split(" (")[0]
+        stored_model = next((m for m in self.models.get(origin, []) if getattr(m, "id", None) == model_id), None)
+        base_name, is_global = _split_model_name(
+            getattr(stored_model, "nome_modelo", item.text()),
+            "__GLOBAL__|",
+        )
         new_name, ok = QtWidgets.QInputDialog.getText(self, "Renomear Modelo", "Novo nome:", text=base_name)
         if not ok or not new_name.strip():
             return
@@ -984,7 +1004,8 @@ class ImportarDadosItemsDialog(QtWidgets.QDialog):
                 )
             else:
                 user_id = getattr(self.current_user, "id", None)
-                svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=user_id, novo_nome=new_name.strip())
+                final_name = f"__GLOBAL__|{new_name.strip()}" if is_global else new_name.strip()
+                svc_dg.renomear_modelo(self.session, modelo_id=model_id, user_id=user_id, novo_nome=final_name)
             self.session.commit()
         except Exception as exc:
             self.session.rollback()
@@ -1065,9 +1086,15 @@ class ImportarMultiDadosItemsDialog(QtWidgets.QDialog):
         self.selections: Dict[str, Tuple[str, int, bool]] = {}
 
         self.setWindowTitle("Importar Multi Dados Items")
-        self.resize(620, 480)
+        self.resize(760, 560)
 
         layout = QtWidgets.QVBoxLayout(self)
+        info = QtWidgets.QLabel(
+            "Escolha para cada tabela um modelo vindo de Dados Items ou de Dados Gerais.\n"
+            "As duas origens aparecem separadas para evitar confusao."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
 
         self.sections: Dict[str, Dict[str, Any]] = {}
 
@@ -1078,38 +1105,68 @@ class ImportarMultiDadosItemsDialog(QtWidgets.QDialog):
             (svc_di.MENU_ACABAMENTOS, "Acabamentos"),
         ):
             box = QtWidgets.QGroupBox(titulo)
-            box_layout = QtWidgets.QHBoxLayout(box)
+            box_layout = QtWidgets.QVBoxLayout(box)
 
-            combo = QtWidgets.QComboBox()
-            combo.addItem("(nenhum)", None)
+            tabs = QtWidgets.QTabWidget()
+            local_combo = QtWidgets.QComboBox()
+            global_combo = QtWidgets.QComboBox()
+            local_combo.addItem("(nenhum)", None)
+            global_combo.addItem("(nenhum)", None)
+
             for model in svc_di.listar_modelos(
                 self.session,
                 orcamento_id=self.context.orcamento_id,
                 item_id=self.context.item_id,
             ):
-                combo.addItem(f"Local - {model.nome_modelo}", ("local", model.id))
+                local_combo.addItem(self._model_display(model), ("local", model.id))
 
             user_id = getattr(self.current_user, "id", None)
             for model in svc_dg.listar_modelos(self.session, user_id=user_id, tipo_menu=menu):
-                combo.addItem(f"Global - {model.nome_modelo}", ("global", model.id))
+                global_combo.addItem(self._model_display(model), ("global", model.id))
+
+            local_page = QtWidgets.QWidget()
+            local_layout = QtWidgets.QVBoxLayout(local_page)
+            local_layout.setContentsMargins(6, 6, 6, 6)
+            local_layout.addWidget(local_combo)
+            tabs.addTab(local_page, f"Dados Items ({max(0, local_combo.count() - 1)})")
+
+            global_page = QtWidgets.QWidget()
+            global_layout = QtWidgets.QVBoxLayout(global_page)
+            global_layout.setContentsMargins(6, 6, 6, 6)
+            global_layout.addWidget(global_combo)
+            tabs.addTab(global_page, f"Dados Gerais ({max(0, global_combo.count() - 1)})")
+
+            if local_combo.count() <= 1 and global_combo.count() > 1:
+                tabs.setCurrentIndex(1)
 
             replace_check = QtWidgets.QCheckBox("Substituir", checked=True)
 
-            box_layout.addWidget(combo, 1)
+            box_layout.addWidget(tabs)
             box_layout.addWidget(replace_check)
 
             layout.addWidget(box)
-            self.sections[menu] = {"combo": combo, "replace": replace_check}
+            self.sections[menu] = {
+                "tabs": tabs,
+                "local_combo": local_combo,
+                "global_combo": global_combo,
+                "replace": replace_check,
+            }
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    @staticmethod
+    def _model_display(model: Any) -> str:
+        clean, _ = _split_model_name(getattr(model, "nome_modelo", str(model)), "__GLOBAL__|")
+        return clean or "(sem nome)"
+
     def _on_accept(self) -> None:
         selections: Dict[str, Tuple[str, int, bool]] = {}
         for menu, widgets in self.sections.items():
-            combo: QtWidgets.QComboBox = widgets["combo"]
+            tabs: QtWidgets.QTabWidget = widgets["tabs"]
+            combo: QtWidgets.QComboBox = widgets["global_combo"] if tabs.currentIndex() == 1 else widgets["local_combo"]
             data = combo.currentData()
             if not data:
                 continue

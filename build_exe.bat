@@ -1,51 +1,46 @@
 @echo off
-REM Build script para gerar executável standalone do Martelo_Orcamentos_V2
-REM Passos:
-REM 1) Opcional: ativar venv (.venv\Scripts\activate). Caso contrário usa python global.
-REM 2) Instala PyInstaller (se não existir) e executa o build.
+setlocal EnableExtensions
 
+rem Build do executavel standalone do Martelo_Orcamentos_V2.
+rem Uso:
+rem   .\build_exe.bat
 
-rem .\.venv_Martelo\Scripts\Activate.ps1   
-rem .\build_exe.bat    -> para executar este script
+cd /d "%~dp0"
 
-setlocal
+set "ROOT=%CD%"
+set "PKG=%ROOT%\Martelo_Orcamentos_V2"
 
-set "ROOT=%~dp0"
-if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
-set "PKG=%ROOT%\\Martelo_Orcamentos_V2"
-
-REM Detecta python do venv se existir
-set PYTHON=python
+set "PYTHON=python"
 if exist ".venv_Martelo\Scripts\python.exe" (
-    set PYTHON=.venv_Martelo\Scripts\python.exe
+    set "PYTHON=.venv_Martelo\Scripts\python.exe"
 ) else if exist ".venv\Scripts\python.exe" (
-    set PYTHON=.venv\Scripts\python.exe
+    set "PYTHON=.venv\Scripts\python.exe"
 )
 
 echo ===========================================
 echo Usando Python: %PYTHON%
 echo ===========================================
+echo A executar PyInstaller. Este passo pode demorar varios minutos.
 
-REM Garante PyInstaller instalado/atualizado
 %PYTHON% -m pip install --upgrade pyinstaller
 if errorlevel 1 (
-    echo Falha ao instalar pyinstaller
+    echo [ERRO] Falha ao instalar ou atualizar o PyInstaller.
     exit /b 1
 )
 
-REM Limpa builds anteriores
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if not exist build mkdir build
 
-REM Executa PyInstaller
-set "ICON_PATH=%ROOT%\\martelo.ico"
-if not exist "%ICON_PATH%" set "ICON_PATH=%PKG%\\martelo.ico"
-set ICON_FLAG=
+set "ICON_PATH=%ROOT%\martelo.ico"
+if not exist "%ICON_PATH%" set "ICON_PATH=%PKG%\martelo.ico"
+
+set "ICON_FLAG="
 if exist "%ICON_PATH%" (
-    set ICON_FLAG=--icon "%ICON_PATH%"
+    set "ICON_FLAG=--icon=%ICON_PATH%"
+    echo Icone: %ICON_PATH%
 ) else (
-    echo [AVISO] Icone martelo.ico nao encontrado; prosseguir sem icon.
+    echo [AVISO] Icone martelo.ico nao encontrado. O build segue sem icon.
 )
 
 %PYTHON% -m PyInstaller ^
@@ -74,34 +69,31 @@ if exist "%ICON_PATH%" (
     --paths "%PKG%" ^
     --add-data "%ICON_PATH%;." ^
     --add-data "%ICON_PATH%;Martelo_Orcamentos_V2" ^
-    --add-data "%PKG%\\ui\\forms;Martelo_Orcamentos_V2/ui/forms" ^
+    --add-data "%PKG%\ui\forms;Martelo_Orcamentos_V2/ui/forms" ^
     --collect-all PySide6 ^
-    "%PKG%\\run_dev.py"
+    "%PKG%\run_dev.py"
 
 if errorlevel 1 (
-    echo Build falhou.
+    echo [ERRO] Build do executavel falhou.
     exit /b 1
 )
 
-REM Copia .env para a pasta do exe para garantir configuracao de BD/email
-set DIST_ENV=dist\Martelo_Orcamentos_V2\.env
+set "DIST_ENV=dist\Martelo_Orcamentos_V2\.env"
 if exist ".env" (
     copy /Y ".env" "%DIST_ENV%" >nul
     echo Copiado .env para %DIST_ENV%
 ) else (
-    echo [AVISO] Ficheiro .env nao encontrado na raiz; nao foi copiado.
+    echo [AVISO] Ficheiro .env nao encontrado na raiz. Nao foi copiado.
 )
 
-REM Cria ficheiro de log (o programa tambem o vai criar/truncar no arranque)
-set DIST_LOG=dist\Martelo_Orcamentos_V2\martelo_debug.log
+set "DIST_LOG=dist\Martelo_Orcamentos_V2\martelo_debug.log"
 type nul > "%DIST_LOG%"
 
 echo.
 echo ============================================================
 echo Build concluido.
-echo Copie a pasta dist\Martelo_Orcamentos_V2 para outro PC e
-echo execute Martelo_Orcamentos_V2.exe (manter estrutura de pastas).
-echo Se faltar runtime do VC++ instale o redistribuivel x64.
+echo Executavel: %ROOT%\dist\Martelo_Orcamentos_V2\Martelo_Orcamentos_V2.exe
+echo Nota: manter a estrutura da pasta dist\Martelo_Orcamentos_V2.
 echo ============================================================
 
 endlocal

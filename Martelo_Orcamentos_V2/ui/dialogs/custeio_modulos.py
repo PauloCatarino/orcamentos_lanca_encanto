@@ -80,6 +80,27 @@ def _configurar_janela_dialog(dialog: QtWidgets.QDialog, *, default_width: int, 
     dialog.move(x, y)
 
 
+def _attach_clear_search_action(
+    line_edit: QtWidgets.QLineEdit,
+    *,
+    tooltip: str = "Limpar pesquisa",
+) -> QtGui.QAction:
+    action = line_edit.addAction(
+        line_edit.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton),
+        QtWidgets.QLineEdit.TrailingPosition,
+    )
+    action.setToolTip(tooltip)
+    action.setVisible(False)
+
+    def _toggle(text: str) -> None:
+        action.setVisible(bool(str(text or "").strip()))
+
+    line_edit.textChanged.connect(_toggle)
+    action.triggered.connect(line_edit.clear)
+    _toggle(line_edit.text())
+    return action
+
+
 class SaveModuloDialog(QtWidgets.QDialog):
     def __init__(
         self,
@@ -336,6 +357,10 @@ class ImportModuloDialog(QtWidgets.QDialog):
         lbl_search = QtWidgets.QLabel("Pesquisar módulos (use % para separar palavras):")
         self.edit_search = QtWidgets.QLineEdit()
         self.edit_search.setPlaceholderText("Ex: roupeiro % portas % gavetas")
+        self._clear_search_action = _attach_clear_search_action(
+            self.edit_search,
+            tooltip="Limpar pesquisa de modulos",
+        )
         self.edit_search.textChanged.connect(self._rebuild_list)
         self.lbl_results = QtWidgets.QLabel("0 módulos")
         self.lbl_results.setStyleSheet("color: #666666;")
@@ -720,6 +745,10 @@ class GerenciadorModulosDialog(QtWidgets.QDialog):
         lbl_search = QtWidgets.QLabel("Pesquisar módulos (use % para separar palavras):")
         self.edit_search = QtWidgets.QLineEdit()
         self.edit_search.setPlaceholderText("Ex: cozinha % 700")
+        self._clear_search_action = _attach_clear_search_action(
+            self.edit_search,
+            tooltip="Limpar pesquisa de modulos",
+        )
         self.edit_search.textChanged.connect(self._rebuild_list)
         search_row.addWidget(lbl_search)
         search_row.addWidget(self.edit_search, 1)

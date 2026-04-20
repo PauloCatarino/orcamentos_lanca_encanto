@@ -332,3 +332,128 @@ ORDER BY BI.LORDEM ASC;
     cfg = load_phc_config(db)
     conn_str = build_connection_string(cfg)
     return run_select(conn_str, query)
+
+
+def _build_phc_encomenda_estado_query(
+    *,
+    num_enc_phc: str | int | None = None,
+    ano: str | int | None = None,
+    min_year: str | int | None = None,
+    max_rows: int | None = None,
+) -> str:
+    filters = [
+        "BI.NDOS = 1",
+        "LTRIM(RTRIM(BI.NMDOS)) = 'Encomenda de Cliente'",
+    ]
+
+    if num_enc_phc is not None and str(num_enc_phc).strip():
+        enc_digits = re.sub(r"\D", "", str(num_enc_phc or ""))
+        if not enc_digits:
+            raise ValueError("Num_Enc_PHC invalido.")
+        filters.append(f"BI.OBRANO = {int(enc_digits)}")
+
+    if ano is not None and str(ano).strip():
+        try:
+            ano_int = int(re.sub(r"\D", "", str(ano)))
+        except Exception as exc:
+            raise ValueError("Ano invalido.") from exc
+        if ano_int < 1900 or ano_int > 2200:
+            raise ValueError("Ano invalido.")
+        filters.append(f"BI.DATAOBRA >= '{ano_int:04d}-01-01'")
+        filters.append(f"BI.DATAOBRA < '{ano_int + 1:04d}-01-01'")
+    elif min_year is not None and str(min_year).strip():
+        try:
+            min_year_int = int(re.sub(r"\D", "", str(min_year)))
+        except Exception as exc:
+            raise ValueError("Ano minimo invalido.") from exc
+        if min_year_int < 1900 or min_year_int > 2200:
+            raise ValueError("Ano minimo invalido.")
+        filters.append(f"BI.DATAOBRA >= '{min_year_int:04d}-01-01'")
+
+    top_clause = ""
+    if max_rows is not None:
+        try:
+            max_rows_int = int(max_rows)
+        except Exception as exc:
+            raise ValueError("Maximo de linhas invalido.") from exc
+        if max_rows_int < 0:
+            raise ValueError("Maximo de linhas invalido.")
+        if max_rows_int > 0:
+            top_clause = f"TOP ({max_rows_int}) "
+
+    where_sql = "\n  AND ".join(filters)
+    return f"""
+SELECT DISTINCT {top_clause}
+    YEAR(BI.DATAOBRA) AS Ano,
+    BI.OBRANO AS Enc_No,
+    LTRIM(RTRIM(BI.NOME)) AS BI_Nome,
+    LTRIM(RTRIM(BO.NOME)) AS BO_Nome,
+    LTRIM(RTRIM(CL.NOME)) AS CL_Nome,
+    CAST(CL.NO AS VARCHAR(64)) AS Num_PHC,
+    LTRIM(RTRIM(BI.NMDOC)) AS NMDoc,
+    LTRIM(RTRIM(BI.NMDOS)) AS BI_Nmdos,
+    LTRIM(RTRIM(BO.NMDOS)) AS BO_Nmdos,
+    LTRIM(RTRIM(BI.TABELA1)) AS BI_Tabela1,
+    LTRIM(RTRIM(BO.TABELA1)) AS BO_Tabela1,
+    LTRIM(RTRIM(COALESCE(NULLIF(BO.TABELA1, ''), NULLIF(BI.TABELA1, ''), ''))) AS Estado_PHC,
+    BI.FDATA AS FDataRaw,
+    CONVERT(VARCHAR(10), BI.FDATA, 104) AS FData,
+    BI.DATAOBRA AS BI_DataObraRaw,
+    CONVERT(VARCHAR(10), BI.DATAOBRA, 104) AS BI_DataObra,
+    BO.DATAOBRA AS BO_DataObraRaw,
+    CONVERT(VARCHAR(10), BO.DATAOBRA, 104) AS BO_DataObra,
+    BI.BOSTAMP AS BI_Bostamp,
+    BO.BOSTAMP AS BO_Bostamp,
+    BO.OBRANO AS BO_Obrano
+FROM BI WITH (NOLOCK)
+LEFT JOIN BO WITH (NOLOCK) ON BO.BOSTAMP = BI.BOSTAMP
+LEFT JOIN CL WITH (NOLOCK) ON LTRIM(RTRIM(CL.NOME)) = LTRIM(RTRIM(BI.NOME))
+WHERE {where_sql}
+ORDER BY FDataRaw DESC, Enc_No DESC, BI_Bostamp DESC;
+""".strip()
+
+
+def query_phc_encomenda_estado_rows(
+    db: Session,
+    *,
+    num_enc_phc: str | int,
+    ano: str | int | None = None,
+    max_rows: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Consulta read-only de diagnostico/estado da encomenda PHC via BI/BO/CL.
+
+    Estado PHC esperado em `BO.TABELA1` (fallback `BI.TABELA1`), por ex.:
+      - 5 - FINALIZADO
+      - 7 - ARQUIVADO
+    """
+    query = _build_phc_encomenda_estado_query(
+        num_enc_phc=num_enc_phc,
+        ano=ano,
+        max_rows=max_rows,
+    )
+    cfg = load_phc_config(db)
+    conn_str = build_connection_string(cfg)
+    return run_select(conn_str, query)
+
+
+def query_phc_estado_debug_rows(
+    db: Session,
+    *,
+    ano: str | int | None = None,
+    min_year: str | int | None = None,
+    max_rows: int = 5000,
+    num_enc_phc: str | int | None = None,
+) -> List[Dict[str, Any]]:
+    """
+    Consulta read-only para a tab temporaria de diagnostico do estado PHC.
+    """
+    query = _build_phc_encomenda_estado_query(
+        num_enc_phc=num_enc_phc,
+        ano=ano,
+        min_year=min_year,
+        max_rows=max_rows,
+    )
+    cfg = load_phc_config(db)
+    conn_str = build_connection_string(cfg)
+    return run_select(conn_str, query)

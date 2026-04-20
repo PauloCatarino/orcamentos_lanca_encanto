@@ -87,6 +87,12 @@ class DescricoesPredefinidasDialog(QtWidgets.QDialog):
 
         self.edit_search = QtWidgets.QLineEdit(self)
         self.edit_search.setPlaceholderText("Pesquisar (use % para separar palavras)")
+        self._clear_search_action = self.edit_search.addAction(
+            self.style().standardIcon(QtWidgets.QStyle.SP_DialogResetButton),
+            QtWidgets.QLineEdit.TrailingPosition,
+        )
+        self._clear_search_action.setToolTip("Limpar pesquisa")
+        self._clear_search_action.setVisible(False)
         layout.addWidget(self.edit_search)
 
         self.list = QtWidgets.QListWidget(self)
@@ -117,6 +123,8 @@ class DescricoesPredefinidasDialog(QtWidgets.QDialog):
         layout.addLayout(btn_row2)
 
         self.edit_search.textChanged.connect(self._apply_filter)
+        self.edit_search.textChanged.connect(self._update_clear_search_button)
+        self._clear_search_action.triggered.connect(self.edit_search.clear)
         self.btn_add.clicked.connect(self._on_add)
         self.btn_edit.clicked.connect(self._on_edit)
         self.btn_remove.clicked.connect(self._on_remove)
@@ -126,6 +134,10 @@ class DescricoesPredefinidasDialog(QtWidgets.QDialog):
         self.btn_cancel.clicked.connect(self.reject)
 
         self._load_rows()
+
+    def _update_clear_search_button(self, text: str) -> None:
+        if hasattr(self, "_clear_search_action"):
+            self._clear_search_action.setVisible(bool(str(text or "").strip()))
 
     def event(self, event: QtCore.QEvent) -> bool:  # type: ignore[override]
         if event.type() == QtCore.QEvent.Type.HelpRequest:

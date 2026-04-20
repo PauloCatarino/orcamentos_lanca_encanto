@@ -6,7 +6,7 @@ ENV_APP_VERSION = "MARTELO_APP_VERSION"
 
 # Atualize este valor quando fizer release.
 # Nota: também pode definir a variável de ambiente MARTELO_APP_VERSION (ex.: no .env) para sobrepor.
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.2.4"
 
 
 def get_app_version() -> str:

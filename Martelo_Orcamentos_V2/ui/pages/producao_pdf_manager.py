@@ -11,6 +11,7 @@ except Exception:  # pragma: no cover - optional dependency
     QPdfDocument = None
 
 from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao
+from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
 from Martelo_Orcamentos_V2.app.services import pdf_printer
 from Martelo_Orcamentos_V2.ui.models.qt_table import SimpleTableModel
 from Martelo_Orcamentos_V2.ui.workers.pdf_scanner_worker import PDFScannerWorker
@@ -28,7 +29,7 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
         self._preview_buffer: Optional[QtCore.QBuffer] = None
         self._preview_path: Optional[str] = None
 
-        self.setWindowTitle("Imprimir PDFs")
+        self.setWindowTitle("Imprimir Documentos")
         self.resize(1650, 980)
         self.setMinimumWidth(1400)
         self.setMinimumHeight(900)
@@ -53,10 +54,10 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
         left_header.addWidget(self.lbl_path)
         header_row.addLayout(left_header, 1)
 
-        preview_box = QtWidgets.QGroupBox("Pre-visualizacao PDF")
+        preview_box = QtWidgets.QGroupBox("Pre-visualizacao")
         preview_box.setMinimumWidth(560)
         preview_layout = QtWidgets.QVBoxLayout(preview_box)
-        self.lbl_preview = QtWidgets.QLabel("Selecione um PDF na tabela.")
+        self.lbl_preview = QtWidgets.QLabel("Selecione um documento na tabela.")
         self.lbl_preview.setAlignment(QtCore.Qt.AlignCenter)
         self.lbl_preview.setFrameShape(QtWidgets.QFrame.Box)
         self.lbl_preview.setStyleSheet("background:#fafafa; color:#555;")
@@ -81,7 +82,7 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
         self.btn_history.setToolTip("Mostrar historico de impressoes (em desenvolvimento).")
         self.btn_print = QtWidgets.QPushButton("Imprimir Selecionados")
         self.btn_print.clicked.connect(self._on_print_selected)
-        self.btn_print.setToolTip("Enviar os PDFs selecionados para impressao.")
+        self.btn_print.setToolTip("Enviar os documentos selecionados para impressao.")
         buttons.addWidget(self.btn_reload)
         buttons.addWidget(self.btn_save)
         buttons.addWidget(self.btn_history)
@@ -109,7 +110,7 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
             columns=[
                 {"header": "", "attr": "selected", "type": "bool", "editable": True},
                 ("Prioridade", "priority"),
-                ("PDF", "file_name"),
+                ("Ficheiro", "file_name"),
                 ("Categoria", "category"),
                 ("Origem", "origin"),
                 ("Qt", "quantity"),
@@ -151,7 +152,7 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
             self.model.set_rows([])
             return
 
-        self._set_status("A procurar PDFs...")
+        self._set_status("A procurar documentos...")
         self.btn_print.setEnabled(False)
         self.btn_reload.setEnabled(False)
 
@@ -178,13 +179,13 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
 
     def _on_scan_finished(self, rows: Sequence[dict], error: str) -> None:
         if error:
-            self._set_status(f"Erro a procurar PDFs: {error}")
+            self._set_status(f"Erro a procurar documentos: {error}")
             self.model.set_rows([])
             self._update_preview(None)
         else:
             normalized = self._normalize_rows(rows)
             self.model.set_rows(normalized)
-            self._set_status(f"{len(normalized)} PDF(s) encontrados.")
+            self._set_status(f"{len(normalized)} documento(s) encontrados.")
             self._apply_column_sizes()
             self._select_first_row()
         self.btn_print.setEnabled(True)
@@ -206,7 +207,52 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
                     "orientation": orientation_norm,
                 }
             )
+        caderno_row = self._build_caderno_encargos_row()
+        if caderno_row is not None:
+            normalized.append(caderno_row)
+        normalized.sort(key=lambda r: (int(r.get("priority", 99)), str(r.get("file_name", "")).casefold()))
         return normalized
+
+    def _build_preparacao_context(self):
+        try:
+            return svc_producao_preparacao.resolve_preparacao_context(
+                self.session,
+                current_id=getattr(self.producao, "id", None),
+                pasta_servidor=str(getattr(self.producao, "pasta_servidor", "") or ""),
+                nome_enc_imos=str(getattr(self.producao, "nome_enc_imos_ix", "") or self._calc_nome_enc_imos_ix() or ""),
+                nome_plano_cut_rite=str(
+                    getattr(self.producao, "nome_plano_cut_rite", "") or self._calc_nome_plano_cut_rite() or ""
+                ),
+            )
+        except Exception:
+            return None
+
+    def _build_caderno_encargos_row(self) -> Optional[dict]:
+        context = self._build_preparacao_context()
+        if context is None:
+            return None
+        path = svc_producao_preparacao.resolve_caderno_encargos_path(context)
+        if path is None or not path.is_file():
+            return None
+        return {
+            "selected": True,
+            "priority": 0,
+            "file_name": path.name,
+            "file_path": str(path),
+            "file_kind": "excel_caderno_encargos",
+            "category": "CADERNO ENCARGOS",
+            "origin": "Excel Macro",
+            "page_size": "A4",
+            "quantity": 1,
+            "paper_size": "A4",
+            "orientation": "Vertical",
+            "page_range": "todos_setores",
+            "double_sided": True,
+            "color_mode": "color",
+            "file_size": 0,
+            "is_a4": True,
+            "is_a3": False,
+        }
 
     def _on_scan_thread_finished(self) -> None:
         self._scan_thread = None
@@ -273,14 +319,20 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
         self._update_preview(str(row_data.get("file_path") or ""))
 
     def _update_preview(self, path: Optional[str]) -> None:
-        if path and path == self._preview_path and self._preview_doc and self._preview_doc.pageCount() > 0:
+        if (
+            path
+            and path == self._preview_path
+            and Path(path).suffix.lower() == ".pdf"
+            and self._preview_doc
+            and self._preview_doc.pageCount() > 0
+        ):
             self._render_preview()
             return
         self._preview_path = path if path else None
         self._preview_buffer = None
         if not path:
             self.lbl_preview.setPixmap(QtGui.QPixmap())
-            self.lbl_preview.setText("Selecione um PDF na tabela.")
+            self.lbl_preview.setText("Selecione um documento na tabela.")
             self.lbl_preview_name.setText("")
             return
         pdf_path = Path(path)
@@ -290,6 +342,13 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
             self.lbl_preview_name.setText(str(pdf_path.name))
             return
         self.lbl_preview_name.setText(pdf_path.name)
+        if pdf_path.suffix.lower() != ".pdf":
+            self.lbl_preview.setPixmap(QtGui.QPixmap())
+            self.lbl_preview.setText(
+                "Pre-visualizacao indisponivel para Excel.\n"
+                "Este ficheiro sera preparado e impresso pela macro 'todos_setores'."
+            )
+            return
         if QPdfDocument is None:
             self.lbl_preview.setPixmap(QtGui.QPixmap())
             self.lbl_preview.setText("Pre-visualizacao PDF indisponivel.")
@@ -387,6 +446,15 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
                 row_data = self.model.row(row)
                 if not isinstance(row_data, dict):
                     continue
+                if str(row_data.get("file_kind") or "").strip() == "excel_caderno_encargos":
+                    row_data["is_a4"] = True
+                    row_data["is_a3"] = False
+                    row_data["paper_size"] = "A4"
+                    row_data["orientation"] = "Vertical"
+                    row_data["page_range"] = "todos_setores"
+                    row_data["double_sided"] = True
+                    self._emit_row_changed(row)
+                    continue
                 if row_data.get("is_a3"):
                     row_data["is_a4"] = False
                     row_data["paper_size"] = "A3"
@@ -410,19 +478,23 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
     def _on_print_selected(self) -> None:
         rows = [r for r in self.model._rows if isinstance(r, dict) and r.get("selected")]
         if not rows:
-            QtWidgets.QMessageBox.information(self, "Imprimir PDFs", "Nenhum PDF selecionado.")
+            QtWidgets.QMessageBox.information(self, "Imprimir Documentos", "Nenhum documento selecionado.")
             return
-        sumatra = pdf_printer.resolve_sumatra_path(self.session)
-        if sumatra is None:
-            if any(_paper_mismatch(row) for row in rows):
+
+        excel_rows = [row for row in rows if str(row.get("file_kind") or "").strip() == "excel_caderno_encargos"]
+        pdf_rows = [row for row in rows if row not in excel_rows]
+
+        if pdf_rows:
+            sumatra = pdf_printer.resolve_sumatra_path(self.session)
+            if sumatra is None and any(_paper_mismatch(row) for row in pdf_rows):
                 QtWidgets.QMessageBox.information(
                     self,
-                    "Imprimir PDFs",
+                    "Imprimir Documentos",
                     "SumatraPDF nao encontrado. Para imprimir A4 quando o PDF esta em A3,\n"
                     "instale o SumatraPDF ou configure o caminho em Settings.\n"
                     "A impressao vai usar o leitor PDF predefinido.",
                 )
-        for row in rows:
+        for row in pdf_rows:
             row["paper_size"] = "A3" if row.get("is_a3") else "A4"
             row["quantity"] = _safe_int(row.get("quantity"), default=1)
             row["orientation"] = str(row.get("orientation") or "vertical")
@@ -430,8 +502,28 @@ class ProducaoPDFManagerDialog(QtWidgets.QDialog):
             row["double_sided"] = bool(row.get("double_sided"))
             row["color_mode"] = str(row.get("color_mode") or "color")
 
-        pdf_printer.print_pdf_batch(rows, db=self.session)
-        QtWidgets.QMessageBox.information(self, "Imprimir PDFs", "Impressao enviada para a fila.")
+        try:
+            if excel_rows:
+                context = self._build_preparacao_context()
+                if context is None:
+                    raise RuntimeError("Nao foi possivel preparar o contexto do Caderno de Encargos para impressao.")
+                for row in excel_rows:
+                    svc_producao_preparacao.print_caderno_encargos_workbook(
+                        context,
+                        copies=_safe_int(row.get("quantity"), default=1),
+                        workbook_path=Path(str(row.get("file_path") or "")),
+                    )
+            if pdf_rows:
+                pdf_printer.print_pdf_batch(pdf_rows, db=self.session)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Imprimir Documentos",
+                f"Nao foi possivel imprimir os documentos selecionados.\n\nDetalhe: {exc}",
+            )
+            return
+
+        QtWidgets.QMessageBox.information(self, "Imprimir Documentos", "Impressao enviada.")
 
     def _on_save_config(self) -> None:
         QtWidgets.QMessageBox.information(self, "Guardar Config", "Funcionalidade em desenvolvimento.")

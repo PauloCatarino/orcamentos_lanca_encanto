@@ -28,9 +28,9 @@ KEY_STREAMLIT_TRUST_CERT = "streamlit_sql_trust_server_certificate"
 
 
 # --- Defaults (sem password hardcoded) ---
-DEFAULT_STREAMLIT_SERVER = r"DESKTOP-9TG3VTH,1433"
+DEFAULT_STREAMLIT_SERVER = r"DESKTOP-PTJ4TE6,1433"
 DEFAULT_STREAMLIT_DATABASE = "Lanca_Encanto2026"
-DEFAULT_STREAMLIT_USER = "Streamlit"
+DEFAULT_STREAMLIT_USER = "Lanca_Encanto_Stream"
 DEFAULT_STREAMLIT_TRUSTED = False
 DEFAULT_STREAMLIT_TRUST_CERT = True
 
@@ -113,7 +113,7 @@ def build_connection_string(cfg: StreamlitConfig) -> str:
     if not server or not database:
         raise ValueError("Configuracao Streamlit incompleta: Servidor e Base de Dados sao obrigatorios.")
 
-    parts = [f"Server={server}", f"Database={database}", "Connection Timeout=30"]
+    parts = [f"Server={server}", f"Database={database}", "Encrypt=False", "Connection Timeout=60"]
     if trusted:
         parts.append("Integrated Security=True")
     else:

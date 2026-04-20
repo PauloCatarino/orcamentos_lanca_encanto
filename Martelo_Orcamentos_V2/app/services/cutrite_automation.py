@@ -409,12 +409,18 @@ def _execute_cutrite_ui_import(
         _report_cutrite_progress(progress_callback, "CUT-RITE ja estava em execucao.")
     _activate_cutrite_window(main_window)
     _sleep_cutrite(CUTRITE_MAIN_WINDOW_READY_DELAY_SECONDS)
+    _report_cutrite_progress(progress_callback, "A maximizar a janela principal do CUT-RITE.")
+    _maximize_cutrite_window(main_window, window_label="principal do CUT-RITE")
+    _sleep_cutrite(CUTRITE_ACTION_DELAY_SECONDS)
 
     _report_cutrite_progress(progress_callback, "A abrir a janela Lista de pecas.")
     parts_window = _ensure_cutrite_parts_window(desktop, main_window, mouse, timeout_seconds=25)
     _activate_cutrite_window(parts_window)
     _sleep_cutrite(CUTRITE_WINDOW_OPEN_DELAY_SECONDS)
     _wait_for_cutrite_parts_window_ready(parts_window, timeout_seconds=12)
+    _report_cutrite_progress(progress_callback, "A maximizar a janela Lista de pecas.")
+    _maximize_cutrite_window(parts_window, window_label="Lista de pecas do CUT-RITE")
+    _sleep_cutrite(CUTRITE_ACTION_DELAY_SECONDS)
     _report_cutrite_progress(progress_callback, "A preparar o clipboard com a lista de pecas.")
     _set_cutrite_clipboard_text(paste_text)
     _report_cutrite_progress(progress_callback, "A definir o titulo do plano no CUT-RITE.")
@@ -435,12 +441,16 @@ def _execute_cutrite_ui_import(
     )
     _report_cutrite_progress(progress_callback, "A aguardar a colagem dos dados.")
     _sleep_cutrite(5.0)  # Esperar 5 segundos para colar os dados
-    _report_cutrite_progress(progress_callback, "A maximizar a janela para gravar (Win+Up).")
-    try:
-        keyboard.send_keys("{LWIN down}{UP}{LWIN up}", pause=0.05)
-    except Exception:
-        pass
-    _sleep_cutrite(2.0)
+    _report_cutrite_progress(progress_callback, "A maximizar a janela Lista de pecas para gravar.")
+    maximized_for_save = _maximize_cutrite_window(parts_window, window_label="Lista de pecas do CUT-RITE")
+    if not maximized_for_save:
+        try:
+            keyboard.send_keys("{LWIN down}{UP}{LWIN up}", pause=0.05)
+        except Exception:
+            pass
+        _sleep_cutrite(1.2)
+        _maximize_cutrite_window(parts_window, window_label="Lista de pecas do CUT-RITE")
+    _sleep_cutrite(CUTRITE_ACTION_DELAY_SECONDS)
     _report_cutrite_progress(progress_callback, "A gravar a lista de pecas.")
     save_confirmed = _save_cutrite_parts_list(
         parts_window,
@@ -978,11 +988,21 @@ def _maximize_cutrite_window(window, *, window_label: str = "CUT-RITE") -> bool:
 
 
 def _activate_cutrite_window(window) -> None:
-    for action_name in ("restore", "set_focus"):
+    handle = _get_cutrite_window_handle(window)
+    if handle and _is_cutrite_window_minimized(handle):
         try:
-            getattr(window, action_name)()
+            ctypes.windll.user32.ShowWindow(handle, SW_RESTORE)
         except Exception:
-            continue
+            pass
+        try:
+            window.restore()
+        except Exception:
+            pass
+        _sleep_cutrite(CUTRITE_POST_FOCUS_DELAY_SECONDS)
+    try:
+        window.set_focus()
+    except Exception:
+        pass
     _sleep_cutrite(CUTRITE_POST_FOCUS_DELAY_SECONDS)
 
 

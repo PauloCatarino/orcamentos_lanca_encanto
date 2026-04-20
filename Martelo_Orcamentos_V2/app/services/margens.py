@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from .settings import get_setting, set_setting
-from .orcamentos import PRECO_MANUAL_KEY
+from . import price_management as svc_price
 
 
 MARGEM_FIELDS: Iterable[Mapping[str, object]] = (
@@ -135,13 +135,18 @@ def update_sum_preco_final(session: Session, orcamento_id: int, total: Decimal) 
     orc = session.get(Orcamento, orcamento_id)
     if orc is None:
         return
+    total_dec = _coerce_decimal(total, Decimal("0.00")).quantize(TWO_PLACES)
     extras = dict(getattr(orc, "extras", {}) or {})
     cfg = extras.get(CONFIG_KEY) or {}
-    cfg[SUM_KEY] = float(total)
+    cfg[SUM_KEY] = float(total_dec)
     extras[CONFIG_KEY] = cfg
-    orc.extras = extras
-    if not extras.get(PRECO_MANUAL_KEY):
-        orc.preco_total = total
+    orc.extras = extras or None
+    if svc_price.is_price_manual(orc):
+        svc_price.sync_price_metadata(orc, manual=True, touch_timestamp=False)
+        session.add(orc)
+        session.flush()
+        return
+    svc_price.set_price_calculated(session, orc, total_dec, commit=False)
     session.add(orc)
     session.flush()
 

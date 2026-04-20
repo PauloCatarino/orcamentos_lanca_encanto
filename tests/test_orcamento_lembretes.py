@@ -49,6 +49,7 @@ class ReminderServiceTests(unittest.TestCase):
                 versao="01",
                 status="Enviado",
                 data="2026-03-05",
+                ref_cliente="REF-101",
                 descricao_orcamento="Roupeiro 4 portas",
                 localizacao="Porto",
                 info_1="",
@@ -72,6 +73,7 @@ class ReminderServiceTests(unittest.TestCase):
             self.assertTrue(summary_all.items[0].hidden)
             self.assertEqual(summary_all.legacy_count, 1)
             self.assertEqual(summary_all.task_count, 0)
+            self.assertEqual(summary_all.items[0].ref_cliente, "REF-101")
 
     def test_build_daily_summary_prefers_formal_tasks_over_legacy_for_same_orcamento(self):
         row = (
@@ -82,6 +84,7 @@ class ReminderServiceTests(unittest.TestCase):
                 versao="01",
                 status="Enviado",
                 data="2026-03-05",
+                ref_cliente="REF-101",
                 descricao_orcamento="Roupeiro 4 portas",
                 localizacao="Porto",
                 info_1="",
@@ -109,6 +112,7 @@ class ReminderServiceTests(unittest.TestCase):
         self.assertEqual(summary.items[0].entry_kind, "task")
         self.assertEqual(summary.items[0].task_id, 501)
         self.assertEqual(summary.items[0].details_text, "Ligar ao cliente")
+        self.assertEqual(summary.items[0].ref_cliente, "REF-101")
 
     def test_set_orcamento_hidden_updates_json_setting(self):
         store: dict[str, str] = {}

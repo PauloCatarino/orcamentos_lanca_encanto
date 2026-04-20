@@ -1,8 +1,9 @@
 import unittest
 import tempfile
 from pathlib import Path
+from datetime import date
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from Martelo_Orcamentos_V2.app.services import producao_workflow
 
@@ -256,6 +257,271 @@ class ProducaoWorkflowTests(unittest.TestCase):
 
         self.assertIs(result, created)
         create_mock.assert_called_once()
+
+    def test_create_process_from_orcamento_conversion_requires_synced_phc_simplex(self):
+        orcamento = SimpleNamespace(id=10, client_id=7, num_orcamento="260262", versao="01")
+        prep = producao_workflow.OrcamentoConversionPreparation(
+            orcamento=orcamento,
+            enc_digits="0417",
+            ano_orc="2026",
+            versao_obra="01",
+            suggested_plano_default="03",
+            responsavel_default="Paulo",
+        )
+        rows_phc = [
+            {
+                "Cliente": "Cliente Sem Abreviatura",
+                "Cliente_Abreviado": "",
+                "Num_PHC": "123",
+                "Ref_Cliente": "REF",
+                "Descricao_Artigo": "Artigo 1",
+                "Data_Encomenda": "01.03.2026",
+                "Data_Entrega": "10.03.2026",
+                "Ano": "2026",
+            }
+        ]
+
+        with patch.object(producao_workflow.svc_phc, "query_phc_encomenda_itens", return_value=rows_phc):
+            with self.assertRaisesRegex(ValueError, "Atualizar PHC"):
+                producao_workflow.create_process_from_orcamento_conversion(
+                    session=object(),
+                    preparation=prep,
+                    versao_plano="03",
+                    current_user_id=7,
+                )
+
+    def test_create_process_from_orcamento_conversion_requires_joined_phc_simplex(self):
+        orcamento = SimpleNamespace(id=10, client_id=7, num_orcamento="260262", versao="01")
+        prep = producao_workflow.OrcamentoConversionPreparation(
+            orcamento=orcamento,
+            enc_digits="0417",
+            ano_orc="2026",
+            versao_obra="01",
+            suggested_plano_default="03",
+            responsavel_default="Paulo",
+        )
+        rows_phc = [
+            {
+                "Cliente": "Cliente Com Espacos",
+                "Cliente_Abreviado": "CLIENTE CASAIS",
+                "Num_PHC": "123",
+                "Ref_Cliente": "REF",
+                "Descricao_Artigo": "Artigo 1",
+                "Data_Encomenda": "01.03.2026",
+                "Data_Entrega": "10.03.2026",
+                "Ano": "2026",
+            }
+        ]
+
+        with patch.object(producao_workflow.svc_phc, "query_phc_encomenda_itens", return_value=rows_phc):
+            with self.assertRaisesRegex(ValueError, "usando '_' para unir as palavras"):
+                producao_workflow.create_process_from_orcamento_conversion(
+                    session=object(),
+                    preparation=prep,
+                    versao_plano="03",
+                    current_user_id=7,
+                )
+
+    def test_sync_producao_statuses_from_phc_skips_when_already_checked_today(self):
+        session = MagicMock()
+        today = date(2026, 3, 20)
+
+        with patch.object(producao_workflow, "get_setting", return_value=today.isoformat()):
+            result = producao_workflow.sync_producao_statuses_from_phc(
+                session,
+                current_user_id=7,
+                today=today,
+            )
+
+        self.assertTrue(result.skipped_daily)
+        session.execute.assert_not_called()
+
+    def test_sync_producao_statuses_from_phc_updates_matching_process(self):
+        session = MagicMock()
+        process = SimpleNamespace(
+            id=10,
+            codigo_processo="26.0402_01_01_VITOR_PEREIRA",
+            ano="2026",
+            num_enc_phc="0402",
+            num_cliente_phc="163",
+            nome_cliente="VITOR JOSE PEREIRA",
+            responsavel="Paulo",
+            estado="Planeamento",
+            tipo_pasta="Encomenda de Cliente",
+            updated_by=None,
+        )
+        session.execute.return_value.scalars.return_value.all.return_value = [process]
+        phc_rows = [
+            {
+                "Ano": 2026,
+                "Enc_No": 402,
+                "Num_PHC": "163",
+                "CL_Nome": "VITOR JOSE PEREIRA",
+                "Estado_PHC": "7 - ARQUIVADO",
+                "BO_Tabela1": "7 - ARQUIVADO",
+                "BI_Tabela1": "7 - ARQUIVADO",
+            }
+        ]
+
+        with patch.object(producao_workflow, "get_setting", return_value=""), \
+             patch.object(producao_workflow, "set_setting") as set_setting_mock, \
+             patch.object(producao_workflow.svc_phc, "query_phc_estado_debug_rows", return_value=phc_rows):
+            result = producao_workflow.sync_producao_statuses_from_phc(
+                session,
+                current_user_id=7,
+                force=True,
+                today=date(2026, 3, 20),
+            )
+
+        self.assertFalse(result.skipped_daily)
+        self.assertEqual(len(result.changed), 1)
+        self.assertEqual(result.changed[0].estado_novo, "Arquivado")
+        self.assertEqual(process.estado, "Arquivado")
+        self.assertEqual(process.updated_by, 7)
+        session.add.assert_called_with(process)
+        saved_keys = [call.args[1] for call in set_setting_mock.call_args_list]
+        self.assertIn(producao_workflow.KEY_PRODUCAO_PHC_STATUS_LAST_SYNC_DATE, saved_keys)
+        self.assertIn(producao_workflow.KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_DATE, saved_keys)
+        self.assertIn(producao_workflow.KEY_PRODUCAO_PHC_STATUS_ISSUES_CACHE_JSON, saved_keys)
+
+    def test_sync_producao_statuses_from_phc_reports_mismatch_details(self):
+        session = MagicMock()
+        process = SimpleNamespace(
+            id=11,
+            codigo_processo="26.0402_01_01_VITOR_PEREIRA",
+            ano="2026",
+            num_enc_phc="0402",
+            num_cliente_phc="999",
+            nome_cliente="VITOR JOSE PEREIRA",
+            responsavel="Paulo",
+            estado="Planeamento",
+            tipo_pasta="Encomenda de Cliente",
+            updated_by=None,
+        )
+        session.execute.return_value.scalars.return_value.all.return_value = [process]
+        phc_rows = [
+            {
+                "Ano": 2026,
+                "Enc_No": 402,
+                "Num_PHC": "163",
+                "CL_Nome": "VITOR JOSE PEREIRA",
+                "Estado_PHC": "2 - DESENHO",
+                "BO_Tabela1": "2 - DESENHO",
+                "BI_Tabela1": "2 - DESENHO",
+            }
+        ]
+
+        with patch.object(producao_workflow, "get_setting", return_value=""), \
+             patch.object(producao_workflow, "set_setting"), \
+             patch.object(producao_workflow.svc_phc, "query_phc_estado_debug_rows", return_value=phc_rows):
+            result = producao_workflow.sync_producao_statuses_from_phc(
+                session,
+                current_user_id=7,
+                force=True,
+                today=date(2026, 3, 20),
+            )
+
+        self.assertEqual(len(result.changed), 0)
+        self.assertEqual(len(result.issues), 1)
+        self.assertIn("Nao foi encontrada correspondencia direta", result.issues[0].reason)
+        self.assertIn("163", result.issues[0].phc_num_clientes)
+        self.assertEqual(result.issues[0].responsavel, "Paulo")
+
+    def test_build_user_phc_status_issue_summary_filters_by_user_and_hidden_state(self):
+        store = {}
+        issue_paulo = producao_workflow.PHCStatusSyncIssue(
+            processo_id=11,
+            codigo_processo="26.0402_01_01_VITOR_PEREIRA",
+            responsavel="Paulo",
+            reason="Divergencia",
+            martelo_ano="2026",
+            martelo_num_enc_phc="0402",
+            martelo_num_cliente_phc="999",
+            martelo_nome_cliente="VITOR JOSE PEREIRA",
+            phc_anos=("2026",),
+            phc_num_encs=("402",),
+            phc_num_clientes=("163",),
+            phc_nomes=("VITOR JOSE PEREIRA",),
+            phc_estados=("2 - DESENHO",),
+        )
+        issue_ana = producao_workflow.PHCStatusSyncIssue(
+            processo_id=12,
+            codigo_processo="26.0410_01_01_OUTRO",
+            responsavel="Ana",
+            reason="Divergencia",
+            martelo_ano="2026",
+            martelo_num_enc_phc="0410",
+            martelo_num_cliente_phc="200",
+            martelo_nome_cliente="OUTRO CLIENTE",
+            phc_anos=("2026",),
+            phc_num_encs=("410",),
+            phc_num_clientes=("201",),
+            phc_nomes=("OUTRO CLIENTE PHC",),
+            phc_estados=("7 - ARQUIVADO",),
+        )
+
+        def fake_get_setting(_db, key, default=None):
+            return store.get(key, default)
+
+        def fake_set_setting(_db, key, value):
+            store[key] = value
+
+        with patch.object(producao_workflow, "get_setting", side_effect=fake_get_setting), \
+             patch.object(producao_workflow, "set_setting", side_effect=fake_set_setting):
+            producao_workflow._cache_phc_status_issues(
+                object(),
+                issues=[issue_paulo, issue_ana],
+                today_text="2026-03-21",
+            )
+            producao_workflow.set_producao_phc_issue_hidden(object(), user_id=7, processo_id=11, hidden=True)
+
+            summary_hidden = producao_workflow.build_user_phc_status_issue_summary(
+                object(),
+                user_id=7,
+                username="Paulo",
+                today=date(2026, 3, 21),
+            )
+            self.assertEqual(summary_hidden.total_count, 1)
+            self.assertEqual(summary_hidden.hidden_count, 1)
+            self.assertEqual(summary_hidden.items, [])
+
+            summary_all = producao_workflow.build_user_phc_status_issue_summary(
+                object(),
+                user_id=7,
+                username="Paulo",
+                today=date(2026, 3, 21),
+                include_hidden=True,
+            )
+            self.assertEqual(len(summary_all.items), 1)
+            self.assertTrue(summary_all.items[0].hidden)
+            self.assertEqual(summary_all.items[0].issue.codigo_processo, "26.0402_01_01_VITOR_PEREIRA")
+
+    def test_should_auto_show_producao_phc_issues_tracks_seen_per_user(self):
+        store = {}
+
+        def fake_get_setting(_db, key, default=None):
+            return store.get(key, default)
+
+        def fake_set_setting(_db, key, value):
+            store[key] = value
+
+        with patch.object(producao_workflow, "get_setting", side_effect=fake_get_setting), \
+             patch.object(producao_workflow, "set_setting", side_effect=fake_set_setting):
+            self.assertTrue(
+                producao_workflow.should_auto_show_producao_phc_issues(
+                    object(),
+                    user_id=7,
+                    today=date(2026, 3, 21),
+                )
+            )
+            producao_workflow.mark_producao_phc_issues_seen(object(), user_id=7, today=date(2026, 3, 21))
+            self.assertFalse(
+                producao_workflow.should_auto_show_producao_phc_issues(
+                    object(),
+                    user_id=7,
+                    today=date(2026, 3, 21),
+                )
+            )
 
     def test_build_processo_folders_context_uses_process_data(self):
         processo = SimpleNamespace(id=10, ano="2026", num_enc_phc="0417", tipo_pasta="Encomenda", codigo_processo="26.0417_01_01")
