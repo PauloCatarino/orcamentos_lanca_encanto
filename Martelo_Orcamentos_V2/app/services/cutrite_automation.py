@@ -282,7 +282,10 @@ def prepare_cutrite_import(
 
     pasta_txt = str(pasta_servidor or "").strip()
     if not pasta_txt:
-        raise ValueError("Pasta Servidor em falta.\n\nUse 'Criar Pasta' para gerar a pasta da obra no servidor.")
+        raise ValueError(
+            "Pasta Servidor em falta.\n\n"
+            "Crie a pasta manualmente com a hierarquia da Producao e use 'Abrir Pasta' para validar o caminho."
+        )
     folder_path = Path(pasta_txt)
 
     source_workbook_path = find_lista_material_workbook(folder_path, nome_enc_imos=nome_enc_imos)

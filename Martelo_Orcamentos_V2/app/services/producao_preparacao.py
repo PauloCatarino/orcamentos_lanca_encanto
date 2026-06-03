@@ -362,10 +362,28 @@ def copy_cutrite_pdf_para_obra(context: ProducaoPreparacaoContext) -> Path:
     source_path = _resolve_cutrite_export_pdf_path(context)
     if target_path is None or source_path is None:
         raise ValueError("Nome Plano CUT-RITE em falta no processo.")
-    if not source_path.exists():
+    if not source_path.is_file():
         raise ValueError(f"PDF exportado do CUT-RITE em falta:\n{source_path}")
+    if source_path == target_path:
+        raise ValueError(f"Origem e destino do PDF CUT-RITE sao iguais:\n{source_path}")
+
     context.work_folder.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_path, target_path)
+    try:
+        if not target_path.is_file():
+            raise OSError("ficheiro de destino nao encontrado apos copia")
+        if source_path.stat().st_size != target_path.stat().st_size:
+            raise OSError("tamanho do ficheiro copiado difere da origem")
+    except OSError as exc:
+        raise OSError(f"Falha ao validar copia do PDF CUT-RITE:\n{target_path}\n{exc}") from exc
+
+    try:
+        source_path.unlink()
+    except OSError as exc:
+        raise OSError(
+            "PDF copiado para a pasta da obra, mas nao foi possivel eliminar a origem CUT-RITE:\n"
+            f"{source_path}\n{exc}"
+        ) from exc
     return target_path
 
 

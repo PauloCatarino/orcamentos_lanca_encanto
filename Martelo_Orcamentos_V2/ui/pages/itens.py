@@ -46,6 +46,17 @@ from ..workers.custeio_batch import CusteioBatchWorker
 logger = logging.getLogger(__name__)
 
 
+def _is_lock_wait_timeout(exc: BaseException) -> bool:
+    root = getattr(exc, "orig", None) or exc
+    args = getattr(root, "args", ())
+    try:
+        if args and int(args[0]) == 1205:
+            return True
+    except Exception:
+        pass
+    return "lock wait timeout" in str(root).casefold()
+
+
 DIMENSION_KEY_ORDER: Tuple[str, ...] = tuple(svc_custeio.DIMENSION_KEY_ORDER)
 PRIMARY_DIMENSION_KEYS = ("H", "L", "P")
 DIMENSION_GROUPS = [
@@ -340,6 +351,7 @@ class ItensTableModel(SimpleTableModel):
 
 class ItensPage(QtWidgets.QWidget):
     item_selected = Signal(object)
+    item_deleted = Signal(object, object)  # deleted_id, next_selected_id
     production_mode_changed = Signal(str)
     price_changed = Signal(int, object)  # NOVO: orc_id, novo_preco (para sincronizar com outros menus)
     def __init__(self, parent=None, current_user=None):
@@ -2770,9 +2782,19 @@ class ItensPage(QtWidgets.QWidget):
             self.db.commit()
         except Exception as e:
             self.db.rollback()
-            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao eliminar: {e}")
+            root_exc = getattr(e, "orig", None) or e
+            if _is_lock_wait_timeout(e):
+                msg = (
+                    "Falha ao eliminar: a base de dados manteve um bloqueio nas "
+                    "linhas de custeio deste item.\n\n"
+                    "A operacao foi revertida; tente novamente."
+                )
+            else:
+                msg = f"Falha ao eliminar: {root_exc}"
+            QtWidgets.QMessageBox.critical(self, "Erro", msg)
             return
         self.refresh(select_row=row)
+        self.item_deleted.emit(id_item, self.selected_id())
 
     def on_duplicate_item(self):
         src_id = self.selected_id()

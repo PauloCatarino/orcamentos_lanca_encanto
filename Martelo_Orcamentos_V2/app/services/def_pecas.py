@@ -313,6 +313,28 @@ def _normalize_piece_lookup_tokens(value: Optional[str]) -> List[str]:
     return variantes
 
 
+def _simple_singular_plural_variants(token: str) -> set[str]:
+    normalized = _normalize_token(token)
+    if not normalized:
+        return set()
+    variants = {normalized}
+    if normalized.endswith("ais") and len(normalized) > 4:
+        variants.add(normalized[:-3] + "al")
+    if normalized.endswith("es") and len(normalized) > 4:
+        variants.add(normalized[:-2])
+    if normalized.endswith("s") and len(normalized) > 3:
+        variants.add(normalized[:-1])
+    return variants
+
+
+def _subgrupo_head_variants(tokens: Sequence[str]) -> set[str]:
+    variants: set[str] = set()
+    for token in tokens:
+        head = token.split(" ", 1)[0].strip()
+        variants.update(_simple_singular_plural_variants(head))
+    return variants
+
+
 def _build_row_lookup_tokens(row: Mapping[str, Any]) -> List[str]:
     candidatos: List[str] = []
     row_type = str(row.get("_row_type") or "").strip().casefold()
@@ -344,12 +366,16 @@ def _score_definicao_match(regra: Mapping[str, Optional[str]], row_tokens: Seque
     nome_tokens = _normalize_piece_lookup_tokens(regra.get("nome_da_peca"))
     subgrupo_tokens = _normalize_piece_lookup_tokens(regra.get("subgrupo_peca"))
     tipo_tokens = _normalize_piece_lookup_tokens(regra.get("tipo_peca_principal"))
+    subgrupo_head_variants = _subgrupo_head_variants(subgrupo_tokens)
     score = 0
     for token in row_tokens:
+        token_variants = _simple_singular_plural_variants(token)
         if token in nome_tokens:
             score = max(score, 500)
         if token in subgrupo_tokens:
             score = max(score, 360)
+        if token_variants and subgrupo_head_variants.intersection(token_variants):
+            score = max(score, 430)
         if token in tipo_tokens:
             score = max(score, 260)
         for alvo in nome_tokens:

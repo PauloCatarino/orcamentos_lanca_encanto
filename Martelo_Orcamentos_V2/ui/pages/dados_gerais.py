@@ -5827,6 +5827,36 @@ class ImportarModeloDialog(QDialog):
         self.scope_tabs.setTabText(self._scope_tab_index["global"], f"Global ({len(self.models_by_scope['global'])})")
 
 
+    def _clear_current_model_state(self, scope: Optional[str] = None, message: str = "Sem modelo selecionado.") -> None:
+        self.current_model = None
+        self.current_lines = []
+        self.display_lines = []
+        self.selected_lines = []
+        self.lines_table.clear()
+        self.lines_table.setRowCount(0)
+        self.lines_table.setColumnCount(0)
+        if scope in self.scope_info_labels:
+            self.scope_info_labels[scope].setText(message)
+        self._update_model_actions()
+
+
+    def _reload_models_from_db(self) -> bool:
+        try:
+            self.models = self.svc.listar_modelos(self.session, user_id=self.user_id, tipo_menu=self.tipo_menu)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao atualizar modelos: {exc}")
+            return False
+        return True
+
+
+    def _select_first_model_in_scope(self, scope: str) -> None:
+        current_list = self.scope_lists[scope]
+        if current_list.count() > 0:
+            current_list.setCurrentRow(0)
+            return
+        self._clear_current_model_state(scope, "Sem modelos disponiveis.")
+
+
 
 
 
@@ -5869,17 +5899,18 @@ class ImportarModeloDialog(QDialog):
 
     def _populate_models(self) -> None:
         self.models_by_scope = _partition_models_by_scope(self.models, self.global_prefix)
-        for scope, list_widget in self.scope_lists.items():
-            list_widget.clear()
-            for model in self.models_by_scope.get(scope, []):
-                clean_name, _ = _split_model_name(getattr(model, "nome_modelo", ""), self.global_prefix)
-                item = QListWidgetItem(clean_name or "(sem nome)")
-                item.setData(Qt.UserRole, getattr(model, "id", None))
-                item.setToolTip(_describe_model(model, self.user_id, self.global_prefix))
-                list_widget.addItem(item)
-            self.scope_info_labels[scope].setText(
-                "Sem modelos disponiveis." if not self.models_by_scope.get(scope) else "Selecione um modelo para importar."
-            )
+        with QtCore.QSignalBlocker(self.scope_lists["user"]), QtCore.QSignalBlocker(self.scope_lists["global"]):
+            for scope, list_widget in self.scope_lists.items():
+                list_widget.clear()
+                for model in self.models_by_scope.get(scope, []):
+                    clean_name, _ = _split_model_name(getattr(model, "nome_modelo", ""), self.global_prefix)
+                    item = QListWidgetItem(clean_name or "(sem nome)")
+                    item.setData(Qt.UserRole, getattr(model, "id", None))
+                    item.setToolTip(_describe_model(model, self.user_id, self.global_prefix))
+                    list_widget.addItem(item)
+                self.scope_info_labels[scope].setText(
+                    "Sem modelos disponiveis." if not self.models_by_scope.get(scope) else "Selecione um modelo para importar."
+                )
         self._update_scope_headers()
 
 
@@ -5898,36 +5929,7 @@ class ImportarModeloDialog(QDialog):
 
 
         if not item:
-
-
-
-            self.current_model = None
-
-
-
-            self.current_lines = []
-
-
-
-            self.display_lines = []
-
-
-
-            self.lines_table.clear()
-
-
-
-            self.lines_table.setRowCount(0)
-
-
-
-            self.lines_table.setColumnCount(0)
-
-
-
-            self.scope_info_labels[scope].setText("Sem modelo selecionado.")
-            self._update_model_actions()
-
+            self._clear_current_model_state(scope)
             return
 
 
@@ -5945,13 +5947,18 @@ class ImportarModeloDialog(QDialog):
 
 
         except Exception as exc:
-
-
-
+            if "Modelo nao encontrado" in str(exc):
+                if self._reload_models_from_db():
+                    self._populate_models()
+                message = (
+                    "Sem modelos disponiveis."
+                    if not self.models_by_scope.get(scope)
+                    else "Modelo removido ou indisponivel. Selecione outro modelo."
+                )
+                self._clear_current_model_state(scope, message)
+                return
+            self._clear_current_model_state(scope)
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao carregar modelo: {exc}")
-
-
-
             return
 
 
@@ -6093,19 +6100,11 @@ class ImportarModeloDialog(QDialog):
 
 
         scope = self._current_scope()
-        self.models = [m for m in self.models if m.id != model_id]
-        self.current_model = None
-        self.current_lines = []
-        self.display_lines = []
+        self._clear_current_model_state(scope)
+        if not self._reload_models_from_db():
+            return
         self._populate_models()
-        current_list = self.scope_lists[scope]
-        current_list.setCurrentRow(0 if current_list.count() else -1)
-        if current_list.count() == 0:
-            self.lines_table.clear()
-            self.lines_table.setRowCount(0)
-            self.lines_table.setColumnCount(0)
-            self.scope_info_labels[scope].setText("Sem modelos disponiveis.")
-        self._update_model_actions()
+        self._select_first_model_in_scope(scope)
 
 
 

@@ -12,6 +12,7 @@ import datetime
 
 from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.services.settings import get_setting, set_setting
+from Martelo_Orcamentos_V2.app.utils.resources import resolve_package_asset_path
 from Martelo_Orcamentos_V2.app.services.materias_primas import (
     DEFAULT_MATERIAS_BASE_PATH,
     KEY_MATERIAS_BASE_PATH,
@@ -23,6 +24,7 @@ from Martelo_Orcamentos_V2.app.services import producao_processos as svc_produca
 from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
 from Martelo_Orcamentos_V2.app.services import producao_lista_material_audit as svc_lista_material_audit
 from Martelo_Orcamentos_V2.app.services import cutrite_automation as svc_cutrite
+from Martelo_Orcamentos_V2.app.services import imos_msg_sync as svc_imos_msg_sync
 from Martelo_Orcamentos_V2.app.services import def_pecas as svc_def_pecas
 from Martelo_Orcamentos_V2.app.services import margens as svc_margens
 from Martelo_Orcamentos_V2.app.services import phc_sql as svc_phc
@@ -294,6 +296,50 @@ class SettingsPage(QtWidgets.QWidget):
         h_imorder.addWidget(btn_imorder_base)
         lay.addRow("Pasta Base Imorder (Imos IX)", h_imorder)
 
+        self.ed_imos_msg_path = QtWidgets.QLineEdit()
+        self.ed_imos_msg_path.setToolTip("Ficheiro imos.msg do IMOS IX que sera atualizado.")
+        btn_imos_msg_path = QtWidgets.QPushButton("Procurar...")
+        btn_imos_msg_path.clicked.connect(
+            lambda: self._choose_existing_file(
+                self.ed_imos_msg_path,
+                "Selecionar ficheiro imos.msg",
+                "Ficheiros MSG (*.msg);;Todos os ficheiros (*)",
+            )
+        )
+        h_imos_msg_path = QtWidgets.QHBoxLayout()
+        h_imos_msg_path.addWidget(self.ed_imos_msg_path, 1)
+        h_imos_msg_path.addWidget(btn_imos_msg_path)
+        lay.addRow("Ficheiro imos.msg", h_imos_msg_path)
+
+        self.ed_imos_msg_excel = QtWidgets.QLineEdit()
+        self.ed_imos_msg_excel.setToolTip(
+            "Excel com as traducoes PT do IMOS (coluna B = referencia, coluna C = texto em portugues)."
+        )
+        btn_imos_msg_excel = QtWidgets.QPushButton("Procurar...")
+        btn_imos_msg_excel.clicked.connect(
+            lambda: self._choose_existing_file(
+                self.ed_imos_msg_excel,
+                "Selecionar Excel de traducoes IMOS",
+                "Ficheiros Excel (*.xlsx *.xlsm *.xltx *.xltm *.xlx);;Todos os ficheiros (*)",
+            )
+        )
+        h_imos_msg_excel = QtWidgets.QHBoxLayout()
+        h_imos_msg_excel.addWidget(self.ed_imos_msg_excel, 1)
+        h_imos_msg_excel.addWidget(btn_imos_msg_excel)
+        lay.addRow("Excel traducoes IMOS", h_imos_msg_excel)
+
+        self.btn_sync_imos_msg = QtWidgets.QPushButton("Atualizar traducoes IMOS")
+        self.btn_sync_imos_msg.setToolTip(
+            "Le o Excel de traducoes PT (coluna B = referencia, coluna C = texto) e atualiza o ficheiro "
+            "imos.msg.\n\nO programa IMOS deve estar desligado antes de executar esta operacao."
+        )
+        imos_icon_path = resolve_package_asset_path("ui", "assets", "icon_imos_2025.ico")
+        if imos_icon_path.exists():
+            self.btn_sync_imos_msg.setIcon(QtGui.QIcon(str(imos_icon_path)))
+            self.btn_sync_imos_msg.setIconSize(QtCore.QSize(18, 18))
+        self.btn_sync_imos_msg.clicked.connect(self._on_sync_imos_msg_clicked)
+        lay.addRow("Atualizacao traducoes IMOS", self.btn_sync_imos_msg)
+
         self.ed_cutrite_exe = QtWidgets.QLineEdit()
         btn_cutrite_exe = QtWidgets.QPushButton("Procurar...")
         btn_cutrite_exe.clicked.connect(
@@ -443,6 +489,20 @@ class SettingsPage(QtWidgets.QWidget):
                 self.db,
                 svc_producao_processos.KEY_IMORDER_BASE_PATH,
                 svc_producao_processos.DEFAULT_IMORDER_BASE_PATH,
+            )
+        )
+        self.ed_imos_msg_path.setText(
+            get_setting(
+                self.db,
+                svc_imos_msg_sync.KEY_IMOS_MSG_PATH,
+                svc_imos_msg_sync.DEFAULT_IMOS_MSG_PATH,
+            )
+        )
+        self.ed_imos_msg_excel.setText(
+            get_setting(
+                self.db,
+                svc_imos_msg_sync.KEY_IMOS_MSG_WORKBOOK_PATH,
+                svc_imos_msg_sync.DEFAULT_IMOS_MSG_WORKBOOK_PATH,
             )
         )
         self.ed_cutrite_exe.setText(svc_cutrite.resolve_cutrite_exe_path(self.db) or "")
@@ -650,6 +710,10 @@ class SettingsPage(QtWidgets.QWidget):
             base_dados = self.ed_base_dados.text().strip() or DEFAULT_BASE_DADOS_ORC
             base_producao = self.ed_base_producao.text().strip() or DEFAULT_BASE_PRODUCAO
             imorder_base = self.ed_imorder_base.text().strip() or svc_producao_processos.DEFAULT_IMORDER_BASE_PATH
+            imos_msg_path = self.ed_imos_msg_path.text().strip() or svc_imos_msg_sync.DEFAULT_IMOS_MSG_PATH
+            imos_msg_excel = (
+                self.ed_imos_msg_excel.text().strip() or svc_imos_msg_sync.DEFAULT_IMOS_MSG_WORKBOOK_PATH
+            )
             cutrite_exe = self.ed_cutrite_exe.text().strip()
             cutrite_workdir_input = self.ed_cutrite_workdir.text().strip()
             cutrite_data_input = self.ed_cutrite_data.text().strip()
@@ -683,6 +747,8 @@ class SettingsPage(QtWidgets.QWidget):
             set_setting(self.db, KEY_ORC_DB_BASE, base_dados)
             set_setting(self.db, KEY_PRODUCAO_BASE_PATH, base_producao)
             set_setting(self.db, svc_producao_processos.KEY_IMORDER_BASE_PATH, imorder_base)
+            set_setting(self.db, svc_imos_msg_sync.KEY_IMOS_MSG_PATH, imos_msg_path)
+            set_setting(self.db, svc_imos_msg_sync.KEY_IMOS_MSG_WORKBOOK_PATH, imos_msg_excel)
             set_setting(self.db, svc_cutrite.KEY_CUTRITE_EXE_PATH, cutrite_exe or None)
             set_setting(self.db, svc_cutrite.KEY_CUTRITE_WORKDIR_PATH, str(cutrite_workdir_path) if cutrite_workdir_path else None)
             set_setting(self.db, svc_cutrite.KEY_CUTRITE_DATA_PATH, str(cutrite_data_path) if cutrite_data_path else None)
@@ -702,6 +768,8 @@ class SettingsPage(QtWidgets.QWidget):
             self.ed_cnc_source_root.setText(cnc_source_root)
             self.ed_mpr_root.setText(mpr_root)
             self.ed_lista_material_audit_root.setText(lista_material_audit_root)
+            self.ed_imos_msg_path.setText(imos_msg_path)
+            self.ed_imos_msg_excel.setText(imos_msg_excel)
             message = "Configuracoes gravadas."
             if cutrite_paths_warning:
                 message += f"\n\n{cutrite_paths_warning}"
@@ -709,6 +777,54 @@ class SettingsPage(QtWidgets.QWidget):
         except Exception as exc:
             self.db.rollback()
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao gravar: {exc}")
+
+    def _on_sync_imos_msg_clicked(self) -> None:
+        msg_path = self.ed_imos_msg_path.text().strip() or svc_imos_msg_sync.DEFAULT_IMOS_MSG_PATH
+        workbook_path = self.ed_imos_msg_excel.text().strip() or svc_imos_msg_sync.DEFAULT_IMOS_MSG_WORKBOOK_PATH
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Atualizar traducoes IMOS",
+            "O Martelo vai ler o Excel de traducoes e atualizar o ficheiro imos.msg.\n\n"
+            "Confirme que o programa IMOS esta desligado antes de continuar.\n\n"
+            "Deseja prosseguir?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+
+        try:
+            result = svc_imos_msg_sync.sync_imos_msg_translations(
+                msg_path=msg_path,
+                workbook_path=workbook_path,
+            )
+        except Exception as exc:
+            logger.exception("Falha ao atualizar traducoes do imos.msg: %s", exc)
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Erro",
+                f"Falha ao atualizar o ficheiro imos.msg:\n\n{exc}",
+            )
+            return
+
+        self.ed_imos_msg_path.setText(str(result.msg_path))
+        self.ed_imos_msg_excel.setText(str(result.workbook_path))
+        details = svc_imos_msg_sync.format_sync_result(result)
+        if result.updated > 0:
+            QtWidgets.QMessageBox.information(self, "Atualizacao IMOS", details)
+            return
+        if result.matched > 0:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Atualizacao IMOS",
+                "Nenhuma linha precisou de ser alterada.\n\n" + details,
+            )
+            return
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Atualizacao IMOS",
+            "Nenhuma referencia do Excel foi encontrada no ficheiro imos.msg.\n\n" + details,
+        )
 
     def _open_rules_dialog(self) -> None:
         dlg = QtRulesDialog(self.db, self)

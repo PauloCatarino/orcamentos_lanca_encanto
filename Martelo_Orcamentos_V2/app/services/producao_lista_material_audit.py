@@ -24,7 +24,7 @@ TARGET_SHEET_NAME = svc_cutrite.LISTAGEM_CUT_RITE_SHEET
 TARGET_TABLE_NAME = "Tabela_Cut_Rite"
 SEVERITY_ORDER = {"info": 0, "sugestao": 1, "aviso": 2, "erro": 3}
 CONFIDENCE_ORDER = {"low": 0, "medium": 1, "high": 2}
-CATEGORY_ORDER = ("estrutura", "notas", "materiais", "uniformizacao", "orlas")
+CATEGORY_ORDER = ("estrutura", "notas", "descricao", "materiais", "uniformizacao", "orlas")
 REQUIRED_COLUMNS = (
     "Descricao",
     "Material",
@@ -43,18 +43,13 @@ REQUIRED_COLUMNS = (
     "CNC_2",
 )
 SIGNATURE_COLUMNS = (
+    "Artigo",
     "Descricao",
     "Material",
     "Comp",
     "Larg",
     "Esp",
     "Veio",
-    "Orla ESQ",
-    "Orla DIR",
-    "Orla CIMA",
-    "Orla BAIXO",
-    "CNC_1",
-    "CNC_2",
 )
 ORLA_COLUMNS = ("Orla ESQ", "Orla DIR", "Orla CIMA", "Orla BAIXO")
 
@@ -102,6 +97,10 @@ DEFAULT_MATERIALS_CONFIG = {
         r"\bCOLAGEM\b",
     ],
 }
+DEFAULT_DESCRIPTIONS_CONFIG = {
+    "canonical_descriptions": [],
+    "aliases": {},
+}
 DEFAULT_FLOORS_CONFIG = {
     "article_clean_suffix_patterns": [
         r"\([A-Z]\)$",
@@ -109,6 +108,11 @@ DEFAULT_FLOORS_CONFIG = {
         r"-(?:DIR|ESQ)$",
     ],
     "article_patterns": [
+        {"regex": r"(?:^|[\s_-])RC(?:$|[\s_-])", "floor": "RC"},
+        {"regex": r"(?:^|[\s_-])P[-_ ]?1(?:$|[\s_-])", "floor": "P1"},
+        {"regex": r"(?:^|[\s_-])P[-_ ]?2(?:$|[\s_-])", "floor": "P2"},
+        {"regex": r"(?:^|[\s_-])P[-_ ]?3(?:$|[\s_-])", "floor": "P3"},
+        {"regex": r"(?:^|[\s_-])P[-_ ]?-1(?:$|[\s_-])", "floor": "P-1"},
         {"regex": r"^RC$", "floor": "RC"},
         {"regex": r"^P[-_ ]?1$", "floor": "P1"},
         {"regex": r"^P[-_ ]?2$", "floor": "P2"},
@@ -142,6 +146,7 @@ DEFAULT_ORLAS_CONFIG = {
 DEFAULT_CONFIG_FILES = {
     "notes.json": DEFAULT_NOTES_CONFIG,
     "materials.json": DEFAULT_MATERIALS_CONFIG,
+    "descriptions.json": DEFAULT_DESCRIPTIONS_CONFIG,
     "floors.json": DEFAULT_FLOORS_CONFIG,
     "orlas.json": DEFAULT_ORLAS_CONFIG,
 }
@@ -223,6 +228,8 @@ class AuditConfig:
     note_token_aliases: dict[str, str]
     note_protected_plus_patterns: tuple[str, ...]
     note_uniform_context_patterns: tuple[re.Pattern[str], ...]
+    description_aliases: dict[str, str]
+    canonical_descriptions: frozenset[str]
     material_aliases: dict[str, str]
     canonical_materials: frozenset[str]
     empty_material_patterns: tuple[re.Pattern[str], ...]
@@ -285,10 +292,11 @@ def ensure_external_config_files(config_root: Path) -> None:
 
 def load_audit_config(config_root: Path) -> AuditConfig:
     ensure_external_config_files(config_root)
-    notes = _read_json_file(config_root / "notes.json", DEFAULT_NOTES_CONFIG)
-    materials = _read_json_file(config_root / "materials.json", DEFAULT_MATERIALS_CONFIG)
-    floors = _read_json_file(config_root / "floors.json", DEFAULT_FLOORS_CONFIG)
-    orlas = _read_json_file(config_root / "orlas.json", DEFAULT_ORLAS_CONFIG)
+    notes = _merge_config_payload(DEFAULT_NOTES_CONFIG, _read_json_file(config_root / "notes.json", DEFAULT_NOTES_CONFIG))
+    materials = _merge_config_payload(DEFAULT_MATERIALS_CONFIG, _read_json_file(config_root / "materials.json", DEFAULT_MATERIALS_CONFIG))
+    descriptions = _merge_config_payload(DEFAULT_DESCRIPTIONS_CONFIG, _read_json_file(config_root / "descriptions.json", DEFAULT_DESCRIPTIONS_CONFIG))
+    floors = _merge_config_payload(DEFAULT_FLOORS_CONFIG, _read_json_file(config_root / "floors.json", DEFAULT_FLOORS_CONFIG))
+    orlas = _merge_config_payload(DEFAULT_ORLAS_CONFIG, _read_json_file(config_root / "orlas.json", DEFAULT_ORLAS_CONFIG))
 
     note_aliases = {
         _normalize_text_compare(str(key or "")): str(value or "").strip()
@@ -305,9 +313,19 @@ def load_audit_config(config_root: Path) -> AuditConfig:
         for key, value in dict(materials.get("aliases") or {}).items()
         if str(key or "").strip() and str(value or "").strip()
     }
+    description_aliases = {
+        _normalize_text_loose_compare(str(key or "")): str(value or "").strip()
+        for key, value in dict(descriptions.get("aliases") or {}).items()
+        if str(key or "").strip() and str(value or "").strip()
+    }
     canonical_materials = frozenset(
         _normalize_material_compare(value)
         for value in (materials.get("canonical_materials") or [])
+        if str(value or "").strip()
+    )
+    canonical_descriptions = frozenset(
+        _normalize_text_loose_compare(value)
+        for value in (descriptions.get("canonical_descriptions") or [])
         if str(value or "").strip()
     )
     edge_aliases = {
@@ -322,6 +340,8 @@ def load_audit_config(config_root: Path) -> AuditConfig:
         note_token_aliases=note_token_aliases,
         note_protected_plus_patterns=tuple(notes.get("protected_plus_patterns") or []),
         note_uniform_context_patterns=_compile_patterns(notes.get("uniform_context_token_patterns") or []),
+        description_aliases=description_aliases,
+        canonical_descriptions=canonical_descriptions,
         material_aliases=material_aliases,
         canonical_materials=canonical_materials,
         empty_material_patterns=_compile_patterns(materials.get("empty_material_exception_patterns") or []),
@@ -451,6 +471,7 @@ def audit_lista_material_workbook(
         )
 
     note_rows: list[tuple[AuditRow, NoteAnalysis]] = []
+    description_variants: defaultdict[str, list[tuple[AuditRow, str, str]]] = defaultdict(list)
     material_variants: defaultdict[str, list[tuple[AuditRow, str, str]]] = defaultdict(list)
     technical_groups: defaultdict[str, list[tuple[AuditRow, NoteAnalysis]]] = defaultdict(list)
     orla_classifications: Counter[tuple[str, str]] = Counter()
@@ -465,6 +486,26 @@ def audit_lista_material_workbook(
 
         if not desc:
             issues.append(_row_issue(row, category="estrutura", rule_id="descricao_vazia", column_name="Descricao", severity="erro", message="Descricao vazia.", group_key="descricao_vazia"))
+        else:
+            canonical_description = _canonical_description_text(desc, config)
+            description_key = _normalize_text_loose_compare(canonical_description)
+            description_variants[description_key].append((row, desc, canonical_description))
+            if config.canonical_descriptions and description_key not in config.canonical_descriptions:
+                issues.append(
+                    _row_issue(
+                        row,
+                        category="descricao",
+                        rule_id="descricao_desconhecida",
+                        column_name="Descricao",
+                        severity="aviso",
+                        confidence="medium",
+                        raw_value=desc,
+                        normalized_value=description_key,
+                        message="Descricao nao consta na configuracao canonica.",
+                        suggestion=canonical_description or desc,
+                        group_key=f"descricao_desconhecida:{description_key}",
+                    )
+                )
         if not article:
             issues.append(_row_issue(row, category="estrutura", rule_id="artigo_vazio", column_name="Artigo", severity="erro", message="Artigo vazio.", group_key="artigo_vazio"))
         if "Qt" in row.formula_columns:
@@ -530,6 +571,24 @@ def audit_lista_material_workbook(
             canonical_material = _canonical_material_text(material_text, config)
             material_key = _normalize_material_compare(canonical_material)
             material_variants[material_key].append((row, material_text, canonical_material))
+            material_thickness = _extract_material_thickness_mm(material_text)
+            row_thickness = _parse_number(row.value("Esp"))
+            if material_thickness is not None and row_thickness is not None and abs(material_thickness - row_thickness) > 0.75:
+                issues.append(
+                    _row_issue(
+                        row,
+                        category="materiais",
+                        rule_id="material_espessura_incoerente",
+                        column_name="Material",
+                        severity="aviso",
+                        confidence="high",
+                        raw_value=material_text,
+                        normalized_value=f"{material_thickness:g}MM vs Esp {row_thickness:g}",
+                        message="Espessura indicada no material nao coincide com a coluna Esp.",
+                        suggestion=f"Confirmar material ou Esp ({material_thickness:g}MM vs {row_thickness:g}).",
+                        group_key=f"material_espessura_incoerente:{material_key}:{row_thickness:g}",
+                    )
+                )
             if config.canonical_materials and material_key not in config.canonical_materials:
                 issues.append(
                     _row_issue(
@@ -573,9 +632,44 @@ def audit_lista_material_workbook(
         for column_name in ORLA_COLUMNS:
             value = row.text(column_name)
             if value:
-                orla_classifications[(value, classify_orla_value(value, config))] += 1
+                orla_classification = classify_orla_value(value, config)
+                orla_classifications[(value, orla_classification)] += 1
+                if orla_classification == "desconhecido":
+                    issues.append(
+                        _row_issue(
+                            row,
+                            category="orlas",
+                            rule_id="orla_valor_desconhecido",
+                            column_name=column_name,
+                            severity="aviso",
+                            confidence="high",
+                            raw_value=value,
+                            normalized_value=orla_classification,
+                            message="Valor de orla fora dos padroes configurados.",
+                            suggestion="Confirmar se e orla real, maquinacao ou texto indevido.",
+                            group_key=f"orla_valor_desconhecido:{_normalize_text_compare(value)}",
+                        )
+                    )
+                elif orla_classification == "maquinacao":
+                    issues.append(
+                        _row_issue(
+                            row,
+                            category="orlas",
+                            rule_id="orla_maquinacao_em_coluna_orla",
+                            column_name=column_name,
+                            severity="sugestao",
+                            confidence="medium",
+                            raw_value=value,
+                            normalized_value=orla_classification,
+                            message="Valor de maquinacao encontrado numa coluna de orla.",
+                            suggestion="Confirmar se deveria estar em CNC_1/CNC_2 ou se e regra valida para esta lista.",
+                            group_key=f"orla_maquinacao_em_coluna_orla:{_normalize_text_compare(value)}",
+                        )
+                    )
 
+    issues.extend(_build_description_variant_issues(description_variants))
     issues.extend(_build_note_variant_issues(note_rows))
+    issues.extend(_build_note_surface_variant_issues(note_rows))
     issues.extend(_build_material_variant_issues(material_variants))
     issues.extend(_build_uniformizacao_issues(technical_groups))
     issues.extend(_build_orla_classification_issues(orla_classifications))
@@ -843,6 +937,74 @@ def _build_note_variant_issues(note_rows: list[tuple[AuditRow, NoteAnalysis]]) -
     return issues
 
 
+def _build_note_surface_variant_issues(note_rows: list[tuple[AuditRow, NoteAnalysis]]) -> list[AuditIssue]:
+    grouped: defaultdict[str, list[tuple[AuditRow, NoteAnalysis]]] = defaultdict(list)
+    for row, note in note_rows:
+        surface_key = _normalize_text_compact_compare(note.canonical_text or note.display_text)
+        if surface_key:
+            grouped[surface_key].append((row, note))
+
+    issues: list[AuditIssue] = []
+    for surface_key, items in grouped.items():
+        raw_variants = Counter(note.raw_text for _row, note in items if note.raw_text)
+        orderless_keys = {note.orderless_key for _row, note in items if note.orderless_key}
+        if len(raw_variants) <= 1 or len(orderless_keys) <= 1:
+            continue
+
+        canonical_counts = Counter(note.canonical_text for _row, note in items if note.canonical_text)
+        canonical = canonical_counts.most_common(1)[0][0] if canonical_counts else ""
+        for row, note in items:
+            issues.append(
+                AuditIssue(
+                    severity="sugestao",
+                    confidence="medium",
+                    rule_id="nota_pontuacao_variavel",
+                    category="notas",
+                    sheet_name=TARGET_SHEET_NAME,
+                    excel_row=row.excel_row,
+                    column_name="Notas",
+                    article=row.text("Artigo"),
+                    raw_value=note.raw_text,
+                    normalized_value=surface_key,
+                    message="Nota aparentemente equivalente com pontuacao/separadores diferentes.",
+                    suggestion=canonical,
+                    group_key=f"nota_pontuacao_variavel:{surface_key}",
+                )
+            )
+    return issues
+
+
+def _build_description_variant_issues(
+    description_variants: defaultdict[str, list[tuple[AuditRow, str, str]]]
+) -> list[AuditIssue]:
+    issues: list[AuditIssue] = []
+    for description_key, items in description_variants.items():
+        raw_variants = Counter(raw for _row, raw, _canonical in items if raw)
+        if len(raw_variants) <= 1:
+            continue
+        canonical_counts = Counter(canonical for _row, _raw, canonical in items if canonical)
+        canonical = canonical_counts.most_common(1)[0][0] if canonical_counts else ""
+        for row, raw, _canonical in items:
+            issues.append(
+                AuditIssue(
+                    severity="sugestao",
+                    confidence="high",
+                    rule_id="descricao_uniformizar",
+                    category="descricao",
+                    sheet_name=TARGET_SHEET_NAME,
+                    excel_row=row.excel_row,
+                    column_name="Descricao",
+                    article=row.text("Artigo"),
+                    raw_value=raw,
+                    normalized_value=description_key,
+                    message="Descricao equivalente com variantes de escrita.",
+                    suggestion=canonical,
+                    group_key=f"descricao_uniformizar:{description_key}",
+                )
+            )
+    return issues
+
+
 def _build_material_variant_issues(
     material_variants: defaultdict[str, list[tuple[AuditRow, str, str]]]
 ) -> list[AuditIssue]:
@@ -900,7 +1062,7 @@ def _build_uniformizacao_issues(
                         excel_row=row.excel_row,
                         column_name="Notas",
                         article=row.text("Artigo"),
-                        raw_value="",
+                        raw_value="<vazio>",
                         normalized_value="",
                         message="Linha tecnicamente equivalente a outras com nota preenchida; rever possivel omissao.",
                         suggestion=canonical,
@@ -1077,12 +1239,23 @@ def _build_technical_signature(row: AuditRow) -> str:
     parts = []
     for column_name in SIGNATURE_COLUMNS:
         value = row.text(column_name)
-        if column_name in ("Descricao", "Material", "Veio"):
+        if column_name in ("Artigo", "Descricao", "Material", "Veio"):
             normalized = _normalize_text_compare(value)
         else:
             normalized = _normalize_numericish_text(value)
         parts.append(f"{column_name}={normalized}")
     return "|".join(parts)
+
+
+def _canonical_description_text(description_text: str, config: AuditConfig) -> str:
+    compare_key = _normalize_text_loose_compare(description_text)
+    return config.description_aliases.get(compare_key, _normalize_description_display(description_text))
+
+
+def _normalize_description_display(description_text: str) -> str:
+    text = _stringify_value(description_text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 def _canonical_material_text(material_text: str, config: AuditConfig) -> str:
@@ -1154,6 +1327,16 @@ def _normalize_numericish_text(value: str) -> str:
     return text.upper()
 
 
+def _normalize_text_loose_compare(value: object) -> str:
+    text = _normalize_text_compare(value)
+    text = re.sub(r"[^A-Z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_text_compact_compare(value: object) -> str:
+    return re.sub(r"[^A-Z0-9]+", "", _normalize_text_compare(value))
+
+
 def _normalize_text_compare(value: object) -> str:
     text = _stringify_value(value)
     text = unicodedata.normalize("NFKD", text)
@@ -1182,6 +1365,31 @@ def _is_valid_quantity(value: object) -> bool:
         return float(text.replace(",", ".")) > 0
     except Exception:
         return False
+
+
+def _parse_number(value: object) -> Optional[float]:
+    text = _stringify_value(value)
+    if not text:
+        return None
+    text = text.replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if match is None:
+        return None
+    try:
+        return float(match.group(0))
+    except Exception:
+        return None
+
+
+def _extract_material_thickness_mm(material_text: str) -> Optional[float]:
+    compare_text = _normalize_text_compare(material_text).replace(",", ".")
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*MM\b", compare_text)
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except Exception:
+        return None
 
 
 def _compile_patterns(patterns: Iterable[str]) -> tuple[re.Pattern[str], ...]:
@@ -1225,10 +1433,32 @@ def _read_json_file(path: Path, default_payload: dict) -> dict:
     return dict(default_payload)
 
 
+def _merge_config_payload(default_payload: dict, payload: dict) -> dict:
+    merged = dict(default_payload)
+    for key, value in dict(payload or {}).items():
+        default_value = default_payload.get(key)
+        if isinstance(default_value, dict) and isinstance(value, dict):
+            merged[key] = {**default_value, **value}
+        elif isinstance(default_value, list) and isinstance(value, list):
+            seen: set[str] = set()
+            combined = []
+            for item in [*default_value, *value]:
+                marker = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                combined.append(item)
+            merged[key] = combined
+        else:
+            merged[key] = value
+    return merged
+
+
 def _sheet_title(category: str) -> str:
     mapping = {
         "estrutura": "Estrutura",
         "notas": "Notas",
+        "descricao": "Descricao",
         "materiais": "Materiais",
         "uniformizacao": "Uniformizacao",
         "orlas": "Orlas",

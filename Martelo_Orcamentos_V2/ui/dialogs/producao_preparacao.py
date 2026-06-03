@@ -378,7 +378,10 @@ class ProducaoPreparacaoDialog(QtWidgets.QDialog):
                 message = f"PDF gerado com sucesso.\n\n{path}"
             elif action_key == svc_producao_preparacao.ACTION_COPY_CUTRITE_PDF_TO_WORK:
                 path = svc_producao_preparacao.copy_cutrite_pdf_para_obra(self.context)
-                message = f"PDF do plano CUT-RITE copiado para a pasta da obra.\n\n{path}"
+                message = (
+                    "PDF do plano CUT-RITE copiado para a pasta da obra e removido da origem CUT-RITE.\n\n"
+                    f"{path}"
+                )
             elif action_key == svc_producao_preparacao.ACTION_COPY_PROGRAMS_TO_WORK:
                 path = svc_producao_preparacao.copy_programas_para_obra(self.context)
                 message = f"Programas CNC copiados para a obra.\n\n{path}"

@@ -42,6 +42,8 @@ def build_producao_table_rows(rows: Iterable) -> tuple[list[dict], list[str], li
                 "qt_artigos": row.qt_artigos,
                 "preco_total": row.preco_total,
                 "descricao_producao": row.descricao_producao,
+                "search_score": getattr(row, "search_score", 0.0),
+                "search_reason": getattr(row, "search_reason", ""),
             }
         )
         if row.nome_cliente:

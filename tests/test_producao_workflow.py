@@ -94,7 +94,16 @@ class ProducaoWorkflowTests(unittest.TestCase):
         processo = SimpleNamespace(codigo_processo="26.0417_01_01")
         with patch.object(producao_workflow.svc_producao, "obter_processo", return_value=processo), \
              patch.object(producao_workflow, "get_setting", return_value=r"D:\Base"), \
-             patch.object(producao_workflow.svc_producao, "criar_pasta_para_processo", return_value=r"D:\Base\2026\Proc") as create_mock:
+             patch.object(
+                 producao_workflow.svc_producao,
+                 "criar_pasta_para_processo_detalhe",
+                 return_value=SimpleNamespace(
+                     path=Path(r"D:\Base\2026\Proc"),
+                     created=True,
+                     reused_existing=False,
+                     warnings=("Aviso",),
+                 ),
+             ) as create_mock:
             result = producao_workflow.create_processo_folder(
                 session=object(),
                 current_id=10,
@@ -104,7 +113,67 @@ class ProducaoWorkflowTests(unittest.TestCase):
 
         self.assertEqual(result.base_dir, r"D:\Base")
         self.assertEqual(result.path, Path(r"D:\Base\2026\Proc"))
+        self.assertTrue(result.created)
+        self.assertEqual(result.warnings, ("Aviso",))
         create_mock.assert_called_once()
+
+    def test_auto_create_folder_for_processo_returns_manual_warning_on_folder_error(self):
+        processo = SimpleNamespace(
+            id=10,
+            ano="2026",
+            num_enc_phc="0417",
+            versao_obra="01",
+            versao_plano="02",
+            tipo_pasta="Encomenda de Cliente",
+            nome_cliente_simplex="CLIENTE",
+            nome_cliente="Cliente",
+            ref_cliente="REF",
+            codigo_processo="26.0417_01_02_CLIENTE",
+        )
+        with patch.object(producao_workflow, "get_setting", return_value=r"D:\Base"), \
+             patch.object(
+                 producao_workflow.svc_producao,
+                 "criar_pasta_para_processo_detalhe",
+                 side_effect=OSError("sem rede"),
+             ):
+            result = producao_workflow.auto_create_folder_for_processo(
+                session=object(),
+                processo=processo,
+                current_base_dir=r"C:\Atual",
+                tipo_pasta="Encomenda de Cliente",
+            )
+
+        self.assertIsNone(result.folder)
+        self.assertIn("sem rede", result.error_text)
+        self.assertEqual(
+            result.expected_path,
+            Path(r"D:\Base\2026\Encomenda de Cliente\0417_CLIENTE\0417_01_CLIENTE\0417_01_02_CLIENTE"),
+        )
+
+    def test_build_process_creation_message_includes_folder_status(self):
+        processo = SimpleNamespace(codigo_processo="26.0417_01_02_CLIENTE")
+        folder = producao_workflow.ProcessoFolderResult(
+            processo=processo,
+            base_dir=r"D:\Base",
+            path=Path(r"D:\Base\Proc"),
+            created=False,
+            reused_existing=True,
+            warnings=("Nome simplex diferente.",),
+        )
+        auto = producao_workflow.ProcessoAutoFolderResult(
+            processo=processo,
+            base_dir=r"D:\Base",
+            folder=folder,
+        )
+
+        message = producao_workflow.build_process_creation_message(
+            action_text="Processo criado",
+            processo=processo,
+            auto_folder=auto,
+        )
+
+        self.assertIn("Pasta servidor existente reutilizada", message)
+        self.assertIn("Nome simplex diferente.", message)
 
     def test_open_processo_folder_returns_path(self):
         processo = SimpleNamespace(codigo_processo="26.0417_01_01")

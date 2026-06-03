@@ -178,9 +178,13 @@ class OrcamentosPage(QtWidgets.QWidget):
         lbl_search = QtWidgets.QLabel("Pesquisa:")
         self.ed_search = QtWidgets.QLineEdit()
         self.ed_search.setMinimumWidth(320)
-        self.ed_search.setPlaceholderText("Pesquisar orcamentos - use % para multi-termos")
+        self.ed_search.setPlaceholderText("Pesquisar orcamentos - use espaco ou % para multi-termos")
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self._perform_search)
         self.ed_search.textChanged.connect(self.on_search)
         self.ed_search.textChanged.connect(self._update_clear_search_button)
+        self.ed_search.returnPressed.connect(self._perform_search)
         self.btn_clear_search = QToolButton()
         self.btn_clear_search.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
         self.btn_clear_search.setToolTip("Limpar pesquisa")
@@ -224,8 +228,8 @@ class OrcamentosPage(QtWidgets.QWidget):
                 {"header": "Num Orcamento", "attr": "num_orcamento", "editable": False},
                 {"header": "Versao", "attr": "versao", "editable": False},
                 {"header": "Enc PHC", "attr": "enc_phc", "formatter": self._format_enc_phc, "editable": False},
-                {"header": "Cliente", "attr": "cliente", "editable": False},
-                {"header": "Ref. Cliente", "attr": "ref_cliente", "editable": False},
+                {"header": "Cliente", "attr": "cliente", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Ref. Cliente", "attr": "ref_cliente", "tooltip": self._orcamento_search_tooltip, "editable": False},
                 {"header": "Data", "attr": "data", "editable": False},
                 {
                     "header": "Preco",
@@ -234,13 +238,13 @@ class OrcamentosPage(QtWidgets.QWidget):
                     "tooltip": self._preco_tooltip,
                     "editable": False,
                 },
-                {"header": "Utilizador", "attr": "utilizador", "editable": False},
-                {"header": "Estado", "attr": "estado", "editable": False},
-                {"header": "Obra", "attr": "obra", "editable": False},
-                {"header": "Localizacao", "attr": "localizacao", "editable": False},
-                {"header": "Descricao", "attr": "descricao", "editable": False},
-                {"header": "Info 1", "attr": "info_1", "editable": False},
-                {"header": "Info 2", "attr": "info_2", "editable": False},
+                {"header": "Utilizador", "attr": "utilizador", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Estado", "attr": "estado", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Obra", "attr": "obra", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Localizacao", "attr": "localizacao", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Descricao", "attr": "descricao", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Info 1", "attr": "info_1", "tooltip": self._orcamento_search_tooltip, "editable": False},
+                {"header": "Info 2", "attr": "info_2", "tooltip": self._orcamento_search_tooltip, "editable": False},
                 {"header": "ID", "attr": "id", "editable": False},
             ]
         )
@@ -924,6 +928,9 @@ class OrcamentosPage(QtWidgets.QWidget):
 
     def _reset_list_filters(self) -> None:
         self._search_text = ""
+        timer = getattr(self, "_search_timer", None)
+        if timer is not None:
+            timer.stop()
         try:
             self.ed_search.blockSignals(True)
             self.ed_search.clear()
@@ -957,6 +964,7 @@ class OrcamentosPage(QtWidgets.QWidget):
         if not hasattr(self, "ed_search"):
             return
         self.ed_search.clear()
+        self._perform_search()
 
     def focus_orcamento_by_id(self, oid: int, *, open_items: bool = False) -> bool:
         request = build_focus_request(oid, open_items=open_items)
@@ -1389,6 +1397,13 @@ class OrcamentosPage(QtWidgets.QWidget):
         except Exception:
             return None
 
+    def _orcamento_search_tooltip(self, row_obj, val, _spec):
+        reason = str(getattr(row_obj, "search_reason", "") or "").strip()
+        value = "" if val in (None, "") else str(val).strip()
+        if reason and getattr(self, "_search_text", ""):
+            return f"{reason}\nValor atual: {value}" if value else reason
+        return value or None
+
     @staticmethod
     def _parse_currency(text):
         return parse_currency_pt(text)
@@ -1396,6 +1411,40 @@ class OrcamentosPage(QtWidgets.QWidget):
     def _confirm_ref_cliente_duplicate(self, ref_cliente: str, matches) -> bool:
         rows = svc_orc_workflow.build_ref_cliente_match_rows(self.db, matches)
         return confirm_ref_cliente_duplicate(self, ref_cliente=ref_cliente, match_rows=rows)
+
+    def _confirm_orcamento_db_delete(self, row) -> bool:
+        if not row:
+            return False
+        ano = str(getattr(row, "ano", "") or "").strip()
+        num = str(getattr(row, "num_orcamento", "") or "").strip()
+        versao = str(getattr(row, "versao", "") or "").strip()
+        cliente = str(getattr(row, "cliente", "") or "").strip()
+        identity = f"{num}/{versao}" if num or versao else str(getattr(row, "id", "") or "").strip()
+        token = f"ELIMINAR {identity}".strip()
+        prompt = (
+            "Vai eliminar permanentemente este orcamento da Base de Dados.\n\n"
+            f"Ano: {ano or 'n/d'}\n"
+            f"Orcamento: {num or 'n/d'}\n"
+            f"Versao: {versao or 'n/d'}\n"
+            f"Cliente: {cliente or 'n/d'}\n\n"
+            "Esta acao e irreversivel e pode remover tambem os dados associados ao orcamento.\n\n"
+            f"Para confirmar, escreva exatamente:\n{token}"
+        )
+        typed, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Confirmar eliminacao na Base de Dados",
+            prompt,
+        )
+        if not ok:
+            return False
+        if str(typed or "").strip().upper() != token.upper():
+            QtWidgets.QMessageBox.information(
+                self,
+                "Eliminacao cancelada",
+                "O texto de confirmacao nao corresponde. Nenhum dado foi eliminado.",
+            )
+            return False
+        return True
 
     def _prepare_new_form(self, ano: Optional[str] = None):
         """Prepara o formulario para um novo orcamento."""
@@ -1594,8 +1643,9 @@ class OrcamentosPage(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao duplicar: {e}")
 
     def on_delete(self):
+        row = self.selected_row()
         oid = self.selected_id()
-        if not oid:
+        if not oid or not row:
             return
         box = QtWidgets.QMessageBox(self)
         box.setWindowTitle("Eliminar Orcamento")
@@ -1606,6 +1656,8 @@ class OrcamentosPage(QtWidgets.QWidget):
         box.exec()
         clicked = box.clickedButton()
         if clicked == btn_bd:
+            if not self._confirm_orcamento_db_delete(row):
+                return
             try:
                 svc_orc_workflow.delete_orcamento_record(self.db, oid)
                 self.db.commit()
@@ -1741,9 +1793,27 @@ class OrcamentosPage(QtWidgets.QWidget):
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Erro", f"Falha ao abrir pasta: {e}")
 
+    def _perform_search(self) -> None:
+        timer = getattr(self, "_search_timer", None)
+        if timer is not None:
+            timer.stop()
+        if not hasattr(self, "ed_search"):
+            return
+        text = self.ed_search.text()
+        # Atualizar flag de pesquisa ativa (para evitar auto-refresh durante pesquisa)
+        self._search_text = text.strip()
+
+        rows = search_orcamentos(self.db, text)
+        if self._search_text:
+            self.table.setSortingEnabled(False)
+        else:
+            self.table.setSortingEnabled(True)
+        self.model.set_rows(rows)
+
     def on_search(self, text: str):
         # Atualizar flag de pesquisa ativa (para evitar auto-refresh durante pesquisa)
         self._search_text = text.strip()
-        
-        rows = search_orcamentos(self.db, text)
-        self.model.set_rows(rows)
+        try:
+            self._search_timer.start(280)
+        except Exception:
+            self._perform_search()

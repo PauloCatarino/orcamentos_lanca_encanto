@@ -1,12 +1,14 @@
 ﻿import datetime
 import json
+import difflib
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
-from sqlalchemy import select, func, and_, or_, delete
+from sqlalchemy import String, cast, select, func, and_, or_, delete
 from sqlalchemy.orm import Session
 
 from ..utils.date_utils import today_storage
@@ -41,6 +43,57 @@ logger = logging.getLogger(__name__)
 PRECO_MANUAL_KEY = "preco_manual"
 TEMP_CLIENT_ID_KEY = "temp_client_id"
 TEMP_CLIENT_NAME_KEY = "temp_client_nome"
+ORCAMENTO_FUZZY_CANDIDATE_LIMIT = 5000
+
+_SEARCH_SYNONYMS_ORCAMENTOS: dict[str, tuple[str, ...]] = {
+    "armario": ("roupeiro", "closet"),
+    "armarios": ("roupeiros", "closets"),
+    "closet": ("roupeiro", "armario"),
+    "closets": ("roupeiros", "armarios"),
+    "batente": ("abrir",),
+    "batentes": ("abrir",),
+    "lacado": ("laca", "pintado"),
+    "lacada": ("laca", "pintada"),
+    "lacados": ("laca", "pintados"),
+    "lacadas": ("laca", "pintadas"),
+    "melamina": ("mlm",),
+    "mlm": ("melamina",),
+    "gavetao": ("gaveta",),
+    "gavetoes": ("gavetas",),
+}
+
+_SEARCH_FIELDS_ORCAMENTOS = (
+    cast(Orcamento.id, String),
+    Orcamento.num_orcamento,
+    Orcamento.ano,
+    Orcamento.versao,
+    Orcamento.enc_phc,
+    Orcamento.status,
+    Orcamento.data,
+    cast(Orcamento.preco_total, String),
+    Orcamento.ref_cliente,
+    Orcamento.obra,
+    Orcamento.descricao_orcamento,
+    Orcamento.localizacao,
+    Orcamento.info_1,
+    Orcamento.info_2,
+    Orcamento.notas,
+    Client.nome,
+    Client.nome_simplex,
+    User.username,
+)
+
+_SEARCH_FIELDS_ORCAMENTO_ITEMS = (
+    OrcamentoItem.item,
+    OrcamentoItem.codigo,
+    OrcamentoItem.descricao,
+    cast(OrcamentoItem.altura, String),
+    cast(OrcamentoItem.largura, String),
+    cast(OrcamentoItem.profundidade, String),
+    OrcamentoItem.und,
+    cast(OrcamentoItem.qt, String),
+    OrcamentoItem.notas,
+)
 
 
 def _delete_item_related_rows(db: Session, id_item: int) -> None:
@@ -52,7 +105,10 @@ def _delete_item_related_rows(db: Session, id_item: int) -> None:
             delete(DadosItemsModeloItem).where(DadosItemsModeloItem.modelo_id.in_(model_ids))
         )
 
+    custeio_item_ids = select(CusteioItem.id).where(CusteioItem.item_id == id_item)
+
     delete_specs = (
+        (CusteioDespBackup, CusteioDespBackup.custeio_item_id.in_(custeio_item_ids)),
         (CusteioItemDimensoes, CusteioItemDimensoes.item_id == id_item),
         (CusteioItem, CusteioItem.item_id == id_item),
         (DadosItemsModelo, DadosItemsModelo.item_id == id_item),
@@ -91,6 +147,8 @@ class OrcamentoResumo:
     info_1: str
     info_2: str
     ref_cliente: str
+    search_score: float = 0.0
+    search_reason: str = ""
 
 
 def _format_versao(value: Optional[str]) -> str:
@@ -509,10 +567,11 @@ def delete_item(
     item_nome = it.item or "(sem nome)"
 
     logger.info(
-        "Item '%s' (ID=%s) removido do orcamento %s por utilizador %s",
+        "A remover item '%s' (ID=%s) do orcamento %s versao %s por utilizador %s",
         item_nome,
         id_item,
         orc_id,
+        versao,
         deleted_by,
     )
 
@@ -522,6 +581,14 @@ def delete_item(
 
     # Reorganizar ordenacao/numeracao dos restantes itens da mesma versao
     _reindex_items(db, orc_id, versao=versao, updated_by=deleted_by)
+    logger.info(
+        "Item '%s' (ID=%s) removido do orcamento %s versao %s por utilizador %s",
+        item_nome,
+        id_item,
+        orc_id,
+        versao,
+        deleted_by,
+    )
     return True
 
 
@@ -1092,32 +1159,338 @@ def duplicate_orcamento_version(
     return dup
 
 
-def search_orcamentos(db: Session, query: str) -> List[OrcamentoResumo]:
+def _normalize_search_text(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    txt = unicodedata.normalize("NFKD", raw)
+    txt = "".join(ch for ch in txt if not unicodedata.combining(ch))
+    txt = txt.casefold()
+    txt = re.sub(r"[^0-9a-z]+", " ", txt)
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return txt
+
+
+def _uniq_search_terms(terms: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for term in terms:
+        token = (term or "").strip()
+        if not token:
+            continue
+        key = token.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(token)
+    return out
+
+
+def _split_terms_percent(query: str) -> list[str]:
+    return _uniq_search_terms([term.strip() for term in str(query or "").split("%") if term.strip()])
+
+
+def _split_terms_raw(query: str) -> list[str]:
+    if not (query or "").strip():
+        return []
+    cleaned = str(query).replace("%", " ").strip()
+    parts = [part.strip(".,;:!?'\"()[]{}<>") for part in cleaned.split()]
+    return _uniq_search_terms([part for part in parts if part])
+
+
+def _split_terms_normalized(query: str) -> list[str]:
+    norm = _normalize_search_text(query or "")
+    return _uniq_search_terms(norm.split()) if norm else []
+
+
+def _term_alternatives(term: str, *, expand: bool) -> tuple[str, ...]:
+    alternatives = [str(term or "").strip()]
+    if expand:
+        norm = _normalize_search_text(term)
+        if norm and norm not in {alt.casefold() for alt in alternatives}:
+            alternatives.append(norm)
+        alternatives.extend(_SEARCH_SYNONYMS_ORCAMENTOS.get(norm, ()))
+    return tuple(_uniq_search_terms(alternatives))
+
+
+def _item_search_exists(term: str):
+    like = f"%{term}%"
+    return (
+        select(OrcamentoItem.id_item)
+        .where(
+            OrcamentoItem.id_orcamento == Orcamento.id,
+            OrcamentoItem.versao == Orcamento.versao,
+            or_(*[field.ilike(like) for field in _SEARCH_FIELDS_ORCAMENTO_ITEMS]),
+        )
+        .correlate(Orcamento)
+        .exists()
+    )
+
+
+def _build_search_filters_orcamentos(
+    terms: Sequence[str],
+    *,
+    expand: bool = False,
+    include_items: bool = False,
+):
+    filters = []
+    for term in terms:
+        term_filters = []
+        for alternative in _term_alternatives(term, expand=expand):
+            like = f"%{alternative}%"
+            term_filters.extend(field.ilike(like) for field in _SEARCH_FIELDS_ORCAMENTOS)
+            if include_items:
+                term_filters.append(_item_search_exists(alternative))
+        if term_filters:
+            filters.append(or_(*term_filters))
+    return filters
+
+
+def _orcamento_blob(row: OrcamentoResumo) -> str:
+    parts = []
+    for attr in (
+        "id",
+        "ano",
+        "num_orcamento",
+        "versao",
+        "enc_phc",
+        "cliente",
+        "temp_client_nome",
+        "data",
+        "preco",
+        "utilizador",
+        "estado",
+        "obra",
+        "descricao",
+        "localizacao",
+        "info_1",
+        "info_2",
+        "ref_cliente",
+    ):
+        value = getattr(row, attr, None)
+        if value in (None, ""):
+            continue
+        parts.append(str(value))
+    return " | ".join(parts)
+
+
+def _item_blobs_for_orcamentos(db: Session, rows: Sequence[OrcamentoResumo]) -> dict[int, str]:
+    ids = [int(row.id) for row in rows if getattr(row, "id", None) is not None]
+    if not ids:
+        return {}
+    stmt = select(
+        OrcamentoItem.id_orcamento,
+        OrcamentoItem.item,
+        OrcamentoItem.codigo,
+        OrcamentoItem.descricao,
+        OrcamentoItem.notas,
+        cast(OrcamentoItem.altura, String),
+        cast(OrcamentoItem.largura, String),
+        cast(OrcamentoItem.profundidade, String),
+        OrcamentoItem.und,
+    ).where(OrcamentoItem.id_orcamento.in_(ids))
+    item_blobs: dict[int, list[str]] = {}
+    for row in db.execute(stmt).all():
+        parts = [
+            str(value)
+            for value in row[1:]
+            if value not in (None, "")
+        ]
+        if not parts:
+            continue
+        item_blobs.setdefault(int(row.id_orcamento), []).append(" | ".join(parts))
+    return {oid: " || ".join(parts) for oid, parts in item_blobs.items()}
+
+
+def _expanded_normalized_terms(term_norm: str) -> list[str]:
+    terms = [term_norm]
+    terms.extend(_SEARCH_SYNONYMS_ORCAMENTOS.get(term_norm, ()))
+    return _uniq_search_terms([_normalize_search_text(term) for term in terms if term])
+
+
+def _score_term_in_text(term_norm: str, text_norm: str) -> tuple[float, str, str]:
+    if not term_norm or not text_norm:
+        return 0.0, "", ""
+    alternatives = _expanded_normalized_terms(term_norm)
+    for alt in alternatives:
+        if alt and alt in text_norm:
+            if alt == term_norm:
+                return 1.0, "direct", alt
+            return 0.9, "synonym", alt
+    if len(term_norm) < 4:
+        return 0.0, "", ""
+    close = difflib.get_close_matches(term_norm, set(text_norm.split()), n=1, cutoff=0.84)
+    if not close:
+        return 0.0, "", ""
+    ratio = difflib.SequenceMatcher(None, term_norm, close[0]).ratio()
+    return ratio * 0.72, "fuzzy", close[0]
+
+
+def _build_search_reason(label: str, term_norm: str, kind: str, matched: str) -> str:
+    if kind == "synonym":
+        return f"Encontrado por sinonimo: {term_norm} -> {matched} ({label})"
+    if kind == "fuzzy":
+        return f"Encontrado por aproximacao: {term_norm} ~ {matched} ({label})"
+    return f"Encontrado em: {label}"
+
+
+def _rank_orcamento_rows(
+    db: Session,
+    rows: Sequence[OrcamentoResumo],
+    query: str,
+    *,
+    item_blobs: Optional[dict[int, str]] = None,
+) -> List[OrcamentoResumo]:
+    rows_list = list(rows)
+    terms_norm = _split_terms_normalized(query)
+    if not rows_list or not terms_norm:
+        return rows_list
+    item_blobs = item_blobs if item_blobs is not None else _item_blobs_for_orcamentos(db, rows_list)
+
+    ranked: list[tuple[float, str, str, str, OrcamentoResumo]] = []
+    for row in rows_list:
+        sections = (
+            ("Referencia", 8.0, f"{row.num_orcamento} {row.enc_phc} {row.ref_cliente} {row.ano} {row.versao}"),
+            ("Cliente", 7.0, f"{row.cliente} {row.temp_client_nome}"),
+            ("Obra", 6.0, row.obra),
+            ("Descricao", 5.0, row.descricao),
+            ("Item", 4.5, item_blobs.get(int(row.id), "")),
+            ("Info/Localizacao", 3.0, f"{row.info_1} {row.info_2} {row.localizacao}"),
+            ("Estado/Utilizador/Data", 2.0, f"{row.estado} {row.utilizador} {row.data}"),
+        )
+        score = 0.0
+        best_reason = ""
+        best_reason_score = 0.0
+        for term_norm in terms_norm:
+            best_term_score = 0.0
+            best_term_reason = ""
+            for label, weight, text_value in sections:
+                match_score, match_kind, matched = _score_term_in_text(term_norm, _normalize_search_text(text_value))
+                if match_score <= 0:
+                    continue
+                weighted = weight * match_score
+                if weighted > best_term_score:
+                    best_term_score = weighted
+                    best_term_reason = _build_search_reason(label, term_norm, match_kind, matched)
+            score += best_term_score
+            if best_term_score > best_reason_score:
+                best_reason_score = best_term_score
+                best_reason = best_term_reason
+
+        row.search_score = float(score)
+        row.search_reason = best_reason
+        ranked.append((float(score), str(row.ano), str(row.num_orcamento), str(row.versao), row))
+
+    ranked.sort(key=lambda item: item[:4], reverse=True)
+    return [row for _, _, _, _, row in ranked]
+
+
+def _fuzzy_match_blob(blob_norm: str, *, terms_norm: Sequence[str]) -> Optional[float]:
+    if not terms_norm:
+        return 0.0
+    if not blob_norm:
+        return None
+    words = set(blob_norm.split())
+    score = 0.0
+    for term in terms_norm:
+        if term in blob_norm:
+            score += 1.0
+            continue
+        alternatives = _SEARCH_SYNONYMS_ORCAMENTOS.get(term, ())
+        if any(alt in blob_norm for alt in alternatives):
+            score += 0.95
+            continue
+        if len(term) < 4:
+            return None
+        close = difflib.get_close_matches(term, words, n=1, cutoff=0.82)
+        if not close:
+            return None
+        score += difflib.SequenceMatcher(None, term, close[0]).ratio()
+    return score
+
+
+def _fuzzy_search_orcamentos(db: Session, query: str) -> List[OrcamentoResumo]:
+    terms_norm = _split_terms_normalized(query)
+    stmt = (
+        _select_orcamentos()
+        .order_by(Orcamento.ano.desc(), Orcamento.num_orcamento.desc(), Orcamento.versao)
+        .limit(ORCAMENTO_FUZZY_CANDIDATE_LIMIT)
+    )
+    candidates = _rows_from_stmt(db, stmt)
+    item_blobs = _item_blobs_for_orcamentos(db, candidates)
+    scored: list[tuple[float, OrcamentoResumo]] = []
+    for row in candidates:
+        blob = f"{_orcamento_blob(row)} | {item_blobs.get(int(row.id), '')}"
+        score = _fuzzy_match_blob(_normalize_search_text(blob), terms_norm=terms_norm)
+        if score is None:
+            continue
+        scored.append((float(score), row))
+    scored.sort(key=lambda item: (item[0], str(item[1].ano), str(item[1].num_orcamento), str(item[1].versao)), reverse=True)
+    fuzzy_scores = {int(getattr(row, "id", 0) or 0): float(score) for score, row in scored}
+    ranked_rows = _rank_orcamento_rows(db, [row for _, row in scored], query, item_blobs=item_blobs)
+    for row in ranked_rows:
+        row_id = int(getattr(row, "id", 0) or 0)
+        row.search_score = max(float(getattr(row, "search_score", 0.0) or 0.0), fuzzy_scores.get(row_id, 0.0))
+        if not row.search_reason:
+            row.search_reason = "Encontrado por aproximacao"
+    ranked_rows.sort(key=lambda row: (float(getattr(row, "search_score", 0.0) or 0.0), str(row.ano), str(row.num_orcamento), str(row.versao)), reverse=True)
+    return ranked_rows
+
+
+def search_orcamentos(db: Session, query: str, *, approx: bool = True) -> List[OrcamentoResumo]:
     if not (query or "").strip():
         return list_orcamentos(db)
-    terms = [t.strip() for t in query.split('%') if t.strip()]
-    if not terms:
+
+    def _run_sql(
+        terms: Sequence[str],
+        *,
+        expand: bool = False,
+        include_items: bool = False,
+    ) -> List[OrcamentoResumo]:
+        filters = _build_search_filters_orcamentos(terms, expand=expand, include_items=include_items)
+        if not filters:
+            return []
+        stmt = _select_orcamentos().where(*filters)
+        stmt = stmt.order_by(Orcamento.ano.desc(), Orcamento.num_orcamento.desc(), Orcamento.versao)
+        return _rank_orcamento_rows(db, _rows_from_stmt(db, stmt), query)
+
+    # 1) comportamento antigo: multi-termos apenas por '%'.
+    legacy_terms = _split_terms_percent(query)
+    if not legacy_terms:
         return list_orcamentos(db)
-    # Join leve com clients para procurar por nome
-    stmt = _select_orcamentos()
-    for t in terms:
-        like = f"%{t}%"
-        stmt = stmt.where(
-            or_(
-                Orcamento.num_orcamento.ilike(like),
-                Orcamento.ano.ilike(like),
-                Orcamento.versao.ilike(like),
-                Orcamento.status.ilike(like),
-                Orcamento.ref_cliente.ilike(like),
-                Orcamento.obra.ilike(like),
-                Orcamento.descricao_orcamento.ilike(like),
-                Orcamento.localizacao.ilike(like),
-                Orcamento.info_1.ilike(like),
-                Orcamento.info_2.ilike(like),
-                Client.nome.ilike(like),
-                Client.nome_simplex.ilike(like),
-            )
-        )
-    stmt = stmt.order_by(Orcamento.ano.desc(), Orcamento.num_orcamento.desc(), Orcamento.versao)
-    return _rows_from_stmt(db, stmt)
+    rows = _run_sql(legacy_terms)
+    if rows:
+        return rows
+
+    # 2) pesquisa natural: '%' e espaco como separadores de multi-termos.
+    raw_terms = _split_terms_raw(query)
+    if raw_terms and raw_terms != legacy_terms:
+        rows = _run_sql(raw_terms)
+        if rows:
+            return rows
+
+    # 3) expansao leve: texto sem acentos/pontuacao e sinonimos do dominio.
+    search_terms = raw_terms or legacy_terms
+    rows = _run_sql(search_terms, expand=True)
+    if rows:
+        return rows
+
+    rows = _run_sql(search_terms, expand=True, include_items=True)
+    if rows:
+        return rows
+
+    norm_terms = _split_terms_normalized(query)
+    if norm_terms and norm_terms != search_terms:
+        rows = _run_sql(norm_terms, expand=True)
+        if rows:
+            return rows
+        rows = _run_sql(norm_terms, expand=True, include_items=True)
+        if rows:
+            return rows
+
+    if not approx:
+        return []
+
+    # 4) fallback aproximado em memoria sobre os orcamentos mais recentes.
+    return _fuzzy_search_orcamentos(db, query)
 

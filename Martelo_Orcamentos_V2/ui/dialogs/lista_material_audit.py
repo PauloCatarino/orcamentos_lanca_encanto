@@ -15,6 +15,7 @@ class ListaMaterialAuditDialog(QtWidgets.QDialog):
     CATEGORY_TITLES = {
         "estrutura": "Estrutura",
         "notas": "Notas",
+        "descricao": "Descricao",
         "materiais": "Materiais",
         "uniformizacao": "Uniformizacao",
         "orlas": "Orlas",

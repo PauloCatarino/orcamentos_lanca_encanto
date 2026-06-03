@@ -464,6 +464,40 @@ class ProducaoPreparacaoTests(unittest.TestCase):
             self.assertEqual(output_path, work_folder / "PROC_PLANO.pdf")
             self.assertTrue(output_path.is_file())
             self.assertEqual(output_path.read_text(encoding="utf-8"), "pdf")
+            self.assertFalse(source_pdf.exists())
+
+    def test_copy_cutrite_pdf_para_obra_reports_when_source_delete_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            work_folder = base / "obra"
+            work_folder.mkdir()
+            cutrite_export_root = base / "cutrite_exports"
+            cutrite_export_root.mkdir()
+            source_pdf = cutrite_export_root / "PROC_PLANO.pdf"
+            source_pdf.write_text("pdf", encoding="utf-8")
+
+            context = producao_preparacao.ProducaoPreparacaoContext(
+                processo=SimpleNamespace(id=1),
+                work_folder=work_folder,
+                nome_enc_imos="PROC",
+                nome_plano_cut_rite="PROC_PLANO",
+                cnc_source_root=base / "cnc_root",
+                cnc_source_folder=base / "cnc_root" / "PROC",
+                work_programs_folder=work_folder / "PROC",
+                mpr_root=base / "mpr_root",
+                mpr_year_folder=base / "mpr_root" / "2026_MPR",
+                mpr_programs_folder=base / "mpr_root" / "2026_MPR" / "PROC",
+                conj_pdf_path=work_folder / producao_preparacao.CONJ_PDF_FILENAME,
+                projeto_pdf_path=work_folder / producao_preparacao.PROJETO_PRODUCAO_PDF_FILENAME,
+                cutrite_export_root=cutrite_export_root,
+            )
+
+            with patch.object(Path, "unlink", side_effect=PermissionError("bloqueado")):
+                with self.assertRaisesRegex(OSError, "nao foi possivel eliminar a origem CUT-RITE"):
+                    producao_preparacao.copy_cutrite_pdf_para_obra(context)
+
+            self.assertTrue((work_folder / "PROC_PLANO.pdf").is_file())
+            self.assertTrue(source_pdf.is_file())
 
     def test_cutrite_pdf_status_is_outdated_when_export_is_newer_than_work_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

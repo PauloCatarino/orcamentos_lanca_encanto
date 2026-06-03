@@ -1,0 +1,4 @@
+interface:
+  display_name: "Martelo Dados Gerais / Items"
+  short_description: "Logica funcional de Dados Gerais e Dados Items"
+  default_prompt: "Use $martelo-dados-gerais-items to analisar, documentar ou alterar Dados Gerais, Dados Items e a ponte para Custeio Items no Martelo."

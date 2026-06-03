@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from Martelo_Orcamentos_V2.app.models import (
+    CusteioDespBackup,
     CusteioItem,
     CusteioItemDimensoes,
     DadosDefPecas,
@@ -58,6 +59,7 @@ class OrcamentosDeleteItemTests(unittest.TestCase):
             delete_tables,
             [
                 DadosItemsModeloItem.__tablename__,
+                CusteioDespBackup.__tablename__,
                 CusteioItemDimensoes.__tablename__,
                 CusteioItem.__tablename__,
                 DadosItemsModelo.__tablename__,

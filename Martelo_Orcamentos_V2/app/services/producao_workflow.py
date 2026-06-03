@@ -45,6 +45,18 @@ class ProcessoFolderResult:
     processo: Producao
     base_dir: str
     path: Path
+    created: bool = False
+    reused_existing: bool = False
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProcessoAutoFolderResult:
+    processo: Producao
+    base_dir: str
+    folder: Optional[ProcessoFolderResult]
+    error_text: str = ""
+    expected_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -652,14 +664,118 @@ def create_processo_folder(
         missing_selection_message="Grave primeiro o processo antes de criar pasta.",
     )
     base_dir = _resolve_base_dir(session, current_base_dir)
-    path = svc_producao.criar_pasta_para_processo(
+    resolution = svc_producao.criar_pasta_para_processo_detalhe(
         session,
         int(current_id),
         base_dir=base_dir,
         tipo_pasta=tipo_pasta,
         pasta_nome_custom=None,
     )
-    return ProcessoFolderResult(processo=processo, base_dir=base_dir, path=Path(path))
+    return ProcessoFolderResult(
+        processo=processo,
+        base_dir=base_dir,
+        path=Path(resolution.path),
+        created=resolution.created,
+        reused_existing=resolution.reused_existing,
+        warnings=resolution.warnings,
+    )
+
+
+def auto_create_folder_for_processo(
+    session: Session,
+    processo: Producao,
+    *,
+    current_base_dir: str,
+    tipo_pasta: Optional[str],
+) -> ProcessoAutoFolderResult:
+    try:
+        base_dir = _resolve_base_dir(session, current_base_dir)
+    except Exception as exc:
+        return ProcessoAutoFolderResult(
+            processo=processo,
+            base_dir=str(current_base_dir or ""),
+            folder=None,
+            error_text=str(exc),
+            expected_path=None,
+        )
+    expected_path: Optional[Path] = None
+    try:
+        expected_path = svc_producao.caminho_esperado_para_processo(
+            session,
+            processo,
+            base_dir=base_dir,
+            tipo_pasta=tipo_pasta,
+            pasta_nome_custom=None,
+        )
+    except Exception:
+        expected_path = None
+
+    try:
+        resolution = svc_producao.criar_pasta_para_processo_detalhe(
+            session,
+            int(getattr(processo, "id")),
+            base_dir=base_dir,
+            tipo_pasta=tipo_pasta,
+            pasta_nome_custom=None,
+        )
+        folder = ProcessoFolderResult(
+            processo=processo,
+            base_dir=base_dir,
+            path=Path(resolution.path),
+            created=resolution.created,
+            reused_existing=resolution.reused_existing,
+            warnings=resolution.warnings,
+        )
+        return ProcessoAutoFolderResult(
+            processo=processo,
+            base_dir=base_dir,
+            folder=folder,
+            expected_path=Path(resolution.path),
+        )
+    except Exception as exc:
+        return ProcessoAutoFolderResult(
+            processo=processo,
+            base_dir=base_dir,
+            folder=None,
+            error_text=str(exc),
+            expected_path=expected_path,
+        )
+
+
+def build_process_creation_message(
+    *,
+    action_text: str,
+    processo: Producao,
+    auto_folder: Optional[ProcessoAutoFolderResult],
+) -> str:
+    lines = [f"{action_text}: {getattr(processo, 'codigo_processo', '')}"]
+    if auto_folder and auto_folder.folder:
+        folder = auto_folder.folder
+        lines.append("")
+        lines.append("Pasta servidor criada:" if folder.created else "Pasta servidor existente reutilizada:")
+        lines.append(str(folder.path))
+        if folder.warnings:
+            lines.append("")
+            lines.append("Aviso:")
+            lines.extend(folder.warnings)
+        return "\n".join(lines)
+
+    lines.append("")
+    lines.append("Aviso: nao foi possivel criar/validar a Pasta Servidor automaticamente.")
+    if auto_folder and auto_folder.error_text:
+        lines.append(f"Erro: {auto_folder.error_text}")
+    lines.append("")
+    lines.append("A pasta deve ser criada manualmente no servidor com esta hierarquia:")
+    lines.append("1. Num_Enc_PHC + Nome Cliente Simplex")
+    lines.append("2. Num_Enc_PHC + Versao Obra + Nome Cliente Simplex")
+    lines.append("3. Num_Enc_PHC + Versao Obra + Versao CutRite + Nome Cliente Simplex")
+    if auto_folder and auto_folder.expected_path:
+        lines.append("")
+        lines.append("Pasta final esperada:")
+        lines.append(str(auto_folder.expected_path))
+    lines.append("")
+    lines.append("Depois de criar manualmente, use 'Abrir Pasta' para o Martelo validar e associar o caminho.")
+    return "\n".join(lines)
 
 
 def open_processo_folder(
@@ -685,7 +801,8 @@ def resolve_pdf_manager_target(session: Session, current_id: Optional[int]) -> P
     processo = load_processo_required(session, current_id)
     if not getattr(processo, "pasta_servidor", None):
         raise ValueError(
-            "Pasta Servidor em falta.\n\nUse 'Criar Pasta' para gerar a pasta da obra no servidor."
+            "Pasta Servidor em falta.\n\n"
+            "Crie a pasta manualmente com a hierarquia da Producao e use 'Abrir Pasta' para validar o caminho."
         )
     return processo
 
@@ -1124,7 +1241,10 @@ def prepare_lista_material_imos(
 
     pasta_txt = str(pasta_servidor or "").strip()
     if not pasta_txt:
-        raise ValueError("Pasta Servidor em falta.\n\nUse 'Criar Pasta' para gerar a pasta da obra no servidor.")
+        raise ValueError(
+            "Pasta Servidor em falta.\n\n"
+            "Crie a pasta manualmente com a hierarquia da Producao e use 'Abrir Pasta' para validar o caminho."
+        )
 
     folder_path = Path(pasta_txt)
     if not folder_path.exists() or not folder_path.is_dir():

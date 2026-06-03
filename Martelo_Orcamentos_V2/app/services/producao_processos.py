@@ -45,6 +45,14 @@ class PastaInfo:
         return path
 
 
+@dataclass(frozen=True)
+class ProcessoFolderResolution:
+    path: Path
+    created: bool
+    reused_existing: bool
+    warnings: Tuple[str, ...] = ()
+
+
 def _two_digit(value: str | int | None) -> str:
     """Normaliza para 2 digitos (zero-fill)."""
     if value is None:
@@ -796,6 +804,23 @@ _SEARCH_FIELDS_PRODUCAO = (
     Producao.tipo_pasta,
 )
 
+_SEARCH_SYNONYMS_PRODUCAO: dict[str, tuple[str, ...]] = {
+    "armario": ("roupeiro", "closet"),
+    "armarios": ("roupeiros", "closets"),
+    "closet": ("roupeiro", "armario"),
+    "closets": ("roupeiros", "armarios"),
+    "batente": ("abrir",),
+    "batentes": ("abrir",),
+    "lacado": ("laca", "pintado"),
+    "lacada": ("laca", "pintada"),
+    "lacados": ("laca", "pintados"),
+    "lacadas": ("laca", "pintadas"),
+    "melamina": ("mlm",),
+    "mlm": ("melamina",),
+    "gavetao": ("gaveta",),
+    "gavetoes": ("gavetas",),
+}
+
 
 def _normalize_txt(val: str) -> str:
     """
@@ -851,11 +876,25 @@ def _split_terms_normalized(query: str) -> list[str]:
     return _uniq_terms(norm.split())
 
 
-def _build_search_filters(terms: Sequence[str]):
+def _term_alternatives(term: str, *, expand: bool) -> tuple[str, ...]:
+    alternatives = [str(term or "").strip()]
+    if expand:
+        norm = _normalize_txt(term)
+        if norm and norm not in {alt.casefold() for alt in alternatives}:
+            alternatives.append(norm)
+        alternatives.extend(_SEARCH_SYNONYMS_PRODUCAO.get(norm, ()))
+    return tuple(_uniq_terms(alternatives))
+
+
+def _build_search_filters(terms: Sequence[str], *, expand: bool = False):
     filters = []
     for t in terms:
-        like = f"%{t}%"
-        filters.append(or_(*[f.ilike(like) for f in _SEARCH_FIELDS_PRODUCAO]))
+        term_filters = []
+        for alternative in _term_alternatives(t, expand=expand):
+            like = f"%{alternative}%"
+            term_filters.extend(f.ilike(like) for f in _SEARCH_FIELDS_PRODUCAO)
+        if term_filters:
+            filters.append(or_(*term_filters))
     return filters
 
 
@@ -903,6 +942,89 @@ def _producao_blob(proc: Producao) -> str:
             continue
         parts.append(str(val))
     return " | ".join(parts)
+
+
+def _expanded_normalized_terms(term_norm: str) -> list[str]:
+    terms = [term_norm]
+    terms.extend(_SEARCH_SYNONYMS_PRODUCAO.get(term_norm, ()))
+    return _uniq_terms([_normalize_txt(term) for term in terms if term])
+
+
+def _score_term_in_text(term_norm: str, text_norm: str) -> tuple[float, str, str]:
+    if not term_norm or not text_norm:
+        return 0.0, "", ""
+    alternatives = _expanded_normalized_terms(term_norm)
+    for alt in alternatives:
+        if alt and alt in text_norm:
+            if alt == term_norm:
+                return 1.0, "direct", alt
+            return 0.9, "synonym", alt
+    if len(term_norm) < 4:
+        return 0.0, "", ""
+    close = difflib.get_close_matches(term_norm, set(text_norm.split()), n=1, cutoff=0.84)
+    if not close:
+        return 0.0, "", ""
+    ratio = difflib.SequenceMatcher(None, term_norm, close[0]).ratio()
+    return ratio * 0.72, "fuzzy", close[0]
+
+
+def _build_search_reason(label: str, term_norm: str, kind: str, matched: str) -> str:
+    if kind == "synonym":
+        return f"Encontrado por sinonimo: {term_norm} -> {matched} ({label})"
+    if kind == "fuzzy":
+        return f"Encontrado por aproximacao: {term_norm} ~ {matched} ({label})"
+    return f"Encontrado em: {label}"
+
+
+def _rank_processos(rows: Sequence[Producao], query: str) -> list[Producao]:
+    rows_list = list(rows)
+    terms_norm = _split_terms_normalized(query)
+    if not rows_list or not terms_norm:
+        return rows_list
+
+    ranked: list[tuple[float, int, Producao]] = []
+    for proc in rows_list:
+        sections = (
+            (
+                "Referencia",
+                8.0,
+                f"{getattr(proc, 'codigo_processo', '')} {getattr(proc, 'num_enc_phc', '')} "
+                f"{getattr(proc, 'num_cliente_phc', '')} {getattr(proc, 'ref_cliente', '')} "
+                f"{getattr(proc, 'num_orcamento', '')} {getattr(proc, 'ano', '')}",
+            ),
+            ("Cliente", 7.0, f"{getattr(proc, 'nome_cliente', '')} {getattr(proc, 'nome_cliente_simplex', '')}"),
+            ("Obra", 6.0, f"{getattr(proc, 'obra', '')} {getattr(proc, 'localizacao', '')}"),
+            ("Descricao Producao", 5.0, getattr(proc, "descricao_producao", "")),
+            ("Descricao Artigos", 4.5, getattr(proc, "descricao_artigos", "")),
+            ("Materiais", 4.0, getattr(proc, "materias_usados", "")),
+            ("Notas", 2.5, f"{getattr(proc, 'notas1', '')} {getattr(proc, 'notas2', '')} {getattr(proc, 'notas3', '')}"),
+            ("Estado/Responsavel/Data", 2.0, f"{getattr(proc, 'estado', '')} {getattr(proc, 'responsavel', '')} {getattr(proc, 'data_inicio', '')} {getattr(proc, 'data_entrega', '')}"),
+        )
+        score = 0.0
+        best_reason = ""
+        best_reason_score = 0.0
+        for term_norm in terms_norm:
+            best_term_score = 0.0
+            best_term_reason = ""
+            for label, weight, text_value in sections:
+                match_score, match_kind, matched = _score_term_in_text(term_norm, _normalize_txt(str(text_value or "")))
+                if match_score <= 0:
+                    continue
+                weighted = weight * match_score
+                if weighted > best_term_score:
+                    best_term_score = weighted
+                    best_term_reason = _build_search_reason(label, term_norm, match_kind, matched)
+            score += best_term_score
+            if best_term_score > best_reason_score:
+                best_reason_score = best_term_score
+                best_reason = best_term_reason
+
+        setattr(proc, "search_score", float(score))
+        setattr(proc, "search_reason", best_reason)
+        ranked.append((float(score), int(getattr(proc, "id", 0) or 0), proc))
+
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [proc for _, _, proc in ranked]
 
 
 def _fuzzy_match_blob(blob_norm: str, *, terms_norm: Sequence[str]) -> Optional[float]:
@@ -971,7 +1093,7 @@ def listar_processos(
         stmt = base.where(*_build_search_filters(terms))
         if limit:
             stmt = stmt.limit(limit)
-        return session.execute(stmt).scalars().all()
+        return _rank_processos(session.execute(stmt).scalars().all(), search or "")
 
     # 1) tentativa "precisa" (mantém pontuação interna para códigos)
     if raw_terms:
@@ -982,6 +1104,15 @@ def listar_processos(
     # 2) tentativa normalizada (ignora pontuação e separa em tokens)
     if norm_terms and norm_terms != raw_terms:
         rows = _run_sql(norm_terms)
+        if rows:
+            return rows
+
+    search_terms = norm_terms or raw_terms
+    if search_terms:
+        stmt = base.where(*_build_search_filters(search_terms, expand=True))
+        if limit:
+            stmt = stmt.limit(limit)
+        rows = _rank_processos(session.execute(stmt).scalars().all(), search or "")
         if rows:
             return rows
 
@@ -1015,7 +1146,15 @@ def listar_processos(
     scored.sort(key=lambda x: (x[0], int(getattr(x[1], "id", 0) or 0)), reverse=True)
     if limit:
         scored = scored[: int(limit)]
-    return [p for _, p in scored]
+    fuzzy_scores = {int(getattr(proc, "id", 0) or 0): float(score) for score, proc in scored}
+    rows = _rank_processos([p for _, p in scored], search or "")
+    for proc in rows:
+        proc_id = int(getattr(proc, "id", 0) or 0)
+        setattr(proc, "search_score", max(float(getattr(proc, "search_score", 0.0) or 0.0), fuzzy_scores.get(proc_id, 0.0)))
+        if not getattr(proc, "search_reason", ""):
+            setattr(proc, "search_reason", "Encontrado por aproximacao")
+    rows.sort(key=lambda p: (float(getattr(p, "search_score", 0.0) or 0.0), int(getattr(p, "id", 0) or 0)), reverse=True)
+    return rows
 
 
 def obter_processo(session: Session, proc_id: int) -> Optional[Producao]:
@@ -1136,6 +1275,26 @@ def _name_endswith_suffix(name: str, suffix: str) -> bool:
     return any(n.endswith(f"{sep}{s}") for sep in _FOLDER_PREFIX_SEPARATORS)
 
 
+def _folder_suffix_after_prefix(name: str, prefix: str) -> str:
+    if not _folder_name_matches_prefix(name, prefix):
+        return ""
+    suffix = str(name or "")[len(str(prefix or "")) :]
+    return suffix.lstrip("".join(_FOLDER_PREFIX_SEPARATORS)).strip()
+
+
+def _folder_client_warning(*, level_label: str, path: Path, prefix: str, expected_suffix: str) -> Optional[str]:
+    expected = str(expected_suffix or "").strip()
+    actual = _folder_suffix_after_prefix(path.name, prefix)
+    if not expected or not actual:
+        return None
+    if actual.casefold() == expected.casefold():
+        return None
+    return (
+        f"{level_label}: foi reutilizada a pasta '{path.name}', mas o Nome Cliente Simplex "
+        f"na pasta e '{actual}' e o esperado e '{expected}'."
+    )
+
+
 def _find_best_dir_match(
     parent: Path,
     *,
@@ -1209,7 +1368,38 @@ def _find_best_dir_match(
     return scored[0][2]
 
 
-def resolver_pasta_para_processo(
+def caminho_esperado_para_processo(
+    session: Session,
+    proc: Producao,
+    *,
+    base_dir: str | Path | None = None,
+    tipo_pasta: Optional[str] = None,
+    pasta_nome_custom: Optional[str] = None,
+) -> Path:
+    if proc is None:
+        raise ValueError("Processo nao encontrado.")
+
+    resolved_base = _resolve_base_dir(session, base_dir)
+    tipo_dir = _pasta_tipo_dir(tipo_pasta or getattr(proc, "tipo_pasta", None))
+    ano_dir = str(getattr(proc, "ano", "") or "").strip()
+    if not ano_dir:
+        raise ValueError("Processo sem ano definido.")
+
+    enc = _num_enc_norm(getattr(proc, "num_enc_phc", None))
+    ver_obra = _two_digit(getattr(proc, "versao_obra", None))
+    ver_plano = _two_digit(getattr(proc, "versao_plano", None))
+    cli = _cliente_para_pasta(
+        getattr(proc, "nome_cliente_simplex", None),
+        getattr(proc, "nome_cliente", None),
+        getattr(proc, "ref_cliente", None),
+    )
+    seg1 = _sanitize_folder_name(f"{enc}_{cli}")
+    seg2 = _sanitize_folder_name(f"{enc}_{ver_obra}_{cli}")
+    seg3 = _sanitize_folder_name(pasta_nome_custom or f"{enc}_{ver_obra}_{ver_plano}_{cli}")
+    return Path(resolved_base) / ano_dir / tipo_dir / seg1 / seg2 / seg3
+
+
+def resolver_pasta_para_processo_detalhe(
     session: Session,
     proc_id: int,
     *,
@@ -1217,7 +1407,7 @@ def resolver_pasta_para_processo(
     tipo_pasta: Optional[str] = None,
     pasta_nome_custom: Optional[str] = None,
     create: bool = False,
-) -> Path:
+) -> ProcessoFolderResolution:
     """
     Resolve (e opcionalmente cria) a Pasta Servidor para um processo.
 
@@ -1271,6 +1461,9 @@ def resolver_pasta_para_processo(
         seg3_desired = _sanitize_folder_name(f"{enc}_{ver_obra}_{ver_plano}_{cli}")
         seg3_prefix = pref3
 
+    warnings: list[str] = []
+    created_final = False
+
     # Nível 1: ENC_Cliente (cliente é só "visual")
     seg1_dir = _find_best_dir_match(
         root,
@@ -1281,9 +1474,18 @@ def resolver_pasta_para_processo(
     )
     if seg1_dir is None:
         if not create:
-            raise ValueError("Pasta nao encontrada. Use 'Criar Pasta' para gerar a pasta da obra no servidor.")
+            raise ValueError("Pasta nao encontrada. Crie a pasta manualmente no servidor e use 'Abrir Pasta' para validar o caminho.")
         seg1_dir = root / seg1_desired
         seg1_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        warning = _folder_client_warning(
+            level_label="Pasta principal",
+            path=seg1_dir,
+            prefix=pref1,
+            expected_suffix=cli,
+        )
+        if warning:
+            warnings.append(warning)
 
     # Nível 2: ENC_VV_Cliente (cliente é só "visual")
     seg2_dir = _find_best_dir_match(
@@ -1295,9 +1497,18 @@ def resolver_pasta_para_processo(
     )
     if seg2_dir is None:
         if not create:
-            raise ValueError("Pasta nao encontrada. Use 'Criar Pasta' para gerar a pasta da obra no servidor.")
+            raise ValueError("Pasta nao encontrada. Crie a pasta manualmente no servidor e use 'Abrir Pasta' para validar o caminho.")
         seg2_dir = seg1_dir / seg2_desired
         seg2_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        warning = _folder_client_warning(
+            level_label="Versao Obra",
+            path=seg2_dir,
+            prefix=pref2,
+            expected_suffix=cli,
+        )
+        if warning:
+            warnings.append(warning)
 
     # Nível 3: ENC_VV_PP_Cliente (ou custom)
     if seg3_prefix:
@@ -1310,21 +1521,56 @@ def resolver_pasta_para_processo(
         )
         if seg3_dir is None:
             if not create:
-                raise ValueError("Pasta nao encontrada. Use 'Criar Pasta' para gerar a pasta da obra no servidor.")
+                raise ValueError("Pasta nao encontrada. Crie a pasta manualmente no servidor e use 'Abrir Pasta' para validar o caminho.")
             seg3_dir = seg2_dir / seg3_desired
             seg3_dir.mkdir(parents=True, exist_ok=True)
+            created_final = True
+        else:
+            warning = _folder_client_warning(
+                level_label="Versao CutRite",
+                path=seg3_dir,
+                prefix=seg3_prefix,
+                expected_suffix=cli,
+            )
+            if warning:
+                warnings.append(warning)
     else:
         seg3_dir = seg2_dir / seg3_desired
         if not seg3_dir.is_dir():
             if not create:
-                raise ValueError("Pasta nao encontrada. Use 'Criar Pasta' para gerar a pasta da obra no servidor.")
+                raise ValueError("Pasta nao encontrada. Crie a pasta manualmente no servidor e use 'Abrir Pasta' para validar o caminho.")
             seg3_dir.mkdir(parents=True, exist_ok=True)
+            created_final = True
 
     proc.pasta_servidor = str(seg3_dir)
     proc.tipo_pasta = tipo_dir
     session.add(proc)
     session.flush()
-    return seg3_dir
+    return ProcessoFolderResolution(
+        path=seg3_dir,
+        created=created_final,
+        reused_existing=not created_final,
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
+
+
+def resolver_pasta_para_processo(
+    session: Session,
+    proc_id: int,
+    *,
+    base_dir: str | Path | None = None,
+    tipo_pasta: Optional[str] = None,
+    pasta_nome_custom: Optional[str] = None,
+    create: bool = False,
+) -> Path:
+    return resolver_pasta_para_processo_detalhe(
+        session,
+        proc_id,
+        base_dir=base_dir,
+        tipo_pasta=tipo_pasta,
+        pasta_nome_custom=pasta_nome_custom,
+        create=create,
+    ).path
 
 
 def criar_pasta_para_processo(
@@ -1336,6 +1582,24 @@ def criar_pasta_para_processo(
     pasta_nome_custom: Optional[str] = None,
 ) -> Path:
     return resolver_pasta_para_processo(
+        session,
+        proc_id,
+        base_dir=base_dir,
+        tipo_pasta=tipo_pasta,
+        pasta_nome_custom=pasta_nome_custom,
+        create=True,
+    )
+
+
+def criar_pasta_para_processo_detalhe(
+    session: Session,
+    proc_id: int,
+    *,
+    base_dir: str | Path | None = None,
+    tipo_pasta: Optional[str] = None,
+    pasta_nome_custom: Optional[str] = None,
+) -> ProcessoFolderResolution:
+    return resolver_pasta_para_processo_detalhe(
         session,
         proc_id,
         base_dir=base_dir,

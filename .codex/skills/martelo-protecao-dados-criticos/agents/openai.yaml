@@ -1,0 +1,4 @@
+interface:
+  display_name: "Martelo Protecao Dados Criticos"
+  short_description: "Guardrails para limpezas, migracoes e eliminacoes de dados"
+  default_prompt: "Use $martelo-protecao-dados-criticos antes de qualquer limpeza, migracao, correcao em massa ou eliminacao de dados no Martelo."

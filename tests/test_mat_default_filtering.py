@@ -8,11 +8,13 @@ from sqlalchemy.orm import sessionmaker
 from Martelo_Orcamentos_V2.app.db import Base
 from Martelo_Orcamentos_V2.app.models.client import Client
 from Martelo_Orcamentos_V2.app.models.dados_gerais import (
+    DadosItemsAcabamento,
     DadosItemsFerragem,
     DadosItemsMaterial,
     DadosItemsSistemaCorrer,
 )
 from Martelo_Orcamentos_V2.app.models.definicao_peca import DefinicaoPeca
+from Martelo_Orcamentos_V2.app.models.materia_prima import MateriaPrima
 from Martelo_Orcamentos_V2.app.models.orcamento import Orcamento, OrcamentoItem
 from Martelo_Orcamentos_V2.app.models.user import User
 from Martelo_Orcamentos_V2.app.services import custeio_items
@@ -32,7 +34,9 @@ class MatDefaultFilteringTests(unittest.TestCase):
                 DadosItemsMaterial.__table__,
                 DadosItemsFerragem.__table__,
                 DadosItemsSistemaCorrer.__table__,
+                DadosItemsAcabamento.__table__,
                 DefinicaoPeca.__table__,
+                MateriaPrima.__table__,
             ],
         )
         self.Session = sessionmaker(bind=self.engine, future=True)
@@ -75,6 +79,8 @@ class MatDefaultFilteringTests(unittest.TestCase):
             self.engine,
             tables=[
                 DefinicaoPeca.__table__,
+                MateriaPrima.__table__,
+                DadosItemsAcabamento.__table__,
                 DadosItemsSistemaCorrer.__table__,
                 DadosItemsFerragem.__table__,
                 DadosItemsMaterial.__table__,
@@ -115,7 +121,15 @@ class MatDefaultFilteringTests(unittest.TestCase):
             )
         )
 
-    def _add_ferragem(self, group: str, *, tipo: str, descricao: str, preco_liq: float = 3.0) -> None:
+    def _add_ferragem(
+        self,
+        group: str,
+        *,
+        tipo: str,
+        descricao: str,
+        preco_liq: float = 3.0,
+        und: str = "UN",
+    ) -> None:
         self.session.add(
             DadosItemsFerragem(
                 id=200 + self.session.query(DadosItemsFerragem).count(),
@@ -132,7 +146,7 @@ class MatDefaultFilteringTests(unittest.TestCase):
                 ref_le=f"FER-{group[:8]}",
                 descricao_material=descricao,
                 preco_liq=preco_liq,
-                und="UN",
+                und=und,
                 desp=0,
                 tipo=tipo,
                 familia="FERRAGENS",
@@ -270,6 +284,99 @@ class MatDefaultFilteringTests(unittest.TestCase):
         self.assertIn("Puxador Fresado J", options)
         self.assertIn("Puxador STD 1", options)
         self.assertNotIn("Corredica 1", options)
+
+    def test_puxador_generico_prefere_subgrupo_puxadores_em_vez_de_spp(self) -> None:
+        for group in (
+            "Puxador Tic Tac",
+            "Puxador Fresado J",
+            "Puxador STD 1",
+            "Puxador STD 2",
+            "Puxador Perfil SPP 1",
+            "Puxador Perfil SPP 2",
+            "Puxador Perfil SPP 3",
+        ):
+            self._add_ferragem(group, tipo="PUXADOR", descricao=group)
+        self._add_definicao(
+            nome="PUXADOR GOLA C {SPP}",
+            tipo="FERRAGENS",
+            subgrupo="SPP (ACESSORIOS AJUSTAVEIS)",
+            origem="ferragens",
+            grupos="PUXADOR PERFIL SPP 1; PUXADOR PERFIL SPP 2; PUXADOR PERFIL SPP 3",
+            default="PUXADOR PERFIL SPP 1",
+        )
+        self._add_definicao(
+            nome="PUXADOR TIC-TAC",
+            tipo="FERRAGENS",
+            subgrupo="PUXADORES",
+            origem="ferragens",
+            grupos="PUXADOR TIC TAC; PUXADOR FRESADO J; PUXADOR STD 1; PUXADOR STD 2",
+            default="PUXADOR TIC TAC",
+        )
+        self.session.flush()
+
+        row = {
+            "def_peca": "PUXADOR",
+            "_child_source": "PUXADOR",
+            "_parent_label": "PORTA ABRIR [2222] + DOBRADICA + PUXADOR",
+            "tipo": "PUXADOR",
+            "familia": "FERRAGENS",
+        }
+        options = custeio_items.resolver_opcoes_mat_default(self.session, self._ctx(), row)
+
+        self.assertEqual(
+            ["Puxador Tic Tac", "Puxador Fresado J", "Puxador STD 1", "Puxador STD 2"],
+            options,
+        )
+        self.assertNotIn("Puxador Perfil SPP 1", options)
+
+        spp_row = {"def_peca": "PUXADOR GOLA C {SPP}", "tipo": "PUXADOR", "familia": "FERRAGENS"}
+        spp_options = custeio_items.resolver_opcoes_mat_default(self.session, self._ctx(), spp_row)
+
+        self.assertEqual(
+            ["Puxador Perfil SPP 1", "Puxador Perfil SPP 2", "Puxador Perfil SPP 3"],
+            spp_options,
+        )
+
+    def test_guarnicao_compra_l_liga_ferragens_e_mantem_und(self) -> None:
+        ferragens = svc_dados_items.MENU_FIXED_GROUPS[svc_dados_items.MENU_FERRAGENS]
+        self.assertIn("Guarnicao Compra L", ferragens)
+        self.assertEqual("Ferragens Diversas 1", ferragens[ferragens.index("Guarnicao Compra L") + 1])
+        self.assertEqual("Guarnicao Compra L", custeio_items.grupo_por_def_peca("GUARNICAO COMPRA L"))
+
+        self._add_ferragem(
+            "Guarnicao Compra L",
+            tipo="GUARNICAO COMPRA L",
+            descricao="Guarnicao Compra L DB",
+            preco_liq=13.65,
+            und="UND",
+        )
+        self._add_ferragem(
+            "Ferragens Diversas 1",
+            tipo="FERRAGENS",
+            descricao="Ferragem diversa",
+            preco_liq=1.0,
+            und="UND",
+        )
+        self.session.flush()
+
+        rows = custeio_items.gerar_linhas_para_selecoes(
+            self.session,
+            self._ctx(),
+            ["REMATES/GUARNICOES>GUARNICAO COMPRA L"],
+        )
+        self.assertEqual(1, len(rows))
+        row = rows[0]
+
+        self.assertEqual("GUARNICAO COMPRA L", row.get("def_peca"))
+        self.assertEqual("Guarnicao Compra L", row.get("mat_default"))
+        self.assertEqual("FERRAGENS", row.get("familia"))
+        self.assertEqual("GUARNICAO COMPRA L", row.get("tipo"))
+        self.assertEqual("UND", row.get("und"))
+        self.assertEqual(13.65, row.get("pliq"))
+
+        options = custeio_items.resolver_opcoes_mat_default(self.session, self._ctx(), row)
+
+        self.assertEqual(["Guarnicao Compra L"], options)
 
     def test_preview_mat_default_mostra_descricao_e_preco(self) -> None:
         self._add_ferragem("Ferragens Diversas 1", tipo="FERRAGENS", descricao="Acessorio Especial DB", preco_liq=2.5)

@@ -13,6 +13,7 @@ __pycache__/
 *.swp
 *.tmp
 *.log
+*.log.*
 *.bak
 *~
 ~$*.docx
@@ -32,13 +33,19 @@ Base_Dados/
 *.xlsx
 *.xls
 *.csv
+!Martelo_Orcamentos_V2/data/
+!Martelo_Orcamentos_V2/data/def_pecas.csv
+Martelo_Orcamentos_V2/data/def_pecas_backup_before_restore_*.json
 
 # Não versionar executáveis e builds
 dist/
 build/
 *.exe
 *.spec
+!Martelo_Orcamentos_V2.spec
 installer/Output/
+build_lean/
+dist_lean/
 
 # Não versionar ficheiros de configuração específicos assinaturas de mails
 *.ini
@@ -47,4 +54,9 @@ assinaturas/
 # Ficheiros de configuração do ambiente
 .env 
 *.env
+
+# Artefactos temporários de testes locais
+tests/_probe_write.txt
+tests/_tmp*/
+tests/tmp*/
 

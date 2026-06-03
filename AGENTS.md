@@ -179,6 +179,26 @@ Ao propor alterações:
 - preservar compatibilidade com orçamentos anteriores sempre que possível
 - priorizar evolução incremental e segura
 
+## Proteção de dados críticos
+- Considerar como ação destrutiva qualquer `DELETE`, `DROP`, `TRUNCATE`, limpeza em massa, correção massiva com reescrita de dados, importação com `replace`, migração corretiva sobre dados existentes ou eliminação de pastas/registos de negócio.
+- Nunca executar ações destrutivas automaticamente, por inferência, ou como "passo técnico" sem confirmação humana explícita.
+- Antes de qualquer ação destrutiva ou potencialmente irreversível, apresentar ao utilizador:
+  - objetivo da operação
+  - tabelas, entidades ou ficheiros afetados
+  - impacto esperado
+  - possibilidade de recuperação, backup ou ausência dela
+- Em tarefas de manutenção, correção de erros, normalização, reconciliação ou limpeza, preferir sempre:
+  - diagnóstico primeiro
+  - `dry-run` ou relatório de impacto
+  - transação controlada
+  - backup/export/snapshot antes da execução
+  - `soft-delete`, quarentena ou desativação lógica quando aplicável
+- Distinguir sempre entre:
+  - recalcular, reconstruir ou regenerar estrutura técnica
+  - apagar ou substituir dados de negócio já introduzidos pelo utilizador
+- A segunda categoria exige confirmação explícita do utilizador, mesmo quando a intenção pareça óbvia.
+- Se houver qualquer dúvida sobre perda de dados, parar e pedir confirmação antes de prosseguir.
+
 ## Prioridades atuais
 1. Consolidar a lógica dos módulos reutilizáveis
 2. Melhorar consistência entre Dados Gerais, Dados Items e Custeio

@@ -7793,6 +7793,42 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
     # ------------------------------------------------------------------ Public API
 
+    def _context_item_exists(self) -> bool:
+        if self.context is None:
+            return False
+        item_id = getattr(self.context, "item_id", None)
+        orcamento_id = getattr(self.context, "orcamento_id", None)
+        if item_id in (None, "") or not orcamento_id:
+            return False
+        try:
+            found = self.session.execute(
+                select(OrcamentoItem.id_item).where(
+                    OrcamentoItem.id_item == item_id,
+                    OrcamentoItem.id_orcamento == orcamento_id,
+                )
+            ).scalar_one_or_none()
+        except Exception:
+            logger.exception("Falha ao validar existencia do item ativo no Custeio.")
+            return True
+        return found is not None
+
+    def _discard_deleted_item_context(self) -> None:
+        try:
+            self.session.rollback()
+        except Exception:
+            pass
+        self.context = None
+        self._current_item_obj = None
+        self.current_item_id = None
+        self._pending_module_imports = []
+        self._nst_override_snapshot = []
+        self.table_model.clear()
+        self._clear_dimension_values()
+        self._set_rows_dirty(False)
+        self._dimensions_dirty = False
+        self._update_table_placeholder_visibility()
+        self._update_save_button_text()
+
     def auto_save_if_dirty(self) -> bool:
 
         if not self.is_dirty():
@@ -7801,6 +7837,15 @@ class CusteioItemsPage(QtWidgets.QWidget):
 
         if not self.context:
 
+            return True
+
+        if not self._context_item_exists():
+            logger.info(
+                "Custeio.auto_save ignorado: item_id=%s orcamento_id=%s ja nao existe.",
+                getattr(self.context, "item_id", None),
+                getattr(self.context, "orcamento_id", None),
+            )
+            self._discard_deleted_item_context()
             return True
 
         return self._save_custeio(auto=True)

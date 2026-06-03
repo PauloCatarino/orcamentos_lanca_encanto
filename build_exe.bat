@@ -4,11 +4,23 @@ setlocal EnableExtensions
 rem Build do executavel standalone do Martelo_Orcamentos_V2.
 rem Uso:
 rem   .\build_exe.bat
+rem   .\build_exe.bat lean
 
 cd /d "%~dp0"
 
 set "ROOT=%CD%"
 set "PKG=%ROOT%\Martelo_Orcamentos_V2"
+set "BUILD_PROFILE=%~1"
+if not defined BUILD_PROFILE set "BUILD_PROFILE=%MARTELO_BUILD_PROFILE%"
+if not defined BUILD_PROFILE set "BUILD_PROFILE=full"
+
+if /I not "%BUILD_PROFILE%"=="full" if /I not "%BUILD_PROFILE%"=="lean" (
+    echo [ERRO] Perfil de build invalido: %BUILD_PROFILE%
+    echo Use: full ^| lean
+    exit /b 1
+)
+
+set "MARTELO_BUILD_PROFILE=%BUILD_PROFILE%"
 
 set "PYTHON=python"
 if exist ".venv_Martelo\Scripts\python.exe" (
@@ -19,12 +31,14 @@ if exist ".venv_Martelo\Scripts\python.exe" (
 
 echo ===========================================
 echo Usando Python: %PYTHON%
+echo Perfil de build: %BUILD_PROFILE%
 echo ===========================================
 echo A executar PyInstaller. Este passo pode demorar varios minutos.
 
-%PYTHON% -m pip install --upgrade pyinstaller
+%PYTHON% -m PyInstaller --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERRO] Falha ao instalar ou atualizar o PyInstaller.
+    echo [ERRO] PyInstaller nao esta instalado neste ambiente.
+    echo Instale com: %PYTHON% -m pip install pyinstaller
     exit /b 1
 )
 
@@ -34,10 +48,16 @@ if not exist build mkdir build
 
 set "ICON_PATH=%ROOT%\martelo.ico"
 if not exist "%ICON_PATH%" set "ICON_PATH=%PKG%\martelo.ico"
+set "SPEC_FILE=%ROOT%\Martelo_Orcamentos_V2.spec"
+
+if not exist "%SPEC_FILE%" (
+    echo [ERRO] Spec file nao encontrado:
+    echo %SPEC_FILE%
+    exit /b 1
+)
 
 set "ICON_FLAG="
 if exist "%ICON_PATH%" (
-    set "ICON_FLAG=--icon=%ICON_PATH%"
     echo Icone: %ICON_PATH%
 ) else (
     echo [AVISO] Icone martelo.ico nao encontrado. O build segue sem icon.
@@ -45,33 +65,7 @@ if exist "%ICON_PATH%" (
 
 %PYTHON% -m PyInstaller ^
     --noconfirm ^
-    --noconsole ^
-    --name Martelo_Orcamentos_V2 ^
-    --specpath build ^
-    %ICON_FLAG% ^
-    --hidden-import passlib.handlers.bcrypt ^
-    --hidden-import win32com.client ^
-    --hidden-import pythoncom ^
-    --hidden-import pywintypes ^
-    --hidden-import win32clipboard ^
-    --hidden-import win32con ^
-    --hidden-import win32gui ^
-    --hidden-import win32process ^
-    --hidden-import pywinauto ^
-    --hidden-import pywinauto.application ^
-    --hidden-import pywinauto.mouse ^
-    --hidden-import pywinauto.controls.uia_controls ^
-    --hidden-import pywinauto.controls.win32_controls ^
-    --hidden-import comtypes ^
-    --hidden-import PySide6.QtPdf ^
-    --hidden-import pypdf ^
-    --collect-all reportlab ^
-    --paths "%PKG%" ^
-    --add-data "%ICON_PATH%;." ^
-    --add-data "%ICON_PATH%;Martelo_Orcamentos_V2" ^
-    --add-data "%PKG%\ui\forms;Martelo_Orcamentos_V2/ui/forms" ^
-    --collect-all PySide6 ^
-    "%PKG%\run_dev.py"
+    "%SPEC_FILE%"
 
 if errorlevel 1 (
     echo [ERRO] Build do executavel falhou.

@@ -310,8 +310,8 @@ def _help_html(*, current_user: Optional[Any] = None) -> str:
 
       <h3>Pastas, IMOS e documentos</h3>
       <ul>
-        <li><b>Criar Pasta</b>: cria/atualiza a <code>Pasta Servidor</code> do processo (base definida em <b>Configurações</b>).</li>
-        <li><b>Abrir Pasta</b>: abre a pasta no Explorador.</li>
+        <li><b>Pasta Servidor</b>: e criada/validada automaticamente ao criar processo, converter orcamento ou criar nova versao.</li>
+        <li><b>Abrir Pasta</b>: abre a pasta no Explorador e pode validar uma pasta criada manualmente quando houve erro de rede/permissoes.</li>
         <li><b>Lista Material_IMOS</b>: cria o Excel <code>Lista_Material_&lt;Nome Enc IMOS IX&gt;.xlsm</code> na Pasta Servidor (a partir do modelo) e preenche os dados.</li>
         <li><b>Nome Plano CUT-RITE</b> / <b>Nome Enc IMOS IX</b>: gerados automaticamente a partir dos campos (mantém padrão e facilita localizar ficheiros).</li>
         <li><b>Enviar CUT-RITE</b>: abre o CUT-RITE, cria a lista de peças com base no Excel de material e grava o plano com o <b>Nome Plano CUT-RITE</b>.</li>

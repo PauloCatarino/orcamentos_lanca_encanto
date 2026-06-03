@@ -709,7 +709,7 @@ TREE_DEFINITION: List[TreeNode] = [
             {"label": "RODAPE PVC/ALUMINIO", "group": "Rodape PVC SPP"},
             {"label": "ENCHIMENTO GUARNICAO [2000]", "group": "Enchimentos Guarnicoes"},
             {"label": "GUARNICAO PRODUZIDA [2222]", "group": "Guarnicoes Produzidas"},
-            {"label": "GUARNICAO COMPRA L", "group": "Guarnicoes Compra"},
+            {"label": "GUARNICAO COMPRA L", "group": "Guarnicao Compra L"},
             {"label": "TETO ACABAMENTO [2222]", "group": "Tetos Acabamento"},
             {"label": "FUNDO ACABAMENTO [2222]", "group": "Fundos Acabamento"},
             {"label": "LATERAL ACABAMENTO [2222]", "group": "Laterais Acabamento"},
@@ -2265,6 +2265,25 @@ def atualizar_orlas_custeio(session: Session, orcamento_id: int, item_id: int) -
 
 
 def _registro_precisa_recalculo(reg: CusteioItem) -> bool:
+    has_technical_data = any(
+        getattr(reg, field, None) not in (None, "", 0)
+        for field in (
+            "def_peca",
+            "descricao",
+            "descricao_livre",
+            "mat_default",
+            "ref_le",
+            "qt_mod",
+            "qt_und",
+            "qt_total",
+            "comp_res",
+            "larg_res",
+            "esp_res",
+        )
+    )
+    if not has_technical_data:
+        return False
+
     campos_orla = (
         (reg.orl_c1, reg.ml_orl_c1, reg.custo_orl_c1),
         (reg.orl_c2, reg.ml_orl_c2, reg.custo_orl_c2),
@@ -2292,6 +2311,12 @@ def _registro_precisa_recalculo_acabamento(reg: CusteioItem) -> bool:
 
 
 def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[int]) -> List[Dict[str, Any]]:
+    """Carrega linhas do Custeio sem persistir recalculos implicitos.
+
+    Recalculos gravados devem acontecer em fluxos explicitos de guardar/atualizar.
+    A listagem e usada ao navegar entre items; escrever aqui pode manter locks em
+    custeio_items e bloquear a eliminacao do item noutra pagina/sessao.
+    """
     if not item_id:
         return []
 
@@ -2304,17 +2329,6 @@ def listar_custeio_items(session: Session, orcamento_id: int, item_id: Optional[
         .order_by(CusteioItem.ordem, CusteioItem.id)
     )
     registros = session.execute(stmt).scalars().all()
-
-    if any(_registro_precisa_recalculo(reg) for reg in registros):
-        atualizar_orlas_custeio(session, orcamento_id, item_id)
-        registros = session.execute(stmt).scalars().all()
-
-    if any(_registro_precisa_recalculo_acabamento(reg) for reg in registros):
-        try:
-            ctx_recalc = svc_dados_items.carregar_contexto(session, orcamento_id, item_id=item_id)
-        except Exception:
-            ctx_recalc = None
-        _recalcular_custos_acabamento(session, ctx_recalc, registros)
 
     linhas: List[Dict[str, Any]] = []
     orla_lookup = _build_orla_lookup(session)

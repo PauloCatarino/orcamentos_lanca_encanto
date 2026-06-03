@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mat Default Filtrado"
+  short_description: "Filtro contextual e preview de Mat_Default no Custeio"
+  default_prompt: "Use $mat-default-filtrado-e-preview to analisar, documentar ou evoluir a coluna Mat_Default no Custeio Items, com filtro contextual, fallback seguro e preview por tooltip."

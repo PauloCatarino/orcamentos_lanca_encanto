@@ -12,6 +12,7 @@ from Martelo_Orcamentos_V2.app.db import SessionLocal
 from Martelo_Orcamentos_V2.app.config import settings as app_settings
 from Martelo_Orcamentos_V2.app.utils.display import format_currency_pt, parse_currency_pt
 from Martelo_Orcamentos_V2.app.utils.date_utils import format_date_storage, parse_date_value
+from Martelo_Orcamentos_V2.app.utils.resources import resolve_package_asset_path
 from Martelo_Orcamentos_V2.app.services import producao_processos as svc_producao
 from Martelo_Orcamentos_V2.app.services import producao_workflow as svc_producao_workflow
 from Martelo_Orcamentos_V2.app.services import producao_preparacao as svc_producao_preparacao
@@ -299,12 +300,6 @@ class ProducaoPage(QtWidgets.QWidget):
         self._shortcut_save.activated.connect(self.on_save)
         self._base_save_button_text = self.btn_save.text() or "Salvar"
 
-        self.btn_criar_pasta = QtWidgets.QPushButton("Criar Pasta")
-        self.btn_criar_pasta.setIcon(s.standardIcon(QStyle.SP_DirIcon))
-        self.btn_criar_pasta.setToolTip("Criar/atualizar a pasta da obra no servidor (Pasta Servidor).")
-        _style_secondary(self.btn_criar_pasta)
-        self.btn_criar_pasta.clicked.connect(self.on_criar_pasta)
-
         self.btn_abrir_pasta = QtWidgets.QPushButton("Abrir Pasta")
         self.btn_abrir_pasta.setIcon(s.standardIcon(QStyle.SP_DialogOpenButton))
         self.btn_abrir_pasta.setToolTip("Abrir a Pasta Servidor no Explorador.")
@@ -362,7 +357,6 @@ class ProducaoPage(QtWidgets.QWidget):
             self.btn_conv,
             self.btn_nova_versao,
             self.btn_delete,
-            self.btn_criar_pasta,
             self.btn_abrir_pasta,
             self.btn_lista_material_imos,
             self.btn_cutrite_import,
@@ -502,7 +496,7 @@ class ProducaoPage(QtWidgets.QWidget):
 
         icons_base = Path(pasta_imagens_base(self.db) or "")
         icon_cut_rite_path = icons_base / "icon_cut_rite.png"
-        icon_imos_ix_path = icons_base / "icon_imos_ix.png"
+        icon_imos_ix_path = resolve_package_asset_path("ui", "assets", "icon_imos_2025.ico")
         icon_size = 18
 
         def icon_label(text: str, icon_path: Path, tooltip: str) -> QtWidgets.QWidget:
@@ -513,7 +507,10 @@ class ProducaoPage(QtWidgets.QWidget):
             icon = QtWidgets.QLabel()
             icon.setFixedSize(icon_size, icon_size)
             if icon_path.is_file():
-                pix = QtGui.QPixmap(str(icon_path))
+                qicon = QtGui.QIcon(str(icon_path))
+                pix = qicon.pixmap(icon_size, icon_size)
+                if pix.isNull():
+                    pix = QtGui.QPixmap(str(icon_path))
                 if not pix.isNull():
                     icon.setPixmap(pix.scaled(icon_size, icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             h.addWidget(icon)
@@ -684,20 +681,20 @@ class ProducaoPage(QtWidgets.QWidget):
             columns=[
                 ("ID", "id"),
                 ("Ano", "ano"),
-                ("Estado", "estado"),
-                ("Responsavel", "responsavel"),
-                ("Processo", "codigo_processo"),
-                ("Enc PHC", "num_enc_phc"),
+                ("Estado", "estado", None, self._producao_search_tooltip),
+                ("Responsavel", "responsavel", None, self._producao_search_tooltip),
+                ("Processo", "codigo_processo", None, self._producao_search_tooltip),
+                ("Enc PHC", "num_enc_phc", None, self._producao_search_tooltip),
                 ("Versao Obra", "versao_obra"),
                 ("Versao CutRite", "versao_plano"),
-                ("Cliente", "nome_cliente"),
-                ("Ref Cliente", "ref_cliente"),
-                ("Obra", "obra"),
+                ("Cliente", "nome_cliente", None, self._producao_search_tooltip),
+                ("Ref Cliente", "ref_cliente", None, self._producao_search_tooltip),
+                ("Obra", "obra", None, self._producao_search_tooltip),
                 ("Data Inicio", "data_inicio"),
                 ("Data Entrega", "data_entrega"),
                 ("Qt Artigos", "qt_artigos"),
                 ("Preco", "preco_total", _format_currency),
-                ("Descricao Producao", "descricao_producao"),
+                ("Descricao Producao", "descricao_producao", None, self._producao_search_tooltip),
             ]
         )
         self.table.setModel(self.model)
@@ -753,6 +750,17 @@ class ProducaoPage(QtWidgets.QWidget):
             if label in width_map:
                 header.resizeSection(idx, width_map[label])
 
+    def _producao_search_tooltip(self, row_obj, val, _spec):
+        reason = ""
+        if isinstance(row_obj, dict):
+            reason = str(row_obj.get("search_reason") or "").strip()
+        else:
+            reason = str(getattr(row_obj, "search_reason", "") or "").strip()
+        value = "" if val in (None, "") else str(val).strip()
+        if reason and getattr(self, "ed_search", None) is not None and self.ed_search.text().strip():
+            return f"{reason}\nValor atual: {value}" if value else reason
+        return value or None
+
     def _set_dirty(self, dirty: bool) -> None:
         dirty = bool(dirty)
         if getattr(self, "_dirty", False) == dirty:
@@ -790,6 +798,23 @@ class ProducaoPage(QtWidgets.QWidget):
         except Exception:
             pass
         QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), text)
+
+    def _show_creation_message(
+        self,
+        *,
+        title: str,
+        message: str,
+        auto_folder: Optional[svc_producao_workflow.ProcessoAutoFolderResult],
+    ) -> None:
+        has_warning = (
+            auto_folder is None
+            or auto_folder.folder is None
+            or bool(getattr(auto_folder.folder, "warnings", ()))
+        )
+        if has_warning:
+            QtWidgets.QMessageBox.warning(self, title, message)
+        else:
+            QtWidgets.QMessageBox.information(self, title, message)
 
     def _on_date_changed(self, edit: QtWidgets.QDateEdit, label: str, date: QDate) -> None:
         if getattr(self, "_loading_form", False):
@@ -1007,8 +1032,14 @@ class ProducaoPage(QtWidgets.QWidget):
             return
         self._update_search_status(search=search, has_rows=bool(rows))
         data, client_names, resp_names = build_producao_table_rows(rows)
-        # SimpleTableModel usa set_rows
+        # Com pesquisa ativa, respeitar ranking do servico em vez da ordenacao por ID.
+        if search:
+            self.table.setSortingEnabled(False)
+        else:
+            self.table.setSortingEnabled(True)
         self.model.set_rows(data)
+        if not search:
+            self.table.sortByColumn(0, Qt.DescendingOrder)
         if client_names:
             current = (self.cb_cliente_filter.currentText() or "").strip()
             sync_filter_combo(self.cb_cliente_filter, client_names, current)
@@ -1628,9 +1659,24 @@ class ProducaoPage(QtWidgets.QWidget):
                 versao_plano=versao_plano,
                 current_user_id=getattr(self.current_user, "id", None),
             )
+            auto_folder = svc_producao_workflow.auto_create_folder_for_processo(
+                self.db,
+                proc,
+                current_base_dir=self._base_producao,
+                tipo_pasta=preparation.tipo_pasta,
+            )
+            self._base_producao = auto_folder.base_dir or self._base_producao
 
             self.db.commit()
-            QtWidgets.QMessageBox.information(self, "Criado", f"Processo criado: {proc.codigo_processo}")
+            self._show_creation_message(
+                title="Criado",
+                message=svc_producao_workflow.build_process_creation_message(
+                    action_text="Processo criado",
+                    processo=proc,
+                    auto_folder=auto_folder,
+                ),
+                auto_folder=auto_folder,
+            )
             self._load_table(select_id=proc.id)
         except Exception as exc:
             self.db.rollback()
@@ -1671,8 +1717,30 @@ class ProducaoPage(QtWidgets.QWidget):
                 versao_plano=new_ver_plano,
                 current_user_id=getattr(self.current_user, "id", None),
             )
+            tipo_pasta = normalize_tipo_pasta_text(
+                str(
+                    preparation.creation_data.get("tipo_pasta")
+                    or getattr(preparation.processo_atual, "tipo_pasta", "")
+                    or self.cb_tipo_pasta.currentText()
+                )
+            )
+            auto_folder = svc_producao_workflow.auto_create_folder_for_processo(
+                self.db,
+                proc,
+                current_base_dir=self._base_producao,
+                tipo_pasta=tipo_pasta,
+            )
+            self._base_producao = auto_folder.base_dir or self._base_producao
             self.db.commit()
-            QtWidgets.QMessageBox.information(self, "Criado", f"Nova versao criada: {proc.codigo_processo}")
+            self._show_creation_message(
+                title="Criado",
+                message=svc_producao_workflow.build_process_creation_message(
+                    action_text="Nova versao criada",
+                    processo=proc,
+                    auto_folder=auto_folder,
+                ),
+                auto_folder=auto_folder,
+            )
             self._load_table(select_id=proc.id)
             self._start_blink_versions()
         except Exception as exc:
@@ -1713,9 +1781,24 @@ class ProducaoPage(QtWidgets.QWidget):
                 versao_plano=versao_plano,
                 current_user_id=getattr(self.current_user, "id", None),
             )
+            auto_folder = svc_producao_workflow.auto_create_folder_for_processo(
+                self.db,
+                proc,
+                current_base_dir=self._base_producao,
+                tipo_pasta=svc_producao.DEFAULT_PASTA_ENCOMENDA,
+            )
+            self._base_producao = auto_folder.base_dir or self._base_producao
 
             self.db.commit()
-            QtWidgets.QMessageBox.information(self, "Sucesso", f"Processo criado: {proc.codigo_processo}")
+            self._show_creation_message(
+                title="Sucesso",
+                message=svc_producao_workflow.build_process_creation_message(
+                    action_text="Processo criado",
+                    processo=proc,
+                    auto_folder=auto_folder,
+                ),
+                auto_folder=auto_folder,
+            )
             self._load_table()
             self._fill_form(proc)
         except ValueError as exc:
@@ -1738,11 +1821,31 @@ class ProducaoPage(QtWidgets.QWidget):
                 data=data,
                 current_user_id=getattr(self.current_user, "id", None),
             )
+            auto_folder = None
+            if result.was_created:
+                auto_folder = svc_producao_workflow.auto_create_folder_for_processo(
+                    self.db,
+                    result.processo,
+                    current_base_dir=self._base_producao,
+                    tipo_pasta=normalize_tipo_pasta_text(str(data.get("tipo_pasta") or "")),
+                )
+                self._base_producao = auto_folder.base_dir or self._base_producao
             self.db.commit()
             self._current_id = getattr(result.processo, "id", None)
             self._load_table(select_id=self._current_id)
             self._set_dirty(False)
-            QtWidgets.QMessageBox.information(self, result.message_title, result.message_text)
+            if result.was_created:
+                self._show_creation_message(
+                    title=result.message_title,
+                    message=svc_producao_workflow.build_process_creation_message(
+                        action_text="Processo criado",
+                        processo=result.processo,
+                        auto_folder=auto_folder,
+                    ),
+                    auto_folder=auto_folder,
+                )
+            else:
+                QtWidgets.QMessageBox.information(self, result.message_title, result.message_text)
             self._maybe_prompt_producao_preparacao(
                 previous_estado=previous_estado,
                 saved_estado=saved_estado,

@@ -37,6 +37,8 @@ class ProducaoTableSupportTests(unittest.TestCase):
                 qt_artigos=1,
                 preco_total=10,
                 descricao_producao="D1",
+                search_score=7.0,
+                search_reason="Encontrado em: Cliente",
             ),
             SimpleNamespace(
                 id=2,
@@ -61,6 +63,8 @@ class ProducaoTableSupportTests(unittest.TestCase):
         data, clientes, responsaveis = build_producao_table_rows(rows)
 
         self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["search_score"], 7.0)
+        self.assertEqual(data[0]["search_reason"], "Encontrado em: Cliente")
         self.assertEqual(clientes, ["ACME", "Beta"])
         self.assertEqual(responsaveis, ["Andreia", "Paulo"])
 

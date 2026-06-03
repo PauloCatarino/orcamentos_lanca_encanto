@@ -263,6 +263,15 @@ class ListaMaterialAuditTests(unittest.TestCase):
 
         self.assertFalse(any(issue.rule_id == "piso_incoerente" for issue in result.issues))
 
+    def test_floor_rule_reads_floor_inside_article_name(self):
+        with self._workspace_tmp() as tmp:
+            workbook_path = tmp / "Lista_Material_TESTE.xlsm"
+            _write_workbook(workbook_path, [_build_row(artigo="RP 03 P2", notas="PISO 1")])
+
+            result = self._audit(str(tmp), workbook_path)
+
+        self.assertTrue(any(issue.rule_id == "piso_incoerente" for issue in result.issues))
+
     def test_floor_rule_does_not_run_when_article_has_no_floor(self):
         with self._workspace_tmp() as tmp:
             workbook_path = tmp / "Lista_Material_TESTE.xlsm"
@@ -282,6 +291,38 @@ class ListaMaterialAuditTests(unittest.TestCase):
 
         self.assertTrue(any(issue.rule_id == "uniformizacao_nota_em_falta" for issue in result.issues))
 
+    def test_uniformizacao_ignores_orlas_when_same_article_piece_has_note_difference(self):
+        with self._workspace_tmp() as tmp:
+            workbook_path = tmp / "Lista_Material_TESTE.xlsm"
+            rows = [
+                _build_row(artigo="RP 03 P2", notas="", orla_esq="PVC_1.0_LINHO"),
+                _build_row(artigo="RP 03 P2", notas="RASGO FIO LED", orla_esq="PVC_0.4_LINHO"),
+            ]
+            _write_workbook(workbook_path, rows)
+
+            result = self._audit(str(tmp), workbook_path)
+
+        self.assertTrue(any(issue.rule_id == "uniformizacao_nota_em_falta" for issue in result.issues))
+
+    def test_description_variant_is_suggested(self):
+        with self._workspace_tmp() as tmp:
+            workbook_path = tmp / "Lista_Material_TESTE.xlsm"
+            rows = [_build_row(descricao="Porta direita"), _build_row(descricao="Porta direita.")]
+            _write_workbook(workbook_path, rows)
+
+            result = self._audit(str(tmp), workbook_path)
+
+        self.assertTrue(any(issue.rule_id == "descricao_uniformizar" for issue in result.issues))
+
+    def test_material_thickness_mismatch_is_warning(self):
+        with self._workspace_tmp() as tmp:
+            workbook_path = tmp / "Lista_Material_TESTE.xlsm"
+            _write_workbook(workbook_path, [_build_row(material="AGL_MLM_LINHO_CANCUN_19MM", esp=16)])
+
+            result = self._audit(str(tmp), workbook_path)
+
+        self.assertTrue(any(issue.rule_id == "material_espessura_incoerente" for issue in result.issues))
+
     def test_orla_value_cnc_fresar_is_machining(self):
         with self._workspace_tmp() as tmp:
             config = svc_audit.load_audit_config(tmp / "cfg")
@@ -291,6 +332,15 @@ class ListaMaterialAuditTests(unittest.TestCase):
         with self._workspace_tmp() as tmp:
             config = svc_audit.load_audit_config(tmp / "cfg")
             self.assertEqual(svc_audit.classify_orla_value("PVC_0.4_LINHO", config), "orla_real")
+
+    def test_orla_unknown_value_is_warning(self):
+        with self._workspace_tmp() as tmp:
+            workbook_path = tmp / "Lista_Material_TESTE.xlsm"
+            _write_workbook(workbook_path, [_build_row(orla_esq="TEXTO ESTRANHO")])
+
+            result = self._audit(str(tmp), workbook_path)
+
+        self.assertTrue(any(issue.rule_id == "orla_valor_desconhecido" for issue in result.issues))
 
     def test_export_report_creates_xlsx(self):
         with self._workspace_tmp() as tmp:
@@ -315,6 +365,7 @@ class ListaMaterialAuditTests(unittest.TestCase):
 
             self.assertTrue((config_root / "notes.json").is_file())
             self.assertTrue((config_root / "materials.json").is_file())
+            self.assertTrue((config_root / "descriptions.json").is_file())
             payload = json.loads((config_root / "notes.json").read_text(encoding="utf-8"))
             self.assertIn("whole_note_aliases", payload)
 

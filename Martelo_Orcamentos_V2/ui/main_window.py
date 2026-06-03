@@ -131,6 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pg_orc = OrcamentosPage(current_user=self.current_user)
         self.pg_itens = ItensPage(current_user=self.current_user)
         self.pg_itens.item_selected.connect(self.on_item_selected)
+        self.pg_itens.item_deleted.connect(self.on_item_deleted)
         self.pg_itens.production_mode_changed.connect(self.on_production_mode_changed)
         # NOVO: Conectar sinal de sincronização de preço
         self.pg_itens.price_changed.connect(self.on_price_changed)
@@ -395,6 +396,24 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.pg_dados_items.load_item(self.current_orcamento_id, item_id)
         self.pg_custeio.load_item(self.current_orcamento_id, item_id)
+
+    def on_item_deleted(self, deleted_id: Optional[int], next_item_id: Optional[int]):
+        if not self.current_orcamento_id:
+            return
+        try:
+            deleted_norm = int(deleted_id) if deleted_id is not None else None
+        except (TypeError, ValueError):
+            deleted_norm = deleted_id
+        try:
+            current_norm = int(self.current_item_id) if self.current_item_id is not None else None
+        except (TypeError, ValueError):
+            current_norm = self.current_item_id
+        if current_norm not in (None, deleted_norm):
+            return
+
+        self.current_item_id = next_item_id
+        self.pg_dados_items.load_item(self.current_orcamento_id, next_item_id)
+        self.pg_custeio.load_item(self.current_orcamento_id, next_item_id)
 
     def on_production_mode_changed(self, modo: str):
         self.pg_settings.update_producao_mode_display(modo)

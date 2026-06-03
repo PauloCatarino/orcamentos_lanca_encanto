@@ -10,6 +10,18 @@ if exist ".venv_Martelo\Scripts\python.exe" (
   set "PYTHON=.venv\Scripts\python.exe"
 )
 
+set "BUILD_PROFILE=%~2"
+if not defined BUILD_PROFILE set "BUILD_PROFILE=%MARTELO_BUILD_PROFILE%"
+if not defined BUILD_PROFILE set "BUILD_PROFILE=full"
+
+if /I not "%BUILD_PROFILE%"=="full" if /I not "%BUILD_PROFILE%"=="lean" (
+  echo [ERRO] Perfil de build invalido: %BUILD_PROFILE%
+  echo Use: full ^| lean
+  exit /b 1
+)
+
+set "MARTELO_BUILD_PROFILE=%BUILD_PROFILE%"
+
 for /f "delims=" %%I in ('%PYTHON% -c "from Martelo_Orcamentos_V2.release_tools import read_static_app_version; print(read_static_app_version())"') do set "APP_VERSION=%%I"
 
 if not defined APP_VERSION (
@@ -29,8 +41,9 @@ echo.
 echo ==========================================
 echo 1) Build PyInstaller (dist\Martelo_Orcamentos_V2)
 echo ==========================================
+echo Perfil de build: %BUILD_PROFILE%
 echo A executar PyInstaller. Este passo pode demorar varios minutos.
-call build_exe.bat
+call build_exe.bat %BUILD_PROFILE%
 if errorlevel 1 (
   echo [ERRO] build_exe.bat falhou.
   exit /b 1
